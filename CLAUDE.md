@@ -76,7 +76,7 @@ Keep it concrete. A first-year DS student should be able to re-explain it in an 
 ```
 theoria/
 ├── etl/
-│   ├── tmdb_client.py          # TMDB API wrapper (Task 2 ✅)
+│   ├── tmdb_client.py          # TMDB API wrapper ()
 │   ├── s3_utils.py             # shared S3 write helpers
 │   ├── logging_config.py       # shared logging setup
 │   ├── incremental.py          # watermark / incremental load logic
@@ -195,12 +195,12 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ### Phase 1 — TMDB Ingestion (Bronze)
 
-#### [x] Task 1 — Project scaffolding & environment
+#### [] Task 1 — Project scaffolding & environment
 - **Goal:** Repo skeleton, virtual env, config, and secrets handling.
 - **Files:** full `theoria/` tree, `requirements.txt`, `.env.example`, `config.py`, `.gitignore`
 - **Outcome:** Root-level scaffold exists; `pip install -r requirements.txt` works; `python -c "import config"` runs cleanly when `.env` is filled in.
 
-#### [x] Task 2 — TMDB API client wrapper
+#### [] Task 2 — TMDB API client wrapper
 - **Goal:** Single reusable client for all TMDB calls.
 - **Files:** `etl/tmdb_client.py`
 - **Key rules:** Centralize base URL and API key; retry-with-backoff for 429/5xx; raise `TMDBAPIError` on persistent failure; never swallow errors.
