@@ -113,3 +113,54 @@ Session — it implements backoff at the transport layer. Question to explore: w
 are the trade-offs between hand-rolling retry logic (like we did, full control,
 easy to unit-test) versus delegating it to the library adapter? When would you
 prefer each?
+
+---
+
+## Task 3 — S3 writer utility (shared)
+
+### What Was Built
+One small module, `etl/s3_utils.py`, that every future ingestion and transform
+script will call when it needs to put a file in S3. Instead of each script
+knowing how to talk to AWS, how to turn data into JSON or Parquet bytes, and
+where in the bucket a file should live, all three of those concerns now live in
+exactly one place. Nothing reads from S3 yet — this is the shared "write" side
+that Bronze (raw JSON) and Silver/Gold (Parquet) both depend on.
+
+### Concepts Used
+- **DRY / single source of truth**: the S3 path layout is defined once in
+  `build_path()`. No script ever hand-assembles a key, so the convention can't
+  drift between modules.
+- **Lazy initialisation**: the boto3 client is created on first use, not at
+  import time. Importing the module stays cheap and free of side effects (no
+  network/credential work just because something did `import s3_utils`).
+- **In-memory serialisation**: Parquet is written to a `BytesIO` buffer and
+  uploaded in a single `PutObject`, so we never create temp files on disk.
+- **Fail loud, never swallow**: writes raise on error so the *caller* can log
+  exactly which object failed (important once we're looping over thousands of
+  movie files).
+- **Data lake layering**: the `<layer>/<entity>/ingestion_date=...` shape is how
+  a data lake partitions data by stage (bronze/silver/gold) and by load date.
+
+### Key Code
+`etl/s3_utils.py` — `build_path()`:
+> Returns `<layer>/<entity>/ingestion_date=YYYY-MM-DD/<filename>`. It accepts
+> either a `date` object or a string so callers can pass `date.today()` without
+> formatting it themselves. This one function is *why* the path convention can
+> live in a single place — change the layout here and every script follows.
+
+`etl/s3_utils.py` — `get_s3_client()`:
+> Builds the boto3 client once and caches it in a module-level global, reusing it
+> on every later call. Credentials and region come from `config.py`, never from
+> `os.environ` directly — that's the project rule that keeps secrets in one place.
+
+`etl/s3_utils.py` — `write_parquet()`:
+> Serialises a DataFrame straight into a bytes buffer with pyarrow (`index=False`
+> so the pandas index never leaks into the file) and uploads it. Writing to
+> memory instead of a temp file means no cleanup and no disk dependency.
+
+### What to Study Next
+Read about **Hive-style partitioning** (the `key=value` directory naming we use
+in `ingestion_date=2026-06-21`). Question to explore: when a query engine like
+Athena or Spark reads this lake later, how does that `ingestion_date=...` folder
+name let it skip files it doesn't need (partition pruning) instead of scanning
+everything?

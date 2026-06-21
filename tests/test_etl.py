@@ -8,8 +8,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 
+from etl import s3_utils
 from etl.tmdb_client import TMDBAPIError, TMDBClient
 
 
@@ -67,3 +69,49 @@ def test_get_does_not_retry_on_401():
 
     # 401 is not retryable: exactly one call.
     assert mock_get.call_count == 1
+
+
+# --- s3_utils -----------------------------------------------------------------
+
+def test_build_path_follows_convention():
+    key = s3_utils.build_path("bronze", "genres", "2026-06-21", "genres.json")
+    assert key == "bronze/genres/ingestion_date=2026-06-21/genres.json"
+
+
+def test_build_path_accepts_date_object():
+    import datetime as dt
+
+    key = s3_utils.build_path("silver", "movies", dt.date(2026, 6, 21), "movies.parquet")
+    assert key == "silver/movies/ingestion_date=2026-06-21/movies.parquet"
+
+
+def test_write_json_puts_serialised_object():
+    mock_client = MagicMock()
+    data = {"genres": [{"id": 28, "name": "Action"}]}
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_client):
+        uri = s3_utils.write_json("theoria-datalake", "bronze/genres/x.json", data)
+
+    assert uri == "s3://theoria-datalake/bronze/genres/x.json"
+    _, kwargs = mock_client.put_object.call_args
+    assert kwargs["Bucket"] == "theoria-datalake"
+    assert kwargs["Key"] == "bronze/genres/x.json"
+    # Body must be the JSON-serialised payload, round-tripping back to `data`.
+    import json
+
+    assert json.loads(kwargs["Body"].decode("utf-8")) == data
+
+
+def test_write_parquet_puts_dataframe():
+    mock_client = MagicMock()
+    df = pd.DataFrame({"movie_id": [1, 2], "title": ["A", "B"]})
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_client):
+        uri = s3_utils.write_parquet("theoria-datalake", "silver/movies/x.parquet", df)
+
+    assert uri == "s3://theoria-datalake/silver/movies/x.parquet"
+    _, kwargs = mock_client.put_object.call_args
+    assert kwargs["Key"] == "silver/movies/x.parquet"
+    # Body must be readable back into the same DataFrame.
+    import io
+
+    round_tripped = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    pd.testing.assert_frame_equal(round_tripped, df)

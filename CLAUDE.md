@@ -20,8 +20,8 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 2 — TMDB API client wrapper
-Currently on          : Task 3 — S3 writer utility (shared)
+Last completed task   : Task 3 — S3 writer utility (shared)
+Currently on          : Task 4 — Bronze ingestion: Genres
 Current phase         : Phase 1 — TMDB Ingestion (Bronze)
 Blockers / open issues: None
 Last updated          : 2026-06-21
@@ -206,12 +206,12 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Key rules:** Centralize base URL and API key; retry-with-backoff for 429/5xx; raise `TMDBAPIError` on persistent failure; never swallow errors.
 - **Outcome:** `TMDBClient` wraps a reusable `requests.Session`, reads base URL + v3 API key from `config.py`, and exposes `get()` plus convenience wrappers (`get_genres`, `get_popular_movies`, `get_movie_details`, `get_movie_credits`). Retries 429/5xx with exponential backoff (honouring `Retry-After`), fails fast on non-retryable codes, and raises `TMDBAPIError` with endpoint + status on persistent failure. 4 mocked unit tests in `tests/test_etl.py` pass; live smoke test fetched 19 genres from the real API.
 
-#### [ ] Task 3 — S3 writer utility (shared)
+#### [x] Task 3 — S3 writer utility (shared)
 - **Goal:** Shared write-to-S3 logic for all ingestion scripts.
 - **Files:** `etl/s3_utils.py`
 - **Steps:** `write_json(bucket, key, data)`, `write_parquet(bucket, key, df)`, `build_path(layer, entity, ingestion_date, filename)`.
 - **Expected output:** Bronze scripts call shared functions; path convention defined in exactly one place.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `etl/s3_utils.py` centralises S3 writes: a lazily-built, reused boto3 client (credentials/region from `config.py`); `build_path()` is the single place defining the `<layer>/<entity>/ingestion_date=YYYY-MM-DD/<file>` key convention (accepts `str` or `date`); `write_json()` uploads pretty UTF-8 JSON and `write_parquet()` serialises a DataFrame to Parquet in-memory (pyarrow, no temp files) — both return the `s3://` URI, log bytes/rows, and never swallow errors. 4 mocked unit tests added to `tests/test_etl.py` (path convention, date handling, JSON + Parquet round-trip); full suite of 8 passes with no network access.
 
 #### [ ] Task 4 — Bronze ingestion: Genres
 - **Goal:** Pull genre list and write raw JSON to Bronze.
