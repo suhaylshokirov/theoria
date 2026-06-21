@@ -33,3 +33,6 @@ staticfiles/
 .DS_Store
 .idea/
 .vscode/
+
+# Others
+self_test.md
