@@ -1,0 +1,18 @@
+# --- Core ETL ---
+requests==2.32.3
+pandas==2.2.3
+pyarrow==18.1.0
+boto3==1.35.92
+
+# --- Warehouse ---
+SQLAlchemy==2.0.36
+psycopg2-binary==2.9.10
+
+# --- Config ---
+python-dotenv==1.0.1
+
+# --- Web UI ---
+Django==5.1.4
+
+# --- Testing ---
+pytest==8.3.4

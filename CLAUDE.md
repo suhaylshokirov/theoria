@@ -20,11 +20,11 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : None
-Currently on          : None
-Current phase         : None
+Last completed task   : Task 1 — Project scaffolding & environment
+Currently on          : Task 2 — TMDB API client wrapper
+Current phase         : Phase 1 — TMDB Ingestion (Bronze)
 Blockers / open issues: None
-Last updated          : None
+Last updated          : 2026-06-21
 ```
 
 **After finishing any task, in this order:**
@@ -76,7 +76,7 @@ Keep it concrete. A first-year DS student should be able to re-explain it in an 
 ```
 theoria/
 ├── etl/
-│   ├── tmdb_client.py          # TMDB API wrapper ()
+│   ├── tmdb_client.py          # TMDB API wrapper
 │   ├── s3_utils.py             # shared S3 write helpers
 │   ├── logging_config.py       # shared logging setup
 │   ├── incremental.py          # watermark / incremental load logic
@@ -180,7 +180,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 | Phase | Name                   | Tasks  | Status      |
 |-------|------------------------|--------|-------------|
-| 1     | TMDB Ingestion (Bronze) | 1–8   | In progress |
+| 1     | TMDB Ingestion (Bronze) | 1–8   | Not started |
 | 2     | Data Lake (Silver/Gold) | 9–14  | Not started |
 | 3     | Warehouse Modeling      | 15–21 | Not started |
 | 4     | SQL Analytics           | 22    | Not started |
@@ -195,16 +195,16 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ### Phase 1 — TMDB Ingestion (Bronze)
 
-#### [] Task 1 — Project scaffolding & environment
+#### [x] Task 1 — Project scaffolding & environment
 - **Goal:** Repo skeleton, virtual env, config, and secrets handling.
 - **Files:** full `theoria/` tree, `requirements.txt`, `.env.example`, `config.py`, `.gitignore`
-- **Outcome:** Root-level scaffold exists; `pip install -r requirements.txt` works; `python -c "import config"` runs cleanly when `.env` is filled in.
+- **Outcome:** Full directory tree created with Python packages; `config.py` loads `.env` via python-dotenv and fails loud listing every missing required var at once; `.env`/`venv` gitignored while `.env.example` is tracked. `python -c "import config"` passes with a filled `.env` and raises a clear `ConfigError` without one. Deps pinned in `requirements.txt` and installed in `venv`.
 
-#### [] Task 2 — TMDB API client wrapper
+#### [ ] Task 2 — TMDB API client wrapper
 - **Goal:** Single reusable client for all TMDB calls.
 - **Files:** `etl/tmdb_client.py`
 - **Key rules:** Centralize base URL and API key; retry-with-backoff for 429/5xx; raise `TMDBAPIError` on persistent failure; never swallow errors.
-- **Outcome:** `TMDBClient` with `get_genres()`, `get_popular_movies(page)`, `get_movie_details(movie_id)`, `get_movie_credits(movie_id)`. Retry/backoff verified; real TMDB smoke test passed.
+- **Outcome:** _(fill in when done)_
 
 #### [ ] Task 3 — S3 writer utility (shared)
 - **Goal:** Shared write-to-S3 logic for all ingestion scripts.
