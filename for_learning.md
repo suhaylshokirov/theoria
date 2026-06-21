@@ -56,3 +56,60 @@ Read about the **12-factor app** methodology, specifically factor III, "Config"
 (https://12factor.net/config) — it explains *why* config belongs in the
 environment and not in code. Then ask: how would this `config.py` behave on a
 server that has no `.env` file but sets real environment variables instead?
+
+---
+
+## Task 2 — TMDB API client wrapper
+
+### What Was Built
+One reusable object, `TMDBClient`, that every future ingestion script will use to
+talk to the TMDB movie database. Instead of each script writing its own HTTP code
+(and its own bugs), they all go through this single door. It knows the base URL
+and API key, automatically retries when the API is briefly unavailable, and raises
+a clear, custom error when something is genuinely wrong — it never hides a failure.
+
+### Concepts Used
+- **API client wrapper**: a thin layer that hides the messy details of HTTP calls
+  behind simple methods like `get_genres()`. Callers think in terms of *movies and
+  genres*, not URLs and status codes.
+- **Session reuse / connection pooling**: one `requests.Session` is reused across
+  all calls. TCP/TLS handshakes are expensive; reusing the connection makes many
+  calls (we'll make thousands) noticeably faster.
+- **Retry with exponential backoff**: when the API returns a *transient* error
+  (429 = rate-limited, 5xx = server hiccup), we wait and try again — 0.5s, then 1s,
+  then 2s. Backing off gives an overloaded server room to recover instead of
+  hammering it. For 429 we also honour the server's own `Retry-After` header.
+- **Retryable vs. non-retryable errors**: a 401 (bad key) will *never* fix itself,
+  so we fail immediately. Only transient codes are retried. Retrying everything
+  would just delay an inevitable failure.
+- **Custom exceptions (`TMDBAPIError`)**: a dedicated error type so callers can
+  `except TMDBAPIError` specifically, and so failures carry the endpoint + status
+  code in the message. Errors are re-raised, never swallowed.
+- **Mocking in tests**: the unit tests fake the HTTP responses, so they test our
+  retry *logic* without ever hitting the network — fast, deterministic, offline.
+
+### Key Code
+`etl/tmdb_client.py` — `get()`:
+> The heart of the client. It loops `max_retries + 1` times. On a 200 it returns
+> the JSON. On a *retryable* status it sleeps (backoff) and loops again. On a
+> non-retryable status, or once retries run out, it raises `TMDBAPIError` with the
+> endpoint and status. The loop structure is *why* this is robust: success, retry,
+> and permanent-failure are three clearly separated paths, not tangled `if`s.
+
+`etl/tmdb_client.py` — `_sleep_before_retry()`:
+> Decides *how long* to wait before the next attempt. If the server sent a
+> `Retry-After` header (common with 429s), it obeys that exact number. Otherwise it
+> falls back to exponential backoff `backoff_factor * 2**attempt`. Setting
+> `backoff_factor=0` in tests makes retries instant — that's why the test suite runs
+> in 0.2s instead of seconds.
+
+`etl/tmdb_client.py` — `request_params = {"api_key": self.api_key, **(params or {})}`:
+> v3 TMDB auth puts the key in the query string. This line injects it into *every*
+> request in one place, so no individual call ever has to remember to add it.
+
+### What to Study Next
+Look at the **`urllib3.util.retry.Retry` adapter** that `requests` can mount on a
+Session — it implements backoff at the transport layer. Question to explore: what
+are the trade-offs between hand-rolling retry logic (like we did, full control,
+easy to unit-test) versus delegating it to the library adapter? When would you
+prefer each?
