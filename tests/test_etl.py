@@ -298,3 +298,82 @@ def test_ingest_movie_details_empty_input_returns_empty_lists():
     assert succeeded == []
     assert failed == []
     mock_s3.put_object.assert_not_called()
+
+
+# --- ingest_credits -----------------------------------------------------------
+
+from etl.bronze.ingest_credits import ingest_credits
+
+
+def _credits_payload(movie_id: int) -> dict:
+    """Build a minimal TMDB credits payload."""
+    return {
+        "id": movie_id,
+        "cast": [{"id": 1, "name": "Actor A", "order": 0}],
+        "crew": [{"id": 2, "name": "Director B", "job": "Director"}],
+    }
+
+
+def test_ingest_credits_writes_one_file_per_movie():
+    """Each movie_id must land in its own S3 key named <movie_id>.json."""
+    mock_client = MagicMock()
+    mock_client.get_movie_credits.side_effect = [
+        _credits_payload(550),
+        _credits_payload(551),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_credits(
+            movie_ids=[550, 551],
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+        )
+
+    assert succeeded == [550, 551]
+    assert failed == []
+    assert mock_s3.put_object.call_count == 2
+    keys_written = [call[1]["Key"] for call in mock_s3.put_object.call_args_list]
+    assert "bronze/credits/ingestion_date=2026-06-22/550.json" in keys_written
+    assert "bronze/credits/ingestion_date=2026-06-22/551.json" in keys_written
+
+
+def test_ingest_credits_logs_failed_movie_id_and_continues():
+    """A failed movie_id must appear in failed list; successes still write."""
+    mock_client = MagicMock()
+    mock_client.get_movie_credits.side_effect = [
+        _credits_payload(100),
+        RuntimeError("connection timeout"),
+        _credits_payload(300),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_credits(
+            movie_ids=[100, 200, 300],
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+        )
+
+    assert succeeded == [100, 300]
+    assert failed == [200]
+    assert mock_s3.put_object.call_count == 2
+
+
+def test_ingest_credits_empty_input_returns_empty_lists():
+    """Calling with an empty movie_ids list must succeed with no S3 calls."""
+    mock_client = MagicMock()
+    mock_s3 = MagicMock()
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_credits(
+            movie_ids=[],
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+        )
+
+    assert succeeded == []
+    assert failed == []
+    mock_s3.put_object.assert_not_called()

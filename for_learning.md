@@ -326,3 +326,42 @@ Look up **partial retry patterns** in pipeline design: once you have a
 Common approaches include writing the failed IDs to a small JSON file in S3
 (e.g. `bronze/movie_details/_failed/2026-06-22.json`) or storing them in a
 simple database table. Think about which fits our single-machine setup better.
+
+---
+
+## Task 7 — Bronze ingestion: Credits (cast & crew)
+
+### What Was Built
+A script that fetches cast and crew credits for each movie from TMDB and writes
+one raw JSON file per movie into the Bronze S3 layer. It follows the exact same
+fail-and-continue pattern as Task 6: one failure does not abort the run, and
+the failed IDs are returned so callers can retry them.
+
+### Concepts Used
+- **Separation of concerns at the entity level**: credits are a different entity
+  from movie details, so they get their own S3 prefix (`bronze/credits/`) and
+  their own ingestion module. This makes it easy to re-ingest credits without
+  touching movie details, and vice versa.
+- **Consistent interface design**: `ingest_credits()` has the same signature and
+  return type as `ingest_movie_details()` — both accept `(movie_ids, ingestion_date, client)`
+  and return `(succeeded_ids, failed_ids)`. A consistent interface means a
+  future orchestrator can call both the same way without special-casing either.
+- **TMDB credits structure**: the credits endpoint returns a dict with two keys —
+  `cast` (ordered list of actors with `order`, `character`, etc.) and `crew`
+  (list of crew members with `job`, `department`, etc.). Both are preserved as-is
+  in Bronze; splitting and cleaning happens in Silver.
+
+### Key Code
+`etl/bronze/ingest_credits.py` — `ingest_credits()`:
+> Calls `client.get_movie_credits(movie_id)` (which hits `movie/{id}/credits`)
+> and writes the payload to `bronze/credits/ingestion_date=YYYY-MM-DD/<movie_id>.json`.
+> The structure is identical to `ingest_movie_details` by design — same loop,
+> same error handling, same return contract. Reusing the same pattern means less
+> cognitive overhead and fewer bugs when reading the pipeline top-to-bottom.
+
+### What to Study Next
+Look at the **TMDB credits response** in detail: `cast[].order` is the billing
+order (0 = top-billed), and `crew[].job` can be "Director", "Producer",
+"Screenplay", etc. In Silver (Task 10), you'll need to filter crew to extract
+only directors. Think now about what `crew[].department` values exist and how
+you'd filter them — the TMDB docs list all departments.
