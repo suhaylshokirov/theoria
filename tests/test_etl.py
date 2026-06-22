@@ -157,3 +157,68 @@ def test_ingest_genres_returns_correct_genre_count():
     _, kwargs = mock_s3.put_object.call_args
     written = json.loads(kwargs["Body"].decode("utf-8"))
     assert len(written["genres"]) == 19
+
+
+# --- ingest_movies ------------------------------------------------------------
+
+from etl.bronze.ingest_movies import ingest_movies
+
+
+def _movie_page(page: int, ids: list[int]) -> dict:
+    """Build a minimal TMDB popular-movies page payload."""
+    return {"page": page, "results": [{"id": mid, "title": f"Movie {mid}"} for mid in ids]}
+
+
+def test_ingest_movies_writes_one_file_per_page():
+    """Each page must land in its own S3 key with zero-padded page number."""
+    mock_client = MagicMock()
+    mock_client.get_popular_movies.side_effect = [
+        _movie_page(1, [10, 20]),
+        _movie_page(2, [30, 40]),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ingest_movies(ingestion_date=dt.date(2026, 6, 22), client=mock_client, max_pages=2)
+
+    assert mock_s3.put_object.call_count == 2
+    keys_written = [call[1]["Key"] for call in mock_s3.put_object.call_args_list]
+    assert "bronze/movies/ingestion_date=2026-06-22/page_0001.json" in keys_written
+    assert "bronze/movies/ingestion_date=2026-06-22/page_0002.json" in keys_written
+
+
+def test_ingest_movies_returns_all_movie_ids():
+    """movie_ids from every page must be collected and returned."""
+    mock_client = MagicMock()
+    mock_client.get_popular_movies.side_effect = [
+        _movie_page(1, [1, 2, 3]),
+        _movie_page(2, [4, 5, 6]),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ids = ingest_movies(ingestion_date=dt.date(2026, 6, 22), client=mock_client, max_pages=2)
+
+    assert ids == [1, 2, 3, 4, 5, 6]
+
+
+def test_ingest_movies_partial_failure_does_not_lose_written_pages():
+    """A failure on page 2 must not roll back page 1 already written to S3."""
+    mock_client = MagicMock()
+    mock_client.get_popular_movies.side_effect = [
+        _movie_page(1, [10, 20]),
+        RuntimeError("network blip"),
+        _movie_page(3, [50, 60]),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ids = ingest_movies(ingestion_date=dt.date(2026, 6, 22), client=mock_client, max_pages=3)
+
+    # 2 pages written (1 and 3), page 2 failed and was skipped
+    assert mock_s3.put_object.call_count == 2
+    # IDs from the two successful pages are still returned
+    assert ids == [10, 20, 50, 60]

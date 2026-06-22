@@ -20,8 +20,8 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 4 — Bronze ingestion: Genres
-Currently on          : Task 5 — Bronze ingestion: Movies (paginated)
+Last completed task   : Task 5 — Bronze ingestion: Movies (paginated)
+Currently on          : Task 6 — Bronze ingestion: Movie details
 Current phase         : Phase 1 — TMDB Ingestion (Bronze)
 Blockers / open issues: None
 Last updated          : 2026-06-22
@@ -219,12 +219,12 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Expected output:** File at `bronze/genres/ingestion_date=.../genres.json`; log row count + path.
 - **Outcome:** `ingest_genres()` fetches the TMDB genre list and writes the raw API payload to `s3://<bucket>/bronze/genres/ingestion_date=YYYY-MM-DD/genres.json`; logs genre count, destination URI, and elapsed time. Idempotent (same date → same key/content). Dependency-injected client + date params make it fully testable without network access; 2 new unit tests added (10/10 pass).
 
-#### [ ] Task 5 — Bronze ingestion: Movies (paginated)
+#### [x] Task 5 — Bronze ingestion: Movies (paginated)
 - **Goal:** Pull a catalog of movies, one file per page.
 - **Files:** `etl/bronze/ingest_movies.py`
 - **Key rules:** Configurable `MAX_PAGES`; one JSON file per page; partial failure must not lose completed pages; collect discovered `movie_id` list.
 - **Expected output:** N JSON files in S3; log summary of total movies.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `ingest_movies()` fetches up to `MAX_PAGES` pages of the TMDB popular-movies list and writes each as `bronze/movies/ingestion_date=YYYY-MM-DD/page_NNNN.json`; pages are flushed to S3 individually so a failure on page N never loses pages already written; returns the full list of discovered `movie_id`s for downstream use. Logs per-page counts and a final summary. 3 new unit tests added (13/13 pass).
 
 #### [ ] Task 6 — Bronze ingestion: Movie details
 - **Goal:** Fetch full details per `movie_id`.

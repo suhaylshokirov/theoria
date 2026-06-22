@@ -226,3 +226,60 @@ returns a *different* genre list tomorrow (e.g. they add a new genre)? Should
 the Bronze layer keep the old file too, or replace it? Then read how systems like
 Apache Airflow handle **backfills** — re-running a past date's pipeline with the
 intent of refreshing the data.
+
+---
+
+## Task 5 — Bronze ingestion: Movies (paginated)
+
+### What Was Built
+`etl/bronze/ingest_movies.py` — an ingestion script that walks through the TMDB
+"popular movies" list page by page and writes each page as its own JSON file in
+the Bronze S3 layer. It returns the list of every `movie_id` it found, which the
+next two tasks (movie details and credits) will use as their input. The number of
+pages to fetch is controlled by `MAX_PAGES` in `.env` so you can fetch 5 pages in
+development and 500 in production without changing any code.
+
+### Concepts Used
+- **Pagination**: APIs rarely return all records at once. TMDB's popular-movies
+  endpoint returns 20 movies per page; to get a useful catalogue you request
+  page 1, page 2, ... up to some limit. The script uses a simple `for page in
+  range(1, max_pages + 1)` loop.
+- **Write-on-success / partial failure tolerance**: each page is written to S3
+  the moment it arrives, before the next page is fetched. If page 7 fails (network
+  blip, rate limit), pages 1–6 are already safely stored. You don't lose everything
+  because one page errored.
+- **Configurable limits via `config.py`**: `MAX_PAGES` comes from the environment,
+  not from a hardcoded number in the script. This is the "all config from one place"
+  rule applied to ingestion tuning.
+- **Collecting IDs across pages**: the function accumulates `movie_id`s from every
+  successful page into a list and returns it. The caller (or the next step in the
+  pipeline) uses that list to know which movies to fetch details for.
+- **Zero-padded filenames**: pages are named `page_0001.json`, `page_0002.json`,
+  etc. (`f"page_{page:04d}.json"`). Zero-padding keeps files in correct lexicographic
+  order when listed — `page_0010` comes after `page_0009`, not after `page_00100`.
+
+### Key Code
+`etl/bronze/ingest_movies.py` — the `for page in range(...)` loop:
+> Each iteration: fetch one page, write it to S3 immediately, extend `movie_ids`,
+> increment `pages_written`. The `try/except` around this block catches any error
+> on a single page, logs it with the page number, increments `pages_failed`, and
+> continues to the next page. The already-written S3 objects are untouched —
+> there is no transaction to roll back.
+
+`etl/bronze/ingest_movies.py` — `f"page_{page:04d}.json"`:
+> The `:04d` format spec zero-pads the page number to four digits. This matters
+> because S3 and most filesystems list keys lexicographically: without padding,
+> `page_10.json` would sort before `page_2.json`.
+
+`tests/test_etl.py` — `test_ingest_movies_partial_failure_does_not_lose_written_pages()`:
+> The mock client raises `RuntimeError` on page 2 mid-run. The test then asserts
+> that `put_object` was called exactly twice (pages 1 and 3) and that the returned
+> IDs still include those from both successful pages. This is the most important
+> test: it proves the failure-isolation guarantee, not just the happy path.
+
+### What to Study Next
+Look up the **"at-least-once" vs "exactly-once" delivery** distinction in data
+engineering. Our current approach is at-least-once: if the script is killed
+*after* `put_object` succeeds but *before* `movie_ids.extend()` runs, the file
+is in S3 but the ID is missing from the returned list. Ask: is that a problem for
+our pipeline? How would you detect and fix it?
