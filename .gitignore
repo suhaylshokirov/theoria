@@ -35,4 +35,5 @@ staticfiles/
 .vscode/
 
 # Others
-self_test.md
+.claude/
+for_learning.md
