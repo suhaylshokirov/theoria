@@ -15,6 +15,34 @@ from etl import s3_utils
 from etl.tmdb_client import TMDBAPIError, TMDBClient
 
 
+# --- logging_config -----------------------------------------------------------
+
+def test_setup_logging_creates_console_and_file_handlers(tmp_path):
+    """setup_logging() must attach exactly two handlers and create the log file."""
+    import logging
+    from unittest.mock import patch as _patch
+
+    import config as _config
+    from etl.logging_config import setup_logging
+
+    root = logging.getLogger()
+    initial_count = len(root.handlers)
+
+    with _patch.object(_config, "LOGS_DIR", tmp_path):
+        setup_logging("test_script")
+
+    added = root.handlers[initial_count:]
+    assert len(added) == 2
+    handler_types = {type(h).__name__ for h in added}
+    assert "StreamHandler" in handler_types
+    assert "RotatingFileHandler" in handler_types
+    assert (tmp_path / "test_script.log").exists()
+
+    # Clean up so other tests aren't affected by extra handlers.
+    for h in added:
+        root.removeHandler(h)
+
+
 def _fake_response(status_code: int, json_body: dict | None = None, headers: dict | None = None):
     """Build a stand-in requests.Response with just what the client reads."""
     resp = MagicMock()

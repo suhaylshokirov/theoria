@@ -20,9 +20,9 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 7 — Bronze ingestion: Credits (cast & crew)
-Currently on          : Task 8 — Ingestion logging & run summary
-Current phase         : Phase 1 — TMDB Ingestion (Bronze)
+Last completed task   : Task 8 — Ingestion logging & run summary
+Currently on          : Task 9 — Silver transform: Movies
+Current phase         : Phase 2 — Data Lake (Silver & Gold)
 Blockers / open issues: None
 Last updated          : 2026-06-22
 ```
@@ -239,11 +239,11 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Expected output:** `bronze/credits/ingestion_date=.../<movie_id>.json` per movie.
 - **Outcome:** `ingest_credits()` fetches the TMDB credits endpoint per movie and writes `bronze/credits/ingestion_date=YYYY-MM-DD/<movie_id>.json` individually. Same fail-and-continue pattern as Task 6: failures logged with the specific `movie_id`, returned in `failed_ids`. 3 new unit tests added (19/19 pass).
 
-#### [ ] Task 8 — Ingestion logging & run summary
+#### [x] Task 8 — Ingestion logging & run summary
 - **Goal:** Consistent logging across all ingestion scripts.
 - **Files:** `etl/logging_config.py`; small edits to Tasks 4–7.
 - **Expected output:** Every run logs: start time, records fetched, records written, failures, duration. One-line summary at end.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `etl/logging_config.py` created with `setup_logging(script_name)`: attaches a console handler (INFO+, timestamped) and a `RotatingFileHandler` (DEBUG+, 5 MB × 3 backups) to the root logger, writing to `logs/<script_name>.log`. All four ingestion scripts updated to call it from `__main__`. 1 new test added (20/20 pass).
 
 ---
 

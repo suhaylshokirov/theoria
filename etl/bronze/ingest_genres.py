@@ -71,6 +71,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+    from etl.logging_config import setup_logging
+    setup_logging("ingest_genres")
     args = _parse_args()
     ingest_genres(ingestion_date=args.date)

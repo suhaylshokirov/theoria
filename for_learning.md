@@ -365,3 +365,52 @@ order (0 = top-billed), and `crew[].job` can be "Director", "Producer",
 "Screenplay", etc. In Silver (Task 10), you'll need to filter crew to extract
 only directors. Think now about what `crew[].department` values exist and how
 you'd filter them — the TMDB docs list all departments.
+
+---
+
+## Task 8 — Ingestion logging & run summary
+
+### What Was Built
+A shared logging setup module (`etl/logging_config.py`) that all Bronze
+ingestion scripts now use. Calling `setup_logging("ingest_genres")` from
+a script's `__main__` block replaces the old one-liner `basicConfig` call and
+gives every script two log destinations: the console (INFO+) and a rotating
+file in `logs/` (DEBUG+).
+
+### Concepts Used
+- **Centralized logging configuration**: instead of each script calling
+  `logging.basicConfig(...)` with its own format string, one function owns the
+  setup. Change the format once → it applies everywhere.
+- **Multiple handlers on the root logger**: Python's logging system lets you
+  attach many handlers to one logger. Console shows only INFO+ (readable at a
+  glance); the file captures DEBUG+ so detailed per-item writes are there for
+  debugging without flooding the terminal.
+- **Rotating file handler (`RotatingFileHandler`)**: limits each log file to
+  5 MB, keeping 3 backups (`ingest_genres.log`, `.log.1`, `.log.2`). Without
+  rotation, a long-running pipeline would fill the disk.
+- **`mkdir(parents=True, exist_ok=True)`**: creates the `logs/` directory if
+  it doesn't exist yet, without raising an error if it already does. The
+  `parents=True` flag creates any missing intermediate directories too.
+
+### Key Code
+`etl/logging_config.py` — `setup_logging(script_name)`:
+> Builds two `logging.Handler` objects, both using the same `Formatter`
+> (timestamp + padded level + logger name + message). Attaches them to
+> `logging.getLogger()` — the *root* logger — so every `logger = logging.getLogger(__name__)`
+> in any ETL module automatically inherits both handlers without any per-module
+> setup.
+
+`etl/bronze/ingest_genres.py` (and the other three) — `__main__` block:
+> The `from etl.logging_config import setup_logging` import is inside
+> `if __name__ == "__main__":` on purpose. Importing it at module level would
+> run setup code on every `import ingest_genres` (e.g. in tests), which would
+> add handlers and create files even during test runs. Keeping it inside
+> `__main__` means it only runs when the script is executed directly.
+
+### What to Study Next
+Read about Python's **logger hierarchy**: `logging.getLogger("etl.bronze.ingest_genres")`
+is a child of `logging.getLogger("etl.bronze")`, which is a child of
+`logging.getLogger("etl")`, which is a child of the root logger. Messages
+propagate up by default. This is why attaching handlers to the root logger is
+enough — you never need to touch child loggers. Try: what happens if you set
+`propagate = False` on a child logger?
