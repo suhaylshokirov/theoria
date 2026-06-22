@@ -20,11 +20,11 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 3 — S3 writer utility (shared)
-Currently on          : Task 4 — Bronze ingestion: Genres
+Last completed task   : Task 4 — Bronze ingestion: Genres
+Currently on          : Task 5 — Bronze ingestion: Movies (paginated)
 Current phase         : Phase 1 — TMDB Ingestion (Bronze)
 Blockers / open issues: None
-Last updated          : 2026-06-21
+Last updated          : 2026-06-22
 ```
 
 **After finishing any task, in this order:**
@@ -213,11 +213,11 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Expected output:** Bronze scripts call shared functions; path convention defined in exactly one place.
 - **Outcome:** `etl/s3_utils.py` centralises S3 writes: a lazily-built, reused boto3 client (credentials/region from `config.py`); `build_path()` is the single place defining the `<layer>/<entity>/ingestion_date=YYYY-MM-DD/<file>` key convention (accepts `str` or `date`); `write_json()` uploads pretty UTF-8 JSON and `write_parquet()` serialises a DataFrame to Parquet in-memory (pyarrow, no temp files) — both return the `s3://` URI, log bytes/rows, and never swallow errors. 4 mocked unit tests added to `tests/test_etl.py` (path convention, date handling, JSON + Parquet round-trip); full suite of 8 passes with no network access.
 
-#### [ ] Task 4 — Bronze ingestion: Genres
+#### [x] Task 4 — Bronze ingestion: Genres
 - **Goal:** Pull genre list and write raw JSON to Bronze.
 - **Files:** `etl/bronze/ingest_genres.py`
 - **Expected output:** File at `bronze/genres/ingestion_date=.../genres.json`; log row count + path.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `ingest_genres()` fetches the TMDB genre list and writes the raw API payload to `s3://<bucket>/bronze/genres/ingestion_date=YYYY-MM-DD/genres.json`; logs genre count, destination URI, and elapsed time. Idempotent (same date → same key/content). Dependency-injected client + date params make it fully testable without network access; 2 new unit tests added (10/10 pass).
 
 #### [ ] Task 5 — Bronze ingestion: Movies (paginated)
 - **Goal:** Pull a catalog of movies, one file per page.

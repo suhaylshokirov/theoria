@@ -60,7 +60,7 @@ TMDB_BASE_URL = _optional("TMDB_BASE_URL", "https://api.themoviedb.org/3")
 AWS_ACCESS_KEY_ID = _require("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = _require("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = _optional("AWS_REGION", "eu-central-1")
-S3_BUCKET = _optional("S3_BUCKET", "theoria-datalake")
+S3_BUCKET = _require("S3_BUCKET")
 
 # --- PostgreSQL warehouse --------------------------------------------------
 DATABASE_URL = _require("DATABASE_URL")

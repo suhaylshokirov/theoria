@@ -115,3 +115,45 @@ def test_write_parquet_puts_dataframe():
 
     round_tripped = pd.read_parquet(io.BytesIO(kwargs["Body"]))
     pd.testing.assert_frame_equal(round_tripped, df)
+
+
+# --- ingest_genres ------------------------------------------------------------
+
+import datetime as dt
+
+from etl.bronze.ingest_genres import ingest_genres
+
+
+def test_ingest_genres_writes_to_correct_s3_path():
+    """ingest_genres() must build the right Bronze key and return the s3:// URI."""
+    fake_payload = {"genres": [{"id": 28, "name": "Action"}, {"id": 12, "name": "Adventure"}]}
+    mock_client = MagicMock()
+    mock_client.get_genres.return_value = fake_payload
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uri = ingest_genres(ingestion_date=dt.date(2026, 6, 22), client=mock_client)
+
+    assert uri == "s3://theoria-datalake/bronze/genres/ingestion_date=2026-06-22/genres.json"
+    mock_client.get_genres.assert_called_once()
+    mock_s3.put_object.assert_called_once()
+
+
+def test_ingest_genres_returns_correct_genre_count():
+    """ingest_genres() must write the full payload including all genres."""
+    import json
+
+    genres = [{"id": i, "name": f"Genre{i}"} for i in range(19)]
+    fake_payload = {"genres": genres}
+    mock_client = MagicMock()
+    mock_client.get_genres.return_value = fake_payload
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ingest_genres(ingestion_date=dt.date(2026, 6, 22), client=mock_client)
+
+    _, kwargs = mock_s3.put_object.call_args
+    written = json.loads(kwargs["Body"].decode("utf-8"))
+    assert len(written["genres"]) == 19

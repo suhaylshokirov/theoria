@@ -164,3 +164,65 @@ in `ingestion_date=2026-06-21`). Question to explore: when a query engine like
 Athena or Spark reads this lake later, how does that `ingestion_date=...` folder
 name let it skip files it doesn't need (partition pruning) instead of scanning
 everything?
+
+---
+
+## Task 4 — Bronze ingestion: Genres
+
+### What Was Built
+The first real ingestion script: `etl/bronze/ingest_genres.py`. It calls the
+TMDB API to fetch the official list of movie genres (Action, Comedy, Drama, etc.)
+and writes the raw API response — untouched — as a JSON file in the Bronze layer
+of the S3 data lake. This is the first step in the pipeline where data actually
+lands in the lake.
+
+### Concepts Used
+- **Bronze layer**: the "raw" zone of a data lake. Data arrives exactly as the
+  source sent it — no cleaning, no type-casting, no filtering. The point is that
+  you always have the original to reprocess if your downstream transforms have a
+  bug.
+- **Idempotent ingestion**: running the script twice on the same day produces the
+  same file with the same content. It doesn't accumulate duplicate records or
+  crash on the second run. "Idempotent" means: same input → same output, no
+  matter how many times you run it.
+- **Separation of concerns**: the business logic (`ingest_genres()`) is a plain
+  function that accepts a client and a date as arguments. The `__main__` block only
+  handles CLI argument parsing and logging setup, then calls that function. This
+  makes the logic testable without invoking a subprocess.
+- **Dependency injection (light)**: `ingest_genres()` accepts an optional `client`
+  argument. In production it builds one from `config.py`; in tests you pass in a
+  mock. You never have to patch module-level globals to test the logic.
+- **Monotonic timer for duration logging**: `time.monotonic()` is used instead of
+  `time.time()` to measure elapsed time. Monotonic clocks only go forward — unlike
+  wall-clock time, they can't jump backwards if the system clock is adjusted mid-run.
+- **Run summary log**: the final log line records genre count, destination URI,
+  and elapsed time. "Done" alone tells you nothing; a run summary tells you whether
+  the run was correct and fast.
+
+### Key Code
+`etl/bronze/ingest_genres.py` — `ingest_genres()`:
+> The function is the module's public API. It takes `ingestion_date` and `client`
+> as parameters (defaulting to today and a real `TMDBClient`), so tests can
+> inject fakes without patching. It fetches the genre payload, builds the S3 key
+> via `s3_utils.build_path()`, and delegates the write to `s3_utils.write_json()`.
+> The function owns only the *orchestration* — it never knows how HTTP or S3 work.
+
+`etl/bronze/ingest_genres.py` — `if __name__ == "__main__"`:
+> The entry point contains *no* business logic — it only sets up logging, parses
+> `--date` from the command line, and calls `ingest_genres()`. This is the
+> "one module, one responsibility" rule applied: the `__main__` block is an
+> I/O adapter, not a logic layer. Because of this, the whole function is testable
+> without spawning a subprocess.
+
+`tests/test_etl.py` — `test_ingest_genres_writes_to_correct_s3_path()`:
+> Passes a pre-built mock `TMDBClient` and patches `get_s3_client` so no network
+> or AWS calls happen. Asserts the exact S3 URI returned — which encodes the date
+> partition, entity name, and filename all at once. If someone changes how
+> `build_path()` works, this test breaks immediately.
+
+### What to Study Next
+Study the concept of **pipeline idempotency** more broadly. Ask: what if TMDB
+returns a *different* genre list tomorrow (e.g. they add a new genre)? Should
+the Bronze layer keep the old file too, or replace it? Then read how systems like
+Apache Airflow handle **backfills** — re-running a past date's pipeline with the
+intent of refreshing the data.
