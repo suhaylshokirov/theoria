@@ -222,3 +222,79 @@ def test_ingest_movies_partial_failure_does_not_lose_written_pages():
     assert mock_s3.put_object.call_count == 2
     # IDs from the two successful pages are still returned
     assert ids == [10, 20, 50, 60]
+
+
+# --- ingest_movie_details -----------------------------------------------------
+
+from etl.bronze.ingest_movie_details import ingest_movie_details
+
+
+def _movie_detail(movie_id: int) -> dict:
+    """Build a minimal TMDB movie-detail payload."""
+    return {"id": movie_id, "title": f"Movie {movie_id}", "runtime": 120}
+
+
+def test_ingest_movie_details_writes_one_file_per_movie():
+    """Each movie_id must land in its own S3 key named <movie_id>.json."""
+    mock_client = MagicMock()
+    mock_client.get_movie_details.side_effect = [
+        _movie_detail(550),
+        _movie_detail(551),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_movie_details(
+            movie_ids=[550, 551],
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+        )
+
+    assert succeeded == [550, 551]
+    assert failed == []
+    assert mock_s3.put_object.call_count == 2
+    keys_written = [call[1]["Key"] for call in mock_s3.put_object.call_args_list]
+    assert "bronze/movie_details/ingestion_date=2026-06-22/550.json" in keys_written
+    assert "bronze/movie_details/ingestion_date=2026-06-22/551.json" in keys_written
+
+
+def test_ingest_movie_details_logs_failed_movie_id_and_continues():
+    """A failed movie_id must be recorded in failed list; successes still write."""
+    mock_client = MagicMock()
+    mock_client.get_movie_details.side_effect = [
+        _movie_detail(100),
+        RuntimeError("404 not found"),
+        _movie_detail(300),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_movie_details(
+            movie_ids=[100, 200, 300],
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+        )
+
+    assert succeeded == [100, 300]
+    assert failed == [200]
+    # Only 2 S3 writes — the failed movie must not produce a partial file.
+    assert mock_s3.put_object.call_count == 2
+
+
+def test_ingest_movie_details_empty_input_returns_empty_lists():
+    """Calling with an empty movie_ids list must succeed with no S3 calls."""
+    mock_client = MagicMock()
+    mock_s3 = MagicMock()
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_movie_details(
+            movie_ids=[],
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+        )
+
+    assert succeeded == []
+    assert failed == []
+    mock_s3.put_object.assert_not_called()

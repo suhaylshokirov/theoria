@@ -283,3 +283,46 @@ engineering. Our current approach is at-least-once: if the script is killed
 *after* `put_object` succeeds but *before* `movie_ids.extend()` runs, the file
 is in S3 but the ID is missing from the returned list. Ask: is that a problem for
 our pipeline? How would you detect and fix it?
+
+---
+
+## Task 6 — Bronze ingestion: Movie details
+
+### What Was Built
+A script that takes a list of movie IDs (collected by Task 5) and fetches the
+full detail record for each one from TMDB, writing a separate JSON file per
+movie into the Bronze S3 layer. If one movie fails, the error is logged with
+the specific ID and the script moves on — completed movies are never lost.
+
+### Concepts Used
+- **Per-entity Bronze files**: storing one raw JSON per source record (instead
+  of one big blob) makes partial re-ingestion and downstream reads much simpler.
+- **Fail-and-continue with identity logging**: catching exceptions per item,
+  recording the failed ID, and keeping the success list separate. This pattern
+  lets you retry only the failed subset rather than the full catalogue.
+- **Return value as contract**: returning `(succeeded_ids, failed_ids)` instead
+  of just logging means callers (e.g. a pipeline orchestrator) can act on
+  failures programmatically without parsing log strings.
+- **Idempotency at the file level**: same `movie_id` + same `ingestion_date`
+  → same S3 key → safe to re-run without duplicating data.
+
+### Key Code
+`etl/bronze/ingest_movie_details.py` — `ingest_movie_details()`:
+> The `for movie_id in movie_ids` loop writes each file *before* moving to the
+> next ID. The `try/except` catches any failure, appends the ID to `failed`,
+> logs `"movie_id=%d failed: %s"`, and continues. This is deliberate: we log
+> the ID (not just "ingestion failed") so the pipeline knows exactly which
+> records need a retry run — essential when you have thousands of movies.
+
+`tests/test_etl.py` — `test_ingest_movie_details_logs_failed_movie_id_and_continues`:
+> Injects a `RuntimeError` for movie_id 200 while 100 and 300 succeed. Asserts
+> that `succeeded == [100, 300]`, `failed == [200]`, and only 2 S3 writes
+> happened. This test proves the contract: one bad record does not abort the run
+> and does not produce a partial file in S3.
+
+### What to Study Next
+Look up **partial retry patterns** in pipeline design: once you have a
+`failed_ids` list, how do you persist it so a separate retry job can pick it up?
+Common approaches include writing the failed IDs to a small JSON file in S3
+(e.g. `bronze/movie_details/_failed/2026-06-22.json`) or storing them in a
+simple database table. Think about which fits our single-machine setup better.

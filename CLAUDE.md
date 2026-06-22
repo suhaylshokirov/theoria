@@ -20,8 +20,8 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 5 — Bronze ingestion: Movies (paginated)
-Currently on          : Task 6 — Bronze ingestion: Movie details
+Last completed task   : Task 6 — Bronze ingestion: Movie details
+Currently on          : Task 7 — Bronze ingestion: Credits (cast & crew)
 Current phase         : Phase 1 — TMDB Ingestion (Bronze)
 Blockers / open issues: None
 Last updated          : 2026-06-22
@@ -226,12 +226,12 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Expected output:** N JSON files in S3; log summary of total movies.
 - **Outcome:** `ingest_movies()` fetches up to `MAX_PAGES` pages of the TMDB popular-movies list and writes each as `bronze/movies/ingestion_date=YYYY-MM-DD/page_NNNN.json`; pages are flushed to S3 individually so a failure on page N never loses pages already written; returns the full list of discovered `movie_id`s for downstream use. Logs per-page counts and a final summary. 3 new unit tests added (13/13 pass).
 
-#### [ ] Task 6 — Bronze ingestion: Movie details
+#### [x] Task 6 — Bronze ingestion: Movie details
 - **Goal:** Fetch full details per `movie_id`.
 - **Files:** `etl/bronze/ingest_movie_details.py`
 - **Key rules:** One file per movie; log specific `movie_id` on failure (not just "ingestion failed").
 - **Expected output:** One JSON per `movie_id`; failures logged with the id.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `ingest_movie_details()` accepts a list of movie IDs, fetches each from TMDB, and writes `bronze/movie_details/ingestion_date=YYYY-MM-DD/<movie_id>.json` individually. Failures are caught per-ID, logged with the specific `movie_id`, and returned in a `failed_ids` list — completed movies are never discarded. Returns `(succeeded_ids, failed_ids)` so callers can retry only the failed subset. 3 new unit tests added (16/16 pass).
 
 #### [ ] Task 7 — Bronze ingestion: Credits (cast & crew)
 - **Goal:** Pull cast/crew per movie.
