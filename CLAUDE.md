@@ -141,7 +141,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 ```
 
 **S3 path convention:**
-`s3://theoria-datalake/<layer>/<entity>/ingestion_date=YYYY-MM-DD/<file>.{json|parquet}`
+`s3://your-datalake-name/<layer>/<entity>/ingestion_date=YYYY-MM-DD/<file>.{json|parquet}`
 
 ---
 
