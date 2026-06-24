@@ -20,8 +20,8 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 9 — Silver transform: Movies
-Currently on          : Task 10 — Silver transform: People
+Last completed task   : Task 10 — Silver transform: People
+Currently on          : Task 11 — Silver transform: Genres
 Current phase         : Phase 2 — Data Lake (Silver & Gold)
 Blockers / open issues: None
 Last updated          : 2026-06-24
@@ -254,10 +254,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Read Bronze JSON → flatten → cast types → deduplicate on `movie_id` → write Parquet.
 - **Outcome:** `transform_movies()` lists all Bronze movie-detail JSON files for a given date via S3 paginator, flattens each raw TMDB payload into one typed row (renaming `id` → `movie_id`, extracting `genre_ids` from nested genres), casts every field with pandas nullable types (`Int64`, coerced dates), deduplicates on `movie_id`, and writes `silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet`. Raises `FileNotFoundError` on empty input. 7 new tests added (27/27 pass).
 
-#### [ ] Task 10 — Silver transform: People (actors & directors)
+#### [x] Task 10 — Silver transform: People (actors & directors)
 - **Files:** `etl/silver/transform_people.py`
 - **Steps:** Read Bronze credits → split cast/crew → standardize → deduplicate on `person_id` → write `silver/actors/` and `silver/directors/` separately.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `transform_people()` reads all Bronze credits JSON for a date, extracts cast rows as actors and `job=="Director"` crew rows as directors, casts types with pandas nullable types, deduplicates each group on `person_id` across all movies, and writes `silver/actors/…/actors.parquet` and `silver/directors/…/directors.parquet`. Returns both S3 URIs. 7 new tests added (34/34 pass).
 
 #### [ ] Task 11 — Silver transform: Genres
 - **Files:** `etl/silver/transform_genres.py`

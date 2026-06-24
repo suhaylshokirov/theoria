@@ -468,3 +468,57 @@ Parquet schema evolution: what happens when you add a new column to
 `_flatten_movie` — does the downstream reader break? Read about PyArrow's
 `schema` parameter in `to_parquet` and how `read_parquet` handles
 missing columns.
+
+---
+
+## Task 10 — Silver transform: People (actors & directors)
+
+### What Was Built
+A Silver transform that reads all Bronze credits JSON files for a given
+date, splits each payload into two entity types — actors (from the `cast`
+array) and directors (from the `crew` array filtered to `job == "Director"`),
+deduplicates each group on `person_id` (the same actor appears in many
+movies' credits), and writes two separate Parquet files:
+`silver/actors/…/actors.parquet` and `silver/directors/…/directors.parquet`.
+
+### Concepts Used
+- **Entity splitting**: one Bronze file contains two conceptually different
+  entities (cast members and crew members). The Silver transform is responsible
+  for separating them into the right tables rather than dumping everything
+  into one place.
+- **Cross-file deduplication**: because `person_id` 10 (e.g. "Alice") can
+  appear in the credits of hundreds of movies, all those Bronze files each
+  contain a row for her. Collecting all rows first and then calling
+  `drop_duplicates(subset=["person_id"])` collapses them to one canonical row
+  per person. This is different from Task 9 where duplicates were only possible
+  within a single date's files.
+- **Defensive empty-DataFrame handling**: if no movie in the batch had a
+  Director in the crew, `director_rows` would be an empty list. Building a
+  `pd.DataFrame([])` and then calling `_cast_people_types` on it works fine
+  because the cast-type logic operates column-by-column and gracefully handles
+  zero rows. The alternative — skipping the write — would leave downstream
+  code wondering whether the Silver file is missing or just empty.
+- **Idempotency**: same date → same S3 keys, same content. Safe to re-run.
+
+### Key Code
+`etl/silver/transform_people.py` — `_extract_directors()`:
+> Iterates the `crew` list and keeps only entries where `job == "Director"`.
+> This filter lives in its own function (not inline in the main transform)
+> because it represents a business rule — "a director is a crew member with
+> job=Director" — that may need to expand later (e.g. "Co-Director"). Keeping
+> it isolated makes it easy to test and change independently.
+
+`etl/silver/transform_people.py` — `transform_people()`:
+> Collects all cast and crew rows into two plain Python lists before building
+> DataFrames. This pattern (accumulate → DataFrame → transform) is preferred
+> over building the DataFrame incrementally inside the loop because appending
+> rows one-by-one to a DataFrame is slow (O(n²) copies). One `pd.DataFrame(rows)`
+> call at the end is O(n).
+
+### What to Study Next
+TMDB's `gender` field uses an integer code (0 = unset, 1 = female, 2 = male,
+3 = non-binary). In the warehouse `dim_actor` we might want a human-readable
+string instead. Look at pandas `.map()` for applying a lookup dict to a column
+(`df["gender"].map({0: "unset", 1: "female", 2: "male", 3: "non-binary"})`),
+and think about whether that conversion belongs in Silver or in the warehouse
+loader.

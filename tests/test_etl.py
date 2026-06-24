@@ -545,3 +545,111 @@ def test_transform_movies_raises_when_no_bronze_files():
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         with pytest.raises(FileNotFoundError):
             transform_movies(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+
+# --- transform_people ---------------------------------------------------------
+
+from etl.silver.transform_people import (
+    _cast_people_types,
+    _extract_actors,
+    _extract_directors,
+    transform_people,
+)
+
+
+def _raw_credits(movie_id: int, extra_cast: list | None = None, extra_crew: list | None = None) -> dict:
+    """Minimal TMDB credits payload for testing."""
+    cast = [
+        {"id": 10, "name": "Alice", "gender": 1, "popularity": 20.0},
+        {"id": 11, "name": "Bob", "gender": 2, "popularity": 15.0},
+    ]
+    crew = [
+        {"id": 20, "name": "Carol", "job": "Director", "gender": 1, "popularity": 30.0},
+        {"id": 21, "name": "Dave", "job": "Producer", "gender": 2, "popularity": 5.0},
+    ]
+    if extra_cast:
+        cast.extend(extra_cast)
+    if extra_crew:
+        crew.extend(extra_crew)
+    return {"id": movie_id, "cast": cast, "crew": crew}
+
+
+def test_extract_actors_returns_all_cast_members():
+    payload = _raw_credits(550)
+    rows = _extract_actors(payload)
+    assert len(rows) == 2
+    assert rows[0]["person_id"] == 10
+    assert rows[0]["name"] == "Alice"
+
+
+def test_extract_directors_filters_to_director_job_only():
+    payload = _raw_credits(550)
+    rows = _extract_directors(payload)
+    assert len(rows) == 1
+    assert rows[0]["person_id"] == 20
+    assert rows[0]["name"] == "Carol"
+
+
+def test_cast_people_types_converts_numerics():
+    rows = _extract_actors(_raw_credits(550))
+    df = pd.DataFrame(rows)
+    df = _cast_people_types(df)
+    assert df["person_id"].dtype.name == "Int64"
+    assert df["gender"].dtype.name == "Int64"
+    assert df["popularity"].dtype == float
+
+
+def test_cast_people_types_coerces_bad_values_to_null():
+    rows = [{"person_id": "bad", "name": "X", "gender": None, "popularity": "nope"}]
+    df = pd.DataFrame(rows)
+    df = _cast_people_types(df)
+    assert pd.isna(df["person_id"].iloc[0])
+    assert pd.isna(df["popularity"].iloc[0])
+
+
+def test_transform_people_writes_actors_and_directors_parquet():
+    """transform_people must write two Silver Parquet files."""
+    key = "bronze/credits/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_credits(550)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        actors_uri, directors_uri = transform_people(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+        )
+
+    assert actors_uri == "s3://theoria-datalake/silver/actors/ingestion_date=2026-06-22/actors.parquet"
+    assert directors_uri == "s3://theoria-datalake/silver/directors/ingestion_date=2026-06-22/directors.parquet"
+    assert mock_s3.put_object.call_count == 2
+
+
+def test_transform_people_deduplicates_actors_across_movies():
+    """The same person appearing in two movies' casts must produce one actor row."""
+    key1 = "bronze/credits/ingestion_date=2026-06-22/550.json"
+    key2 = "bronze/credits/ingestion_date=2026-06-22/551.json"
+    # Both movies share actor id=10
+    mock_s3 = _make_s3_mock_with_files({
+        key1: _raw_credits(550),
+        key2: _raw_credits(551),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_people(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    calls = mock_s3.put_object.call_args_list
+    actors_call = next(c for c in calls if "actors.parquet" in c[1]["Key"])
+    df_actors = pd.read_parquet(io.BytesIO(actors_call[1]["Body"]))
+    # person_id 10 and 11 each appear twice across the two files — should collapse to 2 rows
+    assert len(df_actors) == 2
+
+
+def test_transform_people_raises_when_no_bronze_files():
+    """FileNotFoundError must be raised when no Bronze credits files exist."""
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            transform_people(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
