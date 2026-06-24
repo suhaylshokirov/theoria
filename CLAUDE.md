@@ -20,11 +20,11 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 8 — Ingestion logging & run summary
-Currently on          : Task 9 — Silver transform: Movies
+Last completed task   : Task 9 — Silver transform: Movies
+Currently on          : Task 10 — Silver transform: People
 Current phase         : Phase 2 — Data Lake (Silver & Gold)
 Blockers / open issues: None
-Last updated          : 2026-06-22
+Last updated          : 2026-06-24
 ```
 
 **After finishing any task, in this order:**
@@ -249,10 +249,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ### Phase 2 — Data Lake (Silver & Gold)
 
-#### [ ] Task 9 — Silver transform: Movies
+#### [x] Task 9 — Silver transform: Movies
 - **Files:** `etl/silver/transform_movies.py`
 - **Steps:** Read Bronze JSON → flatten → cast types → deduplicate on `movie_id` → write Parquet.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `transform_movies()` lists all Bronze movie-detail JSON files for a given date via S3 paginator, flattens each raw TMDB payload into one typed row (renaming `id` → `movie_id`, extracting `genre_ids` from nested genres), casts every field with pandas nullable types (`Int64`, coerced dates), deduplicates on `movie_id`, and writes `silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet`. Raises `FileNotFoundError` on empty input. 7 new tests added (27/27 pass).
 
 #### [ ] Task 10 — Silver transform: People (actors & directors)
 - **Files:** `etl/silver/transform_people.py`

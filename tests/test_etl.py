@@ -405,3 +405,143 @@ def test_ingest_credits_empty_input_returns_empty_lists():
     assert succeeded == []
     assert failed == []
     mock_s3.put_object.assert_not_called()
+
+
+# --- transform_movies ---------------------------------------------------------
+
+import io
+
+from etl.silver.transform_movies import _cast_types, _flatten_movie, transform_movies
+
+
+def _raw_movie(movie_id: int, **overrides) -> dict:
+    """Minimal TMDB movie-detail payload for testing."""
+    base = {
+        "id": movie_id,
+        "title": f"Movie {movie_id}",
+        "release_date": "2020-01-15",
+        "runtime": 120,
+        "budget": 1_000_000,
+        "revenue": 5_000_000,
+        "original_language": "en",
+        "status": "Released",
+        "vote_average": 7.5,
+        "vote_count": 300,
+        "popularity": 42.0,
+        "overview": "A test movie.",
+        "genres": [{"id": 28, "name": "Action"}, {"id": 12, "name": "Adventure"}],
+    }
+    base.update(overrides)
+    return base
+
+
+def _make_s3_mock_with_files(payloads: dict[str, dict]) -> MagicMock:
+    """Build an S3 mock whose list_objects_v2 and get_object serve `payloads`.
+
+    payloads: {key: json_dict}
+    """
+    import json
+
+    mock_s3 = MagicMock()
+
+    # list_objects_v2 paginator
+    paginator = MagicMock()
+    paginator.paginate.return_value = [
+        {"Contents": [{"Key": k} for k in payloads]}
+    ]
+    mock_s3.get_paginator.return_value = paginator
+
+    # get_object returns a streaming body for each key
+    def get_object(Bucket, Key):
+        body = MagicMock()
+        body.read.return_value = json.dumps(payloads[Key]).encode("utf-8")
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = get_object
+    mock_s3.put_object.return_value = {}
+    return mock_s3
+
+
+def test_flatten_movie_extracts_genre_ids():
+    raw = _raw_movie(550)
+    row = _flatten_movie(raw)
+    assert row["movie_id"] == 550
+    assert row["title"] == "Movie 550"
+    assert row["genre_ids"] == [28, 12]
+    assert row["release_date"] == "2020-01-15"
+
+
+def test_flatten_movie_handles_missing_release_date():
+    raw = _raw_movie(1, release_date="")
+    row = _flatten_movie(raw)
+    assert row["release_date"] is None
+
+
+def test_cast_types_converts_numerics_and_date():
+    df = pd.DataFrame([_flatten_movie(_raw_movie(550))])
+    df = _cast_types(df)
+    assert df["movie_id"].dtype.name == "Int64"
+    assert df["runtime"].dtype.name == "Int64"
+    assert df["vote_average"].dtype == float
+    import datetime
+    assert isinstance(df["release_date"].iloc[0], datetime.date)
+
+
+def test_cast_types_coerces_bad_values_to_null():
+    raw = _raw_movie(1, runtime="not-a-number", budget=None)
+    df = pd.DataFrame([_flatten_movie(raw)])
+    df = _cast_types(df)
+    assert pd.isna(df["runtime"].iloc[0])
+    assert pd.isna(df["budget"].iloc[0])
+
+
+def test_transform_movies_writes_silver_parquet():
+    """transform_movies must read Bronze JSON and write a Silver Parquet file."""
+    key = "bronze/movie_details/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_movie(550)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uri = transform_movies(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+        )
+
+    assert uri == "s3://theoria-datalake/silver/movies/ingestion_date=2026-06-22/movies.parquet"
+    mock_s3.put_object.assert_called_once()
+    _, kwargs = mock_s3.put_object.call_args
+    assert kwargs["Key"] == "silver/movies/ingestion_date=2026-06-22/movies.parquet"
+    # Verify the Parquet round-trip contains our movie.
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df_out) == 1
+    assert df_out["movie_id"].iloc[0] == 550
+
+
+def test_transform_movies_deduplicates_on_movie_id():
+    """Duplicate movie_ids across Bronze files must be reduced to one row each."""
+    key1 = "bronze/movie_details/ingestion_date=2026-06-22/550.json"
+    key2 = "bronze/movie_details/ingestion_date=2026-06-22/550_dup.json"
+    mock_s3 = _make_s3_mock_with_files({
+        key1: _raw_movie(550, title="Original"),
+        key2: _raw_movie(550, title="Duplicate"),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_movies(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    _, kwargs = mock_s3.put_object.call_args
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df_out) == 1
+
+
+def test_transform_movies_raises_when_no_bronze_files():
+    """FileNotFoundError must be raised when no Bronze files exist for the date."""
+    import pytest
+
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            transform_movies(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")

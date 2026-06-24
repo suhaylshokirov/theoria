@@ -414,3 +414,57 @@ is a child of `logging.getLogger("etl.bronze")`, which is a child of
 propagate up by default. This is why attaching handlers to the root logger is
 enough — you never need to touch child loggers. Try: what happens if you set
 `propagate = False` on a child logger?
+
+---
+
+## Task 9 — Silver transform: Movies
+
+### What Was Built
+A transform script that reads every raw Bronze JSON file for a given date,
+cleans and reshapes it into a flat table, and writes a single Parquet file
+to the Silver layer. This is the first step from raw data to structured data
+— Bronze is what the API returned; Silver is what the rest of the pipeline
+can actually use.
+
+### Concepts Used
+- **Silver layer**: the "cleaned" zone of the data lake. Raw JSON is messy —
+  nested objects, inconsistent types, empty strings where NULLs belong. Silver
+  fixes all of that and stores one clean, typed row per business entity.
+- **Flattening**: extracting a nested structure (e.g., `genres: [{id: 28, name: "Action"}]`)
+  into a flat column (`genre_ids: [28]`). Every downstream query works on flat
+  tables, not nested JSON.
+- **Type casting with coercion**: `pd.to_numeric(series, errors="coerce")` turns
+  bad values into `NaN` instead of crashing. `Int64` (capital I) is pandas'
+  nullable integer type — it holds integers *and* `NaN`, unlike plain `int64`.
+- **Deduplication**: `df.drop_duplicates(subset=["movie_id"], keep="last")` —
+  if the same `movie_id` appears in two Bronze files (e.g., a retry wrote it
+  twice), we keep exactly one row. The Silver layer must have one row per key.
+- **Idempotency**: same date → same output S3 key → same content. Running the
+  transform twice is safe because the second run overwrites the same Parquet
+  file with the same data. No manual cleanup needed.
+- **S3 list + paginator**: `client.get_paginator("list_objects_v2")` lets you
+  iterate through all objects under a prefix even if there are thousands of
+  them. Without pagination you'd only see the first 1,000 results.
+
+### Key Code
+`etl/silver/transform_movies.py` — `_flatten_movie(raw)`:
+> Extracts exactly the columns the rest of the pipeline needs from the raw
+> TMDB dict and renames `id` → `movie_id`. Everything else in the TMDB
+> response is silently discarded here — you choose your schema at this point,
+> not downstream.
+
+`etl/silver/transform_movies.py` — `_cast_types(df)`:
+> All type coercions are in one function, separated from the IO logic. This
+> keeps `transform_movies()` readable and makes the type rules easy to test
+> in isolation — just pass in a DataFrame, no S3 mock needed.
+
+`etl/silver/transform_movies.py` — `transform_movies()`:
+> Orchestrates the full pipeline: list → read → flatten → cast → deduplicate
+> → write. Raises `FileNotFoundError` if there is nothing to process so the
+> caller knows immediately rather than producing an empty Parquet file silently.
+
+### What to Study Next
+Parquet schema evolution: what happens when you add a new column to
+`_flatten_movie` — does the downstream reader break? Read about PyArrow's
+`schema` parameter in `to_parquet` and how `read_parquet` handles
+missing columns.
