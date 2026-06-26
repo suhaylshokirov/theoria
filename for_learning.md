@@ -570,5 +570,29 @@ A Silver-layer transform that reads every Bronze credits JSON file for a given d
 > Uses pytest's `caplog` fixture to assert that a warning log message was emitted when `known_movie_ids={999}` but the data contains movie 550. This tests behaviour (a log warning fires) not just output (the Parquet file) — an important pattern for testing observability code.
 
 ### What to Study Next
-Look up what a **surrogate key** is and how it differs from a natural key. The `movie_id` and `person_id` in this bridge are natural keys (they come from TMDB). In the warehouse, the dimension tables may use their own surrogate keys (auto-increment integers). The warehouse loader (Task 19) will need to join bridge rows against dimensions to swap natural keys for surrogate keys before inserting into `fact_casting` — understanding why this matters is the core of Task 18–19.
+Look up what a **surrogate key** is and how it differs from a natural key.
+
+---
+
+## Task 13 — Silver data quality checks
+
+### What Was Built
+A standalone data quality module (`data_quality/silver_checks.py`) that reads all five Silver Parquet tables for a given date and validates them. For each table it runs four check types: schema (are the expected columns there?), nulls (do required columns have any missing values?), duplicates (is the primary key truly unique?), and ranges (do numeric values fall within sensible bounds?). Rows that fail are tagged with a `rejection_reason` column and written to local Parquet files in `data_quality/rejected/` for later investigation — they are quarantined, never silently dropped.
+
+### Concepts Used
+- **Data Quality checks as first-class code**: Rather than assuming clean data, we validate explicitly. This is how production pipelines catch upstream API changes, ETL bugs, or corrupt files before they silently pollute the warehouse.
+- **Boolean masks**: Each check function (e.g., `_null_mask`, `_range_mask`) returns a pandas `pd.Series` of `True/False` values — one per row — that marks which rows are bad. Masks are cheap to create and combine with `|` (bitwise OR) to union multiple failure types.
+- **Quarantine pattern**: Bad rows are never deleted or silently skipped. They go to `data_quality/rejected/` with a `rejection_reason` label. This preserves evidence — you can look at exactly which rows failed and why, and replay them after fixing the issue.
+- **Dataclass as a result type**: `CheckResult` is a Python `@dataclass` — a lightweight class that holds data (`entity`, `check`, `passed`, `bad_count`, `message`) with no boilerplate. Using a dataclass instead of a plain dict makes the return type self-documenting.
+- **Graceful degradation**: If one Silver file can't be read (e.g., the transform failed and the file doesn't exist yet), the check records a `load` failure and moves on to the next entity. The whole run doesn't abort.
+
+### Key Code
+`data_quality/silver_checks.py` — `_range_mask(df, ranges)`:
+> Takes a dict of `{column: (min, max)}` and returns a boolean mask of rows where any column is out of bounds. Crucially, it converts with `pd.to_numeric(errors="coerce")` before comparing — so text noise produces `NaN`, not a crash — and only checks `not_null` rows for the bounds, so a null value is not reported as an out-of-range failure (that's the null check's job).
+
+`data_quality/silver_checks.py` — `_run_entity_checks(df, entity, cfg, ...)`:
+> Runs all four check types for one entity, collects bad-row DataFrames with their `rejection_reason` label, then calls `_write_rejects` once at the end. This means one reject file per entity (not one per check), and a row that fails multiple checks appears once — not four times.
+
+### What to Study Next
+Look up the difference between **data validation at ingestion time** vs **data quality checks after the fact**. The pattern here is post-hoc: we write Bronze first, transform to Silver, then check Silver. An alternative is to validate on read inside the transform and reject before writing. Think about which approach is better for a streaming pipeline vs a batch pipeline, and why the quarantine-not-delete rule matters in both cases. The `movie_id` and `person_id` in this bridge are natural keys (they come from TMDB). In the warehouse, the dimension tables may use their own surrogate keys (auto-increment integers). The warehouse loader (Task 19) will need to join bridge rows against dimensions to swap natural keys for surrogate keys before inserting into `fact_casting` — understanding why this matters is the core of Task 18–19.
 
