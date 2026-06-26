@@ -546,3 +546,29 @@ A Silver transform that reads the Bronze genre list JSON (one file per date) and
 ### What to Study Next
 Look at how Parquet handles pandas nullable types (`Int64`, `string`) versus plain Python types when the file is read back. Run `pd.read_parquet` on a file written with `Int64` columns and inspect `df.dtypes` — does it round-trip perfectly, or does pandas infer a different type on read? Understanding this avoids surprises in the warehouse loader.
 
+---
+
+## Task 12 — Silver transform: Credits bridge
+
+### What Was Built
+A Silver-layer transform that reads every Bronze credits JSON file for a given date and produces a single "bridge" Parquet table linking movies to people. Each row records one credit: who appeared in which movie, whether they were cast or crew, what their role was, and in what order they appear (for cast). The output is `silver/credits_bridge/ingestion_date=YYYY-MM-DD/credits_bridge.parquet`.
+
+### Concepts Used
+- **Bridge (associative) table**: A table whose job is to hold the many-to-many relationship between two entities — here, movies and people. Neither `dim_movie` nor `dim_actor`/`dim_director` can store this; the bridge holds the link.
+- **Composite deduplication key**: Rows are deduplicated on `(movie_id, person_id, credit_type)` rather than a single column, because the same person can legitimately appear as both an actor and a crew member in the same movie — those are two distinct credits, not duplicates.
+- **Referential integrity checking**: Before writing, the transform optionally checks whether every `movie_id` and `person_id` in the bridge actually exists in the upstream Silver tables. Rows that reference unknown IDs are called "orphans". The rule here is flag-don't-crash: log a warning so the issue is visible, but don't drop the row or abort the job — the warehouse loader can enforce the constraint more strictly later.
+- **Soft vs. hard failures**: Null IDs are always dropped (a row with no movie_id is meaningless). Unknown-but-valid IDs are only flagged. This distinction — hard failure on nulls, soft warning on referential issues — is a common data engineering pattern.
+
+### Key Code
+`etl/silver/transform_credits_bridge.py` — `_extract_bridge_rows(payload)`:
+> Takes one TMDB credits JSON payload and returns one dict per cast/crew member. The key insight is that `payload["id"]` is the `movie_id` — it lives at the root of the payload, not inside each member. Without this, all bridge rows would have `movie_id=None`.
+
+`etl/silver/transform_credits_bridge.py` — `_check_referential_integrity(df, known_movie_ids, known_person_ids)`:
+> Accepts optional sets of valid IDs. If provided, it finds rows whose ID values are not in those sets and logs them as warnings. The parameters are optional (`None` by default) so callers who don't have the Silver people/movies data handy can skip the check — the function degrades gracefully rather than failing.
+
+`tests/test_etl.py` — `test_transform_credits_bridge_flags_orphan_movie_ids`:
+> Uses pytest's `caplog` fixture to assert that a warning log message was emitted when `known_movie_ids={999}` but the data contains movie 550. This tests behaviour (a log warning fires) not just output (the Parquet file) — an important pattern for testing observability code.
+
+### What to Study Next
+Look up what a **surrogate key** is and how it differs from a natural key. The `movie_id` and `person_id` in this bridge are natural keys (they come from TMDB). In the warehouse, the dimension tables may use their own surrogate keys (auto-increment integers). The warehouse loader (Task 19) will need to join bridge rows against dimensions to swap natural keys for surrogate keys before inserting into `fact_casting` — understanding why this matters is the core of Task 18–19.
+

@@ -20,8 +20,8 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 11 — Silver transform: Genres
-Currently on          : Task 12 — Silver transform: Credits bridge
+Last completed task   : Task 12 — Silver transform: Credits bridge
+Currently on          : Task 13 — Silver data quality checks
 Current phase         : Phase 2 — Data Lake (Silver & Gold)
 Blockers / open issues: None
 Last updated          : 2026-06-26
@@ -263,10 +263,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Files:** `etl/silver/transform_genres.py`
 - **Outcome:** `transform_genres()` reads the single Bronze `genres.json` for a given date, flattens the TMDB payload into `(genre_id, genre_name)` rows, casts types with pandas nullable types (`Int64`, `string`), deduplicates on `genre_id`, and writes `silver/genres/ingestion_date=YYYY-MM-DD/genres.parquet`. 7 new tests added (41/41 pass).
 
-#### [ ] Task 12 — Silver transform: Credits bridge
+#### [x] Task 12 — Silver transform: Credits bridge
 - **Files:** `etl/silver/transform_credits_bridge.py`
 - **Steps:** Rows of `(movie_id, person_id, role, ordering)` → dedupe → validate referential integrity → write Parquet. Flag (don't crash on) orphan rows.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `transform_credits_bridge()` reads all Bronze credits JSON for a given date and extracts `(movie_id, person_id, credit_type, role, ordering)` rows for every cast and crew member. Deduplicates on `(movie_id, person_id, credit_type)`, drops rows with null IDs (with a warning), and optionally checks referential integrity against `known_movie_ids`/`known_person_ids` sets — orphan IDs are logged as warnings but rows are kept. Writes `silver/credits_bridge/ingestion_date=YYYY-MM-DD/credits_bridge.parquet`. 9 new tests added (50/50 pass).
 
 #### [ ] Task 13 — Silver data quality checks
 - **Files:** `data_quality/silver_checks.py`

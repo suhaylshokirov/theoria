@@ -761,3 +761,143 @@ def test_transform_genres_raises_when_no_bronze_file():
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         with pytest.raises(Exception):
             transform_genres(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+
+# --- transform_credits_bridge -------------------------------------------------
+
+from etl.silver.transform_credits_bridge import (
+    _cast_bridge_types,
+    _extract_bridge_rows,
+    transform_credits_bridge,
+)
+
+
+def _raw_credits_with_movie_id(movie_id: int) -> dict:
+    """Minimal TMDB credits payload with movie_id in root."""
+    return {
+        "id": movie_id,
+        "cast": [
+            {"id": 10, "name": "Alice", "character": "Hero", "order": 0},
+            {"id": 11, "name": "Bob", "character": "Villain", "order": 1},
+        ],
+        "crew": [
+            {"id": 20, "name": "Carol", "job": "Director", "department": "Directing"},
+            {"id": 21, "name": "Dave", "job": "Producer", "department": "Production"},
+        ],
+    }
+
+
+def test_extract_bridge_rows_returns_cast_and_crew():
+    payload = _raw_credits_with_movie_id(550)
+    rows = _extract_bridge_rows(payload)
+    # 2 cast + 2 crew = 4 rows
+    assert len(rows) == 4
+    cast_rows = [r for r in rows if r["credit_type"] == "cast"]
+    crew_rows = [r for r in rows if r["credit_type"] == "crew"]
+    assert len(cast_rows) == 2
+    assert len(crew_rows) == 2
+
+
+def test_extract_bridge_rows_sets_movie_id_from_payload():
+    payload = _raw_credits_with_movie_id(999)
+    rows = _extract_bridge_rows(payload)
+    assert all(r["movie_id"] == 999 for r in rows)
+
+
+def test_extract_bridge_rows_cast_has_ordering_crew_has_none():
+    payload = _raw_credits_with_movie_id(550)
+    rows = _extract_bridge_rows(payload)
+    cast_row = next(r for r in rows if r["credit_type"] == "cast")
+    crew_row = next(r for r in rows if r["credit_type"] == "crew")
+    assert cast_row["ordering"] == 0
+    assert crew_row["ordering"] is None
+
+
+def test_cast_bridge_types_converts_numerics():
+    payload = _raw_credits_with_movie_id(550)
+    rows = _extract_bridge_rows(payload)
+    df = pd.DataFrame(rows)
+    df = _cast_bridge_types(df)
+    assert df["movie_id"].dtype.name == "Int64"
+    assert df["person_id"].dtype.name == "Int64"
+    assert df["ordering"].dtype.name == "Int64"
+    assert df["credit_type"].dtype.name == "string"
+    assert df["role"].dtype.name == "string"
+
+
+def test_cast_bridge_types_coerces_bad_values_to_null():
+    rows = [{"movie_id": "bad", "person_id": None, "credit_type": "cast",
+             "role": "Hero", "ordering": "nope"}]
+    df = pd.DataFrame(rows)
+    df = _cast_bridge_types(df)
+    assert pd.isna(df["movie_id"].iloc[0])
+    assert pd.isna(df["person_id"].iloc[0])
+    assert pd.isna(df["ordering"].iloc[0])
+
+
+def test_transform_credits_bridge_writes_silver_parquet():
+    """transform_credits_bridge must read Bronze JSON and write a Silver Parquet."""
+    key = "bronze/credits/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_credits_with_movie_id(550)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uri = transform_credits_bridge(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+        )
+
+    assert uri == "s3://theoria-datalake/silver/credits_bridge/ingestion_date=2026-06-22/credits_bridge.parquet"
+    mock_s3.put_object.assert_called_once()
+    _, kwargs = mock_s3.put_object.call_args
+    assert kwargs["Key"] == "silver/credits_bridge/ingestion_date=2026-06-22/credits_bridge.parquet"
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df_out) == 4  # 2 cast + 2 crew for movie 550
+    assert set(df_out["credit_type"].tolist()) == {"cast", "crew"}
+
+
+def test_transform_credits_bridge_deduplicates_on_movie_person_credit_type():
+    """Same (movie_id, person_id, credit_type) across two files → one row."""
+    key1 = "bronze/credits/ingestion_date=2026-06-22/550.json"
+    key2 = "bronze/credits/ingestion_date=2026-06-22/550_dup.json"
+    mock_s3 = _make_s3_mock_with_files({
+        key1: _raw_credits_with_movie_id(550),
+        key2: _raw_credits_with_movie_id(550),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_credits_bridge(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    _, kwargs = mock_s3.put_object.call_args
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df_out) == 4  # still 4, not 8
+
+
+def test_transform_credits_bridge_flags_orphan_movie_ids(caplog):
+    """Rows whose movie_id is not in known_movie_ids must be logged as orphans."""
+    import logging
+    key = "bronze/credits/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_credits_with_movie_id(550)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.WARNING):
+            transform_credits_bridge(
+                ingestion_date=dt.date(2026, 6, 22),
+                bucket="theoria-datalake",
+                known_movie_ids={999},  # 550 is NOT in the known set
+            )
+
+    assert any("unknown movie_id" in record.message for record in caplog.records)
+
+
+def test_transform_credits_bridge_raises_when_no_bronze_files():
+    """FileNotFoundError must be raised when no Bronze credits files exist."""
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            transform_credits_bridge(
+                ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
+            )
