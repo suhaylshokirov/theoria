@@ -6,7 +6,9 @@ TMDBClient's retry/backoff and error-handling logic in isolation.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import datetime as dt
+import io
+from unittest.mock import MagicMock, call, patch
 
 import pandas as pd
 import pytest
@@ -901,3 +903,239 @@ def test_transform_credits_bridge_raises_when_no_bronze_files():
             transform_credits_bridge(
                 ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
             )
+
+
+# ---------------------------------------------------------------------------
+# Gold layer: build_gold_datasets
+# ---------------------------------------------------------------------------
+
+from etl.gold.build_gold_datasets import (
+    _build_actor_filmography,
+    _build_decade_stats,
+    _build_director_ratings,
+    _build_genre_metrics,
+    build_gold_datasets,
+)
+
+
+# --- Fixture DataFrames ---
+
+def _silver_movies() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"movie_id": 1, "title": "Film A", "release_date": dt.date(1994, 1, 1),
+         "vote_average": 8.0, "revenue": 100_000_000, "genre_ids": [28, 12]},
+        {"movie_id": 2, "title": "Film B", "release_date": dt.date(1999, 6, 1),
+         "vote_average": 7.0, "revenue": 50_000_000, "genre_ids": [28]},
+        {"movie_id": 3, "title": "Film C", "release_date": dt.date(2005, 3, 15),
+         "vote_average": 6.5, "revenue": 200_000_000, "genre_ids": [12]},
+    ])
+
+
+def _silver_genres() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"genre_id": 28, "genre_name": "Action"},
+        {"genre_id": 12, "genre_name": "Adventure"},
+    ])
+
+
+def _silver_actors() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"person_id": 10, "name": "Actor A", "gender": 2, "popularity": 50.0},
+        {"person_id": 11, "name": "Actor B", "gender": 1, "popularity": 30.0},
+    ])
+
+
+def _silver_directors() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"person_id": 20, "name": "Dir A", "gender": 2, "popularity": 40.0},
+    ])
+
+
+def _silver_bridge() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"movie_id": 1, "person_id": 10, "credit_type": "cast", "role": "Hero", "ordering": 0},
+        {"movie_id": 2, "person_id": 10, "credit_type": "cast", "role": "Villain", "ordering": 0},
+        {"movie_id": 3, "person_id": 11, "credit_type": "cast", "role": "Lead", "ordering": 0},
+        {"movie_id": 1, "person_id": 20, "credit_type": "crew", "role": "Director", "ordering": None},
+        {"movie_id": 2, "person_id": 20, "credit_type": "crew", "role": "Director", "ordering": None},
+    ])
+
+
+def _parquet_body(df: pd.DataFrame) -> bytes:
+    buf = io.BytesIO()
+    df.to_parquet(buf, engine="pyarrow", index=False)
+    return buf.getvalue()
+
+
+def _make_multi_entity_s3_mock(ingestion_date: dt.date) -> MagicMock:
+    """S3 mock that returns correct Silver Parquet for each entity."""
+    entities = {
+        "movies": _silver_movies(),
+        "actors": _silver_actors(),
+        "directors": _silver_directors(),
+        "genres": _silver_genres(),
+        "credits_bridge": _silver_bridge(),
+    }
+
+    def fake_get_object(Bucket, Key):
+        for entity, df in entities.items():
+            if f"/{entity}/" in Key:
+                body = MagicMock()
+                body.read.return_value = _parquet_body(df)
+                return {"Body": body}
+        raise KeyError(f"Unrecognised key in mock: {Key}")
+
+    mock_s3 = MagicMock()
+    mock_s3.get_object.side_effect = fake_get_object
+    mock_s3.put_object.return_value = {}
+    mock_s3.exceptions.NoSuchKey = KeyError
+    return mock_s3
+
+
+# --- _build_genre_metrics ---
+
+def test_genre_metrics_row_count_matches_unique_genres():
+    """Each unique genre in the exploded movie list must produce exactly one row."""
+    result = _build_genre_metrics(_silver_movies(), _silver_genres())
+    assert set(result["genre_name"]) == {"Action", "Adventure"}
+
+
+def test_genre_metrics_movie_count_per_genre():
+    """Action (id=28) appears in films 1 and 2; Adventure (id=12) in films 1 and 3."""
+    result = _build_genre_metrics(_silver_movies(), _silver_genres())
+    action_row = result[result["genre_name"] == "Action"].iloc[0]
+    adventure_row = result[result["genre_name"] == "Adventure"].iloc[0]
+    assert int(action_row["movie_count"]) == 2
+    assert int(adventure_row["movie_count"]) == 2
+
+
+def test_genre_metrics_avg_rating_is_mean_of_member_movies():
+    """Action avg rating = (8.0 + 7.0) / 2 = 7.5."""
+    result = _build_genre_metrics(_silver_movies(), _silver_genres())
+    action_row = result[result["genre_name"] == "Action"].iloc[0]
+    assert abs(float(action_row["avg_rating"]) - 7.5) < 0.01
+
+
+def test_genre_metrics_total_revenue_sums_correctly():
+    """Action total revenue = 100M + 50M = 150M."""
+    result = _build_genre_metrics(_silver_movies(), _silver_genres())
+    action_row = result[result["genre_name"] == "Action"].iloc[0]
+    assert int(action_row["total_revenue"]) == 150_000_000
+
+
+# --- _build_decade_stats ---
+
+def test_decade_stats_correct_decade_assignment():
+    """Films from 1994 and 1999 are in the 1990s; 2005 in the 2000s."""
+    result = _build_decade_stats(_silver_movies())
+    decades = list(result["decade"])
+    assert 1990 in decades
+    assert 2000 in decades
+
+
+def test_decade_stats_movie_count_per_decade():
+    result = _build_decade_stats(_silver_movies())
+    nineties = result[result["decade"] == 1990].iloc[0]
+    assert int(nineties["movie_count"]) == 2
+
+
+def test_decade_stats_excludes_movies_with_no_release_date():
+    movies = _silver_movies().copy()
+    movies.loc[0, "release_date"] = None
+    result = _build_decade_stats(movies)
+    # Film A (1994) is dropped; nineties only has Film B (1999), 2000s has Film C
+    nineties_rows = result[result["decade"] == 1990]
+    if len(nineties_rows):
+        assert int(nineties_rows.iloc[0]["movie_count"]) == 1
+
+
+def test_decade_stats_sorted_by_decade():
+    result = _build_decade_stats(_silver_movies())
+    assert list(result["decade"]) == sorted(result["decade"])
+
+
+# --- _build_actor_filmography ---
+
+def test_actor_filmography_film_counts():
+    """Actor A (id=10) appears in 2 films; Actor B (id=11) in 1 film."""
+    result = _build_actor_filmography(_silver_movies(), _silver_actors(), _silver_bridge())
+    actor_a = result[result["person_id"] == 10].iloc[0]
+    actor_b = result[result["person_id"] == 11].iloc[0]
+    assert int(actor_a["film_count"]) == 2
+    assert int(actor_b["film_count"]) == 1
+
+
+def test_actor_filmography_avg_rating_for_actor_a():
+    """Actor A avg rating = (8.0 + 7.0) / 2 = 7.5."""
+    result = _build_actor_filmography(_silver_movies(), _silver_actors(), _silver_bridge())
+    actor_a = result[result["person_id"] == 10].iloc[0]
+    assert abs(float(actor_a["avg_rating"]) - 7.5) < 0.01
+
+
+def test_actor_filmography_excludes_crew_rows():
+    """Director rows (credit_type='crew') must not be counted in actor filmography."""
+    result = _build_actor_filmography(_silver_movies(), _silver_actors(), _silver_bridge())
+    # person_id=20 is a director — should not appear
+    assert 20 not in list(result["person_id"])
+
+
+# --- _build_director_ratings ---
+
+def test_director_ratings_film_count():
+    """Director A (id=20) directed films 1 and 2 → film_count=2."""
+    result = _build_director_ratings(_silver_movies(), _silver_directors(), _silver_bridge())
+    dir_a = result[result["person_id"] == 20].iloc[0]
+    assert int(dir_a["film_count"]) == 2
+
+
+def test_director_ratings_avg_rating():
+    """Director A avg rating = (8.0 + 7.0) / 2 = 7.5."""
+    result = _build_director_ratings(_silver_movies(), _silver_directors(), _silver_bridge())
+    dir_a = result[result["person_id"] == 20].iloc[0]
+    assert abs(float(dir_a["avg_rating"]) - 7.5) < 0.01
+
+
+def test_director_ratings_total_revenue():
+    """Director A total revenue = 100M + 50M = 150M."""
+    result = _build_director_ratings(_silver_movies(), _silver_directors(), _silver_bridge())
+    dir_a = result[result["person_id"] == 20].iloc[0]
+    assert int(dir_a["total_revenue"]) == 150_000_000
+
+
+# --- build_gold_datasets (integration) ---
+
+def test_build_gold_datasets_writes_four_parquet_files():
+    """build_gold_datasets must call put_object exactly 4 times (one per dataset)."""
+    date = dt.date(2026, 6, 26)
+    mock_s3 = _make_multi_entity_s3_mock(date)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uris = build_gold_datasets(ingestion_date=date, bucket="theoria-datalake")
+
+    assert mock_s3.put_object.call_count == 4
+    assert set(uris.keys()) == {"genre_metrics", "decade_stats", "actor_filmography", "director_ratings"}
+
+
+def test_build_gold_datasets_keys_follow_path_convention():
+    """All Gold S3 keys must follow gold/<dataset>/ingestion_date=.../dataset.parquet."""
+    date = dt.date(2026, 6, 26)
+    mock_s3 = _make_multi_entity_s3_mock(date)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uris = build_gold_datasets(ingestion_date=date, bucket="theoria-datalake")
+
+    for name, uri in uris.items():
+        assert uri.startswith("s3://theoria-datalake/gold/")
+        assert "ingestion_date=2026-06-26" in uri
+        assert uri.endswith(f"{name}.parquet")
+
+
+def test_build_gold_datasets_raises_on_missing_silver(monkeypatch):
+    """FileNotFoundError must be raised if a Silver file is missing."""
+    mock_s3 = MagicMock()
+    mock_s3.exceptions.NoSuchKey = KeyError
+    mock_s3.get_object.side_effect = KeyError("No such key")
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            build_gold_datasets(ingestion_date=dt.date(2026, 6, 26), bucket="theoria-datalake")

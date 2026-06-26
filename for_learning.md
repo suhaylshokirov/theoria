@@ -596,3 +596,38 @@ A standalone data quality module (`data_quality/silver_checks.py`) that reads al
 ### What to Study Next
 Look up the difference between **data validation at ingestion time** vs **data quality checks after the fact**. The pattern here is post-hoc: we write Bronze first, transform to Silver, then check Silver. An alternative is to validate on read inside the transform and reject before writing. Think about which approach is better for a streaming pipeline vs a batch pipeline, and why the quarantine-not-delete rule matters in both cases. The `movie_id` and `person_id` in this bridge are natural keys (they come from TMDB). In the warehouse, the dimension tables may use their own surrogate keys (auto-increment integers). The warehouse loader (Task 19) will need to join bridge rows against dimensions to swap natural keys for surrogate keys before inserting into `fact_casting` — understanding why this matters is the core of Task 18–19.
 
+
+---
+
+## Task 14 — Gold layer: aggregated datasets
+
+### What Was Built
+A Gold-layer transform script (`etl/gold/build_gold_datasets.py`) that reads all five Silver Parquet files for a given date and computes four pre-aggregated analytical datasets, writing each as a Parquet file to the Gold layer in S3:
+
+1. **genre_metrics** — for each genre: how many films belong to it, the average rating of those films, and their combined revenue.
+2. **decade_stats** — for each release decade (1990s, 2000s, etc.): how many films, average rating, and total revenue.
+3. **actor_filmography** — for each actor: how many films they appeared in and their average rating across those films.
+4. **director_ratings** — for each director: how many films they directed, their average rating, and total revenue of their films.
+
+These datasets live between Silver and the warehouse. They answer common analytical questions in a single table scan rather than requiring the Django app to do expensive joins at query time.
+
+### Concepts Used
+- **Gold layer purpose**: The Gold layer is the "answer-ready" layer — it stores pre-computed aggregations that are directly useful for dashboards or analytics queries. Silver is clean and normalised; Gold trades storage for query speed.
+- **Explode**: `df.explode("genre_ids")` turns one row with `genre_ids=[28, 12]` into two rows — one with `genre_id=28` and one with `genre_id=12`. This is how you handle list-valued columns in a flat relational model. Without explode, you cannot group by genre.
+- **GroupBy + named aggregations**: `df.groupby("genre_id").agg(movie_count=("movie_id", "count"), avg_rating=("vote_average", "mean"))` produces a summary table in one step. Named aggregations (the `result_col=(source_col, func)` syntax) make the output columns self-explanatory.
+- **Join pattern (bridge table)**: To get a director's films, you can't join movies directly to directors — there's no direct FK. You must go through the bridge table: `bridge → movies` (to get ratings/revenue) and `bridge → directors` (to get names). This is the standard many-to-many join pattern.
+- **Separation of concerns**: Each aggregation is its own function (`_build_genre_metrics`, `_build_decade_stats`, etc.). The public entry point `build_gold_datasets()` orchestrates them. This makes each aggregation easy to test and change independently.
+- **Idempotency**: Running the script twice for the same date overwrites the same S3 keys with the same content — no duplicate rows accumulate.
+
+### Key Code
+`etl/gold/build_gold_datasets.py` — `_build_genre_metrics(movies, genres)`:
+> Explodes the `genre_ids` list column so each movie appears once per genre, then merges with the genres table to get names, then groups by `(genre_id, genre_name)` to compute count, avg rating, and total revenue. The explode step is the key insight — without it you'd be grouping on a list, which pandas cannot do.
+
+`etl/gold/build_gold_datasets.py` — `_build_decade_stats(movies)`:
+> Extracts the year from `release_date`, computes `decade = year // 10 * 10` (integer floor division drops the units digit), then groups by decade. Integer floor division is a clean way to bin continuous values into fixed-width buckets without any if/else logic.
+
+`etl/gold/build_gold_datasets.py` — `build_gold_datasets()`:
+> Reads all five Silver files, calls the four aggregation functions, then writes each result with `s3_utils.write_parquet()`. Returns a dict of `{dataset_name: s3_uri}` so the caller knows exactly where each file landed. Raises `FileNotFoundError` immediately if any Silver input is missing — fail loud, not silently.
+
+### What to Study Next
+The Gold layer here is built on top of Parquet files in S3. In production pipelines, this same aggregation would often be done as a SQL `CREATE TABLE AS SELECT … GROUP BY …` inside a data warehouse. Study what **materialised views** are in PostgreSQL (Task 22 will use SQL aggregations directly). Ask: when is it better to pre-aggregate into Gold vs compute on the fly in SQL? The answer involves data volume, query frequency, and how often the source data changes.

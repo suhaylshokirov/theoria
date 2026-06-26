@@ -20,9 +20,9 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 13 — Silver data quality checks
-Currently on          : Task 14 — Gold layer: aggregated datasets
-Current phase         : Phase 2 — Data Lake (Silver & Gold)
+Last completed task   : Task 14 — Gold layer: aggregated datasets
+Currently on          : Task 15 — PostgreSQL setup & connection layer
+Current phase         : Phase 3 — Warehouse Modeling
 Blockers / open issues: None
 Last updated          : 2026-06-26
 ```
@@ -273,10 +273,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Null checks, duplicate-key checks, schema/type validation, range checks. Write rejects to `data_quality/rejected/`. Auto-run after Tasks 9–12.
 - **Outcome:** `run_silver_checks()` reads all five Silver Parquet files (movies, actors, directors, genres, credits_bridge) and runs four checks per entity: schema (expected columns present), nulls (required columns have no nulls), duplicates (PK uniqueness), ranges (vote_average 0–10, counts/popularity ≥ 0, etc.). Each check produces a `CheckResult(entity, check, passed, bad_count, message)`. Bad rows from null/duplicate/range failures are tagged with a `rejection_reason` column and written to `data_quality/rejected/<entity>_rejected_<date>.parquet`. Missing Silver files produce a load-failure result and the run continues. Exits with code 1 if any check fails. 22 new tests added (72/72 pass).
 
-#### [ ] Task 14 — Gold layer: aggregated datasets
+#### [x] Task 14 — Gold layer: aggregated datasets
 - **Files:** `etl/gold/build_gold_datasets.py`
 - **Steps:** Pre-aggregate from Silver: movie metrics per genre, counts/avg ratings per decade, actor filmography counts, director avg ratings.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `build_gold_datasets()` reads all five Silver Parquet files, computes four analytical aggregations (genre metrics, decade stats, actor filmography, director ratings) using pandas groupby, and writes each as a Parquet file to the Gold layer under `gold/<dataset>/ingestion_date=YYYY-MM-DD/`. Idempotent, raises `FileNotFoundError` on missing Silver input. 17 new tests added (89/89 pass).
 
 ---
 
