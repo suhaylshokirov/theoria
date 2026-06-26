@@ -20,11 +20,11 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 10 — Silver transform: People
-Currently on          : Task 11 — Silver transform: Genres
+Last completed task   : Task 11 — Silver transform: Genres
+Currently on          : Task 12 — Silver transform: Credits bridge
 Current phase         : Phase 2 — Data Lake (Silver & Gold)
 Blockers / open issues: None
-Last updated          : 2026-06-24
+Last updated          : 2026-06-26
 ```
 
 **After finishing any task, in this order:**
@@ -259,9 +259,9 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Read Bronze credits → split cast/crew → standardize → deduplicate on `person_id` → write `silver/actors/` and `silver/directors/` separately.
 - **Outcome:** `transform_people()` reads all Bronze credits JSON for a date, extracts cast rows as actors and `job=="Director"` crew rows as directors, casts types with pandas nullable types, deduplicates each group on `person_id` across all movies, and writes `silver/actors/…/actors.parquet` and `silver/directors/…/directors.parquet`. Returns both S3 URIs. 7 new tests added (34/34 pass).
 
-#### [ ] Task 11 — Silver transform: Genres
+#### [x] Task 11 — Silver transform: Genres
 - **Files:** `etl/silver/transform_genres.py`
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `transform_genres()` reads the single Bronze `genres.json` for a given date, flattens the TMDB payload into `(genre_id, genre_name)` rows, casts types with pandas nullable types (`Int64`, `string`), deduplicates on `genre_id`, and writes `silver/genres/ingestion_date=YYYY-MM-DD/genres.parquet`. 7 new tests added (41/41 pass).
 
 #### [ ] Task 12 — Silver transform: Credits bridge
 - **Files:** `etl/silver/transform_credits_bridge.py`

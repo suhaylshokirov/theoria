@@ -522,3 +522,27 @@ string instead. Look at pandas `.map()` for applying a lookup dict to a column
 (`df["gender"].map({0: "unset", 1: "female", 2: "male", 3: "non-binary"})`),
 and think about whether that conversion belongs in Silver or in the warehouse
 loader.
+
+---
+
+## Task 11 — Silver transform: Genres
+
+### What Was Built
+A Silver transform that reads the Bronze genre list JSON (one file per date) and writes a clean `genres.parquet` to the Silver layer. Each row is a `(genre_id, genre_name)` pair — exactly what the `dim_genre` warehouse dimension needs.
+
+### Concepts Used
+- **Silver layer**: The "cleaned and typed" zone of the data lake. Bronze is raw and immutable; Silver is where we fix types, drop nulls, and deduplicate so downstream code can trust the data.
+- **Single-file source vs multi-file source**: Movie details and credits are one file *per movie ID*, so the transform lists S3 objects with a paginator. Genres are one file *per ingestion date* — a known, fixed key — so we just call `get_object` directly on the exact key.
+- **Explicit `FileNotFoundError`**: If the Bronze file doesn't exist, we raise with a clear message rather than letting boto3 throw a cryptic `NoSuchKey` exception. This makes pipeline failures easier to diagnose.
+- **`pd.StringDtype` (`"string"`)**: pandas nullable string type. Unlike plain `object`, it distinguishes `None`/`pd.NA` from the string `"None"`, which matters when writing to Parquet or a database column.
+
+### Key Code
+`etl/silver/transform_genres.py` — `_read_bronze_genres()`:
+> Builds the exact S3 key using `s3_utils.build_path()` (the single source of truth for key conventions) and calls `get_object` directly. If the key doesn't exist, it catches the boto3 `NoSuchKey` exception and re-raises a Python-native `FileNotFoundError` — so callers don't need to know boto3 exception types.
+
+`etl/silver/transform_genres.py` — `_cast_genre_types()`:
+> Casts `genre_id` to `Int64` (nullable integer — handles `None` without converting to `float`) and `genre_name` to pandas `"string"` (nullable string). This is the same coerce-don't-crash pattern used throughout the Silver layer: `errors="coerce"` turns unparseable values into `pd.NA` rather than raising.
+
+### What to Study Next
+Look at how Parquet handles pandas nullable types (`Int64`, `string`) versus plain Python types when the file is read back. Run `pd.read_parquet` on a file written with `Int64` columns and inspect `df.dtypes` — does it round-trip perfectly, or does pandas infer a different type on read? Understanding this avoids surprises in the warehouse loader.
+

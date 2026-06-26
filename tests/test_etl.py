@@ -653,3 +653,111 @@ def test_transform_people_raises_when_no_bronze_files():
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         with pytest.raises(FileNotFoundError):
             transform_people(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+
+# --- transform_genres ---------------------------------------------------------
+
+from etl.silver.transform_genres import (
+    _cast_genre_types,
+    _extract_genres,
+    transform_genres,
+)
+
+import datetime as dt  # already imported above, but explicit for readability
+
+
+def _raw_genres_payload(genres: list[dict] | None = None) -> dict:
+    """Build a minimal TMDB genre-list payload."""
+    if genres is None:
+        genres = [
+            {"id": 28, "name": "Action"},
+            {"id": 12, "name": "Adventure"},
+            {"id": 35, "name": "Comedy"},
+        ]
+    return {"genres": genres}
+
+
+def _make_s3_mock_with_genre_file(payload: dict) -> MagicMock:
+    """Build an S3 mock whose get_object returns the genre payload."""
+    import json
+    mock_s3 = MagicMock()
+    body = MagicMock()
+    body.read.return_value = json.dumps(payload).encode("utf-8")
+    mock_s3.get_object.return_value = {"Body": body}
+    mock_s3.put_object.return_value = {}
+    return mock_s3
+
+
+def test_extract_genres_returns_all_genres():
+    payload = _raw_genres_payload()
+    rows = _extract_genres(payload)
+    assert len(rows) == 3
+    assert rows[0] == {"genre_id": 28, "genre_name": "Action"}
+    assert rows[2] == {"genre_id": 35, "genre_name": "Comedy"}
+
+
+def test_extract_genres_empty_payload_returns_empty_list():
+    rows = _extract_genres({"genres": []})
+    assert rows == []
+
+
+def test_cast_genre_types_converts_id_to_int64():
+    rows = _extract_genres(_raw_genres_payload())
+    df = pd.DataFrame(rows)
+    df = _cast_genre_types(df)
+    assert df["genre_id"].dtype.name == "Int64"
+    assert df["genre_name"].dtype.name == "string"
+
+
+def test_cast_genre_types_coerces_bad_id_to_null():
+    rows = [{"genre_id": "bad", "genre_name": "Unknown"}]
+    df = pd.DataFrame(rows)
+    df = _cast_genre_types(df)
+    assert pd.isna(df["genre_id"].iloc[0])
+
+
+def test_transform_genres_writes_silver_parquet():
+    """transform_genres must read Bronze JSON and write a Silver Parquet file."""
+    mock_s3 = _make_s3_mock_with_genre_file(_raw_genres_payload())
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uri = transform_genres(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+        )
+
+    assert uri == "s3://theoria-datalake/silver/genres/ingestion_date=2026-06-22/genres.parquet"
+    mock_s3.put_object.assert_called_once()
+    _, kwargs = mock_s3.put_object.call_args
+    assert kwargs["Key"] == "silver/genres/ingestion_date=2026-06-22/genres.parquet"
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df_out) == 3
+    assert set(df_out["genre_id"].tolist()) == {28, 12, 35}
+
+
+def test_transform_genres_deduplicates_on_genre_id():
+    """Duplicate genre_ids in the Bronze payload must collapse to one row each."""
+    payload = _raw_genres_payload([
+        {"id": 28, "name": "Action"},
+        {"id": 28, "name": "Action (dup)"},
+        {"id": 12, "name": "Adventure"},
+    ])
+    mock_s3 = _make_s3_mock_with_genre_file(payload)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_genres(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    _, kwargs = mock_s3.put_object.call_args
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df_out) == 2
+
+
+def test_transform_genres_raises_when_no_bronze_file():
+    """FileNotFoundError must be raised when no Bronze genre file exists."""
+    mock_s3 = MagicMock()
+    mock_s3.get_object.side_effect = mock_s3.exceptions.NoSuchKey = Exception("NoSuchKey")
+    mock_s3.exceptions.NoSuchKey = Exception
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(Exception):
+            transform_genres(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
