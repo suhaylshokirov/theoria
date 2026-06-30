@@ -631,3 +631,25 @@ These datasets live between Silver and the warehouse. They answer common analyti
 
 ### What to Study Next
 The Gold layer here is built on top of Parquet files in S3. In production pipelines, this same aggregation would often be done as a SQL `CREATE TABLE AS SELECT … GROUP BY …` inside a data warehouse. Study what **materialised views** are in PostgreSQL (Task 22 will use SQL aggregations directly). Ask: when is it better to pre-aggregate into Gold vs compute on the fly in SQL? The answer involves data volume, query frequency, and how often the source data changes.
+
+## Task 15 — PostgreSQL Setup & Connection Layer
+
+### What Was Built
+A single Python module (`warehouse/db.py`) that manages the connection between the Python application and the PostgreSQL database. It gives every other module a clean, safe way to talk to the database without each one having to manage its own connection details.
+
+### Concepts Used
+- **Connection pool**: Instead of opening a new database connection for every query (slow), SQLAlchemy keeps a pool of reusable connections. `pool_size=5` means up to 5 open at once; `max_overflow=2` allows 2 extra under load.
+- **Singleton pattern**: `get_engine()` creates the engine once and returns the same object every time. Avoids creating multiple pools that waste memory and connections.
+- **Context manager (with statement)**: `get_session()` is decorated with `@contextmanager`. This guarantees the session is always committed or rolled back and always closed — even if code inside crashes.
+- **`pool_pre_ping=True`**: Before handing a connection from the pool to your code, SQLAlchemy sends a cheap "SELECT 1" to check it's still alive. Prevents mysterious errors when the DB drops idle connections.
+- **Transaction**: A group of SQL statements that either all succeed (commit) or all fail (rollback). `get_session()` wraps every block of work in one transaction automatically.
+
+### Key Code
+`warehouse/db.py` — `get_session()`:
+> Uses Python's `contextmanager` to yield a Session to the caller. The `try/except/finally` block is the key: if the code inside `with get_session()` raises any exception, `rollback()` is called (undoing all changes in that transaction) and the exception re-raises to the caller. If no exception, `commit()` saves all changes. `close()` runs in `finally` — no matter what — so the connection is always returned to the pool.
+
+`warehouse/db.py` — `get_engine()`:
+> The `global _engine` pattern is the singleton. On the first call `_engine is None`, so it calls `create_engine()` with the full URL from `config.DATABASE_URL`. Every subsequent call just returns the already-created engine. `reset_engine()` sets it back to `None` so tests can start fresh without one test's engine leaking into another.
+
+### What to Study Next
+Read the SQLAlchemy 2.0 docs on the difference between **`Session`** and **`Connection`**. `Session` (used here) is the ORM-level object that tracks Python objects and maps them to DB rows. `Connection` is the lower-level object that just runs raw SQL. Task 18 (loading dimensions) will use `Session` with ORM models, but Task 22 (analytics SQL) will likely use `Connection.execute(text(...))` for raw SQL. Understanding when to use which is fundamental.

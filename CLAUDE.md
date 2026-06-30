@@ -20,11 +20,11 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 14 — Gold layer: aggregated datasets
-Currently on          : Task 15 — PostgreSQL setup & connection layer
+Last completed task   : Task 15 — PostgreSQL setup & connection layer
+Currently on          : Task 16 — DDL: Dimension tables
 Current phase         : Phase 3 — Warehouse Modeling
 Blockers / open issues: None
-Last updated          : 2026-06-26
+Last updated          : 2026-06-30
 ```
 
 **After finishing any task, in this order:**
@@ -282,10 +282,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ### Phase 3 — Warehouse Modeling (PostgreSQL)
 
-#### [ ] Task 15 — PostgreSQL setup & connection layer
+#### [x] Task 15 — PostgreSQL setup & connection layer
 - **Files:** `warehouse/db.py`
 - **Steps:** Create DB `theoria`; `get_session()` via SQLAlchemy engine from `DATABASE_URL`.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `warehouse/db.py` provides a lazy singleton `get_engine()` (reads `config.DATABASE_URL`, sets `pool_pre_ping=True`) and a context-manager `get_session()` that auto-commits on success and rolls back on any exception. `check_connection()` returns a boolean for health checks; `reset_engine()` disposes the pool for test isolation. 7 new tests added (96/96 pass).
 
 #### [ ] Task 16 — DDL: Dimension tables
 - **Files:** `warehouse/ddl/01_dimensions.sql`

@@ -1139,3 +1139,132 @@ def test_build_gold_datasets_raises_on_missing_silver(monkeypatch):
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         with pytest.raises(FileNotFoundError):
             build_gold_datasets(ingestion_date=dt.date(2026, 6, 26), bucket="theoria-datalake")
+
+
+# ---------------------------------------------------------------------------
+# Task 15 — warehouse/db.py
+# ---------------------------------------------------------------------------
+from unittest.mock import MagicMock, patch, PropertyMock
+
+
+def test_get_engine_returns_singleton():
+    """get_engine() must return the same object on repeated calls."""
+    from warehouse.db import get_engine, reset_engine
+
+    reset_engine()
+    with patch("warehouse.db.create_engine") as mock_create:
+        mock_engine = MagicMock()
+        mock_create.return_value = mock_engine
+
+        e1 = get_engine()
+        e2 = get_engine()
+
+    assert e1 is e2
+    mock_create.assert_called_once()
+    reset_engine()
+
+
+def test_get_engine_uses_database_url(monkeypatch):
+    """get_engine() must pass config.DATABASE_URL to create_engine."""
+    import config
+    from warehouse.db import get_engine, reset_engine
+
+    reset_engine()
+    monkeypatch.setattr(config, "DATABASE_URL", "postgresql+psycopg2://test:pw@localhost/testdb")
+
+    with patch("warehouse.db.create_engine") as mock_create:
+        mock_create.return_value = MagicMock()
+        get_engine()
+
+    args, _ = mock_create.call_args
+    assert args[0] == "postgresql+psycopg2://test:pw@localhost/testdb"
+    reset_engine()
+
+
+def test_get_session_commits_on_success():
+    """get_session() must commit the session when no exception is raised."""
+    from warehouse.db import get_session, reset_engine
+    from sqlalchemy.orm import Session
+
+    reset_engine()
+    mock_session = MagicMock(spec=Session)
+    mock_factory = MagicMock(return_value=mock_session)
+
+    with patch("warehouse.db._get_session_factory", return_value=mock_factory):
+        with get_session() as s:
+            assert s is mock_session
+
+    mock_session.commit.assert_called_once()
+    mock_session.rollback.assert_not_called()
+    mock_session.close.assert_called_once()
+    reset_engine()
+
+
+def test_get_session_rolls_back_on_exception():
+    """get_session() must rollback and re-raise on any exception inside the block."""
+    from warehouse.db import get_session, reset_engine
+    from sqlalchemy.orm import Session
+
+    reset_engine()
+    mock_session = MagicMock(spec=Session)
+    mock_factory = MagicMock(return_value=mock_session)
+
+    with patch("warehouse.db._get_session_factory", return_value=mock_factory):
+        with pytest.raises(ValueError):
+            with get_session():
+                raise ValueError("boom")
+
+    mock_session.rollback.assert_called_once()
+    mock_session.commit.assert_not_called()
+    mock_session.close.assert_called_once()
+    reset_engine()
+
+
+def test_check_connection_returns_true_on_success():
+    """check_connection() returns True when the DB responds."""
+    from warehouse.db import check_connection, reset_engine
+
+    reset_engine()
+    mock_conn = MagicMock()
+    mock_engine = MagicMock()
+    mock_engine.connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+    mock_engine.connect.return_value.__exit__ = MagicMock(return_value=False)
+
+    with patch("warehouse.db.get_engine", return_value=mock_engine):
+        result = check_connection()
+
+    assert result is True
+    reset_engine()
+
+
+def test_check_connection_returns_false_on_failure():
+    """check_connection() returns False when the DB is unreachable."""
+    from warehouse.db import check_connection, reset_engine
+
+    reset_engine()
+    mock_engine = MagicMock()
+    mock_engine.connect.side_effect = Exception("connection refused")
+
+    with patch("warehouse.db.get_engine", return_value=mock_engine):
+        result = check_connection()
+
+    assert result is False
+    reset_engine()
+
+
+def test_reset_engine_disposes_and_clears():
+    """reset_engine() must dispose the existing engine and clear the singleton."""
+    from warehouse import db
+    from warehouse.db import reset_engine
+
+    reset_engine()
+    mock_engine = MagicMock()
+
+    with patch("warehouse.db.create_engine", return_value=mock_engine):
+        from warehouse.db import get_engine
+        get_engine()
+
+    assert db._engine is mock_engine
+    reset_engine()
+    assert db._engine is None
+    mock_engine.dispose.assert_called_once()
