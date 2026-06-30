@@ -20,8 +20,8 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 16 — DDL: Dimension tables
-Currently on          : Task 17 — DDL: Fact tables
+Last completed task   : Task 17 — DDL: Fact tables
+Currently on          : Task 18 — Loader: Dimensions
 Current phase         : Phase 3 — Warehouse Modeling
 Blockers / open issues: None
 Last updated          : 2026-06-30
@@ -292,10 +292,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** `CREATE TABLE` for all five dims with `PRIMARY KEY`.
 - **Outcome:** `warehouse/ddl/01_dimensions.sql` defines all five dimension tables (`dim_movie`, `dim_actor`, `dim_director`, `dim_genre`, `dim_date`) with typed columns, named PRIMARY KEY constraints, and `IF NOT EXISTS` guards for idempotency. DDL executed against the `theoria` PostgreSQL database; all five tables confirmed present in `information_schema.tables`.
 
-#### [ ] Task 17 — DDL: Fact tables
+#### [x] Task 17 — DDL: Fact tables
 - **Files:** `warehouse/ddl/02_facts.sql`
 - **Steps:** `CREATE TABLE` for both facts; explicit `FOREIGN KEY` constraints; indexes on FK columns.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `warehouse/ddl/02_facts.sql` defines `fact_movie_metrics` (composite PK on `movie_id, date_id, genre_id`) and `fact_casting` (composite PK on `movie_id, actor_id, director_id`), each with named FK constraints referencing their dimension tables and a `CREATE INDEX IF NOT EXISTS` on every FK column. DDL executed against the `theoria` PostgreSQL database; both tables and all 6 FK indexes confirmed present.
 
 #### [ ] Task 18 — Loader: Dimensions
 - **Files:** `etl/warehouse_loader/load_dimensions.py`

@@ -677,3 +677,27 @@ A single SQL file (`warehouse/ddl/01_dimensions.sql`) that creates all five dime
 
 ### What to Study Next
 Read the PostgreSQL docs on [data types](https://www.postgresql.org/docs/current/datatype.html) — specifically the difference between `NUMERIC`, `FLOAT`, and `REAL`. Then ask: why do most warehouses store monetary values as `BIGINT` cents rather than `NUMERIC` dollars?
+
+---
+
+## Task 17 — DDL: Fact tables
+
+### What Was Built
+A SQL file (`warehouse/ddl/02_facts.sql`) that creates the two fact tables in PostgreSQL — `fact_movie_metrics` and `fact_casting` — plus indexes on every foreign key column. These are the central tables of the star schema: every analytical query will join through them.
+
+### Concepts Used
+- **Star schema — fact tables**: Fact tables store measurable events or snapshots (a movie's rating on a given date, a casting relationship). They reference dimension tables via foreign keys and are typically much larger than dimensions.
+- **Composite primary key**: Neither fact table has a single natural PK column. `fact_movie_metrics` is uniquely identified by `(movie_id, date_id, genre_id)` — one row per movie-date-genre combination. Using all three as the PK enforces uniqueness and acts as a free compound index.
+- **Named FOREIGN KEY constraints**: `CONSTRAINT fk_fmm_movie FOREIGN KEY (movie_id) REFERENCES dim_movie(movie_id)` tells PostgreSQL to reject any insert whose `movie_id` doesn't exist in `dim_movie`. Named constraints make error messages actionable ("violates fk_fmm_movie" vs. an anonymous generated name).
+- **Indexes on FK columns**: PostgreSQL does *not* automatically index foreign key columns (unlike primary keys). Without these indexes, a join like `fact_movie_metrics JOIN dim_genre USING (genre_id)` requires a full sequential scan of the fact table. `CREATE INDEX IF NOT EXISTS` adds the index idempotently.
+- **`IF NOT EXISTS` on indexes**: Same idempotency benefit as on tables — re-running the file never errors on an already-created index.
+
+### Key Code
+`warehouse/ddl/02_facts.sql` — composite PK on `fact_movie_metrics`:
+> `CONSTRAINT pk_fact_movie_metrics PRIMARY KEY (movie_id, date_id, genre_id)` — three columns together form the key because a single movie appears across multiple dates and multiple genres. A surrogate auto-increment PK would also work, but a natural composite PK doubles as a uniqueness guard and eliminates accidental duplicate loads.
+
+`warehouse/ddl/02_facts.sql` — FK indexes:
+> `CREATE INDEX IF NOT EXISTS idx_fmm_genre_id ON fact_movie_metrics (genre_id)` — this is the pattern for every FK column. When the query planner joins `fact_movie_metrics` to `dim_genre`, it uses this index for an index scan instead of scanning millions of fact rows. The rule of thumb: every FK column in a fact table needs an index.
+
+### What to Study Next
+Read the PostgreSQL docs on [index types](https://www.postgresql.org/docs/current/indexes-types.html). The indexes created here are the default B-tree, which is correct for equality and range lookups on FK columns. Ask: when would you choose a BRIN index over a B-tree for a fact table? (Hint: think about `date_id` and physical row ordering.)
