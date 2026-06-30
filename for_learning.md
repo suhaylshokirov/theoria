@@ -653,3 +653,27 @@ A single Python module (`warehouse/db.py`) that manages the connection between t
 
 ### What to Study Next
 Read the SQLAlchemy 2.0 docs on the difference between **`Session`** and **`Connection`**. `Session` (used here) is the ORM-level object that tracks Python objects and maps them to DB rows. `Connection` is the lower-level object that just runs raw SQL. Task 18 (loading dimensions) will use `Session` with ORM models, but Task 22 (analytics SQL) will likely use `Connection.execute(text(...))` for raw SQL. Understanding when to use which is fundamental.
+
+---
+
+## Task 16 — DDL: Dimension tables
+
+### What Was Built
+A single SQL file (`warehouse/ddl/01_dimensions.sql`) that creates all five dimension tables in PostgreSQL. Running this file bootstraps the warehouse schema so the loaders (Tasks 18+) have tables to insert into.
+
+### Concepts Used
+- **Star schema — dimension tables**: In a star schema the "dim_" tables hold descriptive attributes about the things you measure (movies, actors, genres, dates). They are small relative to fact tables and change slowly.
+- **Surrogate vs. natural key**: `movie_id`, `actor_id`, etc. come directly from TMDB (natural keys). `dim_date.date_id` is an integer surrogate (`YYYYMMDD`) — it's human-readable and sorts correctly without a join.
+- **`IF NOT EXISTS`**: Makes the DDL idempotent — re-running it never errors or overwrites existing data. This is the SQL equivalent of the idempotent ingestion rule applied to schema management.
+- **Named constraints (`CONSTRAINT pk_…`)**: Naming the PRIMARY KEY makes error messages and pg_catalog queries readable. Anonymous constraints get generated names like `dim_movie_pkey` — still fine, just less explicit.
+- **`NUMERIC(10,4)` for popularity**: Floating-point types (`FLOAT`, `DOUBLE`) accumulate rounding errors. `NUMERIC` stores exact decimal values, which matters for ranking and comparison queries.
+
+### Key Code
+`warehouse/ddl/01_dimensions.sql` — `dim_date` table:
+> Uses an integer `date_id` (YYYYMMDD) as the surrogate key instead of the `DATE` type. This is a standard data-warehouse pattern: integer lookups are faster than date comparisons in large fact tables, and the value is self-documenting when you read query results.
+
+`warehouse/ddl/01_dimensions.sql` — `IF NOT EXISTS` on every `CREATE TABLE`:
+> Without this guard, re-running the script on an existing database raises an error and aborts. With it, the script is safe to run as many times as needed — the schema converges to the desired state rather than requiring manual teardown first.
+
+### What to Study Next
+Read the PostgreSQL docs on [data types](https://www.postgresql.org/docs/current/datatype.html) — specifically the difference between `NUMERIC`, `FLOAT`, and `REAL`. Then ask: why do most warehouses store monetary values as `BIGINT` cents rather than `NUMERIC` dollars?

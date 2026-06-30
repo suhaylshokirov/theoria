@@ -20,8 +20,8 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 15 — PostgreSQL setup & connection layer
-Currently on          : Task 16 — DDL: Dimension tables
+Last completed task   : Task 16 — DDL: Dimension tables
+Currently on          : Task 17 — DDL: Fact tables
 Current phase         : Phase 3 — Warehouse Modeling
 Blockers / open issues: None
 Last updated          : 2026-06-30
@@ -287,10 +287,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Create DB `theoria`; `get_session()` via SQLAlchemy engine from `DATABASE_URL`.
 - **Outcome:** `warehouse/db.py` provides a lazy singleton `get_engine()` (reads `config.DATABASE_URL`, sets `pool_pre_ping=True`) and a context-manager `get_session()` that auto-commits on success and rolls back on any exception. `check_connection()` returns a boolean for health checks; `reset_engine()` disposes the pool for test isolation. 7 new tests added (96/96 pass).
 
-#### [ ] Task 16 — DDL: Dimension tables
+#### [x] Task 16 — DDL: Dimension tables
 - **Files:** `warehouse/ddl/01_dimensions.sql`
 - **Steps:** `CREATE TABLE` for all five dims with `PRIMARY KEY`.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `warehouse/ddl/01_dimensions.sql` defines all five dimension tables (`dim_movie`, `dim_actor`, `dim_director`, `dim_genre`, `dim_date`) with typed columns, named PRIMARY KEY constraints, and `IF NOT EXISTS` guards for idempotency. DDL executed against the `theoria` PostgreSQL database; all five tables confirmed present in `information_schema.tables`.
 
 #### [ ] Task 17 — DDL: Fact tables
 - **Files:** `warehouse/ddl/02_facts.sql`
