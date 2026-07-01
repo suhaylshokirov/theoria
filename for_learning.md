@@ -701,3 +701,30 @@ A SQL file (`warehouse/ddl/02_facts.sql`) that creates the two fact tables in Po
 
 ### What to Study Next
 Read the PostgreSQL docs on [index types](https://www.postgresql.org/docs/current/indexes-types.html). The indexes created here are the default B-tree, which is correct for equality and range lookups on FK columns. Ask: when would you choose a BRIN index over a B-tree for a fact table? (Hint: think about `date_id` and physical row ordering.)
+
+---
+
+## Task 18 — Loader: Dimensions
+
+### What Was Built
+`etl/warehouse_loader/load_dimensions.py`, the first script that writes into PostgreSQL. It reads the Silver Parquet files (movies, actors, directors, genres) for a given date and loads them into the `dim_*` tables created in Tasks 16–17. It also generates and loads `dim_date`, a full calendar table, independently of any TMDB data.
+
+### Concepts Used
+- **Upsert (`INSERT ... ON CONFLICT DO UPDATE`)**: Instead of checking "does this row exist? update or insert accordingly" in Python (two round-trips, race conditions), PostgreSQL does it atomically in one statement. If a row with the same primary key exists, its non-key columns are overwritten with `EXCLUDED.<col>` (the value that *would* have been inserted); otherwise a new row is created. This is what makes the loader idempotent — running it twice for the same date produces the same warehouse state, not duplicate rows.
+- **Batch execution vs. row-by-row inserts**: `session.execute(text(sql), records)` where `records` is a list of dicts sends one INSERT statement with many parameter sets in a single round trip (`executemany` under the hood), instead of looping and issuing one query per row. This matters once you're loading thousands of movies.
+- **Surrogate key generation for a calendar dimension**: `dim_date` isn't derived from source data at all — it's *manufactured*. `_build_calendar()` uses `pd.date_range()` to produce every day in a range and derives `year`/`month`/`day`/`decade` and the `YYYYMMDD` integer key from each date. This is the standard way to build a date dimension in any warehouse: generate it once, upfront, wide enough to cover any date you'll ever join against.
+- **Type coercion at the Python/SQL boundary**: pandas' nullable types (`Int64`, `NaT`) aren't the same as Python's `None`, and psycopg2 doesn't know how to bind `pd.NA` or `NaT`. `_records()` converts a DataFrame slice to `object` dtype and replaces anything `pd.notnull()` rejects with `None`, so every value handed to SQLAlchemy is a native Python type.
+- **Separating "what to load" from "how to upsert"**: `_upsert()` is a single generic function parameterized by table name, primary-key columns, and column list. Each `load_dim_*()` function just picks the right columns/renames and delegates — the ON CONFLICT SQL is written once, not five times.
+
+### Key Code
+`etl/warehouse_loader/load_dimensions.py` — `_upsert()`:
+> Builds `INSERT INTO {table} (cols) VALUES (:col1, :col2, ...) ON CONFLICT (pk_cols) DO UPDATE SET col = EXCLUDED.col` from just a table name and column lists, then executes it once against the full record list. Centralizing this in one function means the conflict-handling logic is tested and correct in one place, and every dimension loader is a thin wrapper around it.
+
+`etl/warehouse_loader/load_dimensions.py` — `_build_calendar()`:
+> `date_id = full_date.strftime("%Y%m%d")` turns a date into a sortable, human-readable integer surrogate key — matching the `dim_date.date_id` column defined in the Task 16 DDL. Generating the *entire* range up front (not just dates seen in movie data) means future fact rows can always find a matching `dim_date` row without needing to re-run this loader.
+
+`etl/warehouse_loader/load_dimensions.py` — `load_dim_actor()` / `load_dim_director()`:
+> Both read from the *same* Silver schema (`person_id`, `name`, `gender`, `popularity` — actors and directors are both just "people" until this point) and only differ in which target table and PK column name they use. Renaming `person_id` → `actor_id`/`director_id` at load time keeps the Silver layer generic while the warehouse schema stays explicit about roles.
+
+### What to Study Next
+Read up on **transaction isolation** for concurrent upserts: if two loader runs for overlapping dates executed at the same time, could they deadlock or produce inconsistent results? Look at PostgreSQL's `ON CONFLICT` locking behavior and how `pool_pre_ping`/connection pooling (already in `warehouse/db.py`) interacts with long-running batch transactions.

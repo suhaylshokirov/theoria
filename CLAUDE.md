@@ -20,11 +20,11 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 17 — DDL: Fact tables
-Currently on          : Task 18 — Loader: Dimensions
+Last completed task   : Task 18 — Loader: Dimensions
+Currently on          : Task 19 — Loader: Facts
 Current phase         : Phase 3 — Warehouse Modeling
 Blockers / open issues: None
-Last updated          : 2026-06-30
+Last updated          : 2026-07-01
 ```
 
 **After finishing any task, in this order:**
@@ -297,10 +297,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** `CREATE TABLE` for both facts; explicit `FOREIGN KEY` constraints; indexes on FK columns.
 - **Outcome:** `warehouse/ddl/02_facts.sql` defines `fact_movie_metrics` (composite PK on `movie_id, date_id, genre_id`) and `fact_casting` (composite PK on `movie_id, actor_id, director_id`), each with named FK constraints referencing their dimension tables and a `CREATE INDEX IF NOT EXISTS` on every FK column. DDL executed against the `theoria` PostgreSQL database; both tables and all 6 FK indexes confirmed present.
 
-#### [ ] Task 18 — Loader: Dimensions
+#### [x] Task 18 — Loader: Dimensions
 - **Files:** `etl/warehouse_loader/load_dimensions.py`
 - **Steps:** Read Silver Parquet → upsert into `dim_*` using `ON CONFLICT DO UPDATE`. Populate `dim_date` as a full calendar table.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `load_dimensions()` reads the four Silver Parquet files (movies, actors, directors, genres) for a given ingestion_date, and upserts each into its dimension table via a generic `_upsert()` helper that builds `INSERT ... ON CONFLICT (pk) DO UPDATE SET col = EXCLUDED.col` and executes it as one batch per table inside a single `get_session()` transaction. `dim_actor`/`dim_director` reuse the same Silver people schema, renaming `person_id` to `actor_id`/`director_id`. `dim_date` is populated independently of Silver data by `_build_calendar()`, which generates one row per day over a configurable date range (default 1900–2035) with a `YYYYMMDD` surrogate key and derived year/month/day/decade. NA/NaT values are converted to `None` before binding so psycopg2 doesn't choke on pandas nullable types. Idempotent — reruns update existing rows rather than duplicating them. 13 new tests added (106/106 pass).
 
 #### [ ] Task 19 — Loader: Facts
 - **Files:** `etl/warehouse_loader/load_facts.py`

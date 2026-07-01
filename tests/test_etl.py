@@ -1268,3 +1268,191 @@ def test_reset_engine_disposes_and_clears():
     reset_engine()
     assert db._engine is None
     mock_engine.dispose.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Task 18 — etl/warehouse_loader/load_dimensions.py
+# ---------------------------------------------------------------------------
+from etl.warehouse_loader.load_dimensions import (
+    _build_calendar,
+    _records,
+    _upsert,
+    load_dim_actor,
+    load_dim_date,
+    load_dim_director,
+    load_dim_genre,
+    load_dim_movie,
+    load_dimensions,
+)
+
+
+def _dim_movies_df():
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 2], dtype="Int64"),
+        "title": ["Alpha", "Beta"],
+        "release_date": [dt.date(2020, 1, 1), None],
+        "runtime": pd.array([100, None], dtype="Int64"),
+        "budget": pd.array([1000, 2000], dtype="Int64"),
+        "revenue": pd.array([5000, 6000], dtype="Int64"),
+        "original_language": ["en", "fr"],
+        "status": ["Released", "Released"],
+        "vote_average": [7.5, 6.1],
+        "vote_count": pd.array([100, 50], dtype="Int64"),
+        "popularity": [10.0, 5.0],
+        "overview": ["a", "b"],
+        "genre_ids": [[1], [2]],
+    })
+
+
+def _dim_people_df():
+    return pd.DataFrame({
+        "person_id": pd.array([10, 20], dtype="Int64"),
+        "name": ["Person A", "Person B"],
+        "gender": pd.array([1, 2], dtype="Int64"),
+        "popularity": [3.5, 4.5],
+    })
+
+
+def _dim_genres_df():
+    return pd.DataFrame({
+        "genre_id": pd.array([1, 2], dtype="Int64"),
+        "genre_name": ["Action", "Comedy"],
+    })
+
+
+def test_records_converts_na_to_none():
+    """_records() must turn pandas NA/NaN values into plain None for psycopg2."""
+    df = _dim_movies_df()
+    records = _records(df, ["movie_id", "title", "runtime"])
+    assert records[1]["runtime"] is None
+    assert records[0]["movie_id"] == 1
+
+
+def test_upsert_builds_on_conflict_sql_and_executes():
+    """_upsert() must build an INSERT ... ON CONFLICT DO UPDATE statement and execute it once."""
+    mock_session = MagicMock()
+    records = [{"a": 1, "b": "x"}]
+
+    count = _upsert(mock_session, "some_table", ["a"], ["a", "b"], records)
+
+    assert count == 1
+    mock_session.execute.assert_called_once()
+    (stmt, params), _ = mock_session.execute.call_args
+    sql = str(stmt)
+    assert "INSERT INTO some_table" in sql
+    assert "ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b" in sql
+    assert params == records
+
+
+def test_upsert_skips_execute_when_no_records():
+    """_upsert() must not call session.execute() for an empty record list."""
+    mock_session = MagicMock()
+    count = _upsert(mock_session, "some_table", ["a"], ["a", "b"], [])
+    assert count == 0
+    mock_session.execute.assert_not_called()
+
+
+def test_load_dim_movie_upserts_expected_columns():
+    """load_dim_movie() must upsert only the dim_movie columns, keyed on movie_id."""
+    mock_session = MagicMock()
+    count = load_dim_movie(mock_session, _dim_movies_df())
+
+    assert count == 2
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_movie" in str(stmt)
+    assert set(params[0].keys()) == {
+        "movie_id", "title", "release_date", "runtime", "budget", "revenue",
+        "original_language", "status",
+    }
+
+
+def test_load_dim_actor_renames_person_id():
+    """load_dim_actor() must map the Silver person_id column to actor_id."""
+    mock_session = MagicMock()
+    count = load_dim_actor(mock_session, _dim_people_df())
+
+    assert count == 2
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_actor" in str(stmt)
+    assert params[0]["actor_id"] == 10
+
+
+def test_load_dim_director_renames_person_id():
+    """load_dim_director() must map the Silver person_id column to director_id."""
+    mock_session = MagicMock()
+    count = load_dim_director(mock_session, _dim_people_df())
+
+    assert count == 2
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_director" in str(stmt)
+    assert params[0]["director_id"] == 10
+
+
+def test_load_dim_genre_upserts_expected_columns():
+    """load_dim_genre() must upsert genre_id and genre_name only."""
+    mock_session = MagicMock()
+    count = load_dim_genre(mock_session, _dim_genres_df())
+
+    assert count == 2
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_genre" in str(stmt)
+    assert set(params[0].keys()) == {"genre_id", "genre_name"}
+
+
+def test_build_calendar_computes_surrogate_key_and_decade():
+    """_build_calendar() must produce one row per day with a YYYYMMDD date_id and correct decade."""
+    df = _build_calendar(dt.date(1999, 12, 30), dt.date(2000, 1, 1))
+
+    assert len(df) == 3
+    row_1999 = df[df["full_date"] == dt.date(1999, 12, 31)].iloc[0]
+    assert int(row_1999["date_id"]) == 19991231
+    assert int(row_1999["decade"]) == 1990
+
+    row_2000 = df[df["full_date"] == dt.date(2000, 1, 1)].iloc[0]
+    assert int(row_2000["date_id"]) == 20000101
+    assert int(row_2000["decade"]) == 2000
+
+
+def test_load_dim_date_upserts_full_range():
+    """load_dim_date() must upsert one row per day in the given range."""
+    mock_session = MagicMock()
+    count = load_dim_date(mock_session, dt.date(2020, 1, 1), dt.date(2020, 1, 5))
+
+    assert count == 5
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_date" in str(stmt)
+    assert len(params) == 5
+
+
+def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
+    """load_dimensions() must read all four Silver Parquet files and upsert every dim table."""
+    date = dt.date(2026, 6, 26)
+
+    def fake_read(bucket, entity, ingestion_date, filename):
+        if entity == "movies":
+            return _dim_movies_df()
+        if entity in ("actors", "directors"):
+            return _dim_people_df()
+        if entity == "genres":
+            return _dim_genres_df()
+        raise AssertionError(f"unexpected entity {entity}")
+
+    mock_session = MagicMock()
+
+    import etl.warehouse_loader.load_dimensions as load_dimensions_module
+
+    monkeypatch.setattr(load_dimensions_module, "_read_silver_parquet", fake_read)
+    monkeypatch.setattr(
+        load_dimensions_module, "get_session",
+        lambda: MagicMock(__enter__=MagicMock(return_value=mock_session), __exit__=MagicMock(return_value=False)),
+    )
+
+    counts = load_dimensions(
+        ingestion_date=date, bucket="theoria-datalake",
+        calendar_start=dt.date(2020, 1, 1), calendar_end=dt.date(2020, 1, 2),
+    )
+
+    assert counts == {
+        "dim_movie": 2, "dim_actor": 2, "dim_director": 2, "dim_genre": 2, "dim_date": 2,
+    }
+    assert mock_session.execute.call_count == 5
