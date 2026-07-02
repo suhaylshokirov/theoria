@@ -29,6 +29,9 @@ db.sqlite3
 django_app/**/migrations/0*.py
 staticfiles/
 
+# graphify stuff
+graphify-out/
+
 # OS / editor
 .DS_Store
 .idea/
