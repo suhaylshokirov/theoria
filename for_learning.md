@@ -824,3 +824,24 @@ Seven standalone `.sql` files in `warehouse/queries/` answering concrete busines
 
 ### What to Study Next
 Once real Bronze→Silver→warehouse data exists, run all seven queries and sanity-check the actual output — in particular, check whether `movies_by_decade.sql`'s `LEFT JOIN` to `movie_ratings` (used so movies with no fact rows still show up in the decade count) produces the count you'd expect versus an `INNER JOIN`. Also worth studying: `EXPLAIN ANALYZE` on `actor_collaboration_frequency.sql` once `fact_casting` has real volume — a self-join can get expensive, and this is a good first real query to learn to read a PostgreSQL query plan on.
+
+## Task 23 — Django project & `core` app
+
+### What Was Built
+The first piece of the Django UI: a real Django project (`theoria_site`) living inside `django_app/`, wired to talk to two different databases — Django's own small sqlite database for things like the admin login, and the existing PostgreSQL warehouse (read-only) for all the movie data. A `core` app was added as a home for shared plumbing (the base page template, the database router), and a page skeleton (`base.html`) with a nav bar for Home / Movies / Analytics was created for every future page to extend.
+
+### Concepts Used
+- **Multi-database Django**: Django can talk to more than one database at once via the `DATABASES` setting, each identified by an alias (`default`, `warehouse`). A **database router** (a small class with `db_for_read`/`db_for_write`/`allow_migrate`) tells Django which alias a given app's models should use, and can refuse to let `migrate` touch a database at all — this is how the warehouse stays read-only from Django's side even though nothing in Postgres itself is locked down.
+- **Namespace/module shadowing**: Python resolves imports by walking `sys.path` in order. Because `manage.py` adds the current directory to `sys.path`, a plain folder named `core/` sitting there is enough for `import core` to succeed — even with no code in it — which collided with Django's internal `django.core` package and made the `startapp` command refuse the name. This is why the app had to be built by hand instead.
+- **Single source of truth for config**: rather than re-typing `SECRET_KEY`/`DEBUG`/DB credentials into `settings.py`, the settings module imports the existing `config.py` (adding the repo root to `sys.path` first) so there is exactly one place secrets and env-derived values are read from.
+- **`managed = False` models (preview for Task 24)**: Django normally owns the tables behind its models (creates/alters them via migrations). For tables that already exist and are owned by something else — here, the ETL warehouse loaders — models are marked `managed = False` so Django only ever reads/writes rows, never touches schema.
+
+### Key Code
+`django_app/theoria_site/settings.py`:
+> `_warehouse_url = urlparse(config.DATABASE_URL.replace(...))` splits the single SQLAlchemy-style connection string already used by the ETL/warehouse code into the pieces Django's `DATABASES` dict wants (`NAME`, `USER`, `PASSWORD`, `HOST`, `PORT`), so the connection string is still defined in exactly one place (`config.py`) even though two different libraries (SQLAlchemy and Django) each want it in a different shape.
+
+`django_app/core/routers.py` — `WarehouseRouter.allow_migrate()`:
+> Returns `False` whenever `db == "warehouse"` or the app is one of the warehouse-backed apps, and `None` (meaning "no opinion, let another rule decide") otherwise. Returning `None` rather than `True` matters — it lets Django's default behavior handle every other combination instead of this router silently claiming authority over databases it doesn't care about.
+
+### What to Study Next
+Read Django's own docs page on ["Multiple databases"](https://docs.djangoproject.com/en/5.1/topics/db/multi-db/), specifically the router methods table — the fact that returning `None` vs `False` vs `True` all mean different things is a common source of subtle bugs. Also worth trying: temporarily comment out `DATABASE_ROUTERS` and run `manage.py migrate`, then check (via `psql` or `connections['warehouse']`) whether Django tried to create its `auth_user`/`django_session` tables inside the warehouse — seeing the router's absence break something is the fastest way to understand what it was actually protecting.

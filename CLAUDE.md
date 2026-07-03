@@ -20,8 +20,8 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 22 — Analytics SQL queries
-Currently on          : Task 23 — Django project & `core` app
+Last completed task   : Task 23 — Django project & `core` app
+Currently on          : Task 24 — `movies` app: models
 Current phase         : Phase 5 — Django UI
 Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–22 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
 Last updated          : 2026-07-03
@@ -330,10 +330,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ### Phase 5 — Django UI
 
-#### [ ] Task 23 — Django project & `core` app
+#### [x] Task 23 — Django project & `core` app
 - **Files:** `django_app/` (project), `django_app/core/` (app), `base.html`, `settings.py`
 - **Steps:** `startproject` + `startapp core`; point `DATABASES` at the warehouse (read-only); nav: Home, Movies, Analytics.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** Django project `theoria_site` created at `django_app/` (`manage.py` + `theoria_site/{settings,urls,wsgi,asgi}.py`); `core` app added manually (`django-admin startapp core` refused the name — a bare `core/` directory on `sys.path` shadows Django's own `django.core`, so files were hand-written instead: `apps.py`, empty `models.py`/`views.py`/`admin.py`, `migrations/__init__.py`). `settings.py` imports `config.py` directly (adds repo root to `sys.path`) for `SECRET_KEY`/`DEBUG` — no env values duplicated. Two databases: `default` (sqlite) holds Django's own auth/session/admin tables; `warehouse` (Postgres, parsed from `config.DATABASE_URL`) is the star schema. `core/routers.py` (`WarehouseRouter`) routes `movies`/`analytics` app models to `warehouse` and refuses `allow_migrate` on it in both directions, so the warehouse stays truly read-only from Django's side (Task 24's models will use `managed = False` as defense-in-depth on top of this). Shared `templates/base.html` at project root (`TEMPLATES.DIRS`) with a static nav (Home `/`, Movies `/movies/`, Analytics `/analytics/`) — Movies/Analytics links 404 until Tasks 25/30 wire those apps' URLs. Verified: `manage.py check` clean; `manage.py migrate` applied only to `default` (confirmed no warehouse tables touched); dev server returns 200 on `/` and `/admin/login/`; a `shell` query through `connections["warehouse"]` confirmed a live query against the real Postgres warehouse (8 tables visible).
 
 #### [ ] Task 24 — `movies` app: models
 - **Files:** `django_app/movies/models.py`
