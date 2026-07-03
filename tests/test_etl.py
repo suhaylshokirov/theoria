@@ -1522,12 +1522,14 @@ def test_build_movie_metrics_rows_explodes_genres_and_resolves_date_id():
     """A movie with known movie_id/date_id/genre_id produces one row per genre."""
     rows, rejects = _build_movie_metrics_rows(
         _fact_movies_df(), valid_movie_ids={1}, valid_date_ids={20200101}, valid_genre_ids={1},
+        ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert len(rows) == 1
     assert rows[0] == {
         "movie_id": 1, "date_id": 20200101, "genre_id": 1,
         "rating": 7.5, "vote_count": 100, "revenue": 5000, "budget": 1000, "popularity": 10.0,
+        "ingestion_date": dt.date(2026, 6, 26),
     }
     # movies 2, 3, 4 all fail one lookup or another.
     assert len(rejects) == 3
@@ -1537,7 +1539,7 @@ def test_build_movie_metrics_rows_rejects_unknown_movie_id():
     """A movie_id absent from dim_movie must be rejected, not inserted."""
     rows, rejects = _build_movie_metrics_rows(
         _fact_movies_df(), valid_movie_ids=set(), valid_date_ids={20200101, 20200102},
-        valid_genre_ids={1},
+        valid_genre_ids={1}, ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
@@ -1548,7 +1550,7 @@ def test_build_movie_metrics_rows_rejects_missing_release_date():
     """A movie with a null release_date cannot be assigned a date_id and must be rejected."""
     rows, rejects = _build_movie_metrics_rows(
         _fact_movies_df(), valid_movie_ids={2}, valid_date_ids={20200101, 20200102},
-        valid_genre_ids={1},
+        valid_genre_ids={1}, ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
@@ -1560,6 +1562,7 @@ def test_build_movie_metrics_rows_rejects_unknown_genre_id():
     """A genre_id absent from dim_genre must be rejected while other genres on the same movie still load."""
     rows, rejects = _build_movie_metrics_rows(
         _fact_movies_df(), valid_movie_ids={3}, valid_date_ids={20200102}, valid_genre_ids=set(),
+        ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
@@ -1571,6 +1574,7 @@ def test_build_movie_metrics_rows_rejects_movie_with_no_genres():
     """A movie with an empty genre_ids list must be rejected (fact_movie_metrics.genre_id is NOT NULL)."""
     rows, rejects = _build_movie_metrics_rows(
         _fact_movies_df(), valid_movie_ids={4}, valid_date_ids={20200102}, valid_genre_ids={1},
+        ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
@@ -1582,18 +1586,23 @@ def test_build_casting_rows_cross_joins_actors_and_directors():
     """Every credited actor must be paired with every credited director for the same movie."""
     rows, rejects = _build_casting_rows(
         _fact_bridge_df(), valid_movie_ids={1}, valid_actor_ids={10, 11}, valid_director_ids={20},
+        ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert len(rows) == 2
     assert {(r["actor_id"], r["director_id"]) for r in rows} == {(10, 20), (11, 20)}
     hero_row = next(r for r in rows if r["actor_id"] == 10)
-    assert hero_row == {"movie_id": 1, "actor_id": 10, "director_id": 20, "role": "Hero", "ordering": 0}
+    assert hero_row == {
+        "movie_id": 1, "actor_id": 10, "director_id": 20, "role": "Hero", "ordering": 0,
+        "ingestion_date": dt.date(2026, 6, 26),
+    }
 
 
 def test_build_casting_rows_rejects_movie_with_no_director():
     """A movie with credited actors but no credited director must reject those actor rows."""
     rows, rejects = _build_casting_rows(
         _fact_bridge_df(), valid_movie_ids={2}, valid_actor_ids={30}, valid_director_ids=set(),
+        ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
@@ -1604,6 +1613,7 @@ def test_build_casting_rows_rejects_unknown_actor_id():
     """An actor_id absent from dim_actor must be rejected even if the movie has a valid director."""
     rows, rejects = _build_casting_rows(
         _fact_bridge_df(), valid_movie_ids={3}, valid_actor_ids=set(), valid_director_ids={40},
+        ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
@@ -1614,6 +1624,7 @@ def test_build_casting_rows_rejects_unknown_director_id():
     """A director_id absent from dim_director must be rejected even if the actor resolves."""
     rows, rejects = _build_casting_rows(
         _fact_bridge_df(), valid_movie_ids={3}, valid_actor_ids={40}, valid_director_ids=set(),
+        ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
@@ -1651,13 +1662,14 @@ def test_load_fact_movie_metrics_resolves_fks_and_upserts(monkeypatch):
         lambda session, table, pk_col: id_sets[table],
     )
 
-    count, rejects = load_fact_movie_metrics(mock_session, _fact_movies_df())
+    count, rejects = load_fact_movie_metrics(mock_session, _fact_movies_df(), dt.date(2026, 6, 26))
 
     assert count == 1
     assert len(rejects) == 3
     (stmt, params), _ = mock_session.execute.call_args
     assert "INSERT INTO fact_movie_metrics" in str(stmt)
     assert params[0]["genre_id"] == 1
+    assert params[0]["ingestion_date"] == dt.date(2026, 6, 26)
 
 
 def test_load_fact_casting_resolves_fks_and_upserts(monkeypatch):
@@ -1673,12 +1685,13 @@ def test_load_fact_casting_resolves_fks_and_upserts(monkeypatch):
         lambda session, table, pk_col: id_sets[table],
     )
 
-    count, rejects = load_fact_casting(mock_session, _fact_bridge_df())
+    count, rejects = load_fact_casting(mock_session, _fact_bridge_df(), dt.date(2026, 6, 26))
 
     assert count == 2
     assert any(r["rejection_reason"] == "no director for movie" for r in rejects)
     (stmt, params), _ = mock_session.execute.call_args
     assert "INSERT INTO fact_casting" in str(stmt)
+    assert params[0]["ingestion_date"] == dt.date(2026, 6, 26)
 
 
 def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path):
@@ -1717,3 +1730,222 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
         "fact_casting_rejected_2026-06-26.parquet",
         "fact_movie_metrics_rejected_2026-06-26.parquet",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Task 20 — etl/incremental.py
+# ---------------------------------------------------------------------------
+from etl.incremental import get_watermark, list_available_partitions, pending_partitions, set_watermark
+
+
+def test_get_watermark_returns_date_when_row_exists():
+    """get_watermark() must return the stored last_ingestion_date for a loader."""
+    mock_session = MagicMock()
+    mock_session.execute.return_value.first.return_value = (dt.date(2026, 6, 20),)
+
+    result = get_watermark(mock_session, "load_dimensions")
+
+    assert result == dt.date(2026, 6, 20)
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "etl_watermarks" in str(stmt)
+    assert params == {"name": "load_dimensions"}
+
+
+def test_get_watermark_returns_none_when_no_row():
+    """get_watermark() must return None if the loader has never recorded a watermark."""
+    mock_session = MagicMock()
+    mock_session.execute.return_value.first.return_value = None
+
+    assert get_watermark(mock_session, "load_dimensions") is None
+
+
+def test_set_watermark_upserts_loader_row():
+    """set_watermark() must upsert (loader_name, ingestion_date) via ON CONFLICT DO UPDATE."""
+    mock_session = MagicMock()
+
+    set_watermark(mock_session, "load_facts", dt.date(2026, 6, 21))
+
+    (stmt, params), _ = mock_session.execute.call_args
+    sql = str(stmt)
+    assert "INSERT INTO etl_watermarks" in sql
+    assert "ON CONFLICT (loader_name) DO UPDATE" in sql
+    assert params == {"name": "load_facts", "date": dt.date(2026, 6, 21)}
+
+
+def test_list_available_partitions_parses_ingestion_date_prefixes(monkeypatch):
+    """list_available_partitions() must parse ingestion_date=YYYY-MM-DD prefixes and sort ascending."""
+    import etl.incremental as incremental_module
+
+    mock_client = MagicMock()
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = [
+        {"CommonPrefixes": [
+            {"Prefix": "silver/movies/ingestion_date=2026-06-22/"},
+            {"Prefix": "silver/movies/ingestion_date=2026-06-20/"},
+        ]},
+        {"CommonPrefixes": [
+            {"Prefix": "silver/movies/ingestion_date=2026-06-21/"},
+            {"Prefix": "silver/movies/not_a_date/"},
+        ]},
+    ]
+    mock_client.get_paginator.return_value = mock_paginator
+    monkeypatch.setattr(incremental_module.s3_utils, "get_s3_client", lambda: mock_client)
+
+    dates = list_available_partitions("theoria-datalake", "silver", "movies")
+
+    assert dates == [dt.date(2026, 6, 20), dt.date(2026, 6, 21), dt.date(2026, 6, 22)]
+    mock_paginator.paginate.assert_called_once_with(
+        Bucket="theoria-datalake", Prefix="silver/movies/", Delimiter="/",
+    )
+
+
+def test_pending_partitions_returns_all_when_no_watermark(monkeypatch):
+    """pending_partitions() must return every available partition if no watermark exists yet."""
+    import etl.incremental as incremental_module
+
+    mock_session = MagicMock()
+    monkeypatch.setattr(incremental_module, "get_watermark", lambda session, name: None)
+    monkeypatch.setattr(
+        incremental_module, "list_available_partitions",
+        lambda bucket, layer, entity: [dt.date(2026, 6, 20), dt.date(2026, 6, 21)],
+    )
+
+    dates = pending_partitions(mock_session, "load_dimensions", "theoria-datalake", "silver", "movies")
+
+    assert dates == [dt.date(2026, 6, 20), dt.date(2026, 6, 21)]
+
+
+def test_pending_partitions_filters_to_dates_after_watermark(monkeypatch):
+    """pending_partitions() must only return partitions strictly newer than the watermark."""
+    import etl.incremental as incremental_module
+
+    mock_session = MagicMock()
+    monkeypatch.setattr(incremental_module, "get_watermark", lambda session, name: dt.date(2026, 6, 20))
+    monkeypatch.setattr(
+        incremental_module, "list_available_partitions",
+        lambda bucket, layer, entity: [dt.date(2026, 6, 19), dt.date(2026, 6, 20), dt.date(2026, 6, 21)],
+    )
+
+    dates = pending_partitions(mock_session, "load_dimensions", "theoria-datalake", "silver", "movies")
+
+    assert dates == [dt.date(2026, 6, 21)]
+
+
+# ---------------------------------------------------------------------------
+# Task 20 — load_dimensions_incremental() / load_facts_incremental()
+# ---------------------------------------------------------------------------
+from etl.warehouse_loader.load_dimensions import load_dimensions_incremental
+from etl.warehouse_loader.load_facts import load_facts_incremental
+
+
+def test_load_dimensions_incremental_processes_pending_dates_and_advances_watermark(monkeypatch):
+    """load_dimensions_incremental() must call load_dimensions() per pending date and advance the watermark each time."""
+    import etl.warehouse_loader.load_dimensions as load_dimensions_module
+
+    mock_session = MagicMock()
+    monkeypatch.setattr(
+        load_dimensions_module, "get_session",
+        lambda: MagicMock(__enter__=MagicMock(return_value=mock_session), __exit__=MagicMock(return_value=False)),
+    )
+    monkeypatch.setattr(
+        load_dimensions_module, "pending_partitions",
+        lambda session, loader_name, bucket, layer, entity: [dt.date(2026, 6, 20), dt.date(2026, 6, 21)],
+    )
+
+    calls = []
+    monkeypatch.setattr(
+        load_dimensions_module, "load_dimensions",
+        lambda ingestion_date, bucket, calendar_start, calendar_end: (
+            calls.append(ingestion_date) or {"dim_movie": 1}
+        ),
+    )
+    watermark_calls = []
+    monkeypatch.setattr(
+        load_dimensions_module, "set_watermark",
+        lambda session, loader_name, ingestion_date: watermark_calls.append((loader_name, ingestion_date)),
+    )
+
+    results = load_dimensions_incremental(bucket="theoria-datalake")
+
+    assert calls == [dt.date(2026, 6, 20), dt.date(2026, 6, 21)]
+    assert watermark_calls == [
+        ("load_dimensions", dt.date(2026, 6, 20)),
+        ("load_dimensions", dt.date(2026, 6, 21)),
+    ]
+    assert results == {"2026-06-20": {"dim_movie": 1}, "2026-06-21": {"dim_movie": 1}}
+
+
+def test_load_dimensions_incremental_noop_when_no_pending_dates(monkeypatch):
+    """load_dimensions_incremental() must return {} and call neither loader nor set_watermark when nothing is pending."""
+    import etl.warehouse_loader.load_dimensions as load_dimensions_module
+
+    mock_session = MagicMock()
+    monkeypatch.setattr(
+        load_dimensions_module, "get_session",
+        lambda: MagicMock(__enter__=MagicMock(return_value=mock_session), __exit__=MagicMock(return_value=False)),
+    )
+    monkeypatch.setattr(
+        load_dimensions_module, "pending_partitions",
+        lambda session, loader_name, bucket, layer, entity: [],
+    )
+    monkeypatch.setattr(
+        load_dimensions_module, "load_dimensions",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not be called")),
+    )
+
+    assert load_dimensions_incremental(bucket="theoria-datalake") == {}
+
+
+def test_load_facts_incremental_processes_pending_dates_and_advances_watermark(monkeypatch):
+    """load_facts_incremental() must call load_facts() per pending date and advance the watermark each time."""
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    mock_session = MagicMock()
+    monkeypatch.setattr(
+        load_facts_module, "get_session",
+        lambda: MagicMock(__enter__=MagicMock(return_value=mock_session), __exit__=MagicMock(return_value=False)),
+    )
+    monkeypatch.setattr(
+        load_facts_module, "pending_partitions",
+        lambda session, loader_name, bucket, layer, entity: [dt.date(2026, 6, 20)],
+    )
+
+    calls = []
+    monkeypatch.setattr(
+        load_facts_module, "load_facts",
+        lambda ingestion_date, bucket, rejected_dir: (
+            calls.append(ingestion_date) or {"fact_movie_metrics": 1, "fact_casting": 2}
+        ),
+    )
+    watermark_calls = []
+    monkeypatch.setattr(
+        load_facts_module, "set_watermark",
+        lambda session, loader_name, ingestion_date: watermark_calls.append((loader_name, ingestion_date)),
+    )
+
+    results = load_facts_incremental(bucket="theoria-datalake")
+
+    assert calls == [dt.date(2026, 6, 20)]
+    assert watermark_calls == [("load_facts", dt.date(2026, 6, 20))]
+    assert results == {"2026-06-20": {"fact_movie_metrics": 1, "fact_casting": 2}}
+
+
+def test_load_facts_incremental_noop_when_no_pending_dates(monkeypatch):
+    """load_facts_incremental() must return {} when nothing is pending."""
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    mock_session = MagicMock()
+    monkeypatch.setattr(
+        load_facts_module, "get_session",
+        lambda: MagicMock(__enter__=MagicMock(return_value=mock_session), __exit__=MagicMock(return_value=False)),
+    )
+    monkeypatch.setattr(
+        load_facts_module, "pending_partitions",
+        lambda session, loader_name, bucket, layer, entity: [],
+    )
+    monkeypatch.setattr(
+        load_facts_module, "load_facts",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not be called")),
+    )
+
+    assert load_facts_incremental(bucket="theoria-datalake") == {}

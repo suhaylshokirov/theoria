@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS fact_movie_metrics (
     revenue      BIGINT,
     budget       BIGINT,
     popularity   NUMERIC(10, 4),
+    ingestion_date DATE NOT NULL,
     CONSTRAINT pk_fact_movie_metrics PRIMARY KEY (movie_id, date_id, genre_id),
     CONSTRAINT fk_fmm_movie   FOREIGN KEY (movie_id)  REFERENCES dim_movie  (movie_id),
     CONSTRAINT fk_fmm_date    FOREIGN KEY (date_id)   REFERENCES dim_date   (date_id),
@@ -19,6 +20,7 @@ CREATE TABLE IF NOT EXISTS fact_movie_metrics (
 CREATE INDEX IF NOT EXISTS idx_fmm_movie_id  ON fact_movie_metrics (movie_id);
 CREATE INDEX IF NOT EXISTS idx_fmm_date_id   ON fact_movie_metrics (date_id);
 CREATE INDEX IF NOT EXISTS idx_fmm_genre_id  ON fact_movie_metrics (genre_id);
+CREATE INDEX IF NOT EXISTS idx_fmm_ingestion_date ON fact_movie_metrics (ingestion_date);
 
 CREATE TABLE IF NOT EXISTS fact_casting (
     movie_id    INTEGER      NOT NULL,
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS fact_casting (
     director_id INTEGER      NOT NULL,
     role        TEXT,
     ordering    SMALLINT,
+    ingestion_date DATE NOT NULL,
     CONSTRAINT pk_fact_casting PRIMARY KEY (movie_id, actor_id, director_id),
     CONSTRAINT fk_fc_movie    FOREIGN KEY (movie_id)    REFERENCES dim_movie    (movie_id),
     CONSTRAINT fk_fc_actor    FOREIGN KEY (actor_id)    REFERENCES dim_actor    (actor_id),
@@ -35,3 +38,4 @@ CREATE TABLE IF NOT EXISTS fact_casting (
 CREATE INDEX IF NOT EXISTS idx_fc_movie_id    ON fact_casting (movie_id);
 CREATE INDEX IF NOT EXISTS idx_fc_actor_id    ON fact_casting (actor_id);
 CREATE INDEX IF NOT EXISTS idx_fc_director_id ON fact_casting (director_id);
+CREATE INDEX IF NOT EXISTS idx_fc_ingestion_date ON fact_casting (ingestion_date);

@@ -25,9 +25,17 @@ S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
     silver/credits_bridge/ingestion_date=YYYY-MM-DD/credits_bridge.parquet
 
+Both fact tables carry an ingestion_date column recording which Silver
+partition last wrote each row. It does not participate in either table's
+PRIMARY KEY — the existing composite PK (movie_id, date_id, genre_id) /
+(movie_id, actor_id, director_id) already guards against duplicate inserts
+via the ON CONFLICT upsert, so re-running the same or an earlier partition
+is a no-op update rather than a new row.
+
 Usage:
     python -m etl.warehouse_loader.load_facts
     python -m etl.warehouse_loader.load_facts --date 2026-06-22
+    python -m etl.warehouse_loader.load_facts --incremental
 """
 
 from __future__ import annotations
@@ -43,10 +51,14 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 import config
+from etl.incremental import pending_partitions, set_watermark
 from etl.warehouse_loader.common import _existing_ids, _read_silver_parquet, _upsert
 from warehouse.db import get_session
 
 logger = logging.getLogger(__name__)
+
+_LOADER_NAME = "load_facts"
+_WATERMARK_ENTITY = "movies"  # reference entity used to discover new Silver partitions
 
 
 def _records(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -72,6 +84,7 @@ def _build_movie_metrics_rows(
     valid_movie_ids: set[int],
     valid_date_ids: set[int],
     valid_genre_ids: set[int],
+    ingestion_date: dt.date,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Explode Silver movies into (movie_id, date_id, genre_id) fact rows.
 
@@ -128,6 +141,7 @@ def _build_movie_metrics_rows(
                 "revenue": base["revenue"],
                 "budget": base["budget"],
                 "popularity": base["popularity"],
+                "ingestion_date": ingestion_date,
             })
 
     return rows, rejects
@@ -138,6 +152,7 @@ def _build_casting_rows(
     valid_movie_ids: set[int],
     valid_actor_ids: set[int],
     valid_director_ids: set[int],
+    ingestion_date: dt.date,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Cross-join cast and director bridge rows per movie into fact_casting rows.
 
@@ -181,19 +196,25 @@ def _build_casting_rows(
                     "director_id": int(director_id),
                     "role": actor_row.get("role"),
                     "ordering": actor_row.get("ordering"),
+                    "ingestion_date": ingestion_date,
                 })
 
     return rows, rejects
 
 
-def load_fact_movie_metrics(session: Session, movies_df: pd.DataFrame) -> tuple[int, list[dict[str, Any]]]:
+def load_fact_movie_metrics(
+    session: Session, movies_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
     """Resolve and upsert Silver movies into fact_movie_metrics. Returns (count, rejects)."""
     valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
     valid_date_ids = _existing_ids(session, "dim_date", "date_id")
     valid_genre_ids = _existing_ids(session, "dim_genre", "genre_id")
 
-    rows, rejects = _build_movie_metrics_rows(movies_df, valid_movie_ids, valid_date_ids, valid_genre_ids)
-    columns = ["movie_id", "date_id", "genre_id", "rating", "vote_count", "revenue", "budget", "popularity"]
+    rows, rejects = _build_movie_metrics_rows(
+        movies_df, valid_movie_ids, valid_date_ids, valid_genre_ids, ingestion_date,
+    )
+    columns = ["movie_id", "date_id", "genre_id", "rating", "vote_count", "revenue",
+               "budget", "popularity", "ingestion_date"]
     count = _upsert(session, "fact_movie_metrics", ["movie_id", "date_id", "genre_id"], columns, _records(rows))
     logger.info(
         "fact_movie_metrics: upserted %d row(s), rejected %d row(s)", count, len(rejects)
@@ -201,14 +222,18 @@ def load_fact_movie_metrics(session: Session, movies_df: pd.DataFrame) -> tuple[
     return count, rejects
 
 
-def load_fact_casting(session: Session, bridge_df: pd.DataFrame) -> tuple[int, list[dict[str, Any]]]:
+def load_fact_casting(
+    session: Session, bridge_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
     """Resolve and upsert Silver credits_bridge into fact_casting. Returns (count, rejects)."""
     valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
     valid_actor_ids = _existing_ids(session, "dim_actor", "actor_id")
     valid_director_ids = _existing_ids(session, "dim_director", "director_id")
 
-    rows, rejects = _build_casting_rows(bridge_df, valid_movie_ids, valid_actor_ids, valid_director_ids)
-    columns = ["movie_id", "actor_id", "director_id", "role", "ordering"]
+    rows, rejects = _build_casting_rows(
+        bridge_df, valid_movie_ids, valid_actor_ids, valid_director_ids, ingestion_date,
+    )
+    columns = ["movie_id", "actor_id", "director_id", "role", "ordering", "ingestion_date"]
     count = _upsert(session, "fact_casting", ["movie_id", "actor_id", "director_id"], columns, _records(rows))
     logger.info("fact_casting: upserted %d row(s), rejected %d row(s)", count, len(rejects))
     return count, rejects
@@ -238,8 +263,8 @@ def load_facts(
 
     counts: dict[str, int] = {}
     with get_session() as session:
-        counts["fact_movie_metrics"], metrics_rejects = load_fact_movie_metrics(session, movies_df)
-        counts["fact_casting"], casting_rejects = load_fact_casting(session, bridge_df)
+        counts["fact_movie_metrics"], metrics_rejects = load_fact_movie_metrics(session, movies_df, ingestion_date)
+        counts["fact_casting"], casting_rejects = load_fact_casting(session, bridge_df, ingestion_date)
 
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)
     _write_rejects(casting_rejects, "fact_casting", ingestion_date, rejected_dir)
@@ -252,6 +277,41 @@ def load_facts(
     return counts
 
 
+def load_facts_incremental(
+    bucket: str | None = None,
+    rejected_dir: Path | None = None,
+) -> dict[str, dict[str, int]]:
+    """Process every Silver partition newer than this loader's watermark, in order.
+
+    Mirrors load_dimensions_incremental(): discovers pending dates via
+    etl.incremental.pending_partitions(), runs load_facts() for each, and
+    advances the watermark only after each date completes successfully.
+
+    Returns a dict of ingestion_date (ISO string) -> per-table row counts.
+    """
+    if bucket is None:
+        bucket = config.S3_BUCKET
+
+    with get_session() as session:
+        dates = pending_partitions(session, _LOADER_NAME, bucket, "silver", _WATERMARK_ENTITY)
+
+    if not dates:
+        logger.info("No new Silver partitions to process for %s", _LOADER_NAME)
+        return {}
+
+    logger.info("%d pending partition(s) for %s: %s", len(dates), _LOADER_NAME, dates)
+
+    results: dict[str, dict[str, int]] = {}
+    for ingestion_date in dates:
+        counts = load_facts(ingestion_date=ingestion_date, bucket=bucket, rejected_dir=rejected_dir)
+        with get_session() as session:
+            set_watermark(session, _LOADER_NAME, ingestion_date)
+        logger.info("Watermark for %s advanced to %s", _LOADER_NAME, ingestion_date)
+        results[ingestion_date.isoformat()] = counts
+
+    return results
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Resolve Silver Parquet against dimensions and upsert the PostgreSQL fact tables."
@@ -260,7 +320,12 @@ def _parse_args() -> argparse.Namespace:
         "--date",
         type=dt.date.fromisoformat,
         default=None,
-        help="Ingestion date (YYYY-MM-DD). Defaults to today.",
+        help="Ingestion date (YYYY-MM-DD). Defaults to today. Ignored with --incremental.",
+    )
+    parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help="Process every Silver partition newer than the stored watermark, instead of a single date.",
     )
     return parser.parse_args()
 
@@ -269,4 +334,7 @@ if __name__ == "__main__":
     from etl.logging_config import setup_logging
     setup_logging("load_facts")
     args = _parse_args()
-    load_facts(ingestion_date=args.date)
+    if args.incremental:
+        load_facts_incremental()
+    else:
+        load_facts(ingestion_date=args.date)

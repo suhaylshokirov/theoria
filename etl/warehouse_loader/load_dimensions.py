@@ -18,6 +18,7 @@ S3 sources:
 Usage:
     python -m etl.warehouse_loader.load_dimensions
     python -m etl.warehouse_loader.load_dimensions --date 2026-06-22
+    python -m etl.warehouse_loader.load_dimensions --incremental
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 import config
+from etl.incremental import pending_partitions, set_watermark
 from etl.warehouse_loader.common import _read_silver_parquet, _upsert
 from warehouse.db import get_session
 
@@ -39,6 +41,8 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_CALENDAR_START = dt.date(1900, 1, 1)
 _DEFAULT_CALENDAR_END = dt.date(2035, 12, 31)
+_LOADER_NAME = "load_dimensions"
+_WATERMARK_ENTITY = "movies"  # reference entity used to discover new Silver partitions
 
 
 def _records(df: pd.DataFrame, columns: list[str]) -> list[dict[str, Any]]:
@@ -149,6 +153,47 @@ def load_dimensions(
     return counts
 
 
+def load_dimensions_incremental(
+    bucket: str | None = None,
+    calendar_start: dt.date = _DEFAULT_CALENDAR_START,
+    calendar_end: dt.date = _DEFAULT_CALENDAR_END,
+) -> dict[str, dict[str, int]]:
+    """Process every Silver partition newer than this loader's watermark, in order.
+
+    Discovers pending dates via etl.incremental.pending_partitions() (using the
+    "movies" entity as the reference partition list), runs load_dimensions() for
+    each, and advances the watermark after each date completes — so a failure
+    partway through leaves the watermark at the last fully-processed date rather
+    than losing all progress.
+
+    Returns a dict of ingestion_date (ISO string) -> per-table row counts.
+    """
+    if bucket is None:
+        bucket = config.S3_BUCKET
+
+    with get_session() as session:
+        dates = pending_partitions(session, _LOADER_NAME, bucket, "silver", _WATERMARK_ENTITY)
+
+    if not dates:
+        logger.info("No new Silver partitions to process for %s", _LOADER_NAME)
+        return {}
+
+    logger.info("%d pending partition(s) for %s: %s", len(dates), _LOADER_NAME, dates)
+
+    results: dict[str, dict[str, int]] = {}
+    for ingestion_date in dates:
+        counts = load_dimensions(
+            ingestion_date=ingestion_date, bucket=bucket,
+            calendar_start=calendar_start, calendar_end=calendar_end,
+        )
+        with get_session() as session:
+            set_watermark(session, _LOADER_NAME, ingestion_date)
+        logger.info("Watermark for %s advanced to %s", _LOADER_NAME, ingestion_date)
+        results[ingestion_date.isoformat()] = counts
+
+    return results
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Upsert Silver Parquet into the PostgreSQL dimension tables."
@@ -157,7 +202,12 @@ def _parse_args() -> argparse.Namespace:
         "--date",
         type=dt.date.fromisoformat,
         default=None,
-        help="Ingestion date (YYYY-MM-DD). Defaults to today.",
+        help="Ingestion date (YYYY-MM-DD). Defaults to today. Ignored with --incremental.",
+    )
+    parser.add_argument(
+        "--incremental",
+        action="store_true",
+        help="Process every Silver partition newer than the stored watermark, instead of a single date.",
     )
     return parser.parse_args()
 
@@ -166,4 +216,7 @@ if __name__ == "__main__":
     from etl.logging_config import setup_logging
     setup_logging("load_dimensions")
     args = _parse_args()
-    load_dimensions(ingestion_date=args.date)
+    if args.incremental:
+        load_dimensions_incremental()
+    else:
+        load_dimensions(ingestion_date=args.date)
