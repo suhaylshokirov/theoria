@@ -801,3 +801,26 @@ This watermark is coarse — one date per loader, no concept of "partially loade
 
 ### What to Study Next
 This module was written and unit-tested against fully mocked S3/DB state — it has *not* yet been run against a real multi-partition Bronze→Silver→Gold→Warehouse pipeline, because (same blocker as Tasks 19–20) the S3 bucket currently only has Bronze `movies/` data. Once Bronze `movie_details`/`credits` and the Silver transforms have actually been run for a real date, re-run `python -m data_quality.warehouse_checks --date <that date>` and see whether the row-count invariants hold in practice — a live run is the real test of whether the chosen invariants (not strict equality) are actually correct, versus just plausible on paper.
+
+---
+
+## Task 22 — Analytics SQL queries
+
+### What Was Built
+Seven standalone `.sql` files in `warehouse/queries/` answering concrete business questions over the star schema: top-rated directors, most productive actors, revenue by genre, movies by decade, director rating trend over time, actor collaboration frequency, and genre growth over time. These are meant to be run directly against the warehouse (or later wired into the Django Analytics dashboard in Task 30) — no Python wrapper was written, since the task only calls for SQL files.
+
+### Concepts Used
+- **Grain mismatch and double-counting**: `fact_movie_metrics` is exploded to one row per `(movie_id, genre_id)` (from Task 19, so a movie's rating/revenue can be joined against every genre it belongs to). That means naively `AVG(rating)` or `SUM(revenue)` grouped by director/decade would count a movie with 3 genres three times. The fix used everywhere here is a `WITH movie_ratings AS (SELECT DISTINCT movie_id, rating ...)` CTE — collapse back to one row per movie *before* aggregating, then join that clean set to whatever dimension you're grouping by. This is a general lesson: before writing `SUM`/`AVG` over a joined result, always ask "what is the grain of the table I'm aggregating, and does my join fan it out?"
+- **Self-join for pairwise relationships**: `actor_collaboration_frequency.sql` joins `fact_casting` to itself (`fc1`/`fc2`) on `movie_id` to find every pair of actors who share a movie. The join condition `fc1.actor_id < fc2.actor_id` (strict inequality, not `!=`) does two things at once: it excludes an actor pairing with themselves, and it keeps only one direction of each pair (so actor A paired with B appears once, not once as A-B and once as B-A). This pattern — self-join plus an ordering predicate on the join key — is the standard way to enumerate unordered pairs from a one-column-per-row table in SQL.
+- **CTEs (`WITH ... AS (...)`) as named, reusable subqueries**: every query here uses a CTE rather than a bare subquery in the `FROM` clause, purely for readability — it lets the "de-duplicate to movie grain" step be named and read top-to-bottom instead of buried inline. It doesn't change the query plan meaningfully in PostgreSQL for these simple cases, but naming intermediate steps makes SQL much easier to review later.
+- **Verifying SQL without real data**: with no Silver/warehouse data loaded yet (same blocker since Task 19), correctness of *results* can't be checked. What can be checked is that each query is syntactically valid and executes against the real schema — done by running all seven through `warehouse.db.get_session()` via a short throwaway script, confirming each returns `0 rows` with no error rather than a `column does not exist` or type error. This catches schema-mismatch bugs even with an empty database; it does not catch logic bugs (e.g. picking the wrong join condition) that would only show up with real rows to eyeball.
+
+### Key Code
+`warehouse/queries/actor_collaboration_frequency.sql`:
+> `JOIN fact_casting fc2 ON fc1.movie_id = fc2.movie_id AND fc1.actor_id < fc2.actor_id` — the `<` is what turns a self-join (which would otherwise produce every ordered pair including self-pairs) into "each unordered pair exactly once."
+
+`warehouse/queries/top_rated_directors.sql`:
+> `WITH movie_ratings AS (SELECT DISTINCT movie_id, rating, vote_count FROM fact_movie_metrics)` — this is the recurring fix for the genre-fanout problem; every query that touches movie-level rating/revenue reuses this shape.
+
+### What to Study Next
+Once real Bronze→Silver→warehouse data exists, run all seven queries and sanity-check the actual output — in particular, check whether `movies_by_decade.sql`'s `LEFT JOIN` to `movie_ratings` (used so movies with no fact rows still show up in the decade count) produces the count you'd expect versus an `INNER JOIN`. Also worth studying: `EXPLAIN ANALYZE` on `actor_collaboration_frequency.sql` once `fact_casting` has real volume — a self-join can get expensive, and this is a good first real query to learn to read a PostgreSQL query plan on.

@@ -20,10 +20,10 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 21 — End-to-end data quality validation
-Currently on          : Task 22 — Analytics SQL queries
-Current phase         : Phase 4 — SQL Analytics
-Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–21 could only be verified with unit tests and empty-partition runs, not a live multi-partition run.
+Last completed task   : Task 22 — Analytics SQL queries
+Currently on          : Task 23 — Django project & `core` app
+Current phase         : Phase 5 — Django UI
+Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–22 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
 Last updated          : 2026-07-03
 ```
 
@@ -183,7 +183,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 1     | TMDB Ingestion (Bronze) | 1–8   | Complete |
 | 2     | Data Lake (Silver/Gold) | 9–14  | Complete |
 | 3     | Warehouse Modeling      | 15–21 | Complete |
-| 4     | SQL Analytics           | 22    | Not started |
+| 4     | SQL Analytics           | 22    | Complete |
 | 5     | Django UI               | 23–30 | Not started |
 | 6     | Polish                  | 31–33 | Not started |
 
@@ -321,10 +321,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ### Phase 4 — SQL Analytics
 
-#### [ ] Task 22 — Analytics SQL queries
+#### [x] Task 22 — Analytics SQL queries
 - **Files:** `warehouse/queries/` (one `.sql` file per query or one combined file)
 - **Queries:** Top-rated directors, most productive actors, revenue by genre, movies by decade, director trend over time, actor collaboration frequency (self-join on `fact_casting`), genre growth over time.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** Seven `.sql` files added under `warehouse/queries/`, one per query. `fact_movie_metrics` stores one row per `(movie_id, genre_id)`, so every query that aggregates a movie-level fact (rating, revenue) first collapses it with `SELECT DISTINCT movie_id, ...` in a CTE before joining, to avoid double-counting a multi-genre movie. `actor_collaboration_frequency.sql` self-joins `fact_casting` to itself on `movie_id` with `fc1.actor_id < fc2.actor_id` to produce each co-starring pair exactly once, without pairing an actor with themself or duplicating the pair in reverse order. All seven verified to execute without error against the live (currently empty) `theoria` database via `warehouse.db.get_session()`; output correctness still unverified pending real Silver/warehouse data (same blocker as Tasks 19–21).
 
 ---
 
