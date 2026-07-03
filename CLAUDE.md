@@ -20,10 +20,10 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 20 — Incremental load logic
-Currently on          : Task 21 — End-to-end data quality validation
-Current phase         : Phase 3 — Warehouse Modeling
-Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–20 could only be verified with unit tests and empty-partition runs, not a live multi-partition incremental run.
+Last completed task   : Task 21 — End-to-end data quality validation
+Currently on          : Task 22 — Analytics SQL queries
+Current phase         : Phase 4 — SQL Analytics
+Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–21 could only be verified with unit tests and empty-partition runs, not a live multi-partition run.
 Last updated          : 2026-07-03
 ```
 
@@ -180,9 +180,9 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 | Phase | Name                   | Tasks  | Status      |
 |-------|------------------------|--------|-------------|
-| 1     | TMDB Ingestion (Bronze) | 1–8   | Not started |
-| 2     | Data Lake (Silver/Gold) | 9–14  | Not started |
-| 3     | Warehouse Modeling      | 15–21 | Not started |
+| 1     | TMDB Ingestion (Bronze) | 1–8   | Complete |
+| 2     | Data Lake (Silver/Gold) | 9–14  | Complete |
+| 3     | Warehouse Modeling      | 15–21 | Complete |
 | 4     | SQL Analytics           | 22    | Not started |
 | 5     | Django UI               | 23–30 | Not started |
 | 6     | Polish                  | 31–33 | Not started |
@@ -312,10 +312,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Track watermark (last successful `ingestion_date`); process only newer partitions; facts: guard against duplicate inserts via unique constraint on `(movie_id, ingestion_date)`.
 - **Outcome:** `etl/incremental.py` adds a new `etl_watermarks(loader_name PK, last_ingestion_date, updated_at)` table (`warehouse/ddl/03_watermark.sql`) plus four functions: `get_watermark()`/`set_watermark()` (read/upsert a loader's watermark row) and `list_available_partitions()`/`pending_partitions()` (paginate S3 with `Delimiter="/"` to discover `ingestion_date=YYYY-MM-DD/` prefixes under a `<layer>/<entity>/` key, then filter to dates strictly newer than the watermark). Both `load_dimensions.py` and `load_facts.py` gained a `*_incremental()` wrapper (using the `movies` Silver entity as the reference partition list) that loops `pending_partitions()` in ascending order, runs the existing single-date loader for each, and advances the watermark **after each date**, so a mid-run failure leaves progress at the last fully-processed partition instead of losing it all; a new `--incremental` CLI flag drives this from `python -m etl.warehouse_loader.load_facts --incremental`. Deviation from the literal spec: both fact tables now carry an `ingestion_date` column (`warehouse/ddl/02_facts.sql`, added live via `ALTER TABLE` since the tables were empty), but a literal `UNIQUE(movie_id, ingestion_date)` constraint was **not** added — `fact_movie_metrics` legitimately has multiple rows per `(movie_id, ingestion_date)` (one per genre) and `fact_casting` one per actor/director pair, so that constraint would reject valid data. Duplicate-guarding is instead handled by the existing composite PK + `ON CONFLICT DO UPDATE` upsert (already idempotent per partition); `ingestion_date` is kept purely as an audit/traceability column with a non-unique index. 10 new tests added (131/131 pass). Verified by running both `*_incremental()` wrappers against the current (partition-less) S3 bucket — correctly returned `{}` with no errors; a live multi-partition run is still blocked on the same missing Silver output noted in Task 19.
 
-#### [ ] Task 21 — End-to-end data quality validation
+#### [x] Task 21 — End-to-end data quality validation
 - **Files:** `data_quality/warehouse_checks.py`
 - **Steps:** FK integrity checks; row-count sanity Bronze→Silver→Gold→Warehouse; produce single pass/fail report.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `run_warehouse_checks()` runs two check families and returns a flat list of `CheckResult`s. (1) FK integrity: `check_fk_integrity()` runs a `LEFT JOIN ... WHERE dim.pk IS NULL` anti-join for all six fact→dimension relationships, flagging orphan rows the `FOREIGN KEY` constraints should already prevent (defense-in-depth against corruption from outside the loaders). (2) Row-count sanity, Bronze→Silver→Gold→Warehouse for a given ingestion_date: `check_row_count_sanity()` compares Bronze object/JSON-array counts against Silver Parquet row counts (Silver must never exceed Bronze) and Silver counts against warehouse dimension table totals (warehouse must never be *less* than the just-loaded Silver partition, since dimensions accumulate via upsert rather than matching 1:1 per partition); `check_gold_sanity()` verifies each of the four Gold datasets exists and is non-empty whenever Silver movies had data (and correctly expects no Gold output when Silver was empty); `check_fact_load_sanity()` checks both fact tables have rows tagged with the given `ingestion_date` whenever the Silver data feeding them was non-empty, catching a loader that silently produced zero rows. CLI prints a per-check PASS/FAIL table plus a single overall pass/fail line and exits 1 on any failure, mirroring `silver_checks.py`'s pattern. 18 new tests added (149/149 pass), all against mocked S3/DB. Verified live against the current bucket/DB: FK checks pass (empty tables), Gold/fact checks correctly report "no data expected" for the empty partition, and the 4 `bronze_to_silver` checks correctly fail since no Silver output exists yet — same blocker noted in Tasks 19–20, not a bug in the checker.
 
 ---
 

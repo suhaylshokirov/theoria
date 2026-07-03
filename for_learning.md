@@ -775,3 +775,29 @@ A new `etl/incremental.py` module that lets each warehouse loader remember which
 
 ### What to Study Next
 This watermark is coarse — one date per loader, no concept of "partially loaded partition." Think about what would need to change to make a single partition's load itself resumable/idempotent at the *row* level (not just partition level) if the process died halfway through writing `fact_casting` for a given date — would the existing `ON CONFLICT DO UPDATE` upsert already handle a safe re-run of that one partition, or is something missing?
+
+---
+
+## Task 21 — End-to-end data quality validation
+
+### What Was Built
+`data_quality/warehouse_checks.py`, a validation module that runs *after* the loaders have already run and asks two different questions than `silver_checks.py` did: "do the foreign keys in the fact tables actually resolve?" and "did every stage of the pipeline (Bronze → Silver → Gold → Warehouse) end up with a *sane* number of rows for a given date?" It produces one flat list of `CheckResult`s and an overall pass/fail, exactly like Task 13's Silver checks, but pointed at the warehouse and the whole pipeline instead of a single layer.
+
+### Concepts Used
+- **Defense-in-depth validation**: PostgreSQL's `FOREIGN KEY` constraints (Task 17) already make it *impossible* to insert a `fact_casting` row with an `actor_id` that isn't in `dim_actor` — the database will reject the statement. So why re-check it in Python? Because the constraint only protects against bad inserts going *forward*; it says nothing about corruption introduced another way (a restored backup, a manual `UPDATE`, a migration that dropped the constraint temporarily). A checker that re-verifies invariants the database already enforces is redundant in the happy path and the whole point in every other path — this is the same reasoning behind writing tests for code that "obviously can't be wrong."
+- **Orphan detection via `LEFT JOIN ... WHERE dim.pk IS NULL`**: `_count_orphans()` joins each fact table to its dimension and counts rows where the join found *no match*. This is the standard SQL idiom for "find rows in A that have no corresponding row in B" — an anti-join expressed with a `LEFT JOIN` plus a null filter, rather than a slower `NOT IN` subquery.
+- **Row-count sanity checks aren't always strict equality**: naively, you'd expect "Bronze count == Silver count == Warehouse count." That's wrong here for a structural reason — `dim_movie` etc. *accumulate* across every ingestion_date via upsert (Task 18), so the warehouse table for one day's partition will almost always have *more* rows than that one Silver file (all the previous days' movies are still there). The correct invariant isn't equality, it's monotonic: Silver can never have more rows than Bronze provided (nothing is fabricated in a transform), and the warehouse can never have fewer rows than the Silver partition just loaded (nothing legitimately disappears on upsert). Picking the right invariant — not just "the numbers should match" — is the actual engineering judgment call in this task.
+- **Distinguishing "no data yet" from "a checker failure"**: `check_gold_sanity()` and `check_fact_load_sanity()` both special-case `silver_movies_count == 0` — if there was truly no Silver input for a date, an empty Gold dataset or zero fact rows is *correct behavior*, not a bug. Only flag it as a failure when there *was* Silver data and downstream is empty anyway (that's the sign of a loader silently swallowing everything). Skipping this distinction would make the checker cry wolf on every day with no new ingestion, which teaches people to ignore it.
+
+### Key Code
+`data_quality/warehouse_checks.py` — `_count_orphans()`:
+> Runs `SELECT COUNT(*) FROM {fact_table} f LEFT JOIN {dim_table} d ON f.{fk_col} = d.{dim_pk} WHERE d.{dim_pk} IS NULL` for each of the six FK relationships in the star schema. Any non-zero count means a fact row's foreign key doesn't exist in the referenced dimension — something the `FOREIGN KEY` constraint should already prevent, so a non-zero result here is a signal something bypassed normal insert paths.
+
+`data_quality/warehouse_checks.py` — `_check_entity_counts()`:
+> Reads the Silver Parquet for one entity, compares its row count against the Bronze object count for that date (must not exceed it), then compares it against the current warehouse table's total row count (must not be *less than* it, since the warehouse accumulates). Both comparisons use `<`/`>` rather than `==` on purpose — see "row-count sanity checks aren't always strict equality" above.
+
+`data_quality/warehouse_checks.py` — `check_fact_load_sanity()`:
+> Counts rows in each fact table filtered to `WHERE ingestion_date = :date`. If Silver had real rows for that date but the fact table shows zero for that same date, that's flagged as a failure — a loader that silently drops everything (e.g. every row fails an FK lookup) looks identical to "clean, quiet day" unless you check this explicitly.
+
+### What to Study Next
+This module was written and unit-tested against fully mocked S3/DB state — it has *not* yet been run against a real multi-partition Bronze→Silver→Gold→Warehouse pipeline, because (same blocker as Tasks 19–20) the S3 bucket currently only has Bronze `movies/` data. Once Bronze `movie_details`/`credits` and the Silver transforms have actually been run for a real date, re-run `python -m data_quality.warehouse_checks --date <that date>` and see whether the row-count invariants hold in practice — a live run is the real test of whether the chosen invariants (not strict equality) are actually correct, versus just plausible on paper.
