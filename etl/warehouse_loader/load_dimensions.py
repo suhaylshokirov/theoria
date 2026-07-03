@@ -24,17 +24,15 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import io
 import logging
 import time
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import config
-from etl import s3_utils
+from etl.warehouse_loader.common import _read_silver_parquet, _upsert
 from warehouse.db import get_session
 
 logger = logging.getLogger(__name__)
@@ -43,34 +41,10 @@ _DEFAULT_CALENDAR_START = dt.date(1900, 1, 1)
 _DEFAULT_CALENDAR_END = dt.date(2035, 12, 31)
 
 
-def _read_silver_parquet(bucket: str, entity: str, ingestion_date: dt.date, filename: str) -> pd.DataFrame:
-    """Download and parse a Silver Parquet file from S3."""
-    key = s3_utils.build_path("silver", entity, ingestion_date, filename)
-    client = s3_utils.get_s3_client()
-    response = client.get_object(Bucket=bucket, Key=key)
-    return pd.read_parquet(io.BytesIO(response["Body"].read()))
-
-
 def _records(df: pd.DataFrame, columns: list[str]) -> list[dict[str, Any]]:
     """Convert selected columns of a DataFrame to a list of dicts, with NA -> None."""
     subset = df[columns].astype(object).where(pd.notnull(df[columns]), None)
     return subset.to_dict("records")
-
-
-def _upsert(session: Session, table: str, pk_cols: list[str], columns: list[str],
-            records: list[dict[str, Any]]) -> int:
-    """Bulk upsert records into `table`, updating non-PK columns on conflict."""
-    if not records:
-        return 0
-    update_cols = [c for c in columns if c not in pk_cols]
-    set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
-    sql = (
-        f"INSERT INTO {table} ({', '.join(columns)}) "
-        f"VALUES ({', '.join(f':{c}' for c in columns)}) "
-        f"ON CONFLICT ({', '.join(pk_cols)}) DO UPDATE SET {set_clause}"
-    )
-    session.execute(text(sql), records)
-    return len(records)
 
 
 def load_dim_movie(session: Session, df: pd.DataFrame) -> int:

@@ -34,56 +34,24 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import io
 import logging
 import time
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import config
-from etl import s3_utils
+from etl.warehouse_loader.common import _existing_ids, _read_silver_parquet, _upsert
 from warehouse.db import get_session
 
 logger = logging.getLogger(__name__)
 
 
-def _read_silver_parquet(bucket: str, entity: str, ingestion_date: dt.date, filename: str) -> pd.DataFrame:
-    """Download and parse a Silver Parquet file from S3."""
-    key = s3_utils.build_path("silver", entity, ingestion_date, filename)
-    client = s3_utils.get_s3_client()
-    response = client.get_object(Bucket=bucket, Key=key)
-    return pd.read_parquet(io.BytesIO(response["Body"].read()))
-
-
-def _existing_ids(session: Session, table: str, pk_col: str) -> set[int]:
-    """Return the set of PK values currently present in a dimension table."""
-    rows = session.execute(text(f"SELECT {pk_col} FROM {table}")).scalars().all()
-    return {int(v) for v in rows}
-
-
 def _records(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert NaN/NaT-bearing values in a list of dicts to None."""
     return [{k: (None if pd.isna(v) else v) for k, v in row.items()} for row in rows]
-
-
-def _upsert(session: Session, table: str, pk_cols: list[str], columns: list[str],
-            records: list[dict[str, Any]]) -> int:
-    """Bulk upsert records into `table`, updating non-PK columns on conflict."""
-    if not records:
-        return 0
-    update_cols = [c for c in columns if c not in pk_cols]
-    set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
-    sql = (
-        f"INSERT INTO {table} ({', '.join(columns)}) "
-        f"VALUES ({', '.join(f':{c}' for c in columns)}) "
-        f"ON CONFLICT ({', '.join(pk_cols)}) DO UPDATE SET {set_clause}"
-    )
-    session.execute(text(sql), records)
-    return len(records)
 
 
 def _write_rejects(rejects: list[dict[str, Any]], entity: str, ingestion_date: dt.date,
@@ -132,7 +100,8 @@ def _build_movie_metrics_rows(
         if release_date is None or pd.isna(release_date):
             rejects.append({**base, "rejection_reason": "missing release_date"})
             continue
-        date_id = int(pd.Timestamp(release_date).strftime("%Y%m%d"))
+        release_ts = pd.Timestamp(release_date)
+        date_id = release_ts.year * 10_000 + release_ts.month * 100 + release_ts.day
         if date_id not in valid_date_ids:
             rejects.append({**base, "date_id": date_id, "rejection_reason": "unknown date_id"})
             continue
