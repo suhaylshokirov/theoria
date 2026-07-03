@@ -728,3 +728,27 @@ Read the PostgreSQL docs on [index types](https://www.postgresql.org/docs/curren
 
 ### What to Study Next
 Read up on **transaction isolation** for concurrent upserts: if two loader runs for overlapping dates executed at the same time, could they deadlock or produce inconsistent results? Look at PostgreSQL's `ON CONFLICT` locking behavior and how `pool_pre_ping`/connection pooling (already in `warehouse/db.py`) interacts with long-running batch transactions.
+
+## Task 19 — Loader: Facts
+
+### What Was Built
+`etl/warehouse_loader/load_facts.py` reads the Silver `movies` and `credits_bridge` Parquet files for a given date and loads the two fact tables — `fact_movie_metrics` and `fact_casting` — resolving every natural key against the dimension tables loaded in Task 18, and quarantining any row whose keys don't resolve instead of inserting garbage or crashing.
+
+### Concepts Used
+- **Fact table grain**: A fact table's "grain" is what one row *means*. `fact_movie_metrics`'s grain is `(movie_id, date_id, genre_id)` — since a movie can have multiple genres, one Silver movie row explodes into multiple fact rows, one per genre. Getting the grain wrong (e.g. one row per movie) would silently break any query that joins through `dim_genre`.
+- **Referential integrity enforcement in the loader, not just the database**: PostgreSQL's `FOREIGN KEY` constraints (Task 17) would reject a bad insert anyway, but that fails the *entire* batch statement, including all the good rows in it. Checking membership against `_existing_ids()` (a set of valid PKs pulled from the DB) in Python first means bad rows are filtered out individually, and the good rows in the same batch still load.
+- **Quarantine over silent drop, again**: same pattern as `data_quality/silver_checks.py` — bad rows get a `rejection_reason` column and are written to Parquet under `data_quality/rejected/`, never just discarded. This is a recurring project rule because losing the *reason* a row failed makes debugging a "why is my count low" bug much harder later.
+- **Resolving a schema mismatch through a cross join**: `fact_casting`'s PK requires both `actor_id` and `director_id` non-null, but the Silver bridge table has one row per person (an actor row *or* a director row), never both together. The fix — cross-joining every actor with every director credited on the same movie — is a real data-modeling trade-off, not a mechanical translation: it changes what a "row" means (an actor-director pairing, not a single casting credit) to fit the fact table's declared grain. This was a genuine design decision, not something derivable purely from the code, so it was worth explicitly deciding rather than guessing.
+
+### Key Code
+`etl/warehouse_loader/load_facts.py` — `_build_movie_metrics_rows()`:
+> For each Silver movie row, converts `release_date` into the same `YYYYMMDD` integer used by `dim_date`, then loops over `genre_ids` emitting one fact row per genre that exists in `valid_genre_ids`. Any failure — unknown movie, missing/unmatched date, empty or unknown genre — appends a row to `rejects` with a specific `rejection_reason` instead of raising.
+
+`etl/warehouse_loader/load_facts.py` — `_build_casting_rows()`:
+> Splits the bridge DataFrame into `cast_df` (credit_type == "cast") and `director_df` (credit_type == "crew" and role == "Director"), groups cast rows by `movie_id`, and for each movie's actor group pairs every actor with every director found for that same `movie_id`. A movie with credited actors but zero credited directors rejects its actor rows with reason `"no director for movie"` rather than inserting a row with a fabricated director.
+
+`etl/warehouse_loader/load_facts.py` — `_existing_ids()`:
+> `SELECT {pk_col} FROM {table}` against the session, returned as a Python `set`. This is what lets the loader check "does this ID exist in the dimension?" as an O(1) membership test in Python instead of relying on the database to reject bad rows one at a time inside the FK constraint.
+
+### What to Study Next
+Look at how this loader's row-by-row Python-side FK check would scale: `_existing_ids()` pulls the *entire* PK column into memory. For a small learning project (thousands of movies) this is fine, but think about what breaks at millions of rows, and what the alternative would look like — e.g. doing the FK filter as a SQL anti-join (`LEFT JOIN ... WHERE dim.pk IS NULL`) instead of pulling IDs into pandas/Python sets.

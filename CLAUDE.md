@@ -20,11 +20,11 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 18 — Loader: Dimensions
-Currently on          : Task 19 — Loader: Facts
+Last completed task   : Task 19 — Loader: Facts
+Currently on          : Task 20 — Incremental load logic
 Current phase         : Phase 3 — Warehouse Modeling
-Blockers / open issues: None
-Last updated          : 2026-07-01
+Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Task 19 could only be verified with unit tests, not a live end-to-end run.
+Last updated          : 2026-07-03
 ```
 
 **After finishing any task, in this order:**
@@ -302,10 +302,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Read Silver Parquet → upsert into `dim_*` using `ON CONFLICT DO UPDATE`. Populate `dim_date` as a full calendar table.
 - **Outcome:** `load_dimensions()` reads the four Silver Parquet files (movies, actors, directors, genres) for a given ingestion_date, and upserts each into its dimension table via a generic `_upsert()` helper that builds `INSERT ... ON CONFLICT (pk) DO UPDATE SET col = EXCLUDED.col` and executes it as one batch per table inside a single `get_session()` transaction. `dim_actor`/`dim_director` reuse the same Silver people schema, renaming `person_id` to `actor_id`/`director_id`. `dim_date` is populated independently of Silver data by `_build_calendar()`, which generates one row per day over a configurable date range (default 1900–2035) with a `YYYYMMDD` surrogate key and derived year/month/day/decade. NA/NaT values are converted to `None` before binding so psycopg2 doesn't choke on pandas nullable types. Idempotent — reruns update existing rows rather than duplicating them. 13 new tests added (106/106 pass).
 
-#### [ ] Task 19 — Loader: Facts
+#### [x] Task 19 — Loader: Facts
 - **Files:** `etl/warehouse_loader/load_facts.py`
 - **Steps:** Join Silver to resolve surrogate keys → insert into fact tables → quarantine rows that fail FK lookups.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `load_facts()` reads Silver `movies` and `credits_bridge` Parquet for a given ingestion_date, queries the current dimension tables for valid PK sets (`_existing_ids()`), and upserts into both fact tables via the same `_upsert()` ON CONFLICT pattern as Task 18. `fact_movie_metrics` is built by exploding each movie's `genre_ids` into one row per `(movie_id, date_id, genre_id)`, deriving `date_id` from `release_date` to match `dim_date`'s YYYYMMDD key. `fact_casting` requires both `actor_id` and `director_id` NOT NULL, but Silver's bridge stores cast/crew as separate per-person rows — resolved (per user decision) by cross-joining, per movie, every credited actor with every credited director (`role == "Director"` among crew rows), producing one row per `(movie_id, actor_id, director_id)` pair. Any row that fails an FK lookup (unknown movie/date/genre/actor/director id, missing release_date, or no genres/no director) is never inserted; it's quarantined with a `rejection_reason` column to `data_quality/rejected/<entity>_rejected_<date>.parquet`, never silently dropped. 14 new tests added (121/121 pass). Not yet verified against live data — S3 currently has no Silver output to load.
 
 #### [ ] Task 20 — Incremental load logic
 - **Files:** `etl/incremental.py`; edits to loaders.

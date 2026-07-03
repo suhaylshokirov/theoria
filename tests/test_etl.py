@@ -1456,3 +1456,264 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
         "dim_movie": 2, "dim_actor": 2, "dim_director": 2, "dim_genre": 2, "dim_date": 2,
     }
     assert mock_session.execute.call_count == 5
+
+
+# ---------------------------------------------------------------------------
+# Task 19 — etl/warehouse_loader/load_facts.py
+# ---------------------------------------------------------------------------
+from etl.warehouse_loader.load_facts import (
+    _build_casting_rows,
+    _build_movie_metrics_rows,
+    _existing_ids,
+    _records,
+    _write_rejects,
+    load_fact_casting,
+    load_fact_movie_metrics,
+    load_facts,
+)
+
+
+def _fact_movies_df():
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 2, 3, 4], dtype="Int64"),
+        "title": ["Alpha", "Beta", "Gamma", "Delta"],
+        "release_date": [dt.date(2020, 1, 1), None, dt.date(2020, 1, 2), dt.date(2020, 1, 2)],
+        "vote_average": [7.5, 6.1, 8.0, 5.0],
+        "vote_count": pd.array([100, 50, 20, 10], dtype="Int64"),
+        "revenue": pd.array([5000, 6000, 7000, 8000], dtype="Int64"),
+        "budget": pd.array([1000, 2000, 3000, 4000], dtype="Int64"),
+        "popularity": [10.0, 5.0, 2.0, 1.0],
+        # movie 1: known genre; movie 3: unknown genre; movie 4: no genres at all.
+        "genre_ids": [[1], [1], [99], []],
+    })
+
+
+def _fact_bridge_df():
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 1, 1, 2, 3, 3], dtype="Int64"),
+        "person_id": pd.array([10, 11, 20, 30, 40, 999], dtype="Int64"),
+        "credit_type": ["cast", "cast", "crew", "cast", "cast", "crew"],
+        "role": ["Hero", "Villain", "Director", "Lead", "Lead", "Director"],
+        "ordering": pd.array([0, 1, None, 0, 0, None], dtype="Int64"),
+    })
+
+
+def test_existing_ids_queries_and_returns_set():
+    """_existing_ids() must select the PK column and return it as a set of ints."""
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalars.return_value.all.return_value = [1, 2, 2]
+
+    result = _existing_ids(mock_session, "dim_movie", "movie_id")
+
+    assert result == {1, 2}
+    (stmt,), _ = mock_session.execute.call_args
+    assert "SELECT movie_id" in str(stmt)
+    assert "dim_movie" in str(stmt)
+
+
+def test_records_converts_na_to_none():
+    """_records() must turn NaN values into plain None for psycopg2."""
+    records = _records([{"a": 1, "b": float("nan")}, {"a": 2, "b": 3}])
+    assert records[0]["b"] is None
+    assert records[1]["b"] == 3
+
+
+def test_build_movie_metrics_rows_explodes_genres_and_resolves_date_id():
+    """A movie with known movie_id/date_id/genre_id produces one row per genre."""
+    rows, rejects = _build_movie_metrics_rows(
+        _fact_movies_df(), valid_movie_ids={1}, valid_date_ids={20200101}, valid_genre_ids={1},
+    )
+
+    assert len(rows) == 1
+    assert rows[0] == {
+        "movie_id": 1, "date_id": 20200101, "genre_id": 1,
+        "rating": 7.5, "vote_count": 100, "revenue": 5000, "budget": 1000, "popularity": 10.0,
+    }
+    # movies 2, 3, 4 all fail one lookup or another.
+    assert len(rejects) == 3
+
+
+def test_build_movie_metrics_rows_rejects_unknown_movie_id():
+    """A movie_id absent from dim_movie must be rejected, not inserted."""
+    rows, rejects = _build_movie_metrics_rows(
+        _fact_movies_df(), valid_movie_ids=set(), valid_date_ids={20200101, 20200102},
+        valid_genre_ids={1},
+    )
+
+    assert rows == []
+    assert all(r["rejection_reason"] == "unknown movie_id" for r in rejects)
+
+
+def test_build_movie_metrics_rows_rejects_missing_release_date():
+    """A movie with a null release_date cannot be assigned a date_id and must be rejected."""
+    rows, rejects = _build_movie_metrics_rows(
+        _fact_movies_df(), valid_movie_ids={2}, valid_date_ids={20200101, 20200102},
+        valid_genre_ids={1},
+    )
+
+    assert rows == []
+    reject = next(r for r in rejects if r["movie_id"] == 2)
+    assert reject["rejection_reason"] == "missing release_date"
+
+
+def test_build_movie_metrics_rows_rejects_unknown_genre_id():
+    """A genre_id absent from dim_genre must be rejected while other genres on the same movie still load."""
+    rows, rejects = _build_movie_metrics_rows(
+        _fact_movies_df(), valid_movie_ids={3}, valid_date_ids={20200102}, valid_genre_ids=set(),
+    )
+
+    assert rows == []
+    reject = next(r for r in rejects if r["movie_id"] == 3)
+    assert reject["rejection_reason"] == "unknown genre_id"
+
+
+def test_build_movie_metrics_rows_rejects_movie_with_no_genres():
+    """A movie with an empty genre_ids list must be rejected (fact_movie_metrics.genre_id is NOT NULL)."""
+    rows, rejects = _build_movie_metrics_rows(
+        _fact_movies_df(), valid_movie_ids={4}, valid_date_ids={20200102}, valid_genre_ids={1},
+    )
+
+    assert rows == []
+    reject = next(r for r in rejects if r["movie_id"] == 4)
+    assert reject["rejection_reason"] == "no genres"
+
+
+def test_build_casting_rows_cross_joins_actors_and_directors():
+    """Every credited actor must be paired with every credited director for the same movie."""
+    rows, rejects = _build_casting_rows(
+        _fact_bridge_df(), valid_movie_ids={1}, valid_actor_ids={10, 11}, valid_director_ids={20},
+    )
+
+    assert len(rows) == 2
+    assert {(r["actor_id"], r["director_id"]) for r in rows} == {(10, 20), (11, 20)}
+    hero_row = next(r for r in rows if r["actor_id"] == 10)
+    assert hero_row == {"movie_id": 1, "actor_id": 10, "director_id": 20, "role": "Hero", "ordering": 0}
+
+
+def test_build_casting_rows_rejects_movie_with_no_director():
+    """A movie with credited actors but no credited director must reject those actor rows."""
+    rows, rejects = _build_casting_rows(
+        _fact_bridge_df(), valid_movie_ids={2}, valid_actor_ids={30}, valid_director_ids=set(),
+    )
+
+    assert rows == []
+    assert any(r["rejection_reason"] == "no director for movie" for r in rejects)
+
+
+def test_build_casting_rows_rejects_unknown_actor_id():
+    """An actor_id absent from dim_actor must be rejected even if the movie has a valid director."""
+    rows, rejects = _build_casting_rows(
+        _fact_bridge_df(), valid_movie_ids={3}, valid_actor_ids=set(), valid_director_ids={40},
+    )
+
+    assert rows == []
+    assert any(r["rejection_reason"] == "unknown actor_id" for r in rejects)
+
+
+def test_build_casting_rows_rejects_unknown_director_id():
+    """A director_id absent from dim_director must be rejected even if the actor resolves."""
+    rows, rejects = _build_casting_rows(
+        _fact_bridge_df(), valid_movie_ids={3}, valid_actor_ids={40}, valid_director_ids=set(),
+    )
+
+    assert rows == []
+    assert any(r["rejection_reason"] == "unknown director_id" for r in rejects)
+
+
+def test_write_rejects_writes_parquet_file(tmp_path):
+    """_write_rejects() must write a Parquet file named <entity>_rejected_<date>.parquet."""
+    path = _write_rejects(
+        [{"movie_id": 1, "rejection_reason": "unknown movie_id"}],
+        "fact_movie_metrics", dt.date(2026, 6, 26), tmp_path,
+    )
+
+    assert path is not None
+    assert path.name == "fact_movie_metrics_rejected_2026-06-26.parquet"
+    assert pd.read_parquet(path)["rejection_reason"].iloc[0] == "unknown movie_id"
+
+
+def test_write_rejects_returns_none_when_empty(tmp_path):
+    """_write_rejects() must return None and write nothing when there are no rejects."""
+    assert _write_rejects([], "fact_movie_metrics", dt.date(2026, 6, 26), tmp_path) is None
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_load_fact_movie_metrics_resolves_fks_and_upserts(monkeypatch):
+    """load_fact_movie_metrics() must query dimension tables for valid IDs, then upsert only resolvable rows."""
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    mock_session = MagicMock()
+    id_sets = {
+        "dim_movie": {1, 2, 3, 4}, "dim_date": {20200101, 20200102}, "dim_genre": {1},
+    }
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids",
+        lambda session, table, pk_col: id_sets[table],
+    )
+
+    count, rejects = load_fact_movie_metrics(mock_session, _fact_movies_df())
+
+    assert count == 1
+    assert len(rejects) == 3
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO fact_movie_metrics" in str(stmt)
+    assert params[0]["genre_id"] == 1
+
+
+def test_load_fact_casting_resolves_fks_and_upserts(monkeypatch):
+    """load_fact_casting() must query dimension tables for valid IDs, then upsert only resolvable rows."""
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    mock_session = MagicMock()
+    id_sets = {
+        "dim_movie": {1, 2, 3}, "dim_actor": {10, 11, 30, 40}, "dim_director": {20},
+    }
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids",
+        lambda session, table, pk_col: id_sets[table],
+    )
+
+    count, rejects = load_fact_casting(mock_session, _fact_bridge_df())
+
+    assert count == 2
+    assert any(r["rejection_reason"] == "no director for movie" for r in rejects)
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO fact_casting" in str(stmt)
+
+
+def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path):
+    """load_facts() must read movies + credits_bridge, upsert both fact tables, and write rejects."""
+    date = dt.date(2026, 6, 26)
+    mock_session = MagicMock()
+
+    def fake_read(bucket, entity, ingestion_date, filename):
+        if entity == "movies":
+            return _fact_movies_df()
+        if entity == "credits_bridge":
+            return _fact_bridge_df()
+        raise AssertionError(f"unexpected entity {entity}")
+
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    monkeypatch.setattr(load_facts_module, "_read_silver_parquet", fake_read)
+    monkeypatch.setattr(
+        load_facts_module, "get_session",
+        lambda: MagicMock(__enter__=MagicMock(return_value=mock_session), __exit__=MagicMock(return_value=False)),
+    )
+    id_sets = {
+        "dim_movie": {1, 2, 3, 4}, "dim_date": {20200101, 20200102}, "dim_genre": {1},
+        "dim_actor": {10, 11, 30, 40}, "dim_director": {20},
+    }
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids",
+        lambda session, table, pk_col: id_sets[table],
+    )
+
+    counts = load_facts(ingestion_date=date, bucket="theoria-datalake", rejected_dir=tmp_path)
+
+    assert counts == {"fact_movie_metrics": 1, "fact_casting": 2}
+    rejected_files = sorted(p.name for p in tmp_path.iterdir())
+    assert rejected_files == [
+        "fact_casting_rejected_2026-06-26.parquet",
+        "fact_movie_metrics_rejected_2026-06-26.parquet",
+    ]
