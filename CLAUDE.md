@@ -30,10 +30,10 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 24 — `movies` app: models
-Currently on          : Task 25 — Home page
+Last completed task   : Task 25 — Home page
+Currently on          : Task 26 — Movie Details page
 Current phase         : Phase 5 — Django UI
-Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–24 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
+Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–25 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
 Last updated          : 2026-07-04
 ```
 
@@ -350,10 +350,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** ORM models for all warehouse tables with `class Meta: managed = False`. Map FKs where useful.
 - **Outcome:** `movies/models.py` defines all seven warehouse tables as unmanaged models: `Movie`, `Actor`, `Director`, `Genre`, `Date` (dims) and `MovieMetrics`, `Casting` (facts), each `class Meta: managed = False` with explicit `db_table`. Dim models use their natural integer PK (`movie_id`, `actor_id`, etc.) directly as `primary_key=True`. The two fact tables have a genuinely composite PK in Postgres (`(movie_id, date_id, genre_id)` / `(movie_id, actor_id, director_id)`), which Django's ORM can't express; each model instead marks its `movie` FK as `primary_key=True` purely to satisfy Django's one-pk-per-model rule — the real uniqueness constraint lives only in the database. This produces an expected `fields.W342` warning (unique=True implied but not true of the data), silenced via `SILENCED_SYSTEM_CHECKS` in `settings.py` with a comment explaining why. FKs mapped throughout (`MovieMetrics.date`→`dim_date`, `.genre`→`dim_genre`, `Casting.actor`/`.director`→their dims) using `on_delete=models.DO_NOTHING` since Django never writes to this database. `movies` app added to `INSTALLED_APPS`; `manage.py check` passes clean, `manage.py migrate` confirmed no migrations generated/applied against `warehouse` (still routed away by `WarehouseRouter`), and a live `shell` query via `Model.objects.using("warehouse")` confirmed the ORM reads real Postgres tables (0 rows — same empty-Silver blocker as Tasks 19–22, not a bug).
 
-#### [ ] Task 25 — Home page
+#### [x] Task 25 — Home page
 - **Files:** `movies/views.py`, `movies/urls.py`, `movies/templates/movies/home.html`
 - **Steps:** Aggregate total movies, actors/directors, avg rating. Route: `/`.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `movies.views.home` runs four aggregate queries against the `warehouse` database (`.using("warehouse")`): `.count()` on `Movie`, `Actor`, `Director`, and `MovieMetrics.objects.aggregate(Avg("rating"))` for the average rating. `movies/urls.py` (new, `app_name="movies"`) maps `""` → `home`; `theoria_site/urls.py` includes it at the site root (`path('', include('movies.urls'))`) so Home is served at `/`, matching the nav in `base.html`. `movies/templates/movies/home.html` extends `base.html` and renders the four stats in a `<dl>`, with `avg_rating` falling back to an em dash when `None` (empty warehouse). Verified live: `manage.py check` clean, dev server returns 200 at `/` with all counts at 0 against the still-empty warehouse (same Silver-output blocker as Tasks 19–24) — correct behavior, not a bug.
 
 #### [ ] Task 26 — Movie Details page
 - **Files:** `movies/views.py` (`movie_detail`), URL `/movies/<id>/`, template.

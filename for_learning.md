@@ -874,3 +874,24 @@ movie = models.ForeignKey(
 
 ### What to Study Next
 Django added real composite primary key support in 5.2 (`CompositePrimaryKey`) — this project is pinned to 5.1, which is why Task 24 needed the `primary_key=True`-on-one-FK workaround. Look up what `CompositePrimaryKey` looks like in 5.2+ and compare it to the workaround used here — would upgrading remove the need for `SILENCED_SYSTEM_CHECKS` entirely? Also worth trying once real data exists (post Task 19–22 blocker): `Casting.objects.using("warehouse").select_related("movie", "actor", "director")` and watching the generated SQL with `django.db.connection.queries` — this is the N+1-query problem Task 26 will need to avoid.
+
+## Task 25 — Home page
+
+### What Was Built
+The site's landing page at `/`: a view that pulls four numbers out of the warehouse (total movies, actors, directors, and the average movie rating) and a template that displays them.
+
+### Concepts Used
+- **Multi-database routing in the ORM**: every query explicitly calls `.using("warehouse")` because the project has two databases configured (`default` = sqlite for Django's own admin/session tables, `warehouse` = the real Postgres star schema). Without `.using()`, Django would fall back to `default` (via `WarehouseRouter`, which would then refuse the query since these models don't belong there).
+- **Aggregation vs. iteration**: `Movie.objects.using("warehouse").count()` and `MovieMetrics.objects.aggregate(Avg("rating"))` both push the computation down to a single SQL `COUNT(*)` / `AVG(...)` query in Postgres, rather than pulling every row back into Python and counting/summing there. This matters a lot as the table grows — one round trip and one number back, not thousands of rows.
+- **URL namespacing**: `movies/urls.py` sets `app_name = "movies"`, which lets templates reference `{% url 'movies:home' %}` instead of a hardcoded `/` — useful once more apps (analytics) add their own `home`-like names, since namespacing keeps `home` in `movies` from colliding with `home` in another app.
+- **Template inheritance**: `home.html` uses `{% extends "base.html" %}` + `{% block content %}`, so the nav bar and page shell are defined once and every page (this one, and Tasks 26–30) just fills in its own middle section.
+
+### Key Code
+`django_app/movies/views.py` — `home()`:
+> Four independent queries, each aggregated in the database rather than in Python, assembled into a plain dict and handed to `render()`. No business logic beyond "ask the warehouse for four numbers" — that's the whole job of a Django view: gather context, pick a template, return a response.
+
+`django_app/movies/templates/movies/home.html`:
+> `{% if avg_rating %}...{% else %}—{% endif %}` guards against `None`, which is exactly what `Avg("rating")` returns when the underlying table is empty (as it is right now, pending real Silver data) — SQL `AVG()` over zero rows is `NULL`, not `0`, so this isn't a hypothetical edge case, it's the current live state of the app.
+
+### What to Study Next
+Once real data exists, add a second view that needs a JOIN instead of a flat aggregate (Task 26's movie detail page: movie + genres + cast) and compare the query count via `django.db.connection.queries` with and without `select_related`/`prefetch_related` — that's the concrete N+1 lesson this project has been building toward since Task 24's docstring first mentioned it.

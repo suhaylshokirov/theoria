@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — Home{% endblock %}
+
+{% block content %}
+<h1>Theoria</h1>
+<p>A movie analytics warehouse, at a glance.</p>
+
+<dl>
+    <dt>Movies</dt>
+    <dd>{{ movie_count }}</dd>
+
+    <dt>Actors</dt>
+    <dd>{{ actor_count }}</dd>
+
+    <dt>Directors</dt>
+    <dd>{{ director_count }}</dd>
+
+    <dt>Average rating</dt>
+    <dd>{% if avg_rating %}{{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</dd>
+</dl>
+{% endblock %}
