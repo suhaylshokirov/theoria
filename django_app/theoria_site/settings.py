@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'core',
+    'movies',
 ]
 
 MIDDLEWARE = [
@@ -145,3 +146,10 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# fields.W342: movies.MovieMetrics/Casting mark their `movie` FK as
+# primary_key=True purely to satisfy Django's one-pk-per-model requirement
+# on tables whose real (composite) key Django can't express — see
+# movies/models.py module docstring. The implied unique=True is not
+# actually true of the data, so this warning is expected, not a bug.
+SILENCED_SYSTEM_CHECKS = ['fields.W342']

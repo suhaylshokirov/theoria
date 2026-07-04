@@ -845,3 +845,32 @@ The first piece of the Django UI: a real Django project (`theoria_site`) living 
 
 ### What to Study Next
 Read Django's own docs page on ["Multiple databases"](https://docs.djangoproject.com/en/5.1/topics/db/multi-db/), specifically the router methods table — the fact that returning `None` vs `False` vs `True` all mean different things is a common source of subtle bugs. Also worth trying: temporarily comment out `DATABASE_ROUTERS` and run `manage.py migrate`, then check (via `psql` or `connections['warehouse']`) whether Django tried to create its `auth_user`/`django_session` tables inside the warehouse — seeing the router's absence break something is the fastest way to understand what it was actually protecting.
+
+---
+
+## Task 24 — `movies` app: models
+
+### What Was Built
+Django ORM model classes for every table in the PostgreSQL warehouse — `Movie`, `Actor`, `Director`, `Genre`, `Date` for the dimensions, and `MovieMetrics`, `Casting` for the two fact tables. These models let the rest of the Django app (views, templates) query the warehouse using normal Python/ORM syntax (`Movie.objects.filter(...)`) instead of hand-writing SQL everywhere, while guaranteeing Django never tries to create, alter, or drop any of these tables — the ETL pipeline already owns that schema.
+
+### Concepts Used
+- **`managed = False`**: tells Django "this table already exists, don't generate migrations for it, don't touch its schema — only read/write rows." This is the ORM equivalent of read-only access; it complements (doesn't replace) `WarehouseRouter.allow_migrate()` from Task 23, which blocks migrations at the database-routing layer. Two independent walls around the same guarantee.
+- **`db_table` / `db_column`**: override the default table/column names Django would guess from the class/field name, so the model can point at the exact existing `dim_movie`, `fact_casting`, etc. tables and columns without renaming anything in Postgres.
+- **Composite primary keys and their absence in Django**: Postgres lets a table's primary key span multiple columns (`fact_movie_metrics`'s real key is `(movie_id, date_id, genre_id)`), but Django's ORM requires exactly one field marked `primary_key=True` per model — it has no native concept of a composite key. The workaround here is to mark one FK (`movie`) as the Django-level "pk" purely so the model is valid, while the actual uniqueness constraint is enforced only by the database, never by the ORM.
+- **`ForeignKey(on_delete=models.DO_NOTHING)`**: normally `on_delete` decides what Django does to child rows when a parent is deleted (`CASCADE`, `SET_NULL`, etc.). Since this app never deletes anything (read-only, unmanaged), `DO_NOTHING` is the honest choice — it tells the ORM to not even try to enforce delete behavior it will never trigger.
+- **System check framework**: `manage.py check` runs a set of correctness rules over your models before you ever hit the database. It caught `fields.W342` (a FK marked `unique=True`/`primary_key=True` behaves like a `OneToOneField`) — a true statement about the *model*, even though it's not true about the *data* (multiple `fact_movie_metrics` rows do share a `movie_id`). `SILENCED_SYSTEM_CHECKS` is the sanctioned way to say "I've seen this warning, I understand why it fires, and it doesn't apply here" instead of restructuring the model to make the checker happy.
+
+### Key Code
+`django_app/movies/models.py` — the `movie` field on `MovieMetrics` and `Casting`:
+```python
+movie = models.ForeignKey(
+    Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True
+)
+```
+> This single line is doing two unrelated jobs at once: (1) declaring a real foreign key relationship to `dim_movie` for query convenience (`metrics.movie.title`), and (2) satisfying Django's "every model needs one pk field" rule. Job (2) is a technicality, not a true statement about uniqueness — worth remembering the next time a composite-key legacy table needs an ORM model, since this exact trick will come up again.
+
+`django_app/theoria_site/settings.py` — `SILENCED_SYSTEM_CHECKS = ['fields.W342']`:
+> A short, commented list of check IDs Django should skip. The comment above it explains *why* the warning fires and *why* it's safe to ignore — the important habit here is that silencing a check should always come with a reason written down next to it, not just the bare check ID.
+
+### What to Study Next
+Django added real composite primary key support in 5.2 (`CompositePrimaryKey`) — this project is pinned to 5.1, which is why Task 24 needed the `primary_key=True`-on-one-FK workaround. Look up what `CompositePrimaryKey` looks like in 5.2+ and compare it to the workaround used here — would upgrading remove the need for `SILENCED_SYSTEM_CHECKS` entirely? Also worth trying once real data exists (post Task 19–22 blocker): `Casting.objects.using("warehouse").select_related("movie", "actor", "director")` and watching the generated SQL with `django.db.connection.queries` — this is the N+1-query problem Task 26 will need to avoid.

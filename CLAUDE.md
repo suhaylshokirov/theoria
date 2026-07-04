@@ -20,11 +20,11 @@ python manage.py runserver                   # start Django
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 23 — Django project & `core` app
-Currently on          : Task 24 — `movies` app: models
+Last completed task   : Task 24 — `movies` app: models
+Currently on          : Task 25 — Home page
 Current phase         : Phase 5 — Django UI
-Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–22 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
-Last updated          : 2026-07-03
+Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–24 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
+Last updated          : 2026-07-04
 ```
 
 **After finishing any task, in this order:**
@@ -335,10 +335,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** `startproject` + `startapp core`; point `DATABASES` at the warehouse (read-only); nav: Home, Movies, Analytics.
 - **Outcome:** Django project `theoria_site` created at `django_app/` (`manage.py` + `theoria_site/{settings,urls,wsgi,asgi}.py`); `core` app added manually (`django-admin startapp core` refused the name — a bare `core/` directory on `sys.path` shadows Django's own `django.core`, so files were hand-written instead: `apps.py`, empty `models.py`/`views.py`/`admin.py`, `migrations/__init__.py`). `settings.py` imports `config.py` directly (adds repo root to `sys.path`) for `SECRET_KEY`/`DEBUG` — no env values duplicated. Two databases: `default` (sqlite) holds Django's own auth/session/admin tables; `warehouse` (Postgres, parsed from `config.DATABASE_URL`) is the star schema. `core/routers.py` (`WarehouseRouter`) routes `movies`/`analytics` app models to `warehouse` and refuses `allow_migrate` on it in both directions, so the warehouse stays truly read-only from Django's side (Task 24's models will use `managed = False` as defense-in-depth on top of this). Shared `templates/base.html` at project root (`TEMPLATES.DIRS`) with a static nav (Home `/`, Movies `/movies/`, Analytics `/analytics/`) — Movies/Analytics links 404 until Tasks 25/30 wire those apps' URLs. Verified: `manage.py check` clean; `manage.py migrate` applied only to `default` (confirmed no warehouse tables touched); dev server returns 200 on `/` and `/admin/login/`; a `shell` query through `connections["warehouse"]` confirmed a live query against the real Postgres warehouse (8 tables visible).
 
-#### [ ] Task 24 — `movies` app: models
+#### [x] Task 24 — `movies` app: models
 - **Files:** `django_app/movies/models.py`
 - **Steps:** ORM models for all warehouse tables with `class Meta: managed = False`. Map FKs where useful.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `movies/models.py` defines all seven warehouse tables as unmanaged models: `Movie`, `Actor`, `Director`, `Genre`, `Date` (dims) and `MovieMetrics`, `Casting` (facts), each `class Meta: managed = False` with explicit `db_table`. Dim models use their natural integer PK (`movie_id`, `actor_id`, etc.) directly as `primary_key=True`. The two fact tables have a genuinely composite PK in Postgres (`(movie_id, date_id, genre_id)` / `(movie_id, actor_id, director_id)`), which Django's ORM can't express; each model instead marks its `movie` FK as `primary_key=True` purely to satisfy Django's one-pk-per-model rule — the real uniqueness constraint lives only in the database. This produces an expected `fields.W342` warning (unique=True implied but not true of the data), silenced via `SILENCED_SYSTEM_CHECKS` in `settings.py` with a comment explaining why. FKs mapped throughout (`MovieMetrics.date`→`dim_date`, `.genre`→`dim_genre`, `Casting.actor`/`.director`→their dims) using `on_delete=models.DO_NOTHING` since Django never writes to this database. `movies` app added to `INSTALLED_APPS`; `manage.py check` passes clean, `manage.py migrate` confirmed no migrations generated/applied against `warehouse` (still routed away by `WarehouseRouter`), and a live `shell` query via `Model.objects.using("warehouse")` confirmed the ORM reads real Postgres tables (0 rows — same empty-Silver blocker as Tasks 19–22, not a bug).
 
 #### [ ] Task 25 — Home page
 - **Files:** `movies/views.py`, `movies/urls.py`, `movies/templates/movies/home.html`
