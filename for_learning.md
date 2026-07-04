@@ -923,3 +923,30 @@ cast = (
 
 ### What to Study Next
 Once real Silver/warehouse data exists, run this view with `django.db.connection.queries` (or `django-debug-toolbar`) turned on and confirm it's really 3 queries, not more — then intentionally delete the `select_related` call and watch the query count grow with cast size, to see the N+1 problem happen for real instead of just reading about it.
+
+## Task 27 — Actor Details page
+
+### What Was Built
+An actor's page at `/actors/<id>/`: their filmography (every movie they were credited in) plus three computed career stats — total film count, average rating across their films, and the year range their career spans.
+
+### Concepts Used
+- **Fan-out from a bridge/fact table**: `fact_casting` stores one row per `(movie_id, actor_id, director_id)` — so an actor in a movie with two directors would appear twice for that movie if queried naively. `Casting.objects.filter(actor_id=...).values_list("movie_id", flat=True).distinct()` collapses that back to one id per movie before it's ever used to pull `Movie` rows, the same fan-out problem Task 26 solved for genres.
+- **Aggregation over a de-duplicated subquery**: `fact_movie_metrics` has one row per `(movie_id, genre_id)` too, so a plain `Avg("rating")` filtered by a list of movie ids would weight multi-genre movies more heavily. `.values("movie_id", "rating").distinct()` first collapses to one row per movie (same rating value repeats across that movie's genre rows, so distinct on the pair keeps exactly one), *then* `.aggregate(Avg("rating"))` runs on top of that — Django compiles this as a `SELECT AVG(rating) FROM (SELECT DISTINCT movie_id, rating FROM ...) `, doing the de-dup and the average both in the database, not in Python.
+- **`Min`/`Max` as SQL aggregates**: `career_span = filmography.aggregate(earliest=Min("release_date"), latest=Max("release_date"))` — same idea as `Avg` in Task 25, just a different aggregate function; Postgres computes the min/max release date across the actor's filmography in a single query rather than Python calling `min()`/`max()` on a list of fetched rows.
+- **Reusing a queryset across multiple aggregates without re-querying**: `filmography` (a `Movie` queryset) is used for the table render, `.count()`, *and* the `Min`/`Max` aggregate — each of those triggers its own SQL query when evaluated (querysets are lazy), so this is three queries against the same filtered set, not one queryset object doing triple duty for free. Worth remembering when reasoning about a view's total query count, same theme Task 26 introduced with `select_related`.
+
+### Key Code
+`django_app/movies/views.py` — `actor_detail()`:
+```python
+movie_ratings = (
+    MovieMetrics.objects.using("warehouse")
+    .filter(movie_id__in=movie_ids)
+    .values("movie_id", "rating")
+    .distinct()
+)
+avg_rating = movie_ratings.aggregate(avg_rating=Avg("rating"))["avg_rating"]
+```
+> This is the line that keeps the average correct in the presence of the genre fan-out. The comment above it in the source explains why a bare `.aggregate(Avg("rating"))` on the unfiltered join would silently give multi-genre movies extra weight — a subtle correctness bug that wouldn't show up until real multi-genre data exists (still blocked, per every prior task's Outcome).
+
+### What to Study Next
+Once real data exists, compare the actual SQL Django generates for the `.values().distinct().aggregate()` pattern (via `str(queryset.query)` or `connection.queries`) against writing the equivalent by hand as a raw `.sql` file — Task 22 already has hand-written SQL for exactly this kind of aggregation (`top_rated_directors.sql`, etc.), so it's a good exercise to see whether the ORM-generated query matches what you'd have written directly, and whether one is more readable/efficient than the other.
