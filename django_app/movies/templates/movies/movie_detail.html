@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — {{ movie.title }}{% endblock %}
+
+{% block content %}
+<h1>{{ movie.title }}</h1>
+
+<dl>
+    <dt>Release date</dt>
+    <dd>{{ movie.release_date|default:"—" }}</dd>
+
+    <dt>Runtime</dt>
+    <dd>{% if movie.runtime %}{{ movie.runtime }} min{% else %}—{% endif %}</dd>
+
+    <dt>Budget</dt>
+    <dd>{{ movie.budget|default:"—" }}</dd>
+
+    <dt>Revenue</dt>
+    <dd>{{ movie.revenue|default:"—" }}</dd>
+
+    <dt>Status</dt>
+    <dd>{{ movie.status|default:"—" }}</dd>
+
+    <dt>Genres</dt>
+    <dd>
+        {% for genre in genres %}{{ genre.genre_name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
+    </dd>
+</dl>
+
+<h2>Cast &amp; Crew</h2>
+{% if cast %}
+<table>
+    <thead>
+        <tr>
+            <th>Actor</th>
+            <th>Director</th>
+            <th>Role</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for credit in cast %}
+        <tr>
+            <td>{{ credit.actor.name }}</td>
+            <td>{{ credit.director.name }}</td>
+            <td>{{ credit.role|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No cast data available.</p>
+{% endif %}
+{% endblock %}

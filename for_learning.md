@@ -895,3 +895,31 @@ The site's landing page at `/`: a view that pulls four numbers out of the wareho
 
 ### What to Study Next
 Once real data exists, add a second view that needs a JOIN instead of a flat aggregate (Task 26's movie detail page: movie + genres + cast) and compare the query count via `django.db.connection.queries` with and without `select_related`/`prefetch_related` — that's the concrete N+1 lesson this project has been building toward since Task 24's docstring first mentioned it.
+
+## Task 26 — Movie Details page
+
+### What Was Built
+A detail page for a single movie at `/movies/<id>/`: title, release date, runtime, budget, revenue, status, its genres, and a cast/crew table — all pulled from the warehouse in exactly three queries, with a proper 404 when the id doesn't exist.
+
+### Concepts Used
+- **`get_object_or_404`**: wraps "fetch one row, or return a clean HTTP 404 if it's missing" instead of writing `try/except Movie.DoesNotExist` by hand in every view. It still needs `.using("warehouse")` on the queryset passed in, since the shortcut just calls `.get()` under the hood.
+- **Reverse foreign-key traversal**: `Genre.objects.filter(moviemetrics__movie_id=movie_id)` walks *backwards* across the `MovieMetrics.genre` FK — Django auto-generates the lowercase-model-name accessor (`moviemetrics`) on `Genre` even though `Genre` itself never declares that relationship. This is how you ask "which genres does this movie have" when the FK direction only goes fact → dimension, not the other way.
+- **`.distinct()` after a fan-out join**: `fact_movie_metrics` has one row per `(movie_id, genre_id)`, so filtering by `movie_id` alone would return the same genre multiple times if the underlying join weren't already grouped — `.distinct()` collapses that back to one row per genre.
+- **Avoiding N+1 with `select_related`**: without it, looping over `cast` in the template and touching `credit.actor.name` / `credit.director.name` would fire one extra `SELECT` per cast row (N+1 queries: 1 to get the rows, N more to get each actor and director). `select_related("actor", "director")` tells Django to pull all three tables in a single `JOIN`ed query up front.
+
+### Key Code
+`django_app/movies/views.py` — `movie_detail()`:
+```python
+cast = (
+    Casting.objects.using("warehouse")
+    .filter(movie_id=movie_id)
+    .select_related("actor", "director")
+)
+```
+> This is the line that turns what would otherwise be a classic N+1 bug into a single query. `select_related` only works for FK/one-to-one relationships (it does a SQL JOIN) — it wouldn't work for a many-to-many or reverse FK, where `prefetch_related` (a second, separate query) is the right tool instead.
+
+`django_app/movies/urls.py` — `path("movies/<int:movie_id>/", views.movie_detail, name="movie_detail")`:
+> The `<int:movie_id>` path converter both extracts the id from the URL and validates it's an integer before the view ever runs — a non-numeric id in the URL never reaches `movie_detail` at all, Django 404s it earlier in routing.
+
+### What to Study Next
+Once real Silver/warehouse data exists, run this view with `django.db.connection.queries` (or `django-debug-toolbar`) turned on and confirm it's really 3 queries, not more — then intentionally delete the `select_related` call and watch the query count grow with cast size, to see the N+1 problem happen for real instead of just reading about it.

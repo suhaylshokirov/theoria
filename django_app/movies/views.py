@@ -1,7 +1,7 @@
 from django.db.models import Avg
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, render
 
-from movies.models import Actor, Director, Movie, MovieMetrics
+from movies.models import Actor, Casting, Director, Genre, Movie, MovieMetrics
 
 
 def home(request):
@@ -15,3 +15,27 @@ def home(request):
         )["avg_rating"],
     }
     return render(request, "movies/home.html", context)
+
+
+def movie_detail(request, movie_id):
+    """Single movie: core facts, genres, and cast/director — three queries total."""
+    movie = get_object_or_404(Movie.objects.using("warehouse"), pk=movie_id)
+
+    genres = (
+        Genre.objects.using("warehouse")
+        .filter(moviemetrics__movie_id=movie_id)
+        .distinct()
+    )
+
+    cast = (
+        Casting.objects.using("warehouse")
+        .filter(movie_id=movie_id)
+        .select_related("actor", "director")
+    )
+
+    context = {
+        "movie": movie,
+        "genres": genres,
+        "cast": cast,
+    }
+    return render(request, "movies/movie_detail.html", context)

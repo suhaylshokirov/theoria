@@ -30,10 +30,10 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 25 — Home page
-Currently on          : Task 26 — Movie Details page
+Last completed task   : Task 26 — Movie Details page
+Currently on          : Task 27 — Actor Details page
 Current phase         : Phase 5 — Django UI
-Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–25 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
+Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–26 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
 Last updated          : 2026-07-04
 ```
 
@@ -355,10 +355,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Aggregate total movies, actors/directors, avg rating. Route: `/`.
 - **Outcome:** `movies.views.home` runs four aggregate queries against the `warehouse` database (`.using("warehouse")`): `.count()` on `Movie`, `Actor`, `Director`, and `MovieMetrics.objects.aggregate(Avg("rating"))` for the average rating. `movies/urls.py` (new, `app_name="movies"`) maps `""` → `home`; `theoria_site/urls.py` includes it at the site root (`path('', include('movies.urls'))`) so Home is served at `/`, matching the nav in `base.html`. `movies/templates/movies/home.html` extends `base.html` and renders the four stats in a `<dl>`, with `avg_rating` falling back to an em dash when `None` (empty warehouse). Verified live: `manage.py check` clean, dev server returns 200 at `/` with all counts at 0 against the still-empty warehouse (same Silver-output blocker as Tasks 19–24) — correct behavior, not a bug.
 
-#### [ ] Task 26 — Movie Details page
+#### [x] Task 26 — Movie Details page
 - **Files:** `movies/views.py` (`movie_detail`), URL `/movies/<id>/`, template.
 - **Steps:** Fetch movie + genres + cast via joins. Avoid N+1 queries (`select_related`/`prefetch_related` or explicit join).
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `movies.views.movie_detail(request, movie_id)` runs three queries against `warehouse`: `get_object_or_404` on `Movie` (404s cleanly if the id doesn't exist), a `Genre` queryset filtered via the reverse FK `moviemetrics__movie_id` and `.distinct()` (a movie has one `fact_movie_metrics` row per genre, so distinct avoids duplicate genre listings), and a `Casting` queryset filtered on `movie_id` with `.select_related("actor", "director")` so rendering actor/director names in the template triggers no extra per-row queries (avoids N+1). URL added at `movies/<int:movie_id>/` in `movies/urls.py`, resolving to `/movies/<id>/` since the app is included at the site root. New template `movies/templates/movies/movie_detail.html` shows core fields, comma-joined genres, and a cast/crew table. Verified live: `manage.py check` clean; dev server returns 404 at `/movies/1/` (correct — warehouse has no movies yet, same Silver-output blocker as Tasks 19–25) and 200 at `/`.
 
 #### [ ] Task 27 — Actor Details page
 - **Files:** `movies/views.py` (`actor_detail`), URL `/actors/<id>/`, template.
