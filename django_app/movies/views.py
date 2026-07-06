@@ -1,4 +1,5 @@
-from django.db.models import Avg, Max, Min
+from django.db.models import Avg, Max, Min, Sum
+from django.db.models.functions import ExtractYear
 from django.shortcuts import get_object_or_404, render
 
 from movies.models import Actor, Casting, Director, Genre, Movie, MovieMetrics
@@ -125,3 +126,45 @@ def director_detail(request, director_id):
         "career_end": career_span["latest"],
     }
     return render(request, "movies/director_detail.html", context)
+
+
+def genre_detail(request, genre_id):
+    """Single genre: top-rated movies and revenue trend by year.
+
+    Mirrors etl.gold.build_gold_datasets._build_genre_metrics, but computed
+    live via the ORM against fact_movie_metrics rather than read from the
+    Gold Parquet in S3 — Django's warehouse connection is Postgres-only.
+    """
+    genre = get_object_or_404(Genre.objects.using("warehouse"), pk=genre_id)
+
+    metrics = (
+        MovieMetrics.objects.using("warehouse")
+        .filter(genre_id=genre_id)
+        .select_related("movie")
+    )
+
+    top_movies = metrics.order_by("-rating")[:10]
+
+    # Group by release year to build a revenue trend. fact_movie_metrics has
+    # one row per (movie_id, date_id, genre_id), but a movie only ever has
+    # one date_id/release_date, so grouping directly on the filtered metrics
+    # (rather than re-querying Movie) doesn't double-count revenue.
+    revenue_by_year = (
+        metrics.filter(movie__release_date__isnull=False)
+        .annotate(year=ExtractYear("movie__release_date"))
+        .values("year")
+        .annotate(total_revenue=Sum("movie__revenue"))
+        .order_by("year")
+    )
+
+    movie_count = metrics.values("movie_id").distinct().count()
+    avg_rating = metrics.aggregate(avg_rating=Avg("rating"))["avg_rating"]
+
+    context = {
+        "genre": genre,
+        "top_movies": top_movies,
+        "revenue_by_year": revenue_by_year,
+        "movie_count": movie_count,
+        "avg_rating": avg_rating,
+    }
+    return render(request, "movies/genre_detail.html", context)

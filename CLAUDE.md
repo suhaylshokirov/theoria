@@ -30,10 +30,10 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 28 — Director Details page
-Currently on          : Task 29 — Genre Details page
+Last completed task   : Task 29 — Genre Details page
+Currently on          : Task 30 — Analytics Dashboard
 Current phase         : Phase 5 — Django UI
-Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–28 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
+Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–29 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
 Last updated          : 2026-07-06
 ```
 
@@ -370,10 +370,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Mirror of Task 27 for directors.
 - **Outcome:** `movies.views.director_detail(request, director_id)` mirrors `actor_detail` exactly, swapping the FK filtered on `Casting`: `get_object_or_404` on `Director`; distinct `movie_id` list from `Casting.objects.filter(director_id=director_id)` (a movie can have multiple actors under one director, so distinct avoids repeats); filmography ordered by `-release_date`; `avg_rating` computed via the same distinct-then-average pattern over `fact_movie_metrics` to collapse its one-row-per-genre duplication; career span via `Min`/`Max` on `release_date`. URL added at `directors/<int:director_id>/` in `movies/urls.py`. New template `movies/templates/movies/director_detail.html`, identical structure to `actor_detail.html`. Verified live: `manage.py check` clean; dev server returns 404 at `/directors/1/` (empty warehouse, same blocker as prior tasks) and 200 at `/`.
 
-#### [ ] Task 29 — Genre Details page
+#### [x] Task 29 — Genre Details page
 - **Files:** `movies/views.py` (`genre_detail`), URL `/genres/<id>/`, template.
 - **Steps:** Top-rated movies in genre; revenue trend by year. Reuse Gold-layer aggregates where possible.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `movies.views.genre_detail(request, genre_id)` mirrors `etl.gold.build_gold_datasets._build_genre_metrics()`'s logic, but computed live via the ORM against `fact_movie_metrics` rather than reading the Gold Parquet from S3 — Django's `warehouse` connection is Postgres-only and no loader currently pushes Gold datasets into the warehouse, so "reuse Gold-layer aggregates" is applied as *reuse the aggregation logic*, not literally read the same file. `get_object_or_404` on `Genre`; a `MovieMetrics` queryset filtered on `genre_id` with `.select_related("movie")` avoids N+1 for the top-movies table; `top_movies` takes the top 10 by `-rating`; `revenue_by_year` annotates each row with `ExtractYear("movie__release_date")`, groups via `.values("year").annotate(total_revenue=Sum(...))` — safe because `fact_movie_metrics` has at most one row per `(movie_id, genre_id)`, so grouping directly on the already-genre-filtered metrics doesn't double count a movie's revenue; `movie_count` uses `.values("movie_id").distinct().count()` in case a genre’s movies ever span multiple `date_id`s. URL added at `genres/<int:genre_id>/` in `movies/urls.py`. New template `movies/templates/movies/genre_detail.html`, following the same stats-then-table structure as the actor/director pages. Verified live: `manage.py check` clean; dev server returns 404 at `/genres/1/` (empty warehouse, same blocker as prior tasks) and 200 at `/`.
 
 #### [ ] Task 30 — Analytics Dashboard
 - **Files:** `analytics/` app, `analytics/views.py`, `analytics/urls.py`, templates.

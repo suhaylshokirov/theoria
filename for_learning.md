@@ -966,3 +966,30 @@ A director's page at `/directors/<id>/`, structurally identical to Task 27's act
 
 ### What to Study Next
 Now that three detail pages (movie, actor, director) share almost the same shape — fetch one row, resolve a fan-out to distinct movie ids, aggregate over those ids — consider whether a small shared helper (e.g. a `_person_filmography_stats(model, id_field, id_value)` function) would reduce duplication, or whether keeping them separate is actually clearer since the three views may diverge later (e.g. Task 29's genre page needs a *different* aggregation — top movies + revenue trend, not just count/avg/span). Good exercise in judging premature abstraction versus real duplication.
+
+## Task 29 — Genre Details page
+
+### What Was Built
+A genre's page at `/genres/<id>/`: the genre's average rating and movie count, its top-10 rated movies, and a revenue-by-year trend table.
+
+### Concepts Used
+- **"Reuse Gold-layer aggregates" doesn't always mean "read the Gold file"**: `etl/gold/build_gold_datasets.py` already computes genre-level `avg_rating`/`total_revenue`/`movie_count` — but it writes that result to Parquet in S3, and Django's `warehouse` database connection only points at Postgres. There's no loader that pushes Gold datasets into the warehouse. So "reuse" here means reusing the *aggregation logic* (group by genre, average rating, sum revenue) re-expressed as an ORM query against `fact_movie_metrics`, not literally opening the same file. Recognizing which parts of a spec are structural intent versus a specific implementation detail is the actual skill.
+- **`annotate()` + `values()` + `annotate()` for grouped aggregates**: `.annotate(year=ExtractYear(...)).values("year").annotate(total_revenue=Sum(...))` is Django's idiom for "GROUP BY" — the first `annotate` computes a per-row value, `.values("year")` sets the GROUP BY column, and the second `.annotate()` runs the aggregate *within* each group. Getting the order right matters: an `.annotate()` after `.values()` groups by the `values()` fields; before it, it's a per-row column.
+- **`ExtractYear` as a database function**: pulls the year out of a `DateField` as part of the SQL query (`EXTRACT(YEAR FROM ...)` in Postgres) rather than fetching full dates into Python and grouping there — same "push the work into the database" theme as `Avg`/`Sum`/`Min`/`Max` in Tasks 25–28.
+- **Checking fan-out risk before reusing a "distinct" habit, not applying it reflexively**: Tasks 26–28 needed `.distinct()` because their fact-table filters could return more than one row per movie (multi-genre, multi-director). Here, `MovieMetrics` is already filtered to one specific `genre_id`, so each movie contributes at most one row — grouping directly on the filtered queryset for the revenue trend is safe without an extra distinct step. `movie_count` still uses `.values("movie_id").distinct().count()` defensively, but the revenue aggregation doesn't need it.
+
+### Key Code
+`django_app/movies/views.py` — `genre_detail()`:
+```python
+revenue_by_year = (
+    metrics.filter(movie__release_date__isnull=False)
+    .annotate(year=ExtractYear("movie__release_date"))
+    .values("year")
+    .annotate(total_revenue=Sum("movie__revenue"))
+    .order_by("year")
+)
+```
+> This single queryset compiles to one SQL query: join to `dim_movie`, extract the year, group by it, sum revenue per group, order by year — no Python-side looping or dict-building. Compare this to Task 27/28's `.values("movie_id", "rating").distinct()` pattern: both are "group in the database, not in Python," just for different shapes of grouping (dedup vs. bucket-by-year).
+
+### What to Study Next
+Once real Silver/warehouse data exists, compare this view's generated SQL (`str(revenue_by_year.query)`) against the pandas `groupby` in `_build_genre_metrics()` — same aggregation, two different engines (Postgres vs. pandas). Worth understanding *when* you'd want the Gold/pandas version instead (e.g. genre metrics reused across many pages, expensive to recompute per request) versus computing it live per-request as this view does — that's the general tradeoff between pre-aggregation and on-demand querying that Gold layers exist to solve.
