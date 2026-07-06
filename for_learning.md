@@ -1020,3 +1020,26 @@ def _run_query(filename):
 
 ### What to Study Next
 This view re-executes all seven queries (some with multi-way joins) on every request, with no caching — fine for a learning project against an empty warehouse, but worth studying Django's per-view or low-level cache framework (or a materialized view refreshed by a scheduled job) as the standard fix once a dashboard like this needs to serve real traffic against a populated warehouse.
+
+## Task 30.5 — First real end-to-end pipeline run
+
+### What Was Built
+`scripts/run_pipeline.py`: a single orchestration script that runs every existing ETL stage in order — Bronze ingestion, all four Silver transforms, Gold aggregation, both warehouse loaders, both DQ check suites — for one `ingestion_date`. Ran it live against real TMDB data (100 movies) for the first time in the project, populating the warehouse and every Django page built in Tasks 25–30 with real content instead of empty states.
+
+### Concepts Used
+- **Orchestration vs. new logic**: every stage function (`ingest_movies`, `transform_movies`, `load_facts`, etc.) already existed, already had unit tests, and already worked correctly in isolation. This task added zero new *business* logic — it only sequenced existing calls. Recognizing "this is a wiring problem, not a build problem" avoided reinventing anything already proven correct.
+- **In-process function calls vs. CLI subprocess chaining**: `ingest_movie_details()` and `ingest_credits()` both require a `--movie-ids` list on their CLI, but nothing in the pipeline persists `ingest_movies()`'s returned ID list to a file — each script is designed to be one independent process, so chaining them via shell (`python -m etl.bronze.ingest_movies && python -m etl.bronze.ingest_movie_details --movie-ids ???`) has no natural way to pass that list along. Calling all three as plain Python functions inside one script instead makes `movie_ids` just a local variable — no serialization, no glue script, no CLI limitation to work around.
+- **Upsert idempotency as a design property, not a runtime check**: every warehouse loader uses `INSERT ... ON CONFLICT DO UPDATE` (Tasks 18–19), so `run_pipeline()` doesn't need any "have I already run this?" guard logic itself — re-running for the same date is safe by construction, and that safety was already unit-tested when the loaders were built. Trusting a lower layer's proven guarantee instead of re-verifying it here is the same reasoning as Task 28's "don't re-derive, reuse the proof."
+- **Reading a full pipeline's real DQ output for the first time**: with actual multi-partition data, `fact_casting` rejected ~46% of its bridge rows (1781 of 3852) — not a bug, but the documented consequence (Task 19) of resolving `fact_casting`'s NOT NULL `actor_id`/`director_id` pair by cross-joining each movie's actors with its directors: a movie with credited actors but *no* credited director in TMDB's data contributes zero valid casting rows, and every one of its actor rows gets quarantined. Seeing the real reject count made a previously abstract design tradeoff concrete.
+
+### Key Code
+`scripts/run_pipeline.py` — `run_pipeline()`:
+```python
+movie_ids = ingest_movies(ingestion_date=ingestion_date, max_pages=max_pages)
+succeeded_details, failed_details = ingest_movie_details(movie_ids, ingestion_date=ingestion_date)
+succeeded_credits, failed_credits = ingest_credits(movie_ids, ingestion_date=ingestion_date)
+```
+> `movie_ids` is a plain Python list passed directly into the next two calls — no file write, no S3 round-trip, no CLI argument parsing in between. This is the entire fix for the "how do movie_details/credits know which IDs to fetch" gap: it was never a missing feature in the ingestion scripts, just a question of *how* they're invoked.
+
+### What to Study Next
+Now that real data exists, Task 31 (Tests) should account for `fact_casting`'s reject rate as expected behavior rather than a symptom to chase — worth writing an assertion that reject counts stay *bounded* (e.g. under some percentage) rather than zero, since zero rejects would actually be suspicious given the known data shape. Also worth studying: at what data volume would `python -m scripts.run_pipeline` become too slow to run synchronously (this 100-movie run took ~2.5 minutes, dominated by per-movie TMDB API calls), and what that implies about needing a real workflow scheduler (Airflow, Dagster) instead of a single script — one of the explicit non-goals this project chose to skip, but useful to understand *why* those tools exist.

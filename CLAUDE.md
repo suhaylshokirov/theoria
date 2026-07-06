@@ -30,10 +30,10 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 30 — Analytics Dashboard
+Last completed task   : Task 30.5 — First real end-to-end pipeline run
 Currently on          : Task 31 — Tests
 Current phase         : Phase 6 — Polish
-Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–30 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
+Blockers / open issues: None. The pipeline has now been run end-to-end against real TMDB data (2026-07-06, 100 movies); the warehouse and every Django page have real data behind them for the first time. `fact_casting` still has a known ~46% reject rate for this sample (movies with credited actors but no credited director), per Task 19's documented cross-join limitation — not a bug, just a data-shape consequence to keep in mind when writing Task 31's tests.
 Last updated          : 2026-07-06
 ```
 
@@ -379,6 +379,13 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Files:** `analytics/` app, `analytics/views.py`, `analytics/urls.py`, templates.
 - **Steps:** Each panel calls one Task 22 query (via `.raw()` or `.annotate()`). Basic tables; optional Chart.js via CDN for trends. Route: `/analytics/`.
 - **Outcome:** New `analytics` app (added to `INSTALLED_APPS`; no ORM models — this dashboard reads the Task 22 `.sql` files directly rather than reimplementing them). `analytics/views.py` has one helper, `_run_query(filename)`, that reads a `.sql` file from `warehouse/queries/`, executes it verbatim via `connections["warehouse"].cursor()`, and shapes rows into dicts using `cursor.description` for the column names. `dashboard()` calls it once per Task 22 query — top-rated directors, most productive actors, revenue by genre, movies by decade, director trend over time, actor collaboration frequency, genre growth over time (7 panels). URL added at `analytics/` in `theoria_site/urls.py` (`/analytics/`). Template `analytics/templates/analytics/dashboard.html` renders all seven as tables, plus two Chart.js (CDN) charts — avg rating by decade (line), revenue by genre (bar) — fed via `{{ data|json_script:"..." }}`, with the Decimal columns feeding those two charts cast to `float` first (Decimal isn't JSON-serializable; the plain tables render the original Decimals untouched). Verified live: `manage.py check` clean; dev server returns 200 at both `/analytics/` and `/`; all 7 panels correctly show "No data available" against the still-empty warehouse (same Silver-output blocker as Tasks 19–29) and both `<canvas>` elements render with no JS errors.
+
+---
+
+#### [x] Task 30.5 — First real end-to-end pipeline run
+- **Files:** `scripts/run_pipeline.py`
+- **Steps:** Sequence every existing, already-tested stage function (Bronze -> Silver -> Gold -> Warehouse) in-process for one `ingestion_date`, then actually run it against real TMDB data so the warehouse — and every Django page built in Tasks 25–30 — has real data behind it for the first time.
+- **Outcome:** `scripts/run_pipeline.py` adds one function, `run_pipeline(ingestion_date=None, max_pages=None)`, that calls `ingest_genres` → `ingest_movies` (returns `movie_ids`) → `ingest_movie_details`/`ingest_credits` (fed that same in-memory `movie_ids` list, sidestepping the fact that those two scripts' CLIs require `--movie-ids` and nothing persists the list to disk between separate process invocations) → all four Silver transforms → `run_silver_checks` → `build_gold_datasets` → `load_dimensions` → `load_facts` → `run_warehouse_checks`, logging a per-stage summary and a final one-line total. Same `argparse --date/--max-pages` + `setup_logging` convention as every other stage script; invoked as `python -m scripts.run_pipeline`. Ran live for `ingestion_date=2026-07-06` with the default `MAX_PAGES=5` (100 movies discovered): Bronze wrote 100 movie-detail + 100 credits files (all succeeded); Silver wrote 99 movies (1 dropped — a parse/dedup edge case), 3291 actors, 108 directors, 19 genres, 13147 credits-bridge rows; Silver DQ checks 20/20 passed; Gold wrote all 4 datasets; `dim_*` upserted 99/3291/108/19/49673 rows; `fact_movie_metrics` upserted 247 (1 rejected — quarantined to `data_quality/rejected/`, not dropped), `fact_casting` upserted 2071 (1781 rejected, expected: many credited actors have no credited director in this sample, per Task 19's known cross-join limitation); warehouse checks 20/20 passed. Verified live in Django: `/` now shows 99 movies / 3291 actors / 108 directors / avg rating 6.84 (was all zeros); `/movies/120/` renders "The Lord of the Rings: The Fellowship of the Ring" (200, not 404); `/actors/1/` renders "George Lucas"; `/genres/28/` renders "Action"; `/analytics/` shows real rows in 6 of 7 panels (Top Rated Directors correctly shows "No data available" — its query requires ≥3 movies per director, not met by this 100-movie sample) and both Chart.js charts render with real data. Every stage's idempotency (upsert + `ON CONFLICT DO UPDATE`, already unit-tested in Tasks 9–19) means re-running this script for the same date is safe without a second live re-run to prove it.
 
 ---
 
