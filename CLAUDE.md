@@ -30,11 +30,11 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 27 — Actor Details page
-Currently on          : Task 28 — Director Details page
+Last completed task   : Task 28 — Director Details page
+Currently on          : Task 29 — Genre Details page
 Current phase         : Phase 5 — Django UI
-Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–27 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
-Last updated          : 2026-07-04
+Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–28 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
+Last updated          : 2026-07-06
 ```
 
 **After finishing any task, in this order:**
@@ -365,10 +365,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Filmography via `fact_casting`; compute career stats (film count, avg rating, career span) in SQL.
 - **Outcome:** `movies.views.actor_detail(request, actor_id)` runs four queries against `warehouse`: `get_object_or_404` on `Actor`; a distinct `movie_id` list from `Casting` filtered by `actor_id` (needed because `fact_casting` has one row per actor/director pair, so a movie with several directors would otherwise repeat); a `Movie` queryset filtered on those ids, ordered by `-release_date`, for the filmography table; and career stats computed in SQL rather than Python — `film_count` via `.count()`, `avg_rating` via `MovieMetrics.objects.filter(movie_id__in=...).values("movie_id", "rating").distinct().aggregate(Avg("rating"))` (the `.values().distinct()` collapses `fact_movie_metrics`'s one-row-per-genre duplication before averaging, same pattern as Task 26's genre distinct), and career span via `Min`/`Max` on `release_date`. URL added at `actors/<int:actor_id>/`. New template `movies/templates/movies/actor_detail.html` shows film count, average rating, career span (start–end year), and a filmography table. Verified live: `manage.py check` clean; dev server returns 404 at `/actors/1/` (empty warehouse, same blocker as prior tasks) and 200 at `/`.
 
-#### [ ] Task 28 — Director Details page
+#### [x] Task 28 — Director Details page
 - **Files:** `movies/views.py` (`director_detail`), URL `/directors/<id>/`, template.
 - **Steps:** Mirror of Task 27 for directors.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `movies.views.director_detail(request, director_id)` mirrors `actor_detail` exactly, swapping the FK filtered on `Casting`: `get_object_or_404` on `Director`; distinct `movie_id` list from `Casting.objects.filter(director_id=director_id)` (a movie can have multiple actors under one director, so distinct avoids repeats); filmography ordered by `-release_date`; `avg_rating` computed via the same distinct-then-average pattern over `fact_movie_metrics` to collapse its one-row-per-genre duplication; career span via `Min`/`Max` on `release_date`. URL added at `directors/<int:director_id>/` in `movies/urls.py`. New template `movies/templates/movies/director_detail.html`, identical structure to `actor_detail.html`. Verified live: `manage.py check` clean; dev server returns 404 at `/directors/1/` (empty warehouse, same blocker as prior tasks) and 200 at `/`.
 
 #### [ ] Task 29 — Genre Details page
 - **Files:** `movies/views.py` (`genre_detail`), URL `/genres/<id>/`, template.

@@ -950,3 +950,19 @@ avg_rating = movie_ratings.aggregate(avg_rating=Avg("rating"))["avg_rating"]
 
 ### What to Study Next
 Once real data exists, compare the actual SQL Django generates for the `.values().distinct().aggregate()` pattern (via `str(queryset.query)` or `connection.queries`) against writing the equivalent by hand as a raw `.sql` file — Task 22 already has hand-written SQL for exactly this kind of aggregation (`top_rated_directors.sql`, etc.), so it's a good exercise to see whether the ORM-generated query matches what you'd have written directly, and whether one is more readable/efficient than the other.
+
+## Task 28 — Director Details page
+
+### What Was Built
+A director's page at `/directors/<id>/`, structurally identical to Task 27's actor page: filmography, film count, average rating, and career span — just filtered on `director_id` instead of `actor_id`.
+
+### Concepts Used
+- **Recognizing when a pattern is a genuine mirror, not a near-miss**: `fact_casting` stores `(movie_id, actor_id, director_id)`, so swapping which FK column you filter on (`director_id=` vs `actor_id=`) is enough to get an equivalent view — no new fan-out shape, no new aggregation logic. Confirming this before writing anything (rather than re-deriving the query design from scratch) is itself the lesson: once a pattern is proven correct once (Task 27), re-verifying its assumptions instead of blindly copy-pasting is what makes reuse safe.
+- **Same fan-out, different FK**: a movie with multiple actors under one director would otherwise repeat that movie once per actor when filtering `Casting` by `director_id` — the same `.values_list("movie_id", flat=True).distinct()` collapse from Task 27 is required here for the identical structural reason (fact table granularity is per actor/director *pair*, not per movie).
+
+### Key Code
+`django_app/movies/views.py` — `director_detail()`:
+> Byte-for-byte the same query structure as `actor_detail()` — `get_object_or_404` on `Director`, distinct `movie_id`s from `Casting` filtered by `director_id`, then the same distinct-then-average pattern over `MovieMetrics` and the same `Min`/`Max` career span. The only differences are the model (`Director` vs `Actor`) and the filter field (`director_id` vs `actor_id`) — everything else, including *why* each `.distinct()` is needed, carries over unchanged from Task 27's reasoning.
+
+### What to Study Next
+Now that three detail pages (movie, actor, director) share almost the same shape — fetch one row, resolve a fan-out to distinct movie ids, aggregate over those ids — consider whether a small shared helper (e.g. a `_person_filmography_stats(model, id_field, id_value)` function) would reduce duplication, or whether keeping them separate is actually clearer since the three views may diverge later (e.g. Task 29's genre page needs a *different* aggregation — top movies + revenue trend, not just count/avg/span). Good exercise in judging premature abstraction versus real duplication.

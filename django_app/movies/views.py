@@ -82,3 +82,46 @@ def actor_detail(request, actor_id):
         "career_end": career_span["latest"],
     }
     return render(request, "movies/actor_detail.html", context)
+
+
+def director_detail(request, director_id):
+    """Single director: filmography via fact_casting, with career stats computed in SQL."""
+    director = get_object_or_404(Director.objects.using("warehouse"), pk=director_id)
+
+    movie_ids = (
+        Casting.objects.using("warehouse")
+        .filter(director_id=director_id)
+        .values_list("movie_id", flat=True)
+        .distinct()
+    )
+
+    filmography = (
+        Movie.objects.using("warehouse")
+        .filter(movie_id__in=movie_ids)
+        .order_by("-release_date")
+    )
+
+    # fact_movie_metrics has one row per (movie_id, genre_id), so a multi-genre
+    # movie would be double-counted by a plain Avg — collapse to one row per
+    # movie first, then average across that.
+    movie_ratings = (
+        MovieMetrics.objects.using("warehouse")
+        .filter(movie_id__in=movie_ids)
+        .values("movie_id", "rating")
+        .distinct()
+    )
+    avg_rating = movie_ratings.aggregate(avg_rating=Avg("rating"))["avg_rating"]
+
+    career_span = filmography.aggregate(
+        earliest=Min("release_date"), latest=Max("release_date")
+    )
+
+    context = {
+        "director": director,
+        "filmography": filmography,
+        "film_count": filmography.count(),
+        "avg_rating": avg_rating,
+        "career_start": career_span["earliest"],
+        "career_end": career_span["latest"],
+    }
+    return render(request, "movies/director_detail.html", context)
