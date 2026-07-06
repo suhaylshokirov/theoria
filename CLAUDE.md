@@ -30,10 +30,10 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 29 — Genre Details page
-Currently on          : Task 30 — Analytics Dashboard
-Current phase         : Phase 5 — Django UI
-Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–29 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
+Last completed task   : Task 30 — Analytics Dashboard
+Currently on          : Task 31 — Tests
+Current phase         : Phase 6 — Polish
+Blockers / open issues: S3 bucket currently only has bronze/movies/ — no movie_details/credits Bronze or any Silver output, so Tasks 19–30 could only be verified with unit tests, empty-partition runs, or against an empty warehouse, not real multi-partition data.
 Last updated          : 2026-07-06
 ```
 
@@ -194,7 +194,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 2     | Data Lake (Silver/Gold) | 9–14  | Complete |
 | 3     | Warehouse Modeling      | 15–21 | Complete |
 | 4     | SQL Analytics           | 22    | Complete |
-| 5     | Django UI               | 23–30 | Not started |
+| 5     | Django UI               | 23–30 | Complete |
 | 6     | Polish                  | 31–33 | Not started |
 
 ---
@@ -375,10 +375,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Top-rated movies in genre; revenue trend by year. Reuse Gold-layer aggregates where possible.
 - **Outcome:** `movies.views.genre_detail(request, genre_id)` mirrors `etl.gold.build_gold_datasets._build_genre_metrics()`'s logic, but computed live via the ORM against `fact_movie_metrics` rather than reading the Gold Parquet from S3 — Django's `warehouse` connection is Postgres-only and no loader currently pushes Gold datasets into the warehouse, so "reuse Gold-layer aggregates" is applied as *reuse the aggregation logic*, not literally read the same file. `get_object_or_404` on `Genre`; a `MovieMetrics` queryset filtered on `genre_id` with `.select_related("movie")` avoids N+1 for the top-movies table; `top_movies` takes the top 10 by `-rating`; `revenue_by_year` annotates each row with `ExtractYear("movie__release_date")`, groups via `.values("year").annotate(total_revenue=Sum(...))` — safe because `fact_movie_metrics` has at most one row per `(movie_id, genre_id)`, so grouping directly on the already-genre-filtered metrics doesn't double count a movie's revenue; `movie_count` uses `.values("movie_id").distinct().count()` in case a genre’s movies ever span multiple `date_id`s. URL added at `genres/<int:genre_id>/` in `movies/urls.py`. New template `movies/templates/movies/genre_detail.html`, following the same stats-then-table structure as the actor/director pages. Verified live: `manage.py check` clean; dev server returns 404 at `/genres/1/` (empty warehouse, same blocker as prior tasks) and 200 at `/`.
 
-#### [ ] Task 30 — Analytics Dashboard
+#### [x] Task 30 — Analytics Dashboard
 - **Files:** `analytics/` app, `analytics/views.py`, `analytics/urls.py`, templates.
 - **Steps:** Each panel calls one Task 22 query (via `.raw()` or `.annotate()`). Basic tables; optional Chart.js via CDN for trends. Route: `/analytics/`.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** New `analytics` app (added to `INSTALLED_APPS`; no ORM models — this dashboard reads the Task 22 `.sql` files directly rather than reimplementing them). `analytics/views.py` has one helper, `_run_query(filename)`, that reads a `.sql` file from `warehouse/queries/`, executes it verbatim via `connections["warehouse"].cursor()`, and shapes rows into dicts using `cursor.description` for the column names. `dashboard()` calls it once per Task 22 query — top-rated directors, most productive actors, revenue by genre, movies by decade, director trend over time, actor collaboration frequency, genre growth over time (7 panels). URL added at `analytics/` in `theoria_site/urls.py` (`/analytics/`). Template `analytics/templates/analytics/dashboard.html` renders all seven as tables, plus two Chart.js (CDN) charts — avg rating by decade (line), revenue by genre (bar) — fed via `{{ data|json_script:"..." }}`, with the Decimal columns feeding those two charts cast to `float` first (Decimal isn't JSON-serializable; the plain tables render the original Decimals untouched). Verified live: `manage.py check` clean; dev server returns 200 at both `/analytics/` and `/`; all 7 panels correctly show "No data available" against the still-empty warehouse (same Silver-output blocker as Tasks 19–29) and both `<canvas>` elements render with no JS errors.
 
 ---
 

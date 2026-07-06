@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — Analytics{% endblock %}
+
+{% block content %}
+<h1>Analytics Dashboard</h1>
+
+<section>
+    <h2>Movies by Decade</h2>
+    <canvas id="decade-chart"></canvas>
+    {% if movies_by_decade %}
+    <table>
+        <thead>
+            <tr><th>Decade</th><th>Movie count</th><th>Avg rating</th><th>Total revenue</th></tr>
+        </thead>
+        <tbody>
+            {% for row in movies_by_decade %}
+            <tr>
+                <td>{{ row.decade }}</td>
+                <td>{{ row.movie_count }}</td>
+                <td>{{ row.avg_rating|default:"—" }}</td>
+                <td>{{ row.total_revenue|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No data available.</p>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Revenue by Genre</h2>
+    <canvas id="revenue-chart"></canvas>
+    {% if revenue_by_genre %}
+    <table>
+        <thead>
+            <tr><th>Genre</th><th>Movie count</th><th>Total revenue</th><th>Avg revenue / movie</th></tr>
+        </thead>
+        <tbody>
+            {% for row in revenue_by_genre %}
+            <tr>
+                <td>{{ row.genre_name }}</td>
+                <td>{{ row.movie_count }}</td>
+                <td>{{ row.total_revenue|default:"—" }}</td>
+                <td>{{ row.avg_revenue_per_movie|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No data available.</p>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Top Rated Directors</h2>
+    {% if top_rated_directors %}
+    <table>
+        <thead>
+            <tr><th>Director</th><th>Movie count</th><th>Avg rating</th><th>Total votes</th></tr>
+        </thead>
+        <tbody>
+            {% for row in top_rated_directors %}
+            <tr>
+                <td>{{ row.director_name }}</td>
+                <td>{{ row.movie_count }}</td>
+                <td>{{ row.avg_rating|default:"—" }}</td>
+                <td>{{ row.total_votes|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No data available.</p>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Most Productive Actors</h2>
+    {% if most_productive_actors %}
+    <table>
+        <thead>
+            <tr><th>Actor</th><th>Popularity</th><th>Movie count</th></tr>
+        </thead>
+        <tbody>
+            {% for row in most_productive_actors %}
+            <tr>
+                <td>{{ row.actor_name }}</td>
+                <td>{{ row.popularity|default:"—" }}</td>
+                <td>{{ row.movie_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No data available.</p>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Director Trend Over Time</h2>
+    {% if director_trend_over_time %}
+    <table>
+        <thead>
+            <tr><th>Director</th><th>Year</th><th>Movie count</th><th>Avg rating</th></tr>
+        </thead>
+        <tbody>
+            {% for row in director_trend_over_time %}
+            <tr>
+                <td>{{ row.director_name }}</td>
+                <td>{{ row.year }}</td>
+                <td>{{ row.movie_count }}</td>
+                <td>{{ row.avg_rating|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No data available.</p>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Actor Collaboration Frequency</h2>
+    {% if actor_collaboration_frequency %}
+    <table>
+        <thead>
+            <tr><th>Actor 1</th><th>Actor 2</th><th>Movies together</th></tr>
+        </thead>
+        <tbody>
+            {% for row in actor_collaboration_frequency %}
+            <tr>
+                <td>{{ row.actor_1_name }}</td>
+                <td>{{ row.actor_2_name }}</td>
+                <td>{{ row.movies_together }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No data available.</p>
+    {% endif %}
+</section>
+
+<section>
+    <h2>Genre Growth Over Time</h2>
+    {% if genre_growth_over_time %}
+    <table>
+        <thead>
+            <tr><th>Genre</th><th>Year</th><th>Movie count</th></tr>
+        </thead>
+        <tbody>
+            {% for row in genre_growth_over_time %}
+            <tr>
+                <td>{{ row.genre_name }}</td>
+                <td>{{ row.year }}</td>
+                <td>{{ row.movie_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No data available.</p>
+    {% endif %}
+</section>
+
+{{ decade_labels|json_script:"decade-labels" }}
+{{ decade_avg_ratings|json_script:"decade-avg-ratings" }}
+{{ genre_labels|json_script:"genre-labels" }}
+{{ genre_revenue|json_script:"genre-revenue" }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const decadeLabels = JSON.parse(document.getElementById("decade-labels").textContent);
+    const decadeAvgRatings = JSON.parse(document.getElementById("decade-avg-ratings").textContent);
+    new Chart(document.getElementById("decade-chart"), {
+        type: "line",
+        data: {
+            labels: decadeLabels,
+            datasets: [{ label: "Avg rating by decade", data: decadeAvgRatings }],
+        },
+    });
+
+    const genreLabels = JSON.parse(document.getElementById("genre-labels").textContent);
+    const genreRevenue = JSON.parse(document.getElementById("genre-revenue").textContent);
+    new Chart(document.getElementById("revenue-chart"), {
+        type: "bar",
+        data: {
+            labels: genreLabels,
+            datasets: [{ label: "Total revenue by genre", data: genreRevenue }],
+        },
+    });
+</script>
+{% endblock %}

@@ -993,3 +993,30 @@ revenue_by_year = (
 
 ### What to Study Next
 Once real Silver/warehouse data exists, compare this view's generated SQL (`str(revenue_by_year.query)`) against the pandas `groupby` in `_build_genre_metrics()` — same aggregation, two different engines (Postgres vs. pandas). Worth understanding *when* you'd want the Gold/pandas version instead (e.g. genre metrics reused across many pages, expensive to recompute per request) versus computing it live per-request as this view does — that's the general tradeoff between pre-aggregation and on-demand querying that Gold layers exist to solve.
+
+## Task 30 — Analytics Dashboard
+
+### What Was Built
+A single `/analytics/` page with seven panels — one per Task 22 query (top-rated directors, most productive actors, revenue by genre, movies by decade, director trend over time, actor collaboration frequency, genre growth over time) — plus two Chart.js line/bar charts (avg rating by decade, revenue by genre) fed from the same query results.
+
+### Concepts Used
+- **Reusing hand-written SQL instead of re-deriving it in the ORM**: Tasks 25–29's views all built queries through Django's ORM. These seven queries already exist as reviewed, commented `.sql` files (with CTEs to de-duplicate `fact_movie_metrics`'s per-genre fan-out) — re-expressing a self-join like `actor_collaboration_frequency.sql` (`fc1.actor_id < fc2.actor_id`) in the ORM would be more code for an identical result. The project rule "all analytics SQL lives in `.sql` files" is honored literally: the view reads and executes the files as-is, rather than treating them as a spec to reimplement.
+- **Raw SQL via Django's multi-database connection**: `django.db.connections["warehouse"]` gives a plain DB-API cursor into the same Postgres warehouse the ORM models point at, without going through any model — appropriate when a query (grouped self-join, multiple CTEs) doesn't map cleanly onto a single model's fields.
+- **`cursor.description` for dynamic column names**: since the view doesn't know each query's output shape ahead of time, `[col[0] for col in cursor.description]` reads the actual column names Postgres returned, and `dict(zip(columns, row))` turns each row into a dict the template can address by key (`row.total_revenue`) instead of by fragile positional index.
+- **`json_script` template filter for chart data**: passing Python lists into a `<script>` block naively risks HTML/JS injection if any value contains user-influenced text (here it's just numbers/labels from a trusted DB, but the habit matters). `{{ data|json_script:"id" }}` renders a `<script type="application/json">` tag Django escapes safely, and the page's own script reads it back with `JSON.parse(...).textContent` — the standard safe pattern for handing server data to client JS.
+- **Decimal isn't JSON-serializable**: Postgres `NUMERIC` columns come back as `decimal.Decimal` via psycopg2; `json_script` (like `json.dumps`) can't serialize those directly, so the two chart datasets are explicitly cast to `float` in the view before being handed to the template, while the plain HTML tables render the original `Decimal` values untouched (no precision loss there, since Django templates print them fine).
+
+### Key Code
+`django_app/analytics/views.py` — `_run_query()`:
+```python
+def _run_query(filename):
+    sql = (QUERIES_DIR / filename).read_text()
+    with connections["warehouse"].cursor() as cursor:
+        cursor.execute(sql)
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+```
+> One tiny helper covers all seven panels: read the `.sql` file's text, execute it verbatim against the warehouse connection, and shape the result as a list of dicts. No query-specific code lives in the view at all — the SQL files are the single source of truth for both *what* to compute and *how*.
+
+### What to Study Next
+This view re-executes all seven queries (some with multi-way joins) on every request, with no caching — fine for a learning project against an empty warehouse, but worth studying Django's per-view or low-level cache framework (or a materialized view refreshed by a scheduled job) as the standard fix once a dashboard like this needs to serve real traffic against a populated warehouse.
