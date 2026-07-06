@@ -30,10 +30,10 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 32 — Documentation
-Currently on          : Task 33 — Logging, config, and dependency cleanup
-Current phase         : Phase 6 — Polish
-Blockers / open issues: None. Full test suite is 159/159 passing (`tests/test_etl.py`, `tests/test_data_quality.py`, `tests/test_warehouse_checks.py`, `tests/test_django_views.py`). `fact_casting` still has a known ~46% reject rate for this sample (movies with credited actors but no credited director), per Task 19's documented cross-join limitation — now documented in `docs/architecture.md` §3.
+Last completed task   : Task 33 — Logging, config, and dependency cleanup
+Currently on          : None — all tasks complete (Phases 1–6 done)
+Current phase         : Phase 6 — Polish (complete)
+Blockers / open issues: None. Full test suite is 159/159 passing (`tests/test_etl.py`, `tests/test_data_quality.py`, `tests/test_warehouse_checks.py`, `tests/test_django_views.py`). `fact_casting` still has a known ~46% reject rate for this sample (movies with credited actors but no credited director), per Task 19's documented cross-join limitation — documented in `docs/architecture.md` §3.
 Last updated          : 2026-07-06
 ```
 
@@ -195,7 +195,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 3     | Warehouse Modeling      | 15–21 | Complete |
 | 4     | SQL Analytics           | 22    | Complete |
 | 5     | Django UI               | 23–30 | Complete |
-| 6     | Polish                  | 31–33 | In progress |
+| 6     | Polish                  | 31–33 | Complete |
 
 ---
 
@@ -401,9 +401,9 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** README covers full setup → ingest → transform → load → Django. `architecture.md` covers data flow + schema (written for an interviewer).
 - **Outcome:** `README.md` rewritten as a straight-through runbook: prerequisites, env setup, applying the three DDL files with `psql`, running `scripts.run_pipeline` (with a description of what each of its four stages does), running the Django dev server and the page routes it serves, and how the test suite is isolated from live infra. `docs/architecture.md` (new) is written for an interviewer/reviewer rather than a contributor: the end-to-end data flow diagram and the reasoning behind three-layer S3 (why Bronze is immutable, why Silver owns correctness, why partitioning by `ingestion_date` enables idempotent re-runs and incremental loads); the star schema with an ASCII ER diagram and the `fact_movie_metrics` one-row-per-genre consequence every analytics query has to guard against; a dedicated section on the `fact_casting` actor×director cross-join and why it produces the ~46% reject rate noted in Task 19/30.5 (a data-shape consequence of the schema choice, not a bug); the watermark/incremental mechanism as an optimization layered on top of loads that are already idempotent via upsert; the quarantine-not-drop data quality pattern shared by `silver_checks.py` and `warehouse_checks.py`; how Django's read-only access to the warehouse is enforced at three separate levels (router, `managed=False`, separate databases) plus why the analytics dashboard reads `.sql` files directly instead of re-expressing them via the ORM; the testing philosophy (mock the boundary, never touch live infra); and an explicit non-goals section. Verified `pytest` still passes 159/159 after the doc changes (no code touched).
 
-#### [ ] Task 33 — Logging, config, and dependency cleanup
+#### [x] Task 33 — Logging, config, and dependency cleanup
 - **Steps:** Grep for hardcoded paths/keys; confirm all scripts use `config.py` and `logging_config.py`; regenerate `requirements.txt` with `pip freeze`; trim unused packages.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** Audit, no code changes needed. Grepped for AWS key patterns, hardcoded TMDB/S3/Postgres URLs, and bare `os.environ`/`getenv` usage outside `config.py` — found none; the only `os.environ.setdefault("DJANGO_SETTINGS_MODULE", ...)` calls are standard Django boilerplate in `manage.py`/`asgi.py`/`wsgi.py`, not secrets. Every ETL/DQ/loader script with an `if __name__ == "__main__":` block (15 total) calls `logging_config.setup_logging()`; the four `print()` calls that exist (`silver_checks.py`, `warehouse_checks.py`, `build_gold_datasets.py`) are intentional human-readable CLI summaries, not logging substitutes, consistent with those modules' existing pass/fail report pattern. `etl/incremental.py` takes `bucket` as a parameter rather than importing `config` directly — verified both callers (`load_dimensions.py`, `load_facts.py`) pass `config.S3_BUCKET`, so there's no hidden hardcoding. Compared `requirements.txt` against `import`/`from` statements across the whole codebase (`grep -rhoE` for top-level imports): every pinned package (`requests`, `pandas`, `pyarrow`, `boto3`, `SQLAlchemy`, `psycopg2-binary`, `python-dotenv`, `Django`, `pytest`) is actually used, and no imported package is missing from the file — `pyarrow` isn't imported directly but is required as pandas's Parquet engine (`engine="pyarrow"` in `s3_utils.py`, `load_facts.py`, `build_gold_datasets.py`). Did **not** blindly run `pip freeze > requirements.txt`: this venv also has `graphify` (the knowledge-graph CLI tool) and its tree-sitter/networkx/RapidFuzz dependencies installed for this session's own use, which are unrelated to the project and would have polluted the file. Instead, checked each of the 9 pinned versions against `pip show` in the venv — all match exactly, so no version bumps were needed. Verified `pytest` still passes 159/159 (no code touched).
 
 ---
 

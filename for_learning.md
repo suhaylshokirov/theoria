@@ -1100,3 +1100,28 @@ No functions changed this task. The one design artifact worth pointing to is the
 
 ### What to Study Next
 Compare this project's `docs/architecture.md` against a real company's public engineering design-doc template (many are public — e.g. Google's design doc culture, or Stripe's/Airbnb's public engineering blogs on data platform design) to see what sections professional teams include that this one doesn't (rollout plan, alternatives considered and rejected, monitoring/alerting strategy) — useful context for Task 33, which is about production-readiness cleanup (config, logging, dependencies) rather than documentation, but touches the same "what would make this deployable" question from a different angle.
+
+---
+
+## Task 33 — Logging, config, and dependency cleanup
+
+### What Was Built
+An audit task, not a build task — no source files changed. Grepped the whole codebase for three categories of "config smell": hardcoded credentials/URLs (AWS key patterns, TMDB/S3/Postgres connection strings typed literally instead of read from `config.py`), scripts that skip `logging_config.setup_logging()`, and a `requirements.txt` that's drifted from what's actually imported and installed. Found nothing to fix — every check came back clean — but running the audit is itself the deliverable: it's the difference between *asserting* a project follows its own rules (as `CLAUDE.md`'s "Coding Rules" section does) and actually *verifying* it does, task 32 and earlier having accumulated 32 tasks worth of code where drift could easily have crept in unnoticed.
+
+### Concepts Used
+- **Config centralization as a testable property, not just a convention**: "all config from `config.py`" is easy to write down as a rule and easy to silently violate one script at a time (a stray `os.getenv("SOME_VAR")` added under deadline pressure, say). The way to actually enforce it isn't code review vigilance alone — it's a periodic grep sweep (`os.environ`, `getenv`, literal `postgresql://`, literal `s3://bucket-name`, AWS key regexes) that catches drift mechanically, the same way a linter catches style drift.
+- **Why `pip freeze` isn't always safe to pipe straight into `requirements.txt`**: `pip freeze` dumps *every* package installed in the active environment, not just the ones your code imports. This venv had `graphify` (a separate CLI tool, plus its own tree-sitter/networkx/RapidFuzz dependency tree) installed alongside the project's real dependencies — a blind `pip freeze > requirements.txt` would have silently made "the graphify tool happens to be installed" into a declared dependency of a Django/pandas project, which is exactly the kind of accidental-coupling bug that makes a `requirements.txt` untrustworthy over time. The safer check is the *inverse* direction: grep actual `import`/`from` statements across the codebase, confirm every entry in `requirements.txt` is used, confirm every import is covered, then spot-check pinned versions against `pip show` rather than regenerating the whole file from environment state.
+- **Indirect dependencies still need to be understood, even if they're not imported directly**: `pyarrow` never appears in an `import pyarrow` statement anywhere in this codebase, but it's still a required package — pandas uses it as a named engine (`df.to_parquet(..., engine="pyarrow")`) rather than importing it as a module directly. Auditing "is this dependency used" has to account for this indirect-usage pattern, not just grep for `import <name>`.
+
+### Key Code
+No functions changed. The verification command worth remembering is the two-directional check used here:
+```bash
+# forward: what does the code import?
+grep -rhoE "^import [a-zA-Z0-9_]+|^from [a-zA-Z0-9_]+" --include="*.py" . | sort -u
+# backward: what's pinned?
+cat requirements.txt
+```
+> Diffing these two lists by hand (rather than trusting either one alone) is what catches both "declared but unused" and "used but undeclared" drift — the two failure modes a `requirements.txt` can silently develop over 30+ tasks of incremental changes.
+
+### What to Study Next
+Look into `pip-tools` (`pip-compile`) or `pipdeptree` as tools that automate exactly this kind of drift-check — `pipdeptree` in particular can show which installed packages are *not* depended on by anything else in the environment, which would have flagged the graphify-related packages automatically instead of requiring a manual import-list diff. Also worth studying: what a `requirements.txt` for this project would look like if it pinned transitive dependencies too (a full `pip freeze` scoped to a *clean* venv built only from `requirements.txt`, rather than this session's shared venv) — the trade-off between full reproducibility (pin everything) and readability (pin only direct dependencies, as this file currently does).
