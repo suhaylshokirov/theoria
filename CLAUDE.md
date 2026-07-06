@@ -30,10 +30,10 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 31 — Tests
-Currently on          : Task 32 — Documentation
+Last completed task   : Task 32 — Documentation
+Currently on          : Task 33 — Logging, config, and dependency cleanup
 Current phase         : Phase 6 — Polish
-Blockers / open issues: None. Full test suite is 159/159 passing (`tests/test_etl.py`, `tests/test_data_quality.py`, `tests/test_warehouse_checks.py`, `tests/test_django_views.py`). `fact_casting` still has a known ~46% reject rate for this sample (movies with credited actors but no credited director), per Task 19's documented cross-join limitation — not a bug, just a data-shape consequence worth mentioning in Task 32's architecture doc.
+Blockers / open issues: None. Full test suite is 159/159 passing (`tests/test_etl.py`, `tests/test_data_quality.py`, `tests/test_warehouse_checks.py`, `tests/test_django_views.py`). `fact_casting` still has a known ~46% reject rate for this sample (movies with credited actors but no credited director), per Task 19's documented cross-join limitation — now documented in `docs/architecture.md` §3.
 Last updated          : 2026-07-06
 ```
 
@@ -396,10 +396,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Steps:** Unit tests: a Silver transform on a small fixture (3–5 rows), a DQ check catching a bad row, each view returns 200 with expected context keys.
 - **Outcome:** The Silver-transform-on-a-fixture and DQ-check-catches-a-bad-row requirements were already satisfied by tests added during Tasks 9–14/13 (e.g. `test_transform_movies_deduplicates_on_movie_id`, `test_run_entity_checks_null_required_field_fails_and_writes_reject` in `tests/test_etl.py`/`tests/test_data_quality.py`); the actual gap was `tests/test_django_views.py`, which didn't exist. Added it with 10 new tests covering all five `movies` views (home, movie/actor/director/genre detail, plus a 404 case for each detail view) and the `analytics` dashboard. Since there's no `pytest-django` in `requirements.txt` and the rest of the suite runs under plain `pytest` (never hitting real Postgres/S3, only mocking the boundary), the same philosophy is applied here: `django.setup()` is called manually at import time, `django.test.Client` drives each view through its real URL, and every `Model.objects` manager is patched with a `MagicMock` so no real `warehouse` connection is opened; `django.test.utils.setup_test_environment()`/`teardown_test_environment()` are called manually in `setup_module`/`teardown_module` since that instrumentation (which lets `response.context` work at all) is normally wired up by Django's own test runner or `pytest-django`, neither of which is present. Model instances themselves (`Movie`, `Actor`, ...) are real, unsaved ORM objects rather than mocks — constructing one never touches the database. Full suite: 159/159 pass (149 existing + 10 new).
 
-#### [ ] Task 32 — Documentation
+#### [x] Task 32 — Documentation
 - **Files:** `README.md`, `docs/architecture.md`
 - **Steps:** README covers full setup → ingest → transform → load → Django. `architecture.md` covers data flow + schema (written for an interviewer).
-- **Outcome:** _(fill in when done)_
+- **Outcome:** `README.md` rewritten as a straight-through runbook: prerequisites, env setup, applying the three DDL files with `psql`, running `scripts.run_pipeline` (with a description of what each of its four stages does), running the Django dev server and the page routes it serves, and how the test suite is isolated from live infra. `docs/architecture.md` (new) is written for an interviewer/reviewer rather than a contributor: the end-to-end data flow diagram and the reasoning behind three-layer S3 (why Bronze is immutable, why Silver owns correctness, why partitioning by `ingestion_date` enables idempotent re-runs and incremental loads); the star schema with an ASCII ER diagram and the `fact_movie_metrics` one-row-per-genre consequence every analytics query has to guard against; a dedicated section on the `fact_casting` actor×director cross-join and why it produces the ~46% reject rate noted in Task 19/30.5 (a data-shape consequence of the schema choice, not a bug); the watermark/incremental mechanism as an optimization layered on top of loads that are already idempotent via upsert; the quarantine-not-drop data quality pattern shared by `silver_checks.py` and `warehouse_checks.py`; how Django's read-only access to the warehouse is enforced at three separate levels (router, `managed=False`, separate databases) plus why the analytics dashboard reads `.sql` files directly instead of re-expressing them via the ORM; the testing philosophy (mock the boundary, never touch live infra); and an explicit non-goals section. Verified `pytest` still passes 159/159 after the doc changes (no code touched).
 
 #### [ ] Task 33 — Logging, config, and dependency cleanup
 - **Steps:** Grep for hardcoded paths/keys; confirm all scripts use `config.py` and `logging_config.py`; regenerate `requirements.txt` with `pip freeze`; trim unused packages.

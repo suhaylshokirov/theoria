@@ -1082,3 +1082,21 @@ def teardown_module(module):
 
 ### What to Study Next
 Look at what `pytest-django`'s `client` and `db` fixtures actually do under the hood (they call the same `setup_test_environment()`/`teardown_test_environment()` functions, plus wrap each test in a transaction when `db` is requested) — understanding the manual version here makes the "magic" fixture version much less mysterious. Also worth exploring: Django's `override_settings` decorator, which would let a future test point the `warehouse` connection at a real (but disposable) SQLite or Postgres test database instead of mocking the ORM — a heavier but more end-to-end alternative worth weighing against the mocking approach used here.
+
+---
+
+## Task 32 — Documentation
+
+### What Was Built
+No code changed — this task wrote the two documents a new contributor (`README.md`) and an outside reviewer (`docs/architecture.md`, new file) would each need. The README is a runbook: env setup, applying the three DDL files, running the pipeline end to end, running the Django server, running tests. `docs/architecture.md` is a design write-up: the data-flow diagram, the star schema with an ER sketch, and — most importantly — an explicit explanation of the two "gotchas" a reader would otherwise have to reconstruct from scattered task outcomes: why `fact_movie_metrics` needs a `SELECT DISTINCT` before aggregating (one row per genre), and why `fact_casting` rejects ~46% of candidate rows (the actor×director cross-join has no rows to produce for a movie with no credited director). Verified nothing broke by re-running the full suite (159/159 still passing, as expected for a docs-only change).
+
+### Concepts Used
+- **Writing for the reader, not for yourself**: the task-by-task outcome notes in `CLAUDE.md` are a faithful build log — useful for "what happened and when" — but a poor architecture document, because they're organized by *when something was built* rather than *why the system looks the way it does*. `docs/architecture.md` reorganizes the same underlying facts around the questions a reviewer actually asks: what does data do, why is it shaped this way, what would break if a layer were skipped.
+- **Runbook vs. design doc as two different artifacts**: a README answers "how do I get this running," and should be a sequence of commands a stranger can copy-paste in order. An architecture doc answers "why is this correct," and should read as prose organized around design decisions and their trade-offs, not as a command list. Conflating the two (cramming design rationale into a README, or turning an architecture doc into a step-by-step tutorial) makes both worse at their actual job.
+- **Documenting a known limitation vs. hiding it**: the `fact_casting` cross-join reject rate could be framed as a bug to eventually fix, but it's actually a direct, understood consequence of a schema decision (modeling casting as actor×director pairs) meeting a real data gap (some movies have no credited director in TMDB's data). Writing this down explicitly — with the *why*, not just the *what* — is what turns "an interviewer might ask about this weird 46% number" into a talking point that demonstrates understanding of the trade-off, rather than something to hope nobody notices.
+
+### Key Code
+No functions changed this task. The one design artifact worth pointing to is the ASCII data-flow diagram and star-schema ER sketch added to the top of `docs/architecture.md` — a diagram often communicates "what joins to what" faster than prose, and forces you to notice asymmetries (e.g. that `dim_date` only connects to one fact table, not both) that are easy to miss when reading DDL top to bottom.
+
+### What to Study Next
+Compare this project's `docs/architecture.md` against a real company's public engineering design-doc template (many are public — e.g. Google's design doc culture, or Stripe's/Airbnb's public engineering blogs on data platform design) to see what sections professional teams include that this one doesn't (rollout plan, alternatives considered and rejected, monitoring/alerting strategy) — useful context for Task 33, which is about production-readiness cleanup (config, logging, dependencies) rather than documentation, but touches the same "what would make this deployable" question from a different angle.
