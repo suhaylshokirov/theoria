@@ -30,10 +30,10 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 30.5 — First real end-to-end pipeline run
-Currently on          : Task 31 — Tests
+Last completed task   : Task 31 — Tests
+Currently on          : Task 32 — Documentation
 Current phase         : Phase 6 — Polish
-Blockers / open issues: None. The pipeline has now been run end-to-end against real TMDB data (2026-07-06, 100 movies); the warehouse and every Django page have real data behind them for the first time. `fact_casting` still has a known ~46% reject rate for this sample (movies with credited actors but no credited director), per Task 19's documented cross-join limitation — not a bug, just a data-shape consequence to keep in mind when writing Task 31's tests.
+Blockers / open issues: None. Full test suite is 159/159 passing (`tests/test_etl.py`, `tests/test_data_quality.py`, `tests/test_warehouse_checks.py`, `tests/test_django_views.py`). `fact_casting` still has a known ~46% reject rate for this sample (movies with credited actors but no credited director), per Task 19's documented cross-join limitation — not a bug, just a data-shape consequence worth mentioning in Task 32's architecture doc.
 Last updated          : 2026-07-06
 ```
 
@@ -195,7 +195,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 3     | Warehouse Modeling      | 15–21 | Complete |
 | 4     | SQL Analytics           | 22    | Complete |
 | 5     | Django UI               | 23–30 | Complete |
-| 6     | Polish                  | 31–33 | Not started |
+| 6     | Polish                  | 31–33 | In progress |
 
 ---
 
@@ -391,10 +391,10 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ### Phase 6 — Polish
 
-#### [ ] Task 31 — Tests
+#### [x] Task 31 — Tests
 - **Files:** `tests/test_etl.py`, `tests/test_data_quality.py`, `tests/test_django_views.py`
 - **Steps:** Unit tests: a Silver transform on a small fixture (3–5 rows), a DQ check catching a bad row, each view returns 200 with expected context keys.
-- **Outcome:** _(fill in when done)_
+- **Outcome:** The Silver-transform-on-a-fixture and DQ-check-catches-a-bad-row requirements were already satisfied by tests added during Tasks 9–14/13 (e.g. `test_transform_movies_deduplicates_on_movie_id`, `test_run_entity_checks_null_required_field_fails_and_writes_reject` in `tests/test_etl.py`/`tests/test_data_quality.py`); the actual gap was `tests/test_django_views.py`, which didn't exist. Added it with 10 new tests covering all five `movies` views (home, movie/actor/director/genre detail, plus a 404 case for each detail view) and the `analytics` dashboard. Since there's no `pytest-django` in `requirements.txt` and the rest of the suite runs under plain `pytest` (never hitting real Postgres/S3, only mocking the boundary), the same philosophy is applied here: `django.setup()` is called manually at import time, `django.test.Client` drives each view through its real URL, and every `Model.objects` manager is patched with a `MagicMock` so no real `warehouse` connection is opened; `django.test.utils.setup_test_environment()`/`teardown_test_environment()` are called manually in `setup_module`/`teardown_module` since that instrumentation (which lets `response.context` work at all) is normally wired up by Django's own test runner or `pytest-django`, neither of which is present. Model instances themselves (`Movie`, `Actor`, ...) are real, unsaved ORM objects rather than mocks — constructing one never touches the database. Full suite: 159/159 pass (149 existing + 10 new).
 
 #### [ ] Task 32 — Documentation
 - **Files:** `README.md`, `docs/architecture.md`

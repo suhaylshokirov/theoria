@@ -1043,3 +1043,42 @@ succeeded_credits, failed_credits = ingest_credits(movie_ids, ingestion_date=ing
 
 ### What to Study Next
 Now that real data exists, Task 31 (Tests) should account for `fact_casting`'s reject rate as expected behavior rather than a symptom to chase — worth writing an assertion that reject counts stay *bounded* (e.g. under some percentage) rather than zero, since zero rejects would actually be suspicious given the known data shape. Also worth studying: at what data volume would `python -m scripts.run_pipeline` become too slow to run synchronously (this 100-movie run took ~2.5 minutes, dominated by per-movie TMDB API calls), and what that implies about needing a real workflow scheduler (Airflow, Dagster) instead of a single script — one of the explicit non-goals this project chose to skip, but useful to understand *why* those tools exist.
+
+---
+
+## Task 31 — Tests
+
+### What Was Built
+A gap check across the whole `tests/` suite before writing anything: the Silver-transform-fixture and DQ-check-catches-a-bad-row requirements from the task list were already satisfied by tests added incrementally in Tasks 9–14/13. The only real gap was `tests/test_django_views.py`, which didn't exist. Added it with 10 tests covering all five `movies` views (home, movie/actor/director/genre detail — each with a 404 case) and the `analytics` dashboard. Full suite: 159/159 passing.
+
+### Concepts Used
+- **Testing unmanaged/read-only ORM models without a live database**: `movies/models.py`'s models point at a real Postgres warehouse, but the rest of this project's tests never touch real infrastructure (S3 and the DB engine are always mocked). The same rule applies here: every `Model.objects` manager (`Movie.objects`, `Actor.objects`, etc.) is replaced with a `MagicMock` for the duration of each test, so a view can be driven end-to-end through Django's real URL routing without ever opening a socket to Postgres.
+- **Constructing model instances without hitting the database**: `Movie(movie_id=1, title="Test Movie", ...)` just builds a plain Python object in memory — Django only talks to the database when you call `.save()`, `.delete()`, or run a queryset. This means fixture objects can be *real* `Movie`/`Actor`/`Genre` instances (with all their real field behavior) instead of hand-rolled mocks, which is both simpler and closer to what the view actually receives at runtime.
+- **`django.test.Client` + `response.context`**: Django's test client can inspect what context dict a view passed to `render()` via `response.context`, but only because `django.test.utils.setup_test_environment()` connects a `template_rendered` signal listener that records it. That wiring is normally done for you by Django's own test runner or the `pytest-django` plugin — since this project runs plain `pytest` (no `pytest-django` in `requirements.txt`, matching the rest of the suite's minimal-dependency style), it had to be called explicitly in `setup_module`/`teardown_module`.
+- **Mocking a chained QuerySet API**: view code like `Casting.objects.using("warehouse").filter(...).select_related(...)` is a chain of method calls, and each step on a `MagicMock` auto-creates a new child mock. The pattern used throughout the new tests is to set `.return_value` only on the *last* call in a chain (e.g. `casting_mgr.using.return_value.filter.return_value.select_related.return_value = [casting]`), leaving every intermediate step as an unconfigured (but harmless) auto-mock.
+- **`Http404` as a control-flow exception**: `get_object_or_404()` doesn't return a sentinel on a miss — it raises `django.http.Http404`, which Django's URL resolver catches and turns into a real 404 response. The 404 tests patch `get_object_or_404` with `side_effect=Http404()` to simulate a missing row without needing a real "not found" query result.
+
+### Key Code
+`tests/test_django_views.py` — `test_movie_detail_returns_200_with_expected_context()`:
+```python
+with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+    Genre, "objects", new=MagicMock()
+) as genre_mgr, patch.object(Casting, "objects", new=MagicMock()) as casting_mgr:
+    genre_mgr.using.return_value.filter.return_value.distinct.return_value = [genre]
+    casting_mgr.using.return_value.filter.return_value.select_related.return_value = [casting]
+    response = client.get(f"/movies/{movie.movie_id}/")
+```
+> Three independent things are mocked at exactly the boundary where the view talks to the database — the primary object lookup, and the two related-object queries — while everything else (URL resolution, view logic, template rendering) runs for real. This is the difference between a *unit* test of the view function and an *integration* test that would need a live warehouse; here we get view-logic + template correctness without the infrastructure dependency.
+
+`tests/test_django_views.py` — `setup_module()` / `teardown_module()`:
+```python
+def setup_module(module):
+    setup_test_environment()
+
+def teardown_module(module):
+    teardown_test_environment()
+```
+> Without this pair, `response.context` would simply not exist on responses returned by `client.get(...)` — the signal that populates it is opt-in infrastructure, not something `django.test.Client` does unconditionally. This is a small but easy-to-miss piece of Django internals when writing tests outside of `TestCase`/`pytest-django`.
+
+### What to Study Next
+Look at what `pytest-django`'s `client` and `db` fixtures actually do under the hood (they call the same `setup_test_environment()`/`teardown_test_environment()` functions, plus wrap each test in a transaction when `db` is requested) — understanding the manual version here makes the "magic" fixture version much less mysterious. Also worth exploring: Django's `override_settings` decorator, which would let a future test point the `warehouse` connection at a real (but disposable) SQLite or Postgres test database instead of mocking the ORM — a heavier but more end-to-end alternative worth weighing against the mocking approach used here.
