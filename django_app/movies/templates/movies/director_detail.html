@@ -1,46 +1,44 @@
 {% extends "base.html" %}
+{% load tmdb_images %}
 
 {% block title %}Theoria — {{ director.name }}{% endblock %}
 
 {% block content %}
-<h1>{{ director.name }}</h1>
-
-<dl>
-    <dt>Films</dt>
-    <dd>{{ film_count }}</dd>
-
-    <dt>Average rating</dt>
-    <dd>{% if avg_rating %}{{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</dd>
-
-    <dt>Career span</dt>
-    <dd>
-        {% if career_start and career_end %}
-            {{ career_start|date:"Y" }}–{{ career_end|date:"Y" }}
-        {% else %}
-            —
+<div class="card">
+    <div style="display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap;">
+        {% if director.profile_path %}
+        <img class="headshot" style="width: 120px; border-radius: 6px;" src="{{ director.profile_path|tmdb_image:'w185' }}" alt="{{ director.name }}">
         {% endif %}
-    </dd>
-</dl>
+        <div>
+            <h1>{{ director.name }}</h1>
+            <p class="muted">Director</p>
+        </div>
+    </div>
+</div>
+
+<div class="stats">
+    <div class="stat">
+        <span class="stat-value">{{ film_count }}</span>
+        <span class="stat-label">Films</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{% if avg_rating %}{{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
+        <span class="stat-label">Avg rating</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">
+            {% if career_start and career_end %}{{ career_start|date:"Y" }}–{{ career_end|date:"Y" }}{% else %}—{% endif %}
+        </span>
+        <span class="stat-label">Career span</span>
+    </div>
+</div>
 
 <h2>Filmography</h2>
 {% if filmography %}
-<table>
-    <thead>
-        <tr>
-            <th>Title</th>
-            <th>Release date</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for movie in filmography %}
-        <tr>
-            <td>{{ movie.title }}</td>
-            <td>{{ movie.release_date|default:"—" }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="poster-grid">
+    {% for movie in filmography %}{% include "movies/_movie_card.html" %}{% endfor %}
+</div>
 {% else %}
-<p>No filmography data available.</p>
+<p class="muted">No filmography data available.</p>
 {% endif %}
 {% endblock %}

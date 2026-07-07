@@ -1,18 +1,29 @@
-<!DOCTYPE html>
+{% load static %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Theoria{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/theoria.css' %}">
 </head>
 <body>
-    <nav>
-        <a href="/">Home</a>
-        <a href="/movies/">Movies</a>
-        <a href="/analytics/">Analytics</a>
-    </nav>
-    <hr>
-    <main>
+    <header class="site-header">
+        <nav class="nav">
+            <a class="brand" href="{% url 'movies:home' %}">Theoria</a>
+            <div class="nav-links">
+                <a href="{% url 'movies:movie_list' %}">Movies</a>
+                <a href="{% url 'movies:actor_list' %}">Actors</a>
+                <a href="{% url 'movies:director_list' %}">Directors</a>
+                <a href="{% url 'movies:genre_list' %}">Genres</a>
+                <a href="{% url 'analytics:dashboard' %}">Analytics</a>
+            </div>
+        </nav>
+    </header>
+    <main class="container">
         {% block content %}{% endblock %}
     </main>
+    <footer class="site-footer">
+        Theoria — a movie analytics warehouse. Data from TMDB.
+    </footer>
 </body>
 </html>

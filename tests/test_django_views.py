@@ -44,18 +44,38 @@ def teardown_module(module):
     teardown_test_environment()
 
 
+def _movie(movie_id=1, title="Test Movie"):
+    return Movie(
+        movie_id=movie_id,
+        title=title,
+        release_date=date(2020, 1, 1),
+        runtime=120,
+        budget=1000,
+        revenue=5000,
+        original_language="en",
+        status="Released",
+    )
+
+
 # ---------------------------------------------------------------------------
 # home
 # ---------------------------------------------------------------------------
 
 
 def test_home_returns_200_with_expected_context():
+    movie = _movie()
+
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Actor, "objects", new=MagicMock()
     ) as actor_mgr, patch.object(Director, "objects", new=MagicMock()) as director_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
     ) as metrics_mgr:
-        movie_mgr.using.return_value.count.return_value = 99
+        using = movie_mgr.using.return_value
+        using.count.return_value = 99
+        # top_rated: .annotate(...).order_by(...)[:12]
+        using.annotate.return_value.order_by.return_value.__getitem__.return_value = [movie]
+        # newest: .order_by(...)[:12]
+        using.order_by.return_value.__getitem__.return_value = [movie]
         actor_mgr.using.return_value.count.return_value = 3291
         director_mgr.using.return_value.count.return_value = 108
         metrics_mgr.using.return_value.aggregate.return_value = {
@@ -69,6 +89,114 @@ def test_home_returns_200_with_expected_context():
     assert response.context["actor_count"] == 3291
     assert response.context["director_count"] == 108
     assert response.context["avg_rating"] == Decimal("6.84")
+    assert list(response.context["top_rated"]) == [movie]
+    assert list(response.context["newest"]) == [movie]
+
+
+# ---------------------------------------------------------------------------
+# movie_list
+# ---------------------------------------------------------------------------
+
+
+def test_movie_list_returns_200_with_pagination():
+    movies = [_movie(movie_id=i, title=f"Movie {i}") for i in range(1, 4)]
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr:
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = movies
+
+        response = client.get("/movies/")
+
+    assert response.status_code == 200
+    assert list(response.context["page_obj"]) == movies
+    assert response.context["q"] == ""
+    assert response.context["sort"] == "release"
+
+
+def test_movie_list_search_and_sort():
+    movie = _movie()
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr:
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [movie]
+
+        response = client.get("/movies/", {"q": "test", "sort": "rating"})
+
+    assert response.status_code == 200
+    qs.filter.assert_called_once_with(title__icontains="test")
+    qs.annotate.assert_called_once()  # rating sort needs the Max annotation
+    assert response.context["q"] == "test"
+    assert response.context["sort"] == "rating"
+
+
+def test_movie_list_invalid_sort_falls_back_to_release():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr:
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+
+        response = client.get("/movies/", {"sort": "bogus"})
+
+    assert response.status_code == 200
+    assert response.context["sort"] == "release"
+
+
+# ---------------------------------------------------------------------------
+# actor_list / director_list
+# ---------------------------------------------------------------------------
+
+
+def test_actor_list_returns_200_with_search():
+    actor = Actor(actor_id=1, name="Test Actor", popularity=Decimal("9.5"))
+
+    with patch.object(Actor, "objects", new=MagicMock()) as actor_mgr:
+        qs = actor_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.order_by.return_value = [actor]
+
+        response = client.get("/actors/", {"q": "test"})
+
+    assert response.status_code == 200
+    qs.filter.assert_called_once_with(name__icontains="test")
+    assert list(response.context["page_obj"]) == [actor]
+    assert response.context["list_title"] == "Actors"
+
+
+def test_director_list_returns_200():
+    director = Director(director_id=1, name="Test Director", popularity=Decimal("5.0"))
+
+    with patch.object(Director, "objects", new=MagicMock()) as director_mgr:
+        qs = director_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.order_by.return_value = [director]
+
+        response = client.get("/directors/")
+
+    assert response.status_code == 200
+    assert list(response.context["page_obj"]) == [director]
+    assert response.context["list_title"] == "Directors"
+
+
+# ---------------------------------------------------------------------------
+# genre_list
+# ---------------------------------------------------------------------------
+
+
+def test_genre_list_returns_200():
+    genre = Genre(genre_id=1, genre_name="Action")
+
+    with patch.object(Genre, "objects", new=MagicMock()) as genre_mgr:
+        genre_mgr.using.return_value.order_by.return_value = [genre]
+
+        response = client.get("/genres/")
+
+    assert response.status_code == 200
+    assert list(response.context["genres"]) == [genre]
 
 
 # ---------------------------------------------------------------------------
@@ -77,16 +205,7 @@ def test_home_returns_200_with_expected_context():
 
 
 def test_movie_detail_returns_200_with_expected_context():
-    movie = Movie(
-        movie_id=1,
-        title="Test Movie",
-        release_date=date(2020, 1, 1),
-        runtime=120,
-        budget=1000,
-        revenue=5000,
-        original_language="en",
-        status="Released",
-    )
+    movie = _movie()
     genre = Genre(genre_id=1, genre_name="Action")
     actor = Actor(actor_id=1, name="Test Actor")
     director = Director(director_id=1, name="Test Director")
@@ -94,10 +213,15 @@ def test_movie_detail_returns_200_with_expected_context():
 
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
-    ) as genre_mgr, patch.object(Casting, "objects", new=MagicMock()) as casting_mgr:
+    ) as genre_mgr, patch.object(Casting, "objects", new=MagicMock()) as casting_mgr, patch.object(
+        Director, "objects", new=MagicMock()
+    ) as director_mgr:
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = [genre]
         casting_mgr.using.return_value.filter.return_value.select_related.return_value = [
             casting
+        ]
+        director_mgr.using.return_value.filter.return_value.distinct.return_value = [
+            director
         ]
 
         response = client.get(f"/movies/{movie.movie_id}/")
@@ -106,6 +230,7 @@ def test_movie_detail_returns_200_with_expected_context():
     assert response.context["movie"] == movie
     assert list(response.context["genres"]) == [genre]
     assert list(response.context["cast"]) == [casting]
+    assert list(response.context["directors"]) == [director]
 
 
 def test_movie_detail_404_when_missing():
@@ -124,10 +249,10 @@ def test_movie_detail_404_when_missing():
 
 def test_actor_detail_returns_200_with_expected_context():
     actor = Actor(actor_id=1, name="Test Actor")
-    movie = Movie(movie_id=1, title="Test Movie", release_date=date(2020, 1, 1))
+    movie = _movie()
 
     filmography = MagicMock()
-    filmography.__iter__.return_value = iter([movie])
+    filmography.__iter__.side_effect = lambda: iter([movie])
     filmography.count.return_value = 1
     filmography.aggregate.return_value = {
         "earliest": date(2020, 1, 1),
@@ -174,10 +299,10 @@ def test_actor_detail_404_when_missing():
 
 def test_director_detail_returns_200_with_expected_context():
     director = Director(director_id=1, name="Test Director")
-    movie = Movie(movie_id=1, title="Test Movie", release_date=date(2020, 1, 1))
+    movie = _movie()
 
     filmography = MagicMock()
-    filmography.__iter__.return_value = iter([movie])
+    filmography.__iter__.side_effect = lambda: iter([movie])
     filmography.count.return_value = 1
     filmography.aggregate.return_value = {
         "earliest": date(2020, 1, 1),
@@ -224,10 +349,12 @@ def test_director_detail_404_when_missing():
 
 def test_genre_detail_returns_200_with_expected_context():
     genre = Genre(genre_id=1, genre_name="Action")
-    movie = Movie(movie_id=1, title="Test Movie", release_date=date(2020, 1, 1))
-    top_row = MagicMock()
-    top_row.movie = movie
-    top_row.rating = Decimal("9.00")
+    movie = _movie()
+    # A real (unsaved) fact row rather than a MagicMock: the poster-card
+    # include reverses a URL from m.movie.movie_id, and Django's template
+    # variable resolution tries dict-style lookup first, which a MagicMock
+    # happily (and wrongly) answers via __getitem__.
+    top_row = MovieMetrics(movie=movie, rating=Decimal("9.00"))
     revenue_row = {"year": 2020, "total_revenue": Decimal("5000")}
 
     metrics = MagicMock()
@@ -305,3 +432,16 @@ def test_analytics_dashboard_returns_200_with_expected_context():
     assert response.context["decade_avg_ratings"] == [7.5]
     assert response.context["genre_labels"] == ["Action"]
     assert response.context["genre_revenue"] == [1000.0]
+
+
+# ---------------------------------------------------------------------------
+# tmdb_images template filter
+# ---------------------------------------------------------------------------
+
+
+def test_tmdb_image_filter_builds_url_and_handles_empty():
+    from movies.templatetags.tmdb_images import tmdb_image
+
+    assert tmdb_image("/abc.jpg", "w342").endswith("/w342/abc.jpg")
+    assert tmdb_image("", "w342") == ""
+    assert tmdb_image(None) == ""

@@ -1,53 +1,82 @@
 {% extends "base.html" %}
+{% load tmdb_images %}
 
 {% block title %}Theoria — {{ movie.title }}{% endblock %}
 
 {% block content %}
-<h1>{{ movie.title }}</h1>
+<div class="hero"{% if movie.backdrop_path %} style="background-image: url('{{ movie.backdrop_path|tmdb_image:'w1280' }}')"{% endif %}>
+    <div class="hero-overlay">
+        {% if movie.poster_path %}
+        <div class="hero-poster">
+            <img src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster">
+        </div>
+        {% endif %}
+        <div>
+            <h1>{{ movie.title }}</h1>
+            {% if movie.tagline %}<p class="tagline">{{ movie.tagline }}</p>{% endif %}
+            <p class="muted">
+                {% if movie.release_date %}{{ movie.release_date|date:"Y" }}{% else %}—{% endif %}
+                {% if movie.runtime %} · {{ movie.runtime }} min{% endif %}
+                {% if movie.status %} · {{ movie.status }}{% endif %}
+                {% if movie.original_language %} · {{ movie.original_language|upper }}{% endif %}
+            </p>
+            {% if genres %}
+            <div class="chips">
+                {% for genre in genres %}
+                <a class="chip" href="{% url 'movies:genre_detail' genre.genre_id %}">{{ genre.genre_name }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if directors %}
+            <p>
+                Directed by
+                {% for director in directors %}<a href="{% url 'movies:director_detail' director.director_id %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+            </p>
+            {% endif %}
+            {% if movie.overview %}<p>{{ movie.overview }}</p>{% endif %}
+        </div>
+    </div>
+</div>
 
-<dl>
-    <dt>Release date</dt>
-    <dd>{{ movie.release_date|default:"—" }}</dd>
+<div class="stats">
+    <div class="stat">
+        <span class="stat-value">{% if movie.runtime %}{{ movie.runtime }} min{% else %}—{% endif %}</span>
+        <span class="stat-label">Runtime</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{% if movie.budget %}${{ movie.budget|floatformat:"0g" }}{% else %}—{% endif %}</span>
+        <span class="stat-label">Budget</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{% if movie.revenue %}${{ movie.revenue|floatformat:"0g" }}{% else %}—{% endif %}</span>
+        <span class="stat-label">Revenue</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{{ movie.release_date|default:"—" }}</span>
+        <span class="stat-label">Release date</span>
+    </div>
+</div>
 
-    <dt>Runtime</dt>
-    <dd>{% if movie.runtime %}{{ movie.runtime }} min{% else %}—{% endif %}</dd>
-
-    <dt>Budget</dt>
-    <dd>{{ movie.budget|default:"—" }}</dd>
-
-    <dt>Revenue</dt>
-    <dd>{{ movie.revenue|default:"—" }}</dd>
-
-    <dt>Status</dt>
-    <dd>{{ movie.status|default:"—" }}</dd>
-
-    <dt>Genres</dt>
-    <dd>
-        {% for genre in genres %}{{ genre.genre_name }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}
-    </dd>
-</dl>
-
-<h2>Cast &amp; Crew</h2>
+<h2>Cast</h2>
 {% if cast %}
-<table>
-    <thead>
-        <tr>
-            <th>Actor</th>
-            <th>Director</th>
-            <th>Role</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for credit in cast %}
-        <tr>
-            <td>{{ credit.actor.name }}</td>
-            <td>{{ credit.director.name }}</td>
-            <td>{{ credit.role|default:"—" }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="poster-grid">
+    {% for credit in cast %}
+    <div class="poster-card">
+        <a href="{% url 'movies:actor_detail' credit.actor.actor_id %}">
+            {% if credit.actor.profile_path %}
+            <img class="headshot" src="{{ credit.actor.profile_path|tmdb_image:'w185' }}" alt="{{ credit.actor.name }}" loading="lazy">
+            {% else %}
+            <div class="placeholder">👤</div>
+            {% endif %}
+            <div class="card-body">
+                <span class="card-title">{{ credit.actor.name }}</span>
+                {% if credit.role %}<span class="card-sub">{{ credit.role }}</span>{% endif %}
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
 {% else %}
-<p>No cast data available.</p>
+<p class="muted">No cast data available.</p>
 {% endif %}
 {% endblock %}

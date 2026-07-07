@@ -30,11 +30,11 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 33 — Logging, config, and dependency cleanup
-Currently on          : None — all tasks complete (Phases 1–6 done)
-Current phase         : Phase 6 — Polish (complete)
-Blockers / open issues: None. Full test suite is 159/159 passing (`tests/test_etl.py`, `tests/test_data_quality.py`, `tests/test_warehouse_checks.py`, `tests/test_django_views.py`). `fact_casting` still has a known ~46% reject rate for this sample (movies with credited actors but no credited director), per Task 19's documented cross-join limitation — documented in `docs/architecture.md` §3.
-Last updated          : 2026-07-06
+Last completed task   : Task 34 — Frontend rebuild (Workstream C: browsable + styled + visual)
+Currently on          : Task 35 — Workstream A (split fact_casting into fact_cast/fact_crew)
+Current phase         : Phase 7 — Product Upgrade (plan: ~/.claude/plans/that-s-it-the-project-recursive-ocean.md)
+Blockers / open issues: Full test suite is 166/166 passing. `fact_casting` still has the known ~46% reject rate (fixed by Workstream A, not yet started). Image fields (poster/backdrop/headshot) referenced by the new templates degrade gracefully until Workstream B adds the columns. Workstream D (live pipeline re-run) is blocked on user confirming MAX_PAGES.
+Last updated          : 2026-07-07
 ```
 
 **After finishing any task, in this order:**
@@ -196,6 +196,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 4     | SQL Analytics           | 22    | Complete |
 | 5     | Django UI               | 23–30 | Complete |
 | 6     | Polish                  | 31–33 | Complete |
+| 7     | Product Upgrade         | 34–37 | In progress |
 
 ---
 
@@ -404,6 +405,30 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 #### [x] Task 33 — Logging, config, and dependency cleanup
 - **Steps:** Grep for hardcoded paths/keys; confirm all scripts use `config.py` and `logging_config.py`; regenerate `requirements.txt` with `pip freeze`; trim unused packages.
 - **Outcome:** Audit, no code changes needed. Grepped for AWS key patterns, hardcoded TMDB/S3/Postgres URLs, and bare `os.environ`/`getenv` usage outside `config.py` — found none; the only `os.environ.setdefault("DJANGO_SETTINGS_MODULE", ...)` calls are standard Django boilerplate in `manage.py`/`asgi.py`/`wsgi.py`, not secrets. Every ETL/DQ/loader script with an `if __name__ == "__main__":` block (15 total) calls `logging_config.setup_logging()`; the four `print()` calls that exist (`silver_checks.py`, `warehouse_checks.py`, `build_gold_datasets.py`) are intentional human-readable CLI summaries, not logging substitutes, consistent with those modules' existing pass/fail report pattern. `etl/incremental.py` takes `bucket` as a parameter rather than importing `config` directly — verified both callers (`load_dimensions.py`, `load_facts.py`) pass `config.S3_BUCKET`, so there's no hidden hardcoding. Compared `requirements.txt` against `import`/`from` statements across the whole codebase (`grep -rhoE` for top-level imports): every pinned package (`requests`, `pandas`, `pyarrow`, `boto3`, `SQLAlchemy`, `psycopg2-binary`, `python-dotenv`, `Django`, `pytest`) is actually used, and no imported package is missing from the file — `pyarrow` isn't imported directly but is required as pandas's Parquet engine (`engine="pyarrow"` in `s3_utils.py`, `load_facts.py`, `build_gold_datasets.py`). Did **not** blindly run `pip freeze > requirements.txt`: this venv also has `graphify` (the knowledge-graph CLI tool) and its tree-sitter/networkx/RapidFuzz dependencies installed for this session's own use, which are unrelated to the project and would have polluted the file. Instead, checked each of the 9 pinned versions against `pip show` in the venv — all match exactly, so no version bumps were needed. Verified `pytest` still passes 159/159 (no code touched).
+
+---
+
+### Phase 7 — Product Upgrade
+
+> Full plan: `~/.claude/plans/that-s-it-the-project-recursive-ocean.md`. Workstreams were
+> deliberately started with C (frontend) per user instruction; A/B/D follow.
+
+#### [x] Task 34 — Frontend rebuild (Workstream C: browsable + styled + visual)
+- **Goal:** Turn the ID-only, unstyled Django app into a browsable, styled, cross-linked movie site.
+- **Files:** `django_app/static/css/theoria.css` (new), `templates/base.html`, `movies/{views,urls}.py`, all `movies/templates/movies/*.html` (incl. new `movie_list`, `person_list`, `genre_list`, `_movie_card`, `_person_card`), new `movies/templatetags/tmdb_images.py`, `analytics/templates/analytics/dashboard.html`, `settings.py` (`STATICFILES_DIRS`), `config.py`/`.env.example` (`TMDB_IMAGE_BASE_URL`), `tests/test_django_views.py`
+- **Outcome:** Four new list routes (`/movies/` with `?q=` title search + `?sort=` rating/revenue/release/title + pagination; `/actors/` and `/directors/` with name search + pagination via a shared `_person_list()` helper; `/genres/` chips) fix the broken nav link and make every entity reachable by browsing. All detail pages rebuilt as styled, cross-linked templates (hero backdrop + poster + cast grid on movie pages, stat tiles + poster-grid filmography on people pages) with one hand-written stylesheet (light/dark via `prefers-color-scheme`). Image markup is guarded with `{% if %}` + the new `tmdb_image` filter (base URL from `config.TMDB_IMAGE_BASE_URL`), so pages degrade gracefully until Workstream B adds poster/backdrop/profile columns. Analytics dashboard restyled as cards; Chart.js pinned to 4.4.1. Home gained top-rated/newest poster strips. Verified live: all 11 routes + static CSS return 200 against the real warehouse; search/sort/pagination work. Tests: 7 new/updated view tests + a filter test; full suite 166/166.
+
+#### [ ] Task 35 — Workstream A: split `fact_casting` into `fact_cast` + `fact_crew`
+- **Goal:** Eliminate the ~46% reject rate caused by the actor×director cross-join.
+- **Outcome:** _pending_
+
+#### [ ] Task 36 — Workstream B: carry poster/backdrop/tagline/headshot fields Silver → warehouse
+- **Goal:** Surface image/rich fields already present in Bronze JSON; zero new API calls.
+- **Outcome:** _pending_
+
+#### [ ] Task 37 — Workstream D: re-apply DDL, re-run pipeline live, verify end-to-end
+- **Goal:** Fresh live run at a bigger sample size (MAX_PAGES to be confirmed by user) + full verification.
+- **Outcome:** _pending_
 
 ---
 

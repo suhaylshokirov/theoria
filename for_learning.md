@@ -1125,3 +1125,58 @@ cat requirements.txt
 
 ### What to Study Next
 Look into `pip-tools` (`pip-compile`) or `pipdeptree` as tools that automate exactly this kind of drift-check — `pipdeptree` in particular can show which installed packages are *not* depended on by anything else in the environment, which would have flagged the graphify-related packages automatically instead of requiring a manual import-list diff. Also worth studying: what a `requirements.txt` for this project would look like if it pinned transitive dependencies too (a full `pip freeze` scoped to a *clean* venv built only from `requirements.txt`, rather than this session's shared venv) — the trade-off between full reproducibility (pin everything) and readability (pin only direct dependencies, as this file currently does).
+
+## Task 34 — Frontend rebuild (Workstream C: browsable + styled + visual)
+
+### What Was Built
+The Django site went from "type an integer ID into the URL bar" to an actual browsable
+product. Four new list pages (`/movies/`, `/actors/`, `/directors/`, `/genres/`) with
+search, sorting, and pagination; every detail page restyled and cross-linked (movie →
+genres → actors → directors and back); a single hand-written CSS file with automatic
+dark mode; and the analytics dashboard reorganized into cards. Templates already render
+poster/backdrop/headshot images via a new `tmdb_image` filter — those columns don't exist
+in the warehouse yet (that's Workstream B), and Django templates resolve missing
+attributes to empty strings, so the image blocks simply don't render until the data
+arrives. No pipeline code changed at all.
+
+### Concepts Used
+- **Pagination (`django.core.paginator.Paginator`)**: never send the whole table to the
+  browser; `get_page()` clamps bad page numbers instead of crashing.
+- **Query-string state**: search (`?q=`) and sort (`?sort=`) live in the URL, so results
+  are shareable/bookmarkable; pagination links must re-carry `q` and `sort` or the
+  filter resets on page 2.
+- **NULLS LAST ordering (`F(...).desc(nulls_last=True)`)**: in Postgres, `DESC` puts
+  NULLs *first* by default — without this, movies missing a release date would lead
+  the "newest" list.
+- **Annotation across a fact table (`Max("moviemetrics__rating")`)**: `dim_movie` has no
+  rating column; rating lives in `fact_movie_metrics` (one row per genre), so sorting
+  movies by rating requires a join + aggregate, done in SQL via `annotate`, not in Python.
+- **Separation of data and presentation**: the warehouse stores only TMDB's *relative*
+  image path; the CDN base URL and size are presentation concerns applied at render time
+  by a template filter (base URL still from `config.py` — no hardcoded URLs rule).
+- **Graceful degradation**: templates guard every image with `{% if %}`, so the same
+  templates work before and after Workstream B lands.
+
+### Key Code
+`django_app/movies/views.py` — `movie_list()`:
+> Builds the queryset in stages — filter by `?q`, annotate only when the sort actually
+> needs the join (`sort == "rating"`), then order and paginate. The `MOVIE_SORTS` dict
+> whitelists sort values, so a hand-crafted `?sort=` can never inject an arbitrary
+> `ORDER BY` expression.
+
+`django_app/movies/views.py` — `_person_list()`:
+> Actors and directors need the identical list behavior against different tables, so one
+> private helper takes the model class + title + URL name as parameters. Two views become
+> two one-liners instead of copy-pasted twins.
+
+`django_app/movies/templatetags/tmdb_images.py` — `tmdb_image`:
+> A 4-line filter that turns `/abc.jpg` into `https://image.tmdb.org/t/p/w342/abc.jpg`
+> and returns `""` for empty input. Putting this in one place means templates never
+> concatenate URLs by hand, and swapping CDN or size later is a one-file change.
+
+### What to Study Next
+Django's template variable resolution order (dict lookup → attribute → method → index):
+a test broke because a `MagicMock` "answered" the dict lookup that a real model object
+would have failed, returning garbage before attribute lookup was ever tried. Read the
+"Variables" section of the Django template language docs and re-explain why
+`{{ m.movie }}` on a mock behaves differently than on a model instance.

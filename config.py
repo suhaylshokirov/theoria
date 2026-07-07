@@ -55,6 +55,7 @@ def _optional(name: str, default: str) -> str:
 # --- TMDB ------------------------------------------------------------------
 TMDB_API_KEY = _require("TMDB_API_KEY")
 TMDB_BASE_URL = _optional("TMDB_BASE_URL", "https://api.themoviedb.org/3")
+TMDB_IMAGE_BASE_URL = _optional("TMDB_IMAGE_BASE_URL", "https://image.tmdb.org/t/p")
 
 # --- AWS / S3 --------------------------------------------------------------
 AWS_ACCESS_KEY_ID = _require("AWS_ACCESS_KEY_ID")

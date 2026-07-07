@@ -5,57 +5,49 @@
 {% block content %}
 <h1>{{ genre.genre_name }}</h1>
 
-<dl>
-    <dt>Movies</dt>
-    <dd>{{ movie_count }}</dd>
-
-    <dt>Average rating</dt>
-    <dd>{% if avg_rating %}{{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</dd>
-</dl>
+<div class="stats">
+    <div class="stat">
+        <span class="stat-value">{{ movie_count }}</span>
+        <span class="stat-label">Movies</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{% if avg_rating %}{{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
+        <span class="stat-label">Avg rating</span>
+    </div>
+</div>
 
 <h2>Top-rated movies</h2>
 {% if top_movies %}
-<table>
-    <thead>
-        <tr>
-            <th>Title</th>
-            <th>Rating</th>
-            <th>Release date</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for m in top_movies %}
-        <tr>
-            <td>{{ m.movie.title }}</td>
-            <td>{{ m.rating|default:"—" }}</td>
-            <td>{{ m.movie.release_date|default:"—" }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="poster-grid">
+    {% for m in top_movies %}
+    {% include "movies/_movie_card.html" with movie=m.movie %}
+    {% endfor %}
+</div>
 {% else %}
-<p>No movies found for this genre.</p>
+<p class="muted">No movies found for this genre.</p>
 {% endif %}
 
 <h2>Revenue by year</h2>
 {% if revenue_by_year %}
-<table>
-    <thead>
-        <tr>
-            <th>Year</th>
-            <th>Total revenue</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for row in revenue_by_year %}
-        <tr>
-            <td>{{ row.year }}</td>
-            <td>{{ row.total_revenue|default:"—" }}</td>
-        </tr>
-        {% endfor %}
-    </tbody>
-</table>
+<div class="card table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Year</th>
+                <th>Total revenue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in revenue_by_year %}
+            <tr>
+                <td>{{ row.year }}</td>
+                <td>{% if row.total_revenue %}${{ row.total_revenue|floatformat:"0g" }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
 {% else %}
-<p>No revenue data available.</p>
+<p class="muted">No revenue data available.</p>
 {% endif %}
 {% endblock %}

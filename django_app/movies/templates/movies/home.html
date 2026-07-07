@@ -4,19 +4,48 @@
 
 {% block content %}
 <h1>Theoria</h1>
-<p>A movie analytics warehouse, at a glance.</p>
+<p class="muted">A movie analytics warehouse, at a glance.</p>
 
-<dl>
-    <dt>Movies</dt>
-    <dd>{{ movie_count }}</dd>
+<div class="stats">
+    <div class="stat">
+        <span class="stat-value">{{ movie_count }}</span>
+        <span class="stat-label">Movies</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{{ actor_count }}</span>
+        <span class="stat-label">Actors</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{{ director_count }}</span>
+        <span class="stat-label">Directors</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{% if avg_rating %}{{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
+        <span class="stat-label">Avg rating</span>
+    </div>
+</div>
 
-    <dt>Actors</dt>
-    <dd>{{ actor_count }}</dd>
+<div class="toolbar">
+    <a class="btn" href="{% url 'movies:movie_list' %}">Browse movies</a>
+    <a class="btn" href="{% url 'movies:actor_list' %}">Browse actors</a>
+    <a class="btn" href="{% url 'movies:genre_list' %}">Browse genres</a>
+</div>
 
-    <dt>Directors</dt>
-    <dd>{{ director_count }}</dd>
+<h2>Top rated</h2>
+{% if top_rated %}
+<div class="poster-grid">
+    {% for movie in top_rated %}{% include "movies/_movie_card.html" %}{% endfor %}
+</div>
+{% else %}
+<p class="muted">No movies loaded yet.</p>
+{% endif %}
 
-    <dt>Average rating</dt>
-    <dd>{% if avg_rating %}{{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</dd>
-</dl>
+<h2>Newest releases</h2>
+{% if newest %}
+<div class="poster-grid">
+    {% for movie in newest %}{% include "movies/_movie_card.html" %}{% endfor %}
+</div>
+{% else %}
+<p class="muted">No movies loaded yet.</p>
+{% endif %}
 {% endblock %}

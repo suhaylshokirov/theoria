@@ -1,12 +1,35 @@
-from django.db.models import Avg, Max, Min, Sum
+from django.core.paginator import Paginator
+from django.db.models import Avg, F, Max, Min, Sum
 from django.db.models.functions import ExtractYear
 from django.shortcuts import get_object_or_404, render
 
 from movies.models import Actor, Casting, Director, Genre, Movie, MovieMetrics
 
+MOVIES_PER_PAGE = 24
+PEOPLE_PER_PAGE = 30
+
+# ?sort= values accepted by movie_list, mapped to an order_by expression.
+# Nulls always sort last so movies missing a field don't lead the list.
+MOVIE_SORTS = {
+    "release": F("release_date").desc(nulls_last=True),
+    "rating": F("top_rating").desc(nulls_last=True),
+    "revenue": F("revenue").desc(nulls_last=True),
+    "title": F("title").asc(),
+}
+
 
 def home(request):
-    """Landing page: high-level counts + average rating across the warehouse."""
+    """Landing page: warehouse-wide stats plus browse strips into the lists."""
+    top_rated = (
+        Movie.objects.using("warehouse")
+        .annotate(top_rating=Max("moviemetrics__rating"))
+        .order_by(F("top_rating").desc(nulls_last=True))[:12]
+    )
+    newest = (
+        Movie.objects.using("warehouse")
+        .order_by(F("release_date").desc(nulls_last=True))[:12]
+    )
+
     context = {
         "movie_count": Movie.objects.using("warehouse").count(),
         "actor_count": Actor.objects.using("warehouse").count(),
@@ -14,12 +37,68 @@ def home(request):
         "avg_rating": MovieMetrics.objects.using("warehouse").aggregate(
             avg_rating=Avg("rating")
         )["avg_rating"],
+        "top_rated": top_rated,
+        "newest": newest,
     }
     return render(request, "movies/home.html", context)
 
 
+def movie_list(request):
+    """Browsable movie catalog: poster grid + title search + sort + pagination."""
+    q = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "release")
+    if sort not in MOVIE_SORTS:
+        sort = "release"
+
+    movies = Movie.objects.using("warehouse").all()
+    if q:
+        movies = movies.filter(title__icontains=q)
+    if sort == "rating":
+        movies = movies.annotate(top_rating=Max("moviemetrics__rating"))
+    movies = movies.order_by(MOVIE_SORTS[sort])
+
+    page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
+
+    context = {"page_obj": page_obj, "q": q, "sort": sort}
+    return render(request, "movies/movie_list.html", context)
+
+
+def _person_list(request, model, list_title, detail_url_name):
+    """Shared list view for actors and directors: name search + pagination."""
+    q = request.GET.get("q", "").strip()
+
+    people = model.objects.using("warehouse").all()
+    if q:
+        people = people.filter(name__icontains=q)
+    people = people.order_by(F("popularity").desc(nulls_last=True))
+
+    page_obj = Paginator(people, PEOPLE_PER_PAGE).get_page(request.GET.get("page"))
+
+    context = {
+        "page_obj": page_obj,
+        "q": q,
+        "list_title": list_title,
+        "detail_url_name": detail_url_name,
+    }
+    return render(request, "movies/person_list.html", context)
+
+
+def actor_list(request):
+    return _person_list(request, Actor, "Actors", "movies:actor_detail")
+
+
+def director_list(request):
+    return _person_list(request, Director, "Directors", "movies:director_detail")
+
+
+def genre_list(request):
+    """All genres, linking to each genre's detail page."""
+    genres = Genre.objects.using("warehouse").order_by("genre_name")
+    return render(request, "movies/genre_list.html", {"genres": genres})
+
+
 def movie_detail(request, movie_id):
-    """Single movie: core facts, genres, and cast/director — three queries total."""
+    """Single movie: core facts, genres, directors, and cast."""
     movie = get_object_or_404(Movie.objects.using("warehouse"), pk=movie_id)
 
     genres = (
@@ -34,10 +113,19 @@ def movie_detail(request, movie_id):
         .select_related("actor", "director")
     )
 
+    # fact_casting has one row per (actor, director) pair, so the same
+    # director repeats across every actor row — collect them separately.
+    directors = (
+        Director.objects.using("warehouse")
+        .filter(casting__movie_id=movie_id)
+        .distinct()
+    )
+
     context = {
         "movie": movie,
         "genres": genres,
         "cast": cast,
+        "directors": directors,
     }
     return render(request, "movies/movie_detail.html", context)
 
