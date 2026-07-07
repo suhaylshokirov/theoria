@@ -1,0 +1,14 @@
+{% load tmdb_images %}
+<div class="poster-card">
+    <a href="{% url detail_url_name person.pk %}">
+        {% if person.profile_path %}
+        <img class="headshot" src="{{ person.profile_path|tmdb_image:'w185' }}" alt="{{ person.name }}" loading="lazy">
+        {% else %}
+        <div class="placeholder">👤</div>
+        {% endif %}
+        <div class="card-body">
+            <span class="card-title">{{ person.name }}</span>
+            {% if person.popularity %}<span class="card-sub">Popularity {{ person.popularity|floatformat:1 }}</span>{% endif %}
+        </div>
+    </a>
+</div>

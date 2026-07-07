@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — Genres{% endblock %}
+
+{% block content %}
+<h1>Genres</h1>
+
+{% if genres %}
+<div class="chips">
+    {% for genre in genres %}
+    <a class="chip" href="{% url 'movies:genre_detail' genre.genre_id %}">{{ genre.genre_name }}</a>
+    {% endfor %}
+</div>
+{% else %}
+<p class="muted">No genres loaded yet.</p>
+{% endif %}
+{% endblock %}

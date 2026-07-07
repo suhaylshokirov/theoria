@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — {{ list_title }}{% endblock %}
+
+{% block content %}
+<h1>{{ list_title }}</h1>
+
+<div class="toolbar">
+    <form method="get" action="">
+        <input type="text" name="q" value="{{ q }}" placeholder="Search by name…" aria-label="Search {{ list_title|lower }}">
+        <button type="submit">Search</button>
+    </form>
+    <span class="muted">{{ page_obj.paginator.count }} result{{ page_obj.paginator.count|pluralize }}</span>
+</div>
+
+{% if page_obj.object_list %}
+<div class="poster-grid">
+    {% for person in page_obj %}{% include "movies/_person_card.html" %}{% endfor %}
+</div>
+{% else %}
+<p class="muted">No results found{% if q %} for “{{ q }}”{% endif %}.</p>
+{% endif %}
+
+{% if page_obj.has_other_pages %}
+<div class="pagination">
+    {% if page_obj.has_previous %}
+    <a href="?q={{ q|urlencode }}&amp;page={{ page_obj.previous_page_number }}">← Previous</a>
+    {% endif %}
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?q={{ q|urlencode }}&amp;page={{ page_obj.next_page_number }}">Next →</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
