@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS dim_movie (
     revenue          BIGINT,
     original_language VARCHAR(10),
     status           VARCHAR(50),
+    tagline          TEXT,
+    poster_path      TEXT,
+    backdrop_path    TEXT,
     CONSTRAINT pk_dim_movie PRIMARY KEY (movie_id)
 );
 
@@ -18,6 +21,7 @@ CREATE TABLE IF NOT EXISTS dim_actor (
     name        TEXT         NOT NULL,
     gender      SMALLINT,
     popularity  NUMERIC(10, 4),
+    profile_path TEXT,
     CONSTRAINT pk_dim_actor PRIMARY KEY (actor_id)
 );
 
@@ -26,6 +30,7 @@ CREATE TABLE IF NOT EXISTS dim_director (
     name        TEXT         NOT NULL,
     gender      SMALLINT,
     popularity  NUMERIC(10, 4),
+    profile_path TEXT,
     CONSTRAINT pk_dim_director PRIMARY KEY (director_id)
 );
 

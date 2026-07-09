@@ -68,6 +68,11 @@ def _flatten_movie(raw: dict[str, Any]) -> dict[str, Any]:
         "vote_count": raw.get("vote_count"),
         "popularity": raw.get("popularity"),
         "overview": raw.get("overview"),
+        # Rich/image fields carried straight through from Bronze (no new API calls).
+        # TMDB returns "" for missing image paths and taglines; normalise to None.
+        "tagline": raw.get("tagline") or None,
+        "poster_path": raw.get("poster_path") or None,
+        "backdrop_path": raw.get("backdrop_path") or None,
         # Flatten nested genres list to a list of IDs for the bridge table.
         "genre_ids": [g["id"] for g in raw.get("genres", [])],
     }

@@ -66,6 +66,7 @@ def _extract_actors(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "name": member.get("name"),
             "gender": member.get("gender"),
             "popularity": member.get("popularity"),
+            "profile_path": member.get("profile_path") or None,
         })
     return rows
 
@@ -80,6 +81,7 @@ def _extract_directors(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "name": member.get("name"),
                 "gender": member.get("gender"),
                 "popularity": member.get("popularity"),
+                "profile_path": member.get("profile_path") or None,
             })
     return rows
 
@@ -164,7 +166,7 @@ def transform_people(
 
     # --- Directors ---
     df_directors = pd.DataFrame(director_rows) if director_rows else pd.DataFrame(
-        columns=["person_id", "name", "gender", "popularity"]
+        columns=["person_id", "name", "gender", "popularity", "profile_path"]
     )
     df_directors = _cast_people_types(df_directors)
 

@@ -30,11 +30,11 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 34 — Frontend rebuild (Workstream C: browsable + styled + visual)
+Last completed task   : Task 36 + 37 — Workstream B (image fields Silver→warehouse) + live re-run
 Currently on          : Task 35 — Workstream A (split fact_casting into fact_cast/fact_crew)
 Current phase         : Phase 7 — Product Upgrade (plan: ~/.claude/plans/that-s-it-the-project-recursive-ocean.md)
-Blockers / open issues: Full test suite is 166/166 passing. `fact_casting` still has the known ~46% reject rate (fixed by Workstream A, not yet started). Image fields (poster/backdrop/headshot) referenced by the new templates degrade gracefully until Workstream B adds the columns. Workstream D (live pipeline re-run) is blocked on user confirming MAX_PAGES.
-Last updated          : 2026-07-07
+Blockers / open issues: Full test suite is 168/168 passing. `fact_casting` still has the known ~46% reject rate (1714/3530 rejected in the 2026-07-09 run) — fixed by Workstream A (Task 35), not yet started. Images now live: posters/backdrops/taglines/headshots populated in the warehouse and rendering on the site.
+Last updated          : 2026-07-09
 ```
 
 **After finishing any task, in this order:**
@@ -422,13 +422,13 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Goal:** Eliminate the ~46% reject rate caused by the actor×director cross-join.
 - **Outcome:** _pending_
 
-#### [ ] Task 36 — Workstream B: carry poster/backdrop/tagline/headshot fields Silver → warehouse
+#### [x] Task 36 — Workstream B: carry poster/backdrop/tagline/headshot fields Silver → warehouse
 - **Goal:** Surface image/rich fields already present in Bronze JSON; zero new API calls.
-- **Outcome:** _pending_
+- **Outcome:** The four image/rich fields were being dropped at the Silver step — now carried through end to end (no new TMDB calls; all present in Bronze detail/credits JSON). `transform_movies._flatten_movie()` keeps `tagline`/`poster_path`/`backdrop_path` (TMDB `""` normalised to `None`); `transform_people` keeps `profile_path` for both cast and crew. Added the columns to `dim_movie` (tagline/poster_path/backdrop_path) and `dim_actor`/`dim_director` (profile_path) in `01_dimensions.sql`, plus a new `warehouse/ddl/04_add_image_columns.sql` (idempotent `ADD COLUMN IF NOT EXISTS`) to ALTER the already-live tables. `load_dimensions.py` upsert column lists extended; `silver_checks.py` expected-schema lists extended; `movies/models.py` gained the matching `TextField(null=True)` fields (the templates already referenced them behind `{% if %}`). Tests: fixtures updated + 2 new assertions that the fields survive the transforms; full suite 168/168.
 
-#### [ ] Task 37 — Workstream D: re-apply DDL, re-run pipeline live, verify end-to-end
+#### [x] Task 37 — Workstream D: re-apply DDL, re-run pipeline live, verify end-to-end
 - **Goal:** Fresh live run at a bigger sample size (MAX_PAGES to be confirmed by user) + full verification.
-- **Outcome:** _pending_
+- **Outcome:** Applied `04_add_image_columns.sql` to the live warehouse, then ran `scripts.run_pipeline --date 2026-07-09 --max-pages 5` (user-chosen size; 100 movies). All stages green: Silver 99 movies / 3133 actors / 104 directors, Silver DQ 20/20, Gold 4 datasets, dims upserted, `fact_movie_metrics` 250 (0 rejected), `fact_casting` 1816 (1714 rejected — same expected cross-join limitation, Task 35 will fix), warehouse checks 20/20. Verified populated: dim_movie 99 posters / 95 backdrops / 80 taglines; dim_actor 2342 headshots; dim_director 84 headshots. A rendered `/movies/<id>/` page emits real `https://image.tmdb.org/t/p/w1280` backdrop + `w342` poster URLs (200). Note: user did **not** raise MAX_PAGES beyond 5 this run.
 
 ---
 

@@ -431,6 +431,9 @@ def _raw_movie(movie_id: int, **overrides) -> dict:
         "vote_count": 300,
         "popularity": 42.0,
         "overview": "A test movie.",
+        "tagline": "A test tagline.",
+        "poster_path": "/poster.jpg",
+        "backdrop_path": "/backdrop.jpg",
         "genres": [{"id": 28, "name": "Action"}, {"id": 12, "name": "Adventure"}],
     }
     base.update(overrides)
@@ -471,6 +474,23 @@ def test_flatten_movie_extracts_genre_ids():
     assert row["title"] == "Movie 550"
     assert row["genre_ids"] == [28, 12]
     assert row["release_date"] == "2020-01-15"
+
+
+def test_flatten_movie_carries_image_fields():
+    """Task 36: poster/backdrop/tagline flow through from Bronze, empty strings become None."""
+    row = _flatten_movie(_raw_movie(550))
+    assert row["poster_path"] == "/poster.jpg"
+    assert row["backdrop_path"] == "/backdrop.jpg"
+    assert row["tagline"] == "A test tagline."
+    empty = _flatten_movie(_raw_movie(1, poster_path="", tagline=""))
+    assert empty["poster_path"] is None
+    assert empty["tagline"] is None
+
+
+def test_extract_actors_carries_profile_path():
+    """Task 36: actor profile_path flows through from Bronze credits."""
+    rows = _extract_actors(_raw_credits(550))
+    assert rows[0]["profile_path"] == "/alice.jpg"
 
 
 def test_flatten_movie_handles_missing_release_date():
@@ -562,11 +582,11 @@ from etl.silver.transform_people import (
 def _raw_credits(movie_id: int, extra_cast: list | None = None, extra_crew: list | None = None) -> dict:
     """Minimal TMDB credits payload for testing."""
     cast = [
-        {"id": 10, "name": "Alice", "gender": 1, "popularity": 20.0},
-        {"id": 11, "name": "Bob", "gender": 2, "popularity": 15.0},
+        {"id": 10, "name": "Alice", "gender": 1, "popularity": 20.0, "profile_path": "/alice.jpg"},
+        {"id": 11, "name": "Bob", "gender": 2, "popularity": 15.0, "profile_path": "/bob.jpg"},
     ]
     crew = [
-        {"id": 20, "name": "Carol", "job": "Director", "gender": 1, "popularity": 30.0},
+        {"id": 20, "name": "Carol", "job": "Director", "gender": 1, "popularity": 30.0, "profile_path": "/carol.jpg"},
         {"id": 21, "name": "Dave", "job": "Producer", "gender": 2, "popularity": 5.0},
     ]
     if extra_cast:
@@ -1300,6 +1320,9 @@ def _dim_movies_df():
         "vote_count": pd.array([100, 50], dtype="Int64"),
         "popularity": [10.0, 5.0],
         "overview": ["a", "b"],
+        "tagline": ["Tag A", None],
+        "poster_path": ["/a.jpg", None],
+        "backdrop_path": ["/a_bd.jpg", None],
         "genre_ids": [[1], [2]],
     })
 
@@ -1310,6 +1333,7 @@ def _dim_people_df():
         "name": ["Person A", "Person B"],
         "gender": pd.array([1, 2], dtype="Int64"),
         "popularity": [3.5, 4.5],
+        "profile_path": ["/p.jpg", None],
     })
 
 
@@ -1362,7 +1386,7 @@ def test_load_dim_movie_upserts_expected_columns():
     assert "INSERT INTO dim_movie" in str(stmt)
     assert set(params[0].keys()) == {
         "movie_id", "title", "release_date", "runtime", "budget", "revenue",
-        "original_language", "status",
+        "original_language", "status", "tagline", "poster_path", "backdrop_path",
     }
 
 

@@ -1180,3 +1180,56 @@ a test broke because a `MagicMock` "answered" the dict lookup that a real model 
 would have failed, returning garbage before attribute lookup was ever tried. Read the
 "Variables" section of the Django template language docs and re-explain why
 `{{ m.movie }}` on a mock behaves differently than on a model instance.
+
+## Task 36 + 37 — Image fields Silver → warehouse, and the live re-run that lit them up
+
+### What Was Built
+The site's templates already asked for movie posters, backdrops, taglines, and actor/director
+headshots — but nothing showed, because those fields were being thrown away back at the Silver
+cleaning step. This task carried them all the way through: TMDB Bronze JSON → Silver Parquet →
+Postgres warehouse → Django ORM → template. No new API calls: every one of these fields was
+already sitting in the raw Bronze payloads we'd downloaded months ago. Then (Task 37) we altered
+the live database to add the new columns and re-ran the whole pipeline so the warehouse actually
+filled in.
+
+### Concepts Used
+- **Additive schema migration**: adding columns to a table that already has data and is in use.
+  You can't just re-run `CREATE TABLE` (it's `IF NOT EXISTS`, so it no-ops). You need an
+  `ALTER TABLE ... ADD COLUMN`. Making it `ADD COLUMN IF NOT EXISTS` keeps it idempotent — safe
+  to run twice — the same discipline every ETL script in this project follows.
+- **Backfill vs. schema change**: two separate steps that people conflate. Adding the *column*
+  (a schema change) leaves every existing row NULL. The values only appear after you re-run the
+  load that *writes* them (the backfill). Task 36 was the schema+code; Task 37 was the backfill.
+- **Graceful degradation**: the templates guard every image with `{% if movie.poster_path %}`, so
+  before the column existed the attribute resolved to empty and the page just skipped the image
+  instead of crashing. This is why Workstream C (frontend) could safely ship *before* the data
+  existed.
+- **Normalising sentinel values**: TMDB returns `""` (empty string), not `null`, for a missing
+  poster. `raw.get("poster_path") or None` collapses both the missing key and the empty string to
+  a real `None`, so the database stores NULL rather than a meaningless empty string.
+
+### Key Code
+`etl/silver/transform_movies.py` — `_flatten_movie()`:
+> Added three keys (`tagline`, `poster_path`, `backdrop_path`), each wrapped in `... or None`.
+> This is the single point where the raw API shape becomes our clean row shape — the fields were
+> present in `raw` all along, we just weren't copying them across.
+
+`warehouse/ddl/04_add_image_columns.sql`:
+> Five `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements. Kept in its own numbered file rather
+> than editing history: `01_dimensions.sql` was also updated so a *fresh* bootstrap gets the
+> columns from the start, but an already-deployed database needs the ALTER — both paths converge on
+> the same final schema. This mirrors how real migration tooling (Alembic, Django migrations) keeps
+> "create from scratch" and "evolve what's live" consistent.
+
+`etl/warehouse_loader/load_dimensions.py` — `load_dim_movie()` / `load_dim_actor()`:
+> Only change was appending the new column names to the `columns` list. The generic `_upsert()`
+> helper builds its INSERT and its `ON CONFLICT DO UPDATE` straight from that list, so widening the
+> list was all that was needed — a payoff of having written one reusable upsert instead of a
+> hand-typed SQL string per table.
+
+### What to Study Next
+Real migration tools track *which* migrations have already run (a `django_migrations` table, or
+Alembic's `alembic_version`) so they never apply the same ALTER twice or skip one. We fake that
+here with `IF NOT EXISTS`. Read the Django migrations docs (or Alembic's autogenerate) and ask:
+what does a version-tracking table buy you that `IF NOT EXISTS` doesn't — especially for a change
+that *isn't* naturally idempotent, like renaming a column or backfilling a value?

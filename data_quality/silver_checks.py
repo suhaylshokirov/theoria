@@ -55,7 +55,8 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         "expected_cols": [
             "movie_id", "title", "release_date", "runtime", "budget", "revenue",
             "original_language", "status", "vote_average", "vote_count",
-            "popularity", "overview", "genre_ids",
+            "popularity", "overview", "tagline", "poster_path", "backdrop_path",
+            "genre_ids",
         ],
         "ranges": {
             "vote_average": (0.0, 10.0),
@@ -67,7 +68,7 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         "parquet": "actors.parquet",
         "pk_cols": ["person_id"],
         "required_cols": ["person_id", "name"],
-        "expected_cols": ["person_id", "name", "gender", "popularity"],
+        "expected_cols": ["person_id", "name", "gender", "popularity", "profile_path"],
         "ranges": {
             "popularity": (0.0, None),
         },
@@ -76,7 +77,7 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         "parquet": "directors.parquet",
         "pk_cols": ["person_id"],
         "required_cols": ["person_id", "name"],
-        "expected_cols": ["person_id", "name", "gender", "popularity"],
+        "expected_cols": ["person_id", "name", "gender", "popularity", "profile_path"],
         "ranges": {
             "popularity": (0.0, None),
         },

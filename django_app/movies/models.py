@@ -40,6 +40,9 @@ class Movie(models.Model):
     revenue = models.BigIntegerField(null=True)
     original_language = models.CharField(max_length=10, null=True)
     status = models.CharField(max_length=50, null=True)
+    tagline = models.TextField(null=True)
+    poster_path = models.TextField(null=True)
+    backdrop_path = models.TextField(null=True)
 
     class Meta:
         managed = False
@@ -54,6 +57,7 @@ class Actor(models.Model):
     name = models.TextField()
     gender = models.SmallIntegerField(null=True)
     popularity = models.DecimalField(max_digits=10, decimal_places=4, null=True)
+    profile_path = models.TextField(null=True)
 
     class Meta:
         managed = False
@@ -68,6 +72,7 @@ class Director(models.Model):
     name = models.TextField()
     gender = models.SmallIntegerField(null=True)
     popularity = models.DecimalField(max_digits=10, decimal_places=4, null=True)
+    profile_path = models.TextField(null=True)
 
     class Meta:
         managed = False

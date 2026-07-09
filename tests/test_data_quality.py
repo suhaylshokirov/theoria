@@ -47,6 +47,9 @@ def _movies_df(**overrides) -> pd.DataFrame:
         "vote_count": 24000,
         "popularity": 55.0,
         "overview": "An insomniac office worker...",
+        "tagline": "Mischief. Mayhem. Soap.",
+        "poster_path": "/poster.jpg",
+        "backdrop_path": "/backdrop.jpg",
         "genre_ids": [18, 53],
     }
     row.update(overrides)
@@ -274,8 +277,8 @@ def _make_multi_entity_s3_mock(entity_dfs: dict[str, pd.DataFrame]) -> MagicMock
 
 def _all_entity_dfs() -> dict[str, pd.DataFrame]:
     """Minimal valid Silver DataFrames for all five entities."""
-    actors_df = pd.DataFrame([{"person_id": 10, "name": "Alice", "gender": 1, "popularity": 20.0}])
-    directors_df = pd.DataFrame([{"person_id": 20, "name": "Carol", "gender": 1, "popularity": 30.0}])
+    actors_df = pd.DataFrame([{"person_id": 10, "name": "Alice", "gender": 1, "popularity": 20.0, "profile_path": "/a.jpg"}])
+    directors_df = pd.DataFrame([{"person_id": 20, "name": "Carol", "gender": 1, "popularity": 30.0, "profile_path": "/c.jpg"}])
     genres_df = pd.DataFrame([{"genre_id": 28, "genre_name": "Action"}])
     return {
         "movies": _movies_df(),

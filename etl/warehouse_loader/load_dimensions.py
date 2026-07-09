@@ -54,7 +54,7 @@ def _records(df: pd.DataFrame, columns: list[str]) -> list[dict[str, Any]]:
 def load_dim_movie(session: Session, df: pd.DataFrame) -> int:
     """Upsert Silver movies into dim_movie."""
     columns = ["movie_id", "title", "release_date", "runtime", "budget", "revenue",
-               "original_language", "status"]
+               "original_language", "status", "tagline", "poster_path", "backdrop_path"]
     records = _records(df, columns)
     count = _upsert(session, "dim_movie", ["movie_id"], columns, records)
     logger.info("dim_movie: upserted %d row(s)", count)
@@ -64,7 +64,7 @@ def load_dim_movie(session: Session, df: pd.DataFrame) -> int:
 def load_dim_actor(session: Session, df: pd.DataFrame) -> int:
     """Upsert Silver actors into dim_actor (person_id -> actor_id)."""
     df = df.rename(columns={"person_id": "actor_id"})
-    columns = ["actor_id", "name", "gender", "popularity"]
+    columns = ["actor_id", "name", "gender", "popularity", "profile_path"]
     records = _records(df, columns)
     count = _upsert(session, "dim_actor", ["actor_id"], columns, records)
     logger.info("dim_actor: upserted %d row(s)", count)
@@ -74,7 +74,7 @@ def load_dim_actor(session: Session, df: pd.DataFrame) -> int:
 def load_dim_director(session: Session, df: pd.DataFrame) -> int:
     """Upsert Silver directors into dim_director (person_id -> director_id)."""
     df = df.rename(columns={"person_id": "director_id"})
-    columns = ["director_id", "name", "gender", "popularity"]
+    columns = ["director_id", "name", "gender", "popularity", "profile_path"]
     records = _records(df, columns)
     count = _upsert(session, "dim_director", ["director_id"], columns, records)
     logger.info("dim_director: upserted %d row(s)", count)
