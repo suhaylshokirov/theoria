@@ -1,0 +1,476 @@
+/* Theoria — Home only. The "projection console, powered on and running."
+   Everything is scoped under body.page-home so the rest of the site,
+   styled by theoria.css, is left completely untouched.
+
+   Motion is diegetic: the lamp strikes and finds focus, grain drifts over
+   the gate, the reel threads through continuously, the footage counter
+   ticks up. One orchestrated startup, then a calm ambient idle. */
+
+body.page-home {
+  /* darkened theater + projector light — local tokens, no global override */
+  --ink: #0d0f14;
+  --ink-raised: #161922;
+  --ink-gate: #08090c;
+  --ink-line: #262b38;
+  --lumen: #f5e9d0;
+  --lumen-dim: #948d7e;
+  --tungsten: #e8a33d;
+  --tungsten-soft: rgba(232, 163, 61, 0.5);
+
+  background: var(--ink);
+  color: var(--lumen);
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Drifting film grain over the whole page — the projector's light on emulsion. */
+body.page-home::after {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-drift 0.6s steps(3) infinite;
+}
+
+@keyframes grain-drift {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(-3%, 2%); }
+  66% { transform: translate(2%, -3%); }
+  100% { transform: translate(-2%, 1%); }
+}
+
+/* --- Header / footer go dark, on Home only ------------------------------- */
+
+body.page-home .site-header {
+  background: transparent;
+  border-bottom: none;
+  position: absolute;
+  width: 100%;
+}
+
+body.page-home .nav .brand,
+body.page-home .nav-links a {
+  color: var(--lumen);
+}
+
+body.page-home .nav .brand {
+  font-family: "Oswald", sans-serif;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+body.page-home .nav-links a:hover,
+body.page-home .nav .brand:hover {
+  color: var(--tungsten);
+}
+
+body.page-home .site-footer {
+  border-top: 1px solid var(--ink-line);
+  color: var(--lumen-dim);
+  background: transparent;
+}
+
+body.page-home .container {
+  max-width: 1240px;
+}
+
+/* --- Hero: the projection ------------------------------------------------- */
+
+.projection {
+  position: relative;
+  min-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6rem 0 2rem;
+  isolation: isolate;
+}
+
+/* The lamp: a soft volumetric glow thrown behind the title. */
+.projection::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  top: 42%;
+  width: min(120vw, 1400px);
+  height: 90vh;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(closest-side, var(--tungsten-soft), transparent 70%);
+  filter: blur(60px);
+  opacity: 0.55;
+  animation: lamp-flicker 5.5s ease-in-out infinite;
+}
+
+@keyframes lamp-flicker {
+  0%, 100% { opacity: 0.5; }
+  47% { opacity: 0.58; }
+  50% { opacity: 0.42; }
+  53% { opacity: 0.6; }
+  70% { opacity: 0.5; }
+}
+
+.eyebrow {
+  font-family: "Oswald", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.34em;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--lumen-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 1.4rem;
+}
+
+.eyebrow::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tungsten);
+  box-shadow: 0 0 10px var(--tungsten);
+  animation: reel-blink 2.4s steps(1) infinite;
+}
+
+@keyframes reel-blink {
+  0%, 70% { opacity: 1; }
+  71%, 100% { opacity: 0.25; }
+}
+
+.wordmark {
+  font-family: "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: clamp(4rem, 17vw, 13rem);
+  line-height: 0.86;
+  letter-spacing: 0.02em;
+  margin: 0;
+  color: var(--lumen);
+  text-shadow: 0 0 44px rgba(232, 163, 61, 0.28);
+  animation: lamp-strike 1.1s ease-out both;
+}
+
+/* The lamp strikes and the title finds focus. */
+@keyframes lamp-strike {
+  0% { opacity: 0; filter: blur(16px); }
+  18% { opacity: 0.45; }
+  24% { opacity: 0.08; }
+  42% { opacity: 0.85; filter: blur(5px); }
+  55% { opacity: 0.35; }
+  70% { opacity: 1; filter: blur(0); }
+  80% { opacity: 0.72; }
+  100% { opacity: 1; filter: blur(0); }
+}
+
+.subhead {
+  font-family: "Space Grotesk", sans-serif;
+  font-style: italic;
+  font-size: clamp(1rem, 2.4vw, 1.5rem);
+  color: var(--lumen);
+  letter-spacing: 0.02em;
+  margin: 1.1rem 0 0;
+  opacity: 0;
+  animation: rise 0.8s ease-out 0.9s forwards;
+}
+
+.hero-lead {
+  max-width: 46ch;
+  color: var(--lumen-dim);
+  margin: 0.9rem 0 0;
+  font-size: 1rem;
+  opacity: 0;
+  animation: rise 0.8s ease-out 1.05s forwards;
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- The footage counter (stats, as a running projector counter) --------- */
+
+.counter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-top: 2.6rem;
+  border-top: 1px solid var(--ink-line);
+  border-bottom: 1px solid var(--ink-line);
+  opacity: 0;
+  animation: rise 0.8s ease-out 1.2s forwards;
+}
+
+.counter-cell {
+  padding: 1rem 1.6rem 1rem 0;
+  margin-right: 1.6rem;
+  border-right: 1px solid var(--ink-line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.counter-cell:last-child {
+  border-right: none;
+}
+
+.counter-label {
+  font-family: "Oswald", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.66rem;
+  color: var(--lumen-dim);
+}
+
+.counter-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  color: var(--tungsten);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  font-feature-settings: "tnum";
+}
+
+/* --- Section labels ------------------------------------------------------- */
+
+.reel-heading,
+.strip-heading {
+  font-family: "Oswald", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: var(--lumen);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 3.4rem 0 1.2rem;
+}
+
+.reel-heading::before,
+.strip-heading::before {
+  content: "";
+  width: 12px;
+  height: 12px;
+  background: var(--tungsten);
+}
+
+.reel-heading .sub {
+  color: var(--lumen-dim);
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+}
+
+/* --- The reel: 35mm strip threading through the gate --------------------- */
+
+.reel-gate {
+  position: relative;
+  background: var(--ink-gate);
+  padding: 26px 0; /* room for the sprocket rows */
+  overflow: hidden;
+  border-radius: 3px;
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.7);
+}
+
+/* Perforations along the top and bottom edges. */
+.reel-gate::before,
+.reel-gate::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 26px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0 12px,
+    rgba(245, 233, 208, 0.16) 12px 24px,
+    transparent 24px 36px
+  );
+  background-size: 36px 12px;
+  background-repeat: repeat-x;
+  background-position: center;
+}
+
+.reel-gate::before { top: 0; }
+.reel-gate::after { bottom: 0; }
+
+.reel-track {
+  display: flex;
+  gap: 10px;
+  width: max-content;
+  animation: reel-run 48s linear infinite;
+}
+
+.reel-gate:hover .reel-track,
+.reel-gate:focus-within .reel-track {
+  animation-play-state: paused;
+}
+
+@keyframes reel-run {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); } /* track holds two copies; -50% loops seamlessly */
+}
+
+.reel-frame {
+  position: relative;
+  flex: 0 0 auto;
+  width: 168px;
+  aspect-ratio: 2 / 3;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--ink-raised);
+  outline: 1px solid rgba(245, 233, 208, 0.08);
+  transition: transform 0.25s ease, outline-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.reel-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.reel-frame .frame-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: var(--lumen-dim);
+}
+
+/* Hovering a frame blooms it and lights its rating in the gate. */
+.reel-frame:hover,
+.reel-frame:focus-visible {
+  transform: scale(1.06);
+  outline-color: var(--tungsten);
+  box-shadow: 0 0 0 2px var(--tungsten), 0 12px 30px rgba(0, 0, 0, 0.6);
+  z-index: 2;
+}
+
+.frame-meta {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 1.4rem 0.6rem 0.55rem;
+  background: linear-gradient(to top, rgba(8, 9, 12, 0.95), transparent);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.4rem;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.reel-frame:hover .frame-meta,
+.reel-frame:focus-visible .frame-meta {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.frame-title {
+  font-size: 0.72rem;
+  line-height: 1.2;
+  color: var(--lumen);
+  font-weight: 500;
+}
+
+.frame-rating {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--tungsten);
+  white-space: nowrap;
+}
+
+/* --- Newest acquisitions: a quiet grid (restraint — don't repeat the reel) */
+
+.strip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+/* Recolor the shared poster card for the dark stage. */
+body.page-home .poster-card {
+  background: var(--ink-raised);
+  border-color: var(--ink-line);
+  box-shadow: none;
+}
+
+body.page-home .poster-card a { color: var(--lumen); }
+
+body.page-home .poster-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+  outline: 1px solid var(--tungsten);
+}
+
+body.page-home .poster-card .poster,
+body.page-home .poster-card .placeholder {
+  background: var(--ink-gate);
+}
+
+body.page-home .poster-card .card-sub { color: var(--lumen-dim); }
+
+.stage-empty {
+  color: var(--lumen-dim);
+  border: 1px dashed var(--ink-line);
+  border-radius: var(--radius, 6px);
+  padding: 1.4rem;
+  font-size: 0.95rem;
+}
+
+/* --- Browse-out row ------------------------------------------------------- */
+
+.marquee-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 3.4rem 0 1rem;
+}
+
+.marquee-links a {
+  font-family: "Oswald", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.82rem;
+  color: var(--lumen);
+  border: 1px solid var(--ink-line);
+  border-radius: 999px;
+  padding: 0.5rem 1.2rem;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.marquee-links a:hover {
+  border-color: var(--tungsten);
+  color: var(--tungsten);
+  text-decoration: none;
+}
+
+/* --- Responsive ----------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .projection { min-height: 70vh; padding-top: 5rem; }
+  .counter-cell { padding-right: 1rem; margin-right: 1rem; }
+  .reel-frame { width: 120px; }
+}
+
+/* --- Quality floor: honor reduced motion --------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  body.page-home::after { animation: none; }
+  .projection::before { animation: none; }
+  .eyebrow::before { animation: none; }
+  .wordmark,
+  .subhead,
+  .hero-lead,
+  .counter { animation: none; opacity: 1; filter: none; transform: none; }
+  .reel-track { animation: none; }
+  .reel-gate { overflow-x: auto; } /* becomes a plain scrollable strip */
+}
