@@ -9,6 +9,12 @@ TMDB API → S3 Data Lake (Bronze/Silver/Gold) → PostgreSQL warehouse (star sc
 Full design rationale: [`docs/architecture.md`](docs/architecture.md). Task-by-task roadmap and
 rules: [`CLAUDE.md`](CLAUDE.md). Running learning log: [`for_learning.md`](for_learning.md).
 
+## Screenshots
+
+| Home | Analytics Dashboard |
+|---|---|
+| ![Home page](docs/screenshots/home.png) | ![Analytics dashboard](docs/screenshots/analytics.png) |
+
 ## Prerequisites
 
 - Python 3.11+
