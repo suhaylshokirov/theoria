@@ -1,0 +1,302 @@
+/* Theoria — Analytics only. The projection booth's instrument wall.
+   Home is the auditorium (the show); this page is the booth — cue sheets
+   and light-meter readouts. Same darkened-theater tokens as home.css,
+   scoped under body.page-analytics so the rest of the site is untouched.
+
+   Motion budget: one moment — the meter needles settle on load. Nothing
+   else moves unless hovered. */
+
+body.page-analytics {
+  --ink: #0d0f14;
+  --ink-raised: #161922;
+  --ink-gate: #08090c;
+  --ink-line: #262b38;
+  --lumen: #f5e9d0;
+  --lumen-dim: #948d7e;
+  --tungsten: #e8a33d;
+  --tungsten-deep: #c67e15; /* data marks — validated vs --ink-raised */
+  --tungsten-soft: rgba(232, 163, 61, 0.5);
+
+  background: var(--ink);
+  color: var(--lumen);
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+/* The booth shares the theater's air: same drifting grain as home. */
+body.page-analytics::after {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  z-index: 999;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-drift 0.6s steps(3) infinite;
+}
+
+@keyframes grain-drift {
+  0% { transform: translate(0, 0); }
+  33% { transform: translate(-3%, 2%); }
+  66% { transform: translate(2%, -3%); }
+  100% { transform: translate(-2%, 1%); }
+}
+
+/* --- Header / footer go dark, matching home ------------------------------ */
+
+body.page-analytics .site-header {
+  background: transparent;
+  border-bottom: 1px solid var(--ink-line);
+}
+
+body.page-analytics .nav .brand,
+body.page-analytics .nav-links a {
+  color: var(--lumen);
+}
+
+body.page-analytics .nav .brand {
+  font-family: "Oswald", sans-serif;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+body.page-analytics .nav-links a:hover,
+body.page-analytics .nav .brand:hover {
+  color: var(--tungsten);
+}
+
+body.page-analytics .site-footer {
+  border-top: 1px solid var(--ink-line);
+  color: var(--lumen-dim);
+  background: transparent;
+}
+
+body.page-analytics .container {
+  max-width: 1240px;
+}
+
+body.page-analytics a:focus-visible {
+  outline: 2px solid var(--tungsten);
+  outline-offset: 2px;
+}
+
+/* --- Page head: the booth log ---------------------------------------------- */
+
+.booth-head {
+  padding: 3.2rem 0 2.2rem;
+}
+
+.booth-head .eyebrow {
+  font-family: "Oswald", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.34em;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--lumen-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0 1rem;
+}
+
+.booth-head .eyebrow::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tungsten);
+  box-shadow: 0 0 10px var(--tungsten);
+  animation: reel-blink 2.4s steps(1) infinite;
+}
+
+@keyframes reel-blink {
+  0%, 70% { opacity: 1; }
+  71%, 100% { opacity: 0.25; }
+}
+
+.booth-title {
+  font-family: "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: clamp(2.6rem, 8vw, 5rem);
+  line-height: 0.95;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin: 0;
+  color: var(--lumen);
+  text-shadow: 0 0 34px rgba(232, 163, 61, 0.22);
+}
+
+.booth-sub {
+  font-style: italic;
+  font-size: clamp(0.95rem, 2vw, 1.2rem);
+  color: var(--lumen-dim);
+  margin: 0.8rem 0 0;
+  max-width: 52ch;
+}
+
+/* --- Panels: the instrument wall -------------------------------------------- */
+
+.booth-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(430px, 100%), 1fr));
+  gap: 1.2rem;
+  margin-bottom: 3rem;
+}
+
+.booth-panel {
+  background: var(--ink-raised);
+  border: 1px solid var(--ink-line);
+  border-radius: 4px;
+  padding: 1.3rem 1.4rem 1.4rem;
+  min-width: 0; /* let tables shrink inside the grid track */
+}
+
+.booth-panel h2 {
+  font-family: "Oswald", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-weight: 500;
+  font-size: 0.82rem;
+  color: var(--lumen);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 1.1rem;
+}
+
+.booth-panel h2::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  background: var(--tungsten);
+}
+
+.booth-panel h2 .sub {
+  color: var(--lumen-dim);
+  letter-spacing: 0.14em;
+  font-size: 0.68rem;
+}
+
+/* --- Charts ------------------------------------------------------------------ */
+
+.chart-stage {
+  position: relative;
+  height: 260px;
+  margin-bottom: 1.1rem;
+}
+
+/* --- Cue sheets (tables) ------------------------------------------------------ */
+
+body.page-analytics .table-wrap {
+  overflow-x: auto;
+}
+
+.table-scroll {
+  max-height: 330px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-line) transparent;
+}
+
+body.page-analytics table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+body.page-analytics th,
+body.page-analytics td {
+  text-align: left;
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--ink-line);
+}
+
+body.page-analytics th {
+  font-family: "Oswald", sans-serif;
+  font-weight: 500;
+  color: var(--lumen-dim);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  border-bottom-color: var(--lumen-dim);
+}
+
+.table-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--ink-raised);
+  z-index: 1;
+}
+
+body.page-analytics td {
+  color: var(--lumen);
+}
+
+body.page-analytics tbody tr:last-child td {
+  border-bottom: none;
+}
+
+body.page-analytics tbody tr:hover {
+  background: rgba(232, 163, 61, 0.05);
+}
+
+/* Numeric columns read like a readout: right-aligned, tabular figures. */
+body.page-analytics th.num,
+body.page-analytics td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+
+/* --- The signature: exposure meters inside the cue sheets --------------------
+   analytics.js measures each table's marked column, then lays a tungsten
+   needle behind the number, scaled to the column max. Without JS the cell
+   is just a plain number — nothing breaks. */
+
+body.page-analytics td[data-meter] {
+  position: relative;
+  isolation: isolate;
+  min-width: 110px;
+}
+
+td[data-meter] .meter-fill {
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 0;
+  max-width: 100%;
+  background: rgba(232, 163, 61, 0.14);
+  border-right: 2px solid var(--tungsten-deep);
+  transition: width 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* --- Empty readouts ------------------------------------------------------------ */
+
+body.page-analytics .stage-empty {
+  color: var(--lumen-dim);
+  border: 1px dashed var(--ink-line);
+  border-radius: 4px;
+  padding: 1.2rem;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* --- Responsive ----------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .booth-head { padding: 2.2rem 0 1.6rem; }
+  .booth-panel { padding: 1rem 1rem 1.1rem; }
+  .chart-stage { height: 220px; }
+}
+
+/* --- Quality floor: honor reduced motion ------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  body.page-analytics::after { animation: none; }
+  .booth-head .eyebrow::before { animation: none; }
+  td[data-meter] .meter-fill { transition: none; }
+}
