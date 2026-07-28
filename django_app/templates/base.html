@@ -6,8 +6,8 @@
     <title>{% block title %}Theoria{% endblock %}</title>
     <meta name="description" content="{% block description %}Theoria — a film catalog measured end to end: every title, cast member and rating read straight out of a star-schema warehouse.{% endblock %}">
 
-    {# The keyed square: the mark this site puts on anything it has measured. #}
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffffff'/%3E%3Crect x='6' y='6' width='20' height='20' fill='%23a3e635'/%3E%3C/svg%3E">
+    {% comment %} Favicon: the same Θ mark, at the heavier weight that survives 16px. {% endcomment %}
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 32'%3E%3Crect width='26' height='32' fill='%23ffffff'/%3E%3Cellipse cx='13' cy='16' rx='9.9' ry='13.3' fill='none' stroke='%230b0b0b' stroke-width='6.4'/%3E%3Crect x='3.6' y='12.7' width='18.8' height='6.6' fill='%23a3e635'/%3E%3C/svg%3E">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,7 +23,17 @@
 
     <header class="site-header">
         <nav class="nav container" aria-label="Main">
-            <a class="brand" href="{% url 'movies:home' %}">Theoria</a>
+            <a class="brand" href="{% url 'movies:home' %}">
+                {% comment %} Θ — the first letter of θεωρία. Drawn as a vertical
+                   ellipse rather than a circle so it reads as a letterform and
+                   not a prohibition sign, with the crossbar in lime: the
+                   measurement laid across the act of looking. {% endcomment %}
+                <svg class="mark" viewBox="0 0 26 32" aria-hidden="true" focusable="false">
+                    <ellipse cx="13" cy="16" rx="9.9" ry="13.3" fill="none" stroke="currentColor" stroke-width="6.4"/>
+                    <rect x="3.6" y="12.7" width="18.8" height="6.6" fill="#a3e635"/>
+                </svg>
+                Theoria
+            </a>
             {% comment %} resolver_match.url_name, not request.path: "/" would prefix every
                route, and view_name equality would drop the highlight as soon as
                you opened a detail page. Grouping the list and detail names keeps

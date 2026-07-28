@@ -270,14 +270,14 @@ main.container {
   color: var(--ink);
 }
 
-/* The keyed square — the mosaic's lime frame-mark, shrunk to a glyph. It is
-   the one motif that repeats site-wide. */
-.brand::before {
-  content: "";
-  width: 14px;
-  height: 14px;
-  background: var(--lime);
+/* The logomark is an inline <svg> in base.html rather than a ::before, so it
+   scales with the type and can invert on dark ground. Sized to the wordmark's
+   cap height, not its em box, so the Θ and the T optically match. */
+.brand .mark {
+  width: 0.92em;
+  height: 1.16em;
   flex: none;
+  overflow: visible;
 }
 
 .nav-links {
