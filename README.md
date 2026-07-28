@@ -11,9 +11,17 @@ rules: [`CLAUDE.md`](CLAUDE.md). Running learning log: [`for_learning.md`](for_l
 
 ## Screenshots
 
-| Home | Analytics Dashboard |
+| Home | Analytics dashboard |
 |---|---|
-| ![Home page](docs/screenshots/home.png) | ![Analytics dashboard](docs/screenshots/analytics.png) |
+| ![Home page — the catalog as a contact sheet, top-rated films keyed in lime](docs/screenshots/home.png) | ![Analytics dashboard — average rating by decade](docs/screenshots/analytics.png) |
+
+| Film catalog | Film detail |
+|---|---|
+| ![Film list — search, sort and a poster grid](docs/screenshots/movies.png) | ![Film detail — poster plate, record list and cast](docs/screenshots/movie-detail.png) |
+
+| Genres |
+|---|
+| ![Genre index — each genre's share of the catalog](docs/screenshots/genres.png) |
 
 ## Prerequisites
 
