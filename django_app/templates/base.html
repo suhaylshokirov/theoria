@@ -18,6 +18,19 @@
 
     <link rel="stylesheet" href="{% static 'css/theoria.css' %}">
     {% block extra_head %}{% endblock %}
+    {% comment %} Applies the saved theme BEFORE first paint. This has to be inline
+       and synchronous in <head>: a deferred or external script runs after the
+       first paint, so a dark-theme user would see a white flash on every page
+       load. Wrapped in try/catch because localStorage throws in some privacy
+       modes, in which case we simply fall back to the OS preference. {% endcomment %}
+    <script>
+      try {
+        var t = localStorage.getItem("theoria-theme");
+        if (t === "dark" || t === "light") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) {}
+    </script>
     <script defer src="{% static 'js/theoria.js' %}"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -47,6 +60,21 @@
                 <a href="{% url 'movies:director_list' %}"{% if vn in "director_list,director_detail" %} aria-current="page"{% endif %}>Directors</a>
                 <a href="{% url 'movies:genre_list' %}"{% if vn in "genre_list,genre_detail" %} aria-current="page"{% endif %}>Genres</a>
                 <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>
+                <button type="button" class="theme-toggle" id="theme-toggle"
+                        aria-label="Switch to dark theme" title="Switch theme">
+                    {% comment %} Moon = "go dark", sun = "go light". Only one is
+                       visible at a time; both are always in the DOM so the
+                       button never resizes. {% endcomment %}
+                    <svg class="icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+                    </svg>
+                    <svg class="icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4.2"/>
+                        <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>
+                    </svg>
+                </button>
             </div>
             {% endwith %}
         </nav>

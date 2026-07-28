@@ -53,9 +53,6 @@ def home(request):
         "top_rated": top_rated,
         "newest": newest,
         "mosaic": mosaic,
-        # Ids the sheet marks in lime. Rendered as a lookup in the template,
-        # so the mosaic can key a frame without a second query per tile.
-        "keyed_ids": {m.movie_id for m in top_rated},
     }
     return render(request, "movies/home.html", context)
 

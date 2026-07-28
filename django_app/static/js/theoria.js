@@ -113,9 +113,70 @@
     document.querySelectorAll("[data-count]").forEach(runCounter);
   }
 
+  /* --- Theme toggle --------------------------------------------------------
+     The saved theme is applied by an inline script in <head> so there's no
+     flash of the wrong theme; this only wires up the button.
+
+     Charts read their colours from CSS custom properties once, at build time,
+     so a live theme switch has to rebuild them — hence the themechange event
+     that analytics.js listens for. */
+
+  var STORAGE_KEY = "theoria-theme";
+
+  function currentTheme() {
+    var explicit = document.documentElement.getAttribute("data-theme");
+    if (explicit) return explicit;
+    return window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }
+
+  function initThemeToggle() {
+    var btn = document.getElementById("theme-toggle");
+    if (!btn) return;
+
+    function syncLabel() {
+      var next = currentTheme() === "dark" ? "light" : "dark";
+      btn.setAttribute("aria-label", "Switch to " + next + " theme");
+    }
+
+    syncLabel();
+
+    btn.addEventListener("click", function () {
+      var next = currentTheme() === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      try {
+        localStorage.setItem(STORAGE_KEY, next);
+      } catch (e) {
+        // Private mode — the choice just won't persist across loads.
+      }
+      syncLabel();
+      document.dispatchEvent(
+        new CustomEvent("themechange", { detail: { theme: next } })
+      );
+    });
+
+    // With no explicit choice saved, keep following the OS if it changes.
+    if (window.matchMedia) {
+      var mq = window.matchMedia("(prefers-color-scheme: dark)");
+      var onChange = function () {
+        if (!document.documentElement.getAttribute("data-theme")) {
+          syncLabel();
+          document.dispatchEvent(
+            new CustomEvent("themechange", { detail: { theme: currentTheme() } })
+          );
+        }
+      };
+      if (mq.addEventListener) mq.addEventListener("change", onChange);
+      else if (mq.addListener) mq.addListener(onChange);
+    }
+  }
+
   function init() {
     initMeters();
     initCounters();
+    initThemeToggle();
   }
 
   if (document.readyState === "loading") {

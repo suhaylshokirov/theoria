@@ -117,34 +117,79 @@
    The lime *swaps role* between modes. On white it was too light to serve as
    a mark, so marks stepped DOWN the ramp to a darker green. On ink it is the
    brightest thing available, so the mark and link steps move UP instead.
-   Only the tokens change — no component below this block is redefined. */
+   Only the tokens change — no component below this block is redefined.
+
+   Applied two ways, and the values live in ONE place (--dark-*) so the two
+   can never drift apart:
+     [data-theme="dark"]  — the user picked dark from the header toggle
+     prefers-color-scheme — no explicit pick yet, so follow the OS
+   The :not([data-theme]) guard is what lets an explicit "light" choice win
+   over a dark OS setting. */
+:root {
+  --dark-paper: #12120f;
+  --dark-sheet: #1b1b17;
+  --dark-sheet-2: #24241f;
+  --dark-rule: #2c2c26;
+  --dark-rule-strong: #423f38;
+  --dark-ink: #f2f1ed;
+  --dark-ink-muted: #a8a49c;
+  --dark-ink-faint: #8a867e;
+  /* --lime-wash sits deliberately near the surface: on white it is a pale
+     tint of the page, so on ink it must be a barely-lifted tint of the ink.
+     Matching the light value's saturation produces olive slabs instead of a
+     whisper behind the number. */
+  --dark-lime-wash: #1e2612;
+  --dark-lime-text: #bef264;
+  --dark-lime-mark: #a3e635;
+  --dark-lime-deep: #d9f99d;
+  --dark-lime-hover: #bef264;
+  --dark-chart-wash: rgba(163, 230, 53, 0.10);
+  --dark-rank-1: #bef264;
+  --dark-rank-2: #a3e635;
+  --dark-rank-3: #7cb518;
+}
+
+[data-theme="dark"] {
+  --paper: var(--dark-paper);
+  --sheet: var(--dark-sheet);
+  --sheet-2: var(--dark-sheet-2);
+  --rule: var(--dark-rule);
+  --rule-strong: var(--dark-rule-strong);
+  --ink: var(--dark-ink);
+  --ink-muted: var(--dark-ink-muted);
+  --ink-faint: var(--dark-ink-faint);
+  --lime-wash: var(--dark-lime-wash);
+  --lime-text: var(--dark-lime-text);
+  --lime-mark: var(--dark-lime-mark);
+  --lime-deep: var(--dark-lime-deep);
+  --lime-hover: var(--dark-lime-hover);
+  --chart-wash: var(--dark-chart-wash);
+  --rank-1: var(--dark-rank-1);
+  --rank-2: var(--dark-rank-2);
+  --rank-3: var(--dark-rank-3);
+
+  color-scheme: dark;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #12120f;
-    --sheet: #1b1b17;
-    --sheet-2: #24241f;
-    --rule: #2c2c26;
-    --rule-strong: #423f38;
-
-    --ink: #f2f1ed;
-    --ink-muted: #a8a49c;
-    --ink-faint: #8a867e;
-
-    --lime: #a3e635;
-    /* Deliberately near the surface: on white the wash is a pale tint of the
-       page, so on ink it must be a barely-lifted tint of the ink — matching
-       the light value's saturation here produces olive slabs instead of a
-       whisper behind the number. */
-    --lime-wash: #1e2612;
-    --lime-text: #bef264;
-    --lime-mark: #a3e635;
-    --lime-deep: #d9f99d;
-    --lime-hover: #bef264;
-    --chart-wash: rgba(163, 230, 53, 0.10);
-
-    --rank-1: #bef264;
-    --rank-2: #a3e635;
-    --rank-3: #7cb518;
+  :root:not([data-theme]) {
+    --paper: var(--dark-paper);
+    --sheet: var(--dark-sheet);
+    --sheet-2: var(--dark-sheet-2);
+    --rule: var(--dark-rule);
+    --rule-strong: var(--dark-rule-strong);
+    --ink: var(--dark-ink);
+    --ink-muted: var(--dark-ink-muted);
+    --ink-faint: var(--dark-ink-faint);
+    --lime-wash: var(--dark-lime-wash);
+    --lime-text: var(--dark-lime-text);
+    --lime-mark: var(--dark-lime-mark);
+    --lime-deep: var(--dark-lime-deep);
+    --lime-hover: var(--dark-lime-hover);
+    --chart-wash: var(--dark-chart-wash);
+    --rank-1: var(--dark-rank-1);
+    --rank-2: var(--dark-rank-2);
+    --rank-3: var(--dark-rank-3);
 
     color-scheme: dark;
   }
@@ -364,6 +409,51 @@ main.container {
   bottom: calc(-1 * var(--space-2) - 1px);
   height: 3px;
   background: var(--lime);
+}
+
+/* --- Theme toggle -----------------------------------------------------------
+   A quiet icon button in the header. The two glyphs are stacked and swapped
+   by opacity so the control never changes size as the theme changes. */
+
+.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+
+.theme-toggle:hover {
+  color: var(--ink);
+  border-color: var(--lime-mark);
+  background: none;
+}
+
+.theme-toggle svg {
+  grid-area: 1 / 1;
+  width: 16px;
+  height: 16px;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+/* Show the glyph for the mode you'd switch TO, which is the conventional
+   affordance: a moon means "go dark". */
+.theme-toggle .icon-dark { opacity: 1; }
+.theme-toggle .icon-light { opacity: 0; }
+
+[data-theme="dark"] .theme-toggle .icon-dark { opacity: 0; }
+[data-theme="dark"] .theme-toggle .icon-light { opacity: 1; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .theme-toggle .icon-dark { opacity: 0; }
+  :root:not([data-theme]) .theme-toggle .icon-light { opacity: 1; }
 }
 
 /* --- Footer ---------------------------------------------------------------- */

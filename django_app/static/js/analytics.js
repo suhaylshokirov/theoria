@@ -22,15 +22,22 @@
     return v || fallback;
   }
 
-  var MARK = cssVar("--lime-mark", "#65a30d");
-  // The area fill under the line. Read from --chart-wash so each mode can set
-  // its own weight: a tint that reads as delicate on white is a heavy slab on
-  // ink, because the eye judges it against the surface it sits on.
-  var WASH = cssVar("--chart-wash", "rgba(163, 230, 53, 0.18)");
-  var RULE = cssVar("--rule", "#e3e2dd");
-  var INK = cssVar("--ink", "#0b0b0b");
-  var INK_FAINT = cssVar("--ink-faint", "#78716c");
-  var PAPER = cssVar("--paper", "#ffffff");
+  // Palette values are re-read on every (re)build rather than cached once, so
+  // a live theme switch picks up the new tokens. Declared here and filled by
+  // readPalette() below.
+  var MARK, WASH, RULE, INK, INK_FAINT, PAPER;
+
+  function readPalette() {
+    MARK = cssVar("--lime-mark", "#65a30d");
+    // The area fill under the line. Read from --chart-wash so each mode can
+    // set its own weight: a tint that reads as delicate on white is a heavy
+    // slab on ink, because the eye judges it against its surface.
+    WASH = cssVar("--chart-wash", "rgba(163, 230, 53, 0.18)");
+    RULE = cssVar("--rule", "#e3e2dd");
+    INK = cssVar("--ink", "#0b0b0b");
+    INK_FAINT = cssVar("--ink-faint", "#78716c");
+    PAPER = cssVar("--paper", "#ffffff");
+  }
 
   var FONT_BODY = '"Instrument Sans", system-ui, sans-serif';
   var FONT_MONO = '"Spline Sans Mono", ui-monospace, monospace';
@@ -104,14 +111,20 @@
     };
   }
 
+  // Live chart instances, so a theme switch can destroy and rebuild them.
+  var charts = [];
+
   function initCharts() {
     if (typeof Chart === "undefined") return;
+
+    readPalette();
+    while (charts.length) charts.pop().destroy();
 
     var decadeLabels = readJSON("decade-labels");
     var decadeRatings = readJSON("decade-avg-ratings");
     var decadeCanvas = document.getElementById("decade-chart");
     if (decadeCanvas && decadeLabels && decadeLabels.length) {
-      new Chart(decadeCanvas, {
+      charts.push(new Chart(decadeCanvas, {
         type: "line",
         data: {
           labels: decadeLabels,
@@ -136,14 +149,14 @@
         options: baseOptions(function (v) {
           return "★ " + Number(v).toFixed(2);
         }),
-      });
+      }));
     }
 
     var genreLabels = readJSON("genre-labels");
     var genreRevenue = readJSON("genre-revenue");
     var genreCanvas = document.getElementById("revenue-chart");
     if (genreCanvas && genreLabels && genreLabels.length) {
-      new Chart(genreCanvas, {
+      charts.push(new Chart(genreCanvas, {
         type: "bar",
         data: {
           labels: genreLabels,
@@ -162,9 +175,13 @@
         options: baseOptions(function (v) {
           return "$" + compact(Number(v));
         }),
-      });
+      }));
     }
   }
+
+  // Rebuild on theme change: Chart.js bakes colours into the instance, so
+  // re-reading the tokens means re-creating the charts.
+  document.addEventListener("themechange", initCharts);
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initCharts);

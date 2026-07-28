@@ -94,9 +94,6 @@ def test_home_returns_200_with_expected_context():
     assert list(response.context["top_rated"]) == [movie]
     assert list(response.context["newest"]) == [movie]
     assert list(response.context["mosaic"]) == [movie]
-    # The mosaic keys the top-rated films in lime; the view precomputes that
-    # id set so each tile can check membership without another query.
-    assert response.context["keyed_ids"] == {movie.movie_id}
 
 
 # ---------------------------------------------------------------------------

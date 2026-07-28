@@ -77,28 +77,21 @@
   to { opacity: 1; }
 }
 
-/* THE KEY — a lime chinagraph rectangle drawn on the frames the analytics
-   singled out. This is the whole thesis in one mark: we hold all of it, and
-   we have measured it. It is the only place lime appears on this page at
-   full strength. */
-.contact-sheet .frame.is-keyed::after {
+/* The lime outline is a HOVER affordance and nothing else.
+
+   It previously sat permanently on the top-rated films — an archivist's
+   chinagraph mark, "we hold all of it and we measured it". But a mark drawn
+   in exactly the hover treatment, showing while nothing is hovered, reads as
+   a rendering bug rather than as meaning. The "Highest rated" section
+   directly below the sheet already names those films, so the information is
+   not lost by removing the mark. */
+.contact-sheet .frame:hover::after,
+.contact-sheet .frame:focus-visible::after {
   content: "";
   position: absolute;
   inset: 0;
   border: 3px solid var(--lime);
-  opacity: 0;
-  animation: key-strike var(--dur) var(--ease) forwards;
-  /* Lands after the sheet has finished developing. */
-  animation-delay: calc(1100ms + var(--i, 0) * 4ms);
-}
-
-.contact-sheet .frame.is-keyed img {
-  filter: none;
-}
-
-@keyframes key-strike {
-  from { opacity: 0; transform: scale(1.18); }
-  to { opacity: 1; transform: scale(1); }
+  pointer-events: none;
 }
 
 /* The headline column. Plain page — no panel, no shadow, no border. */
@@ -189,8 +182,7 @@
    never ran — so pin the end state explicitly. */
 
 @media (prefers-reduced-motion: reduce) {
-  .contact-sheet .frame,
-  .contact-sheet .frame.is-keyed::after {
+  .contact-sheet .frame {
     opacity: 1;
     animation: none;
     transform: none;

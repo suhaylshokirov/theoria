@@ -11,9 +11,9 @@
 {% endblock %}
 
 {% block content %}
-{% comment %} The contact sheet: the whole catalog at thumbnail size, with the
-   highest-rated films keyed in lime the way an archivist marks a strip.
-   It is the real catalog, not decoration — every tile links to its film. {% endcomment %}
+{% comment %} The contact sheet: the whole catalog at thumbnail size. It is the
+   real catalog, not decoration — every tile links to its film, and hovering
+   one outlines it in lime. {% endcomment %}
 <section class="sheet-hero">
     <div class="hero-card">
         <p class="label">Film catalog · measured</p>
@@ -52,7 +52,7 @@
 
     <div class="contact-sheet" aria-hidden="true">
         {% for movie in mosaic %}
-        <a class="frame{% if movie.movie_id in keyed_ids %} is-keyed{% endif %}"
+        <a class="frame"
            href="{% url 'movies:movie_detail' movie.movie_id %}"
            tabindex="-1"
            style="--i: {{ forloop.counter0 }}">
@@ -65,7 +65,7 @@
 <section class="sheet-section">
     <div class="section-head">
         <h2>Highest rated</h2>
-        <span class="section-note">keyed above</span>
+        <span class="section-note">top 12</span>
     </div>
     <div class="poster-grid">
         {% for movie in top_rated %}
