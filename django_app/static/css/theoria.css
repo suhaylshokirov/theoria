@@ -411,15 +411,6 @@ main.container {
   gap: var(--space-3);
 }
 
-/* The keyed square again, marking a measured section. */
-.section-head h2::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  background: var(--lime);
-  flex: none;
-}
-
 .section-head .section-note {
   margin-left: auto;
   font-size: var(--text-2xs);
@@ -725,6 +716,8 @@ input[type="search"]:focus {
   outline: none;
 }
 
+/* Lime is the action colour. Ink text on lime is 13:1, so the label stays
+   sharp; hover deepens the fill rather than changing hue. */
 button,
 .btn {
   font-family: var(--font-label);
@@ -733,20 +726,20 @@ button,
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  background: var(--ink);
-  color: var(--paper);
-  border: 1px solid var(--ink);
+  background: var(--lime);
+  color: var(--ink);
+  border: 1px solid var(--lime);
   border-radius: var(--radius);
   padding: var(--space-3) var(--space-5);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease),
-              color var(--dur-fast) var(--ease);
+              border-color var(--dur-fast) var(--ease);
 }
 
 button:hover,
 .btn:hover {
-  background: var(--lime);
-  border-color: var(--lime);
+  background: #93d128;
+  border-color: #93d128;
   color: var(--ink);
   text-decoration: none;
 }
