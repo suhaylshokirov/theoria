@@ -3,33 +3,40 @@
 {% block title %}Theoria — {{ list_title }}{% endblock %}
 
 {% block content %}
-<h1>{{ list_title }}</h1>
+{% include "movies/_sheet_header.html" with eyebrow="Index" accession=list_title title=list_title sub="Ordered by popularity as recorded in the warehouse." only %}
 
-<div class="toolbar">
-    <form method="get" action="">
-        <input type="text" name="q" value="{{ q }}" placeholder="Search by name…" aria-label="Search {{ list_title|lower }}">
-        <button type="submit">Search</button>
-    </form>
-    <span class="muted">{{ page_obj.paginator.count }} result{{ page_obj.paginator.count|pluralize }}</span>
-</div>
+<section class="sheet-section">
+    <div class="toolbar">
+        <form method="get" action="">
+            <div class="field">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search names" aria-label="Search {{ list_title|lower }} by name">
+            </div>
+            <button type="submit">Apply</button>
+        </form>
+        <span class="result-count">{{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}</span>
+    </div>
 
-{% if page_obj.object_list %}
-<div class="poster-grid">
-    {% for person in page_obj %}{% include "movies/_person_card.html" %}{% endfor %}
-</div>
-{% else %}
-<p class="muted">No results found{% if q %} for “{{ q }}”{% endif %}.</p>
-{% endif %}
+    <div class="poster-grid">
+        {% for person in page_obj %}
+        {% include "movies/_person_card.html" with person=person detail_url_name=detail_url_name only %}
+        {% empty %}
+        <p class="empty">
+            {% if q %}No names match “{{ q }}”.
+            {% else %}Nothing loaded yet. Run the pipeline to fill the index.{% endif %}
+        </p>
+        {% endfor %}
+    </div>
 
-{% if page_obj.has_other_pages %}
-<div class="pagination">
-    {% if page_obj.has_previous %}
-    <a href="?q={{ q|urlencode }}&amp;page={{ page_obj.previous_page_number }}">← Previous</a>
+    {% if page_obj.has_other_pages %}
+    <nav class="pagination" aria-label="Pagination">
+        {% if page_obj.has_previous %}
+        <a href="?q={{ q|urlencode }}&amp;page={{ page_obj.previous_page_number }}">← Previous</a>
+        {% endif %}
+        <span class="page-state">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a href="?q={{ q|urlencode }}&amp;page={{ page_obj.next_page_number }}">Next →</a>
+        {% endif %}
+    </nav>
     {% endif %}
-    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}
-    <a href="?q={{ q|urlencode }}&amp;page={{ page_obj.next_page_number }}">Next →</a>
-    {% endif %}
-</div>
-{% endif %}
+</section>
 {% endblock %}

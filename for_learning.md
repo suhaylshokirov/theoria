@@ -1233,3 +1233,71 @@ Alembic's `alembic_version`) so they never apply the same ALTER twice or skip on
 here with `IF NOT EXISTS`. Read the Django migrations docs (or Alembic's autogenerate) and ask:
 what does a version-tracking table buy you that `IF NOT EXISTS` doesn't — especially for a change
 that *isn't* naturally idempotent, like renaming a column or backfilling a value?
+
+## Task 38 — Frontend redesign: one design system, white + lime
+
+### What Was Built
+The site worked but looked like two different products stapled together. Home and Analytics
+opted out of the global stylesheet (`{% block body_class %}`) and loaded their own dark theme
+with their own fonts; the other eight pages fell back to `theoria.css` and rendered as
+unstyled `<h1>Movies</h1>` with a bare `<select>`. This task replaced both with **one**
+design system — plain white paper, one lime green — applied to all ten pages.
+
+The organising idea: Theoria is a film *archive with a measuring instrument pointed at it*,
+not a cinema. So the vocabulary is contact sheets, catalog cards, accession numbers and
+shelf labels. Lime is reserved as the **measurement mark** — it appears on a meter bar, a
+keyed poster, the active nav item, and nowhere else. The home hero is the whole catalog
+rendered as a contact sheet with the top-rated films keyed in lime, the way an archivist
+marks a strip.
+
+Deleted along the way: drifting film grain, a flickering lamp glow, a blinking reel dot and
+a 48-second infinite marquee. Ambient motion reads as noise; the redesign spends its whole
+motion budget on one page-load moment.
+
+### Concepts Used
+- **Design tokens**: every colour, type size, space step and duration is a CSS custom
+  property on `:root`. Nothing is hardcoded at a use site, so a palette change is one edit.
+- **Contrast ratios as a hard constraint, not a taste call**: each ink/lime pair was
+  *computed* against white before use (`--ink` 19.7:1, `--lime-text` 5.0:1, `--lime-mark`
+  3.1:1). `--lime` itself is only 1.5:1 — far below the 3:1 floor for a chart mark — so it
+  is used as a *fill behind a printed number*, never as a mark on its own. The printed value
+  is the "relief channel" that makes the pale bar legal.
+- **Sequential vs categorical colour**: each chart carries one series, so it takes one hue,
+  not a multi-colour palette, and needs no legend — the heading names it.
+- **CSS specificity discipline**: page stylesheets may only *add* components, never restyle
+  a shared one. This is what stops section margins cancelling each other out.
+- **Progressive enhancement**: meters and count-ups are drawn by JS over markup that is
+  already correct and readable without it.
+- **Single source of truth across languages**: `analytics.js` reads its palette out of the
+  CSS custom properties instead of duplicating five hex values in JavaScript.
+
+### Key Code
+`django_app/static/css/theoria.css` — the token block and `td[data-meter] .meter-track`:
+> The meter is a `.meter-track` wrapper with a `.meter-fill` inside it. The wrapper reserves
+> the right-hand strip where the number sits, so the fill's percentage width is relative to
+> the *bar's* space rather than the whole cell — a 100% bar lands exactly at the track edge
+> and can never run under its own digits. The fill grows leftward from the number, so the
+> **left** edge is the one that moves with the value; that edge carries the lime rule. (An
+> earlier version marked the right edge, which put every bar's rule in the same place and
+> therefore encoded nothing.)
+
+`django_app/templates/base.html` — the active-nav block:
+> Uses `request.resolver_match.url_name`, not `request.path`. Path matching breaks on home
+> (`/` is a prefix of every route), and matching the full `view_name` would drop the
+> highlight the moment you opened a detail page. Grouping the list and detail names —
+> `{% if vn in "movie_list,movie_detail" %}` — keeps "Films" lit on `/movies/120/`.
+
+`django_app/movies/views.py` — `movie_detail()`:
+> `fact_casting` stores one row per *(actor, director)* pair, so a film with two credited
+> directors listed every actor twice on the page. `.distinct()` can't fix this — the rows
+> genuinely differ by `director_id` — so the view orders by billing and keeps the first
+> credit per actor. This is the same cross-join whose ~46% reject rate Task 35 will remove
+> at the schema level; this is the display-side workaround until then.
+
+### What to Study Next
+The cast duplication above is a symptom of a modelling decision, not a UI bug: a bridge
+table that cross-joins two dimensions can't represent "this actor was in this film" without
+also asserting a director. Read up on **factless fact tables** and on why a many-to-many
+bridge usually gets its own grain (one row per credit) rather than a composite of two roles.
+Then look at Task 35's plan to split `fact_casting` into `fact_cast` + `fact_crew` and ask:
+which queries get *simpler*, and which need a join they didn't need before?

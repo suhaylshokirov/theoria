@@ -4,27 +4,52 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Theoria{% endblock %}</title>
+    <meta name="description" content="{% block description %}Theoria — a film catalog measured end to end: every title, cast member and rating read straight out of a star-schema warehouse.{% endblock %}">
+
+    {# The keyed square: the mark this site puts on anything it has measured. #}
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23ffffff'/%3E%3Crect x='6' y='6' width='20' height='20' fill='%23a3e635'/%3E%3C/svg%3E">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..700&family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&display=swap">
+
     <link rel="stylesheet" href="{% static 'css/theoria.css' %}">
     {% block extra_head %}{% endblock %}
+    <script defer src="{% static 'js/theoria.js' %}"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
+    <a class="skip-link" href="#content">Skip to content</a>
+
     <header class="site-header">
-        <nav class="nav">
+        <nav class="nav container" aria-label="Main">
             <a class="brand" href="{% url 'movies:home' %}">Theoria</a>
+            {% comment %} resolver_match.url_name, not request.path: "/" would prefix every
+               route, and view_name equality would drop the highlight as soon as
+               you opened a detail page. Grouping the list and detail names keeps
+               "Films" lit while you're on /movies/120/. {% endcomment %}
+            {% with vn=request.resolver_match.url_name %}
             <div class="nav-links">
-                <a href="{% url 'movies:movie_list' %}">Movies</a>
-                <a href="{% url 'movies:actor_list' %}">Actors</a>
-                <a href="{% url 'movies:director_list' %}">Directors</a>
-                <a href="{% url 'movies:genre_list' %}">Genres</a>
-                <a href="{% url 'analytics:dashboard' %}">Analytics</a>
+                <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>Films</a>
+                <a href="{% url 'movies:actor_list' %}"{% if vn in "actor_list,actor_detail" %} aria-current="page"{% endif %}>Actors</a>
+                <a href="{% url 'movies:director_list' %}"{% if vn in "director_list,director_detail" %} aria-current="page"{% endif %}>Directors</a>
+                <a href="{% url 'movies:genre_list' %}"{% if vn in "genre_list,genre_detail" %} aria-current="page"{% endif %}>Genres</a>
+                <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>
             </div>
+            {% endwith %}
         </nav>
     </header>
-    <main class="container">
+
+    <main class="container" id="content">
         {% block content %}{% endblock %}
     </main>
+
     <footer class="site-footer">
-        Theoria — a movie analytics warehouse. Data from TMDB.
+        <div class="container footer-row">
+            <span>Theoria — a film catalog measured end to end.</span>
+            <span class="mono">Source · TMDB</span>
+        </div>
     </footer>
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

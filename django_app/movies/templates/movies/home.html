@@ -2,97 +2,91 @@
 {% load static %}
 {% load tmdb_images %}
 
-{% block title %}Theoria — Home{% endblock %}
+{% block title %}Theoria — Every film, measured{% endblock %}
 
 {% block body_class %}page-home{% endblock %}
 
 {% block extra_head %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{% static 'css/home.css' %}">
-<script defer src="{% static 'js/home.js' %}"></script>
 {% endblock %}
 
 {% block content %}
-<section class="projection">
-    <p class="eyebrow">Movie analytics warehouse · Source&nbsp;·&nbsp;TMDB</p>
-    <h1 class="wordmark">Theoria</h1>
-    <p class="subhead">the analytics of looking</p>
-    <p class="hero-lead">
-        Every film the catalog knows, modeled down to a star schema —
-        then handed back to you as something you can browse.
-    </p>
+{% comment %} The contact sheet: the whole catalog at thumbnail size, with the
+   highest-rated films keyed in lime the way an archivist marks a strip.
+   It is the real catalog, not decoration — every tile links to its film. {% endcomment %}
+<section class="sheet-hero">
+    <div class="contact-sheet" aria-hidden="true">
+        {% for movie in mosaic %}
+        <a class="frame{% if movie.movie_id in keyed_ids %} is-keyed{% endif %}"
+           href="{% url 'movies:movie_detail' movie.movie_id %}"
+           tabindex="-1"
+           style="--i: {{ forloop.counter0 }}">
+            <img src="{{ movie.poster_path|tmdb_image:'w185' }}" alt="" loading="lazy">
+        </a>
+        {% endfor %}
+    </div>
 
-    <div class="counter" aria-label="Warehouse contents">
-        <div class="counter-cell">
-            <span class="counter-label">Films</span>
-            <span class="counter-value" data-count="{{ movie_count }}">{{ movie_count }}</span>
-        </div>
-        <div class="counter-cell">
-            <span class="counter-label">Actors</span>
-            <span class="counter-value" data-count="{{ actor_count }}">{{ actor_count }}</span>
-        </div>
-        <div class="counter-cell">
-            <span class="counter-label">Directors</span>
-            <span class="counter-value" data-count="{{ director_count }}">{{ director_count }}</span>
-        </div>
-        <div class="counter-cell">
-            <span class="counter-label">Avg rating</span>
-            {% if avg_rating %}
-            <span class="counter-value" data-count="{{ avg_rating|floatformat:2 }}" data-decimals="2">{{ avg_rating|floatformat:2 }}</span>
-            {% else %}
-            <span class="counter-value">—</span>
-            {% endif %}
+    <div class="hero-card">
+        <p class="label">Film catalog · measured</p>
+        <h1 class="hero-title">Every film<br>in the catalog,<br>measured.</h1>
+        <p class="hero-lead">
+            Ratings, budgets, casts and revenue for every title the warehouse
+            holds — read straight out of the star schema, nothing estimated.
+        </p>
+
+        <dl class="hero-counts">
+            <div class="count">
+                <dt class="stat-label">Films</dt>
+                <dd class="stat-value" data-count="{{ movie_count }}">{{ movie_count }}</dd>
+            </div>
+            <div class="count">
+                <dt class="stat-label">Actors</dt>
+                <dd class="stat-value" data-count="{{ actor_count }}">{{ actor_count }}</dd>
+            </div>
+            <div class="count">
+                <dt class="stat-label">Directors</dt>
+                <dd class="stat-value" data-count="{{ director_count }}">{{ director_count }}</dd>
+            </div>
+            <div class="count">
+                <dt class="stat-label">Avg rating</dt>
+                <dd class="stat-value">
+                    {% if avg_rating %}<span data-count="{{ avg_rating|floatformat:2 }}" data-decimals="2">{{ avg_rating|floatformat:2 }}</span>{% else %}—{% endif %}
+                </dd>
+            </div>
+        </dl>
+
+        <div class="hero-actions">
+            <a class="btn" href="{% url 'movies:movie_list' %}">Browse films</a>
+            <a class="hero-link" href="{% url 'analytics:dashboard' %}">See the analytics →</a>
         </div>
     </div>
 </section>
 
-<section aria-labelledby="reel-h">
-    <h2 class="reel-heading" id="reel-h">
-        Now showing <span class="sub">top rated</span>
-    </h2>
-    {% if top_rated %}
-    <div class="reel-gate">
-        <div class="reel-track">
-            {% for _ in "12" %}{% for movie in top_rated %}
-            <a class="reel-frame" href="{% url 'movies:movie_detail' movie.movie_id %}"
-               aria-label="{{ movie.title }}">
-                {% if movie.poster_path %}
-                <img src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="" loading="lazy">
-                {% else %}
-                <span class="frame-empty">🎞</span>
-                {% endif %}
-                <span class="frame-meta">
-                    <span class="frame-title">{{ movie.title }}</span>
-                    {% if movie.top_rating %}<span class="frame-rating">★ {{ movie.top_rating|floatformat:1 }}</span>{% endif %}
-                </span>
-            </a>
-            {% endfor %}{% endfor %}
-        </div>
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>Highest rated</h2>
+        <span class="section-note">keyed above</span>
     </div>
-    {% else %}
-    <p class="stage-empty">The reel is empty — run the pipeline to thread some film through the gate.</p>
-    {% endif %}
+    <div class="poster-grid">
+        {% for movie in top_rated %}
+        {% include "movies/_movie_card.html" with movie=movie only %}
+        {% empty %}
+        <p class="empty">No films loaded yet. Run the pipeline to fill the catalog.</p>
+        {% endfor %}
+    </div>
 </section>
 
-<section aria-labelledby="strip-h">
-    <h2 class="strip-heading" id="strip-h">Newest acquisitions</h2>
-    {% if newest %}
-    <div class="strip-grid">
-        {% for movie in newest %}{% include "movies/_movie_card.html" %}{% endfor %}
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>Most recent</h2>
+        <span class="section-note">by release date</span>
     </div>
-    {% else %}
-    <p class="stage-empty">Nothing acquired yet.</p>
-    {% endif %}
+    <div class="poster-grid">
+        {% for movie in newest %}
+        {% include "movies/_movie_card.html" with movie=movie only %}
+        {% empty %}
+        <p class="empty">No films loaded yet. Run the pipeline to fill the catalog.</p>
+        {% endfor %}
+    </div>
 </section>
-
-<nav class="marquee-links" aria-label="Browse the warehouse">
-    <a href="{% url 'movies:movie_list' %}">Movies</a>
-    <a href="{% url 'movies:actor_list' %}">Actors</a>
-    <a href="{% url 'movies:director_list' %}">Directors</a>
-    <a href="{% url 'movies:genre_list' %}">Genres</a>
-    <a href="{% url 'analytics:dashboard' %}">Analytics</a>
-</nav>
 {% endblock %}

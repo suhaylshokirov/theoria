@@ -30,11 +30,11 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 36 + 37 — Workstream B (image fields Silver→warehouse) + live re-run
+Last completed task   : Task 38 — Frontend redesign (one white + lime design system, all 10 pages)
 Currently on          : Task 35 — Workstream A (split fact_casting into fact_cast/fact_crew)
 Current phase         : Phase 7 — Product Upgrade (plan: ~/.claude/plans/that-s-it-the-project-recursive-ocean.md)
-Blockers / open issues: Full test suite is 168/168 passing. `fact_casting` still has the known ~46% reject rate (1714/3530 rejected in the 2026-07-09 run) — fixed by Workstream A (Task 35), not yet started. Images now live: posters/backdrops/taglines/headshots populated in the warehouse and rendering on the site.
-Last updated          : 2026-07-09
+Blockers / open issues: Full test suite is 169/169 passing. `fact_casting` still has the known ~46% reject rate (1714/3530 rejected in the 2026-07-09 run) — fixed by Workstream A (Task 35), not yet started. Its actor×director cross-join also duplicated every cast member on movie pages when a film has 2+ directors; `movie_detail` now de-duplicates in the view as a display-side workaround until Task 35 fixes the grain.
+Last updated          : 2026-07-28
 ```
 
 **After finishing any task, in this order:**
@@ -429,6 +429,11 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 #### [x] Task 37 — Workstream D: re-apply DDL, re-run pipeline live, verify end-to-end
 - **Goal:** Fresh live run at a bigger sample size (MAX_PAGES to be confirmed by user) + full verification.
 - **Outcome:** Applied `04_add_image_columns.sql` to the live warehouse, then ran `scripts.run_pipeline --date 2026-07-09 --max-pages 5` (user-chosen size; 100 movies). All stages green: Silver 99 movies / 3133 actors / 104 directors, Silver DQ 20/20, Gold 4 datasets, dims upserted, `fact_movie_metrics` 250 (0 rejected), `fact_casting` 1816 (1714 rejected — same expected cross-join limitation, Task 35 will fix), warehouse checks 20/20. Verified populated: dim_movie 99 posters / 95 backdrops / 80 taglines; dim_actor 2342 headshots; dim_director 84 headshots. A rendered `/movies/<id>/` page emits real `https://image.tmdb.org/t/p/w1280` backdrop + `w342` poster URLs (200). Note: user did **not** raise MAX_PAGES beyond 5 this run.
+
+#### [x] Task 38 — Frontend redesign (AP-521): one design system, white + lime
+- **Goal:** Replace the two disjoint themes (dark "projection booth" on Home/Analytics, unstyled system-ui everywhere else) with a single, fully-designed system across all ten pages.
+- **Files:** `static/css/{theoria,home,analytics}.css` (all rewritten), `static/js/theoria.js` (new, shared) + `analytics.js` (charts only) + `home.js` (deleted), `templates/base.html`, all `movies/templates/movies/*.html` (incl. new `_sheet_header.html`, `_person_header.html`), `analytics/templates/analytics/dashboard.html`, `movies/views.py`, `tests/test_django_views.py`
+- **Outcome:** One token system (colour/type/space/motion) in `theoria.css`, with a hard contract that page stylesheets may only *add* components, never restyle a shared one — every `body.page-*` override deleted. Palette is white paper + one lime, with lime reserved as the "measurement mark" (meter bars, keyed posters, active nav); all ink/lime pairs contrast-verified, and the pale in-table bar is legal only because its value is printed on top. Type is Archivo used at two widths (expanded display / condensed labels) + Instrument Sans body + Spline Sans Mono for keys and figures. Every page opens with a shared "sheet header" (shelf label · accession · display title), which is what makes the eight previously-plain pages read as designed. Home's hero is the signature: the full catalog as a contact sheet with top-rated films keyed in lime, developing on load in the one orchestrated motion moment; the grain/lamp-flicker/infinite-marquee were removed. `movie_detail` replaced its darkened-backdrop hero with a specimen layout (framed plate + record list + backdrop strip); `genre_list` went from a chip row to a ranked sheet with share bars; the dashboard became white panels keeping all 7 panels' data bindings. `initMeters()`/number formatting moved into shared `theoria.js` so any page can use `data-meter`, and `analytics.js` now reads its palette from CSS custom properties instead of duplicating five hexes. Views: `genre_list` gained a distinct `Count` annotation, `home` a `mosaic` + `keyed_ids` context, and `movie_detail` now collapses the duplicate cast rows the `fact_casting` cross-join produces for multi-director films. Verified live: all 10 routes + 5 static assets 200, zero template syntax leaking into output, no horizontal overflow at 390px, skip-link is the first tab stop with visible focus rings, and `prefers-reduced-motion` leaves the mosaic fully visible with meters at final width. Tests: 169/169 (added a cast-deduplication test; updated the `genre_list`, `home` and `movie_detail` mock chains).
 
 ---
 

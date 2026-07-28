@@ -4,79 +4,86 @@
 {% block title %}Theoria — {{ movie.title }}{% endblock %}
 
 {% block content %}
-<div class="hero"{% if movie.backdrop_path %} style="background-image: url('{{ movie.backdrop_path|tmdb_image:'w1280' }}')"{% endif %}>
-    <div class="hero-overlay">
+{% comment %} A specimen record, not a streaming-app splash: the poster is a framed
+   plate with its own caption, the facts sit beside it as a record, and the
+   backdrop is a thin strip below rather than a darkened image behind text. {% endcomment %}
+<article class="specimen">
+    <div class="specimen-plate">
         {% if movie.poster_path %}
-        <div class="hero-poster">
-            <img src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster">
+        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster">
+        {% else %}
+        <div class="placeholder" aria-hidden="true">◻</div>
+        {% endif %}
+        <p class="plate-caption mono">dim_movie · {{ movie.movie_id }}</p>
+    </div>
+
+    <div class="specimen-record">
+        <div class="sheet-eyebrow">
+            <span class="label">Film</span>
+            {% if movie.status %}<span class="sheet-accession">{{ movie.status }}</span>{% endif %}
+        </div>
+
+        <h1 class="sheet-title">{{ movie.title }}</h1>
+        {% if movie.tagline %}<p class="specimen-tagline">{{ movie.tagline }}</p>{% endif %}
+
+        <dl class="record-list">
+            <div class="record-row">
+                <dt class="label">Released</dt>
+                <dd class="mono">{% if movie.release_date %}{{ movie.release_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
+            </div>
+            <div class="record-row">
+                <dt class="label">Runtime</dt>
+                <dd class="mono">{% if movie.runtime %}{{ movie.runtime }} min{% else %}—{% endif %}</dd>
+            </div>
+            <div class="record-row">
+                <dt class="label">Language</dt>
+                <dd class="mono">{% if movie.original_language %}{{ movie.original_language|upper }}{% else %}—{% endif %}</dd>
+            </div>
+            <div class="record-row">
+                <dt class="label">Budget</dt>
+                <dd class="mono">{% if movie.budget %}${{ movie.budget|floatformat:"0g" }}{% else %}—{% endif %}</dd>
+            </div>
+            <div class="record-row">
+                <dt class="label">Revenue</dt>
+                <dd class="mono">{% if movie.revenue %}${{ movie.revenue|floatformat:"0g" }}{% else %}—{% endif %}</dd>
+            </div>
+            {% if directors %}
+            <div class="record-row">
+                <dt class="label">Directed by</dt>
+                <dd>
+                    {% for director in directors %}<a href="{% url 'movies:director_detail' director.director_id %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                </dd>
+            </div>
+            {% endif %}
+        </dl>
+
+        {% if genres %}
+        <div class="chips">
+            {% for genre in genres %}
+            <a class="chip" href="{% url 'movies:genre_detail' genre.genre_id %}">{{ genre.genre_name }}</a>
+            {% endfor %}
         </div>
         {% endif %}
-        <div>
-            <h1>{{ movie.title }}</h1>
-            {% if movie.tagline %}<p class="tagline">{{ movie.tagline }}</p>{% endif %}
-            <p class="muted">
-                {% if movie.release_date %}{{ movie.release_date|date:"Y" }}{% else %}—{% endif %}
-                {% if movie.runtime %} · {{ movie.runtime }} min{% endif %}
-                {% if movie.status %} · {{ movie.status }}{% endif %}
-                {% if movie.original_language %} · {{ movie.original_language|upper }}{% endif %}
-            </p>
-            {% if genres %}
-            <div class="chips">
-                {% for genre in genres %}
-                <a class="chip" href="{% url 'movies:genre_detail' genre.genre_id %}">{{ genre.genre_name }}</a>
-                {% endfor %}
-            </div>
-            {% endif %}
-            {% if directors %}
-            <p>
-                Directed by
-                {% for director in directors %}<a href="{% url 'movies:director_detail' director.director_id %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
-            </p>
-            {% endif %}
-            {% if movie.overview %}<p>{{ movie.overview }}</p>{% endif %}
-        </div>
     </div>
-</div>
+</article>
 
-<div class="stats">
-    <div class="stat">
-        <span class="stat-value">{% if movie.runtime %}{{ movie.runtime }} min{% else %}—{% endif %}</span>
-        <span class="stat-label">Runtime</span>
-    </div>
-    <div class="stat">
-        <span class="stat-value">{% if movie.budget %}${{ movie.budget|floatformat:"0g" }}{% else %}—{% endif %}</span>
-        <span class="stat-label">Budget</span>
-    </div>
-    <div class="stat">
-        <span class="stat-value">{% if movie.revenue %}${{ movie.revenue|floatformat:"0g" }}{% else %}—{% endif %}</span>
-        <span class="stat-label">Revenue</span>
-    </div>
-    <div class="stat">
-        <span class="stat-value">{{ movie.release_date|default:"—" }}</span>
-        <span class="stat-label">Release date</span>
-    </div>
-</div>
-
-<h2>Cast</h2>
-{% if cast %}
-<div class="poster-grid">
-    {% for credit in cast %}
-    <div class="poster-card">
-        <a href="{% url 'movies:actor_detail' credit.actor.actor_id %}">
-            {% if credit.actor.profile_path %}
-            <img class="headshot" src="{{ credit.actor.profile_path|tmdb_image:'w185' }}" alt="{{ credit.actor.name }}" loading="lazy">
-            {% else %}
-            <div class="placeholder">👤</div>
-            {% endif %}
-            <div class="card-body">
-                <span class="card-title">{{ credit.actor.name }}</span>
-                {% if credit.role %}<span class="card-sub">{{ credit.role }}</span>{% endif %}
-            </div>
-        </a>
-    </div>
-    {% endfor %}
-</div>
-{% else %}
-<p class="muted">No cast data available.</p>
+{% if movie.backdrop_path %}
+<figure class="backdrop-strip">
+    <img src="{{ movie.backdrop_path|tmdb_image:'w1280' }}" alt="" loading="lazy">
+</figure>
 {% endif %}
+
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>Cast</h2>
+        <span class="section-note">fact_casting</span>
+    </div>
+    <div class="poster-grid is-tight">
+        {% for credit in cast %}
+        {% include "movies/_person_card.html" with person=credit.actor detail_url_name="movies:actor_detail" card_sub=credit.role only %}
+        {% empty %}
+        <p class="empty">No cast recorded for this film.</p>
+        {% endfor %}
+    </div>
+</section>
 {% endblock %}

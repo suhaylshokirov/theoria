@@ -3,15 +3,36 @@
 {% block title %}Theoria — Genres{% endblock %}
 
 {% block content %}
-<h1>Genres</h1>
+{% include "movies/_sheet_header.html" with eyebrow="Index" accession="dim_genre" title="Genres" sub="How the catalog divides up. The bar shows each genre's share against the largest." only %}
 
-{% if genres %}
-<div class="chips">
-    {% for genre in genres %}
-    <a class="chip" href="{% url 'movies:genre_detail' genre.genre_id %}">{{ genre.genre_name }}</a>
-    {% endfor %}
-</div>
-{% else %}
-<p class="muted">No genres loaded yet.</p>
-{% endif %}
+<section class="sheet-section">
+    {% if genres %}
+    <div class="table-wrap">
+        <table class="table-2col">
+            <caption class="visually-hidden">Genres by number of films in the catalog</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Genre</th>
+                    <th scope="col" class="num">Films</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for genre in genres %}
+                <tr>
+                    <th scope="row" class="genre-cell">
+                        <a href="{% url 'movies:genre_detail' genre.genre_id %}">{{ genre.genre_name }}</a>
+                    </th>
+                    {% comment %} data-meter draws the lime bar behind the number, scaled
+                       to the column max by theoria.js. The number stays
+                       printed on top — that's what makes the cell readable. {% endcomment %}
+                    <td class="num" data-meter>{{ genre.movie_count|default:0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty">No genres loaded yet. Run the pipeline to fill the catalog.</p>
+    {% endif %}
+</section>
 {% endblock %}

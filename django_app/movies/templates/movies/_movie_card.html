@@ -1,10 +1,13 @@
+{% comment %} A film as a frame on the sheet. Params (pass with `only`):
+     movie : a Movie
+   Note genre_detail passes `movie=m.movie`, since its rows are MovieMetrics. {% endcomment %}
 {% load tmdb_images %}
 <div class="poster-card">
     <a href="{% url 'movies:movie_detail' movie.movie_id %}">
         {% if movie.poster_path %}
         <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster" loading="lazy">
         {% else %}
-        <div class="placeholder">🎬</div>
+        <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}
         <div class="card-body">
             <span class="card-title">{{ movie.title }}</span>

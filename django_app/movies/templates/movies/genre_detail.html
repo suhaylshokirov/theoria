@@ -3,51 +3,62 @@
 {% block title %}Theoria — {{ genre.genre_name }}{% endblock %}
 
 {% block content %}
-<h1>{{ genre.genre_name }}</h1>
+{% include "movies/_sheet_header.html" with eyebrow="Genre" accession="dim_genre" title=genre.genre_name only %}
 
-<div class="stats">
-    <div class="stat">
-        <span class="stat-value">{{ movie_count }}</span>
-        <span class="stat-label">Movies</span>
+<section class="sheet-section">
+    <div class="stats">
+        <div class="stat">
+            <span class="stat-value" data-count="{{ movie_count }}">{{ movie_count }}</span>
+            <span class="stat-label">Films</span>
+        </div>
+        <div class="stat">
+            <span class="stat-value">{% if avg_rating %}★ {{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
+            <span class="stat-label">Avg rating</span>
+        </div>
     </div>
-    <div class="stat">
-        <span class="stat-value">{% if avg_rating %}{{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
-        <span class="stat-label">Avg rating</span>
+</section>
+
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>Highest rated</h2>
+        <span class="section-note">top 10</span>
     </div>
-</div>
+    <div class="poster-grid">
+        {% for m in top_movies %}
+        {% include "movies/_movie_card.html" with movie=m.movie only %}
+        {% empty %}
+        <p class="empty">No films recorded under this genre.</p>
+        {% endfor %}
+    </div>
+</section>
 
-<h2>Top-rated movies</h2>
-{% if top_movies %}
-<div class="poster-grid">
-    {% for m in top_movies %}
-    {% include "movies/_movie_card.html" with movie=m.movie %}
-    {% endfor %}
-</div>
-{% else %}
-<p class="muted">No movies found for this genre.</p>
-{% endif %}
-
-<h2>Revenue by year</h2>
-{% if revenue_by_year %}
-<div class="card table-wrap">
-    <table>
-        <thead>
-            <tr>
-                <th>Year</th>
-                <th>Total revenue</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in revenue_by_year %}
-            <tr>
-                <td>{{ row.year }}</td>
-                <td>{% if row.total_revenue %}${{ row.total_revenue|floatformat:"0g" }}{% else %}—{% endif %}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-{% else %}
-<p class="muted">No revenue data available.</p>
-{% endif %}
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>Revenue by year</h2>
+        <span class="section-note">fact_movie_metrics</span>
+    </div>
+    {% if revenue_by_year %}
+    <div class="table-wrap">
+        <table class="table-2col">
+            <caption class="visually-hidden">Total revenue per release year for {{ genre.genre_name }} films</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Year</th>
+                    <th scope="col" class="num">Total revenue</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in revenue_by_year %}
+                <tr>
+                    <th scope="row" class="mono">{{ row.year }}</th>
+                    <td class="num" data-meter>{% if row.total_revenue %}{{ row.total_revenue|floatformat:"0" }}{% else %}0{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty">No revenue recorded for this genre.</p>
+    {% endif %}
+</section>
 {% endblock %}

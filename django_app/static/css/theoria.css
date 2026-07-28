@@ -1,53 +1,126 @@
-/* Theoria — single hand-written stylesheet for the whole site.
-   Light theme by default, dark theme via prefers-color-scheme.
-   No framework, no build step: plain CSS custom properties + grid/flex. */
+/* ===========================================================================
+   THEORIA — the catalog sheet
+   ---------------------------------------------------------------------------
+   One design system for the whole site. Plain white paper, one lime green.
+
+   The idea: Theoria is a film *archive* with a measuring instrument pointed
+   at it — not a cinema. So the vocabulary is contact sheets, catalog cards,
+   accession numbers and shelf labels, set on white with hairline rules.
+
+   LIME IS THE MEASUREMENT MARK. It appears only where something has been
+   measured: a bar, a keyed frame, a rating, the page you're on. It is never
+   decoration, never a gradient, never a glow. Spending it anywhere else is
+   what makes it stop meaning anything.
+
+   No framework, no build step: custom properties + grid/flex.
+   Light only — "plain white" stays literally true, so there is no
+   prefers-color-scheme block anywhere in this file.
+
+   Contract with page stylesheets (home.css, analytics.css):
+   this file owns every token and every shared component. A page stylesheet
+   may ADD a component of its own; it may never restyle one defined here.
+   That rule is what keeps section margins from cancelling each other out.
+   =========================================================================== */
 
 :root {
-  --bg: #f6f5f2;
-  --surface: #ffffff;
-  --surface-2: #eceae5;
-  --text: #1d1c1a;
-  --text-muted: #6b6862;
-  --border: #dcd9d2;
-  --accent: #b0413e;
-  --accent-contrast: #ffffff;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 4px 14px rgba(0, 0, 0, 0.06);
-  --radius: 10px;
+  /* --- Color ---------------------------------------------------------------
+     Contrast ratios verified against --paper #FFFFFF:
+       --ink 19.7:1 · --ink-muted 7.6:1 · --ink-faint 4.8:1 · --lime-text 5.0:1
+       --lime-mark 3.1:1 (clears the 3:1 non-text mark floor)
+       --ink on --lime 13.1:1
+     --lime itself is 1.5:1 on paper: a FILL, never a mark on its own and
+     never text. Where it fills a meter bar the number is printed in the same
+     cell — that printed value is the required relief channel. */
+  --paper: #ffffff;
+  --sheet: #f7f7f5;
+  --sheet-2: #efeeea;
+  --rule: #e3e2dd;
+  --rule-strong: #c9c7c0;
+
+  --ink: #0b0b0b;
+  --ink-muted: #57534e;
+  --ink-faint: #78716c;
+
+  --lime: #a3e635;
+  --lime-wash: #f2fbe0;
+  --lime-text: #4d7c0f;
+  --lime-mark: #65a30d;
+  --lime-deep: #365314;
+
+  /* Sequential ramp for ranked data. PASSES all four ordinal checks
+     (monotone L, adjacent ΔL ≥ .06, light-end ≥ 2:1, single hue). */
+  --rank-1: #7cb518;
+  --rank-2: #558e0b;
+  --rank-3: #365314;
+
+  /* --- Type ----------------------------------------------------------------
+     Archivo carries two roles through its width axis: expanded for display,
+     condensed for labels. That single family doing two opposite jobs is the
+     typographic signature. */
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-label: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --text-3xs: 0.6875rem;
+  --text-2xs: 0.75rem;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.125rem;
+  --text-lg: 1.375rem;
+  --text-xl: 1.75rem;
+  --text-2xl: 2.5rem;
+  --text-display: clamp(3rem, 7vw, 5.5rem);
+
+  /* --- Space --------------------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.375rem;
+  --space-3: 0.5rem;
+  --space-4: 0.75rem;
+  --space-5: 1rem;
+  --space-6: 1.5rem;
+  --space-7: 2rem;
+  --space-8: 2.75rem;
+  --space-9: 4rem;
+  --space-10: 6rem;
+
+  /* --- Form ---------------------------------------------------------------- */
+  --radius: 2px;          /* sheets and plates, not pills */
+  --radius-pill: 999px;   /* chips only */
+  --hairline: 1px solid var(--rule);
+  --frame: 260px;         /* max content width of the page shell gutter calc */
+  --measure: 1240px;
+
+  --z-header: 100;
+  --z-skip: 200;
+
+  --ease: cubic-bezier(0.2, 0, 0.1, 1);
+  --dur-fast: 120ms;
+  --dur: 220ms;
+  --dur-slow: 420ms;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #16151a;
-    --surface: #201f26;
-    --surface-2: #2a2931;
-    --text: #ecebe8;
-    --text-muted: #9a97a0;
-    --border: #37353e;
-    --accent: #e05d5a;
-    --accent-contrast: #16151a;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
-  }
-}
+/* --- Reset ---------------------------------------------------------------- */
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  line-height: 1.5;
-}
-
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
 
 img {
@@ -55,263 +128,441 @@ img {
   display: block;
 }
 
-/* --- Layout ------------------------------------------------------------- */
-
-.container {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 4rem;
+a {
+  color: var(--lime-text);
+  text-decoration: none;
 }
 
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* One focus treatment for the whole site. */
+:where(a, button, input, select, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--lime-mark);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  font-weight: 700;
+}
+
+p {
+  margin: 0;
+}
+
+/* --- Type roles ------------------------------------------------------------ */
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-stretch: 118%;
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+}
+
+/* The shelf label: condensed, spaced, small. Used for every eyebrow,
+   table header, stat label and chip on the site. */
+.label {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+}
+
+/* Accession numbers, surrogate keys, IDs, and every numeric cell. The
+   subject of this project is a star schema with real primary keys — the
+   mono face is honest about that rather than hiding it. */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.muted { color: var(--ink-muted); }
+.faint { color: var(--ink-faint); }
+
+/* Available to screen readers, removed from the visual page. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Page shell ------------------------------------------------------------ */
+
+.skip-link {
+  position: absolute;
+  left: var(--space-4);
+  top: calc(-1 * var(--space-10));
+  z-index: var(--z-skip);
+  background: var(--ink);
+  color: var(--paper);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  transition: top var(--dur) var(--ease);
+}
+
+.skip-link:focus {
+  top: var(--space-4);
+  text-decoration: none;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--measure);
+  margin-inline: auto;
+  padding-inline: var(--space-6);
+}
+
+main.container {
+  padding-block: var(--space-8) var(--space-10);
+}
+
+/* --- Header ---------------------------------------------------------------- */
+
 .site-header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-header);
+  background: var(--paper);
+  border-bottom: var(--hairline);
 }
 
 .nav {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 0.75rem 1rem;
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: var(--space-7);
+  min-height: 60px;
   flex-wrap: wrap;
 }
 
-.nav .brand {
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-display);
   font-weight: 700;
-  font-size: 1.2rem;
-  letter-spacing: 0.02em;
-  color: var(--text);
+  font-stretch: 118%;
+  font-size: var(--text-md);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
 }
 
-.nav .brand:hover {
+.brand:hover {
   text-decoration: none;
-  color: var(--accent);
+  color: var(--ink);
+}
+
+/* The keyed square — the mosaic's lime frame-mark, shrunk to a glyph. It is
+   the one motif that repeats site-wide. */
+.brand::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: var(--lime);
+  flex: none;
 }
 
 .nav-links {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-6);
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .nav-links a {
-  color: var(--text-muted);
+  position: relative;
+  font-size: var(--text-sm);
   font-weight: 500;
+  color: var(--ink-muted);
+  padding-block: var(--space-2);
 }
 
 .nav-links a:hover {
-  color: var(--accent);
+  color: var(--ink);
   text-decoration: none;
 }
 
+/* Active page: the lime rule under the label. Same "this one is measured"
+   logic as the keyed frames on the contact sheet. */
+.nav-links a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.nav-links a[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(-1 * var(--space-2) - 1px);
+  height: 3px;
+  background: var(--lime);
+}
+
+/* --- Footer ---------------------------------------------------------------- */
+
 .site-footer {
-  border-top: 1px solid var(--border);
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  text-align: center;
-  padding: 1.5rem 1rem;
+  border-top: var(--hairline);
+  padding-block: var(--space-7);
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
 }
 
-/* --- Headings & text ------------------------------------------------------ */
-
-h1 {
-  font-size: 1.8rem;
-  margin: 0.5rem 0 1rem;
+.site-footer .footer-row {
+  display: flex;
+  gap: var(--space-5);
+  justify-content: space-between;
+  flex-wrap: wrap;
 }
 
-h2 {
-  font-size: 1.25rem;
-  margin: 2rem 0 0.75rem;
+/* --- The sheet header ------------------------------------------------------
+   Every page opens with this band: shelf label + accession number, the
+   title in expanded display, an optional sub-line, then a hairline. It is
+   the single device that makes ten different pages read as one site. */
+
+.sheet-head {
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: var(--space-5);
 }
 
-.muted {
-  color: var(--text-muted);
+/* Unscoped on purpose: movie_detail and the person header build their own
+   record layouts around these same pieces, so a `.sheet-head .x` descendant
+   selector would silently drop the display type on those pages. */
+.sheet-eyebrow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
 }
 
-.tagline {
-  font-style: italic;
-  color: var(--text-muted);
-  margin: 0.25rem 0 1rem;
+.sheet-accession {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
 }
 
-/* --- Stat tiles ----------------------------------------------------------- */
+.sheet-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-stretch: 118%;
+  font-size: var(--text-2xl);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.sheet-sub {
+  margin-top: var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--text-md);
+  max-width: 62ch;
+}
+
+/* --- Sections --------------------------------------------------------------
+   ONE owner for vertical rhythm. Sections never set their own top margin —
+   that is how the old stylesheet ended up with paddings cancelling out. */
+
+.sheet-section + .sheet-section,
+.sheet-head + .sheet-section {
+  margin-top: var(--space-9);
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--hairline);
+}
+
+.section-head h2 {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The keyed square again, marking a measured section. */
+.section-head h2::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  background: var(--lime);
+  flex: none;
+}
+
+.section-head .section-note {
+  margin-left: auto;
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+}
+
+/* --- Stat row --------------------------------------------------------------
+   Ruled cells rather than boxed tiles — a catalog record, not a dashboard. */
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.75rem;
-  margin: 1rem 0;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border-top: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-strong);
 }
 
 .stat {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.9rem 1rem;
+  padding: var(--space-5) var(--space-5) var(--space-5) 0;
+  border-right: var(--hairline);
 }
 
+.stat:last-child { border-right: none; }
+
 .stat .stat-value {
-  font-size: 1.4rem;
-  font-weight: 700;
   display: block;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: var(--text-lg);
+  line-height: 1.3;
+  min-height: 1.3em; /* an em-dash placeholder occupies the same height */
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
 
 .stat .stat-label {
-  color: var(--text-muted);
-  font-size: 0.8rem;
+  display: block;
+  margin-top: var(--space-3);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
 }
 
-/* --- Cards & grids ---------------------------------------------------------- */
-
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 1rem 1.25rem;
-  margin: 1rem 0;
-}
+/* --- Poster / person cards -------------------------------------------------
+   Frames on a sheet: hairline border, no shadow, no radius to speak of. */
 
 .poster-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 1rem;
-  margin: 1rem 0;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: var(--space-5);
 }
 
-.poster-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow);
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.12s ease;
-}
-
-.poster-card:hover {
-  transform: translateY(-3px);
+.poster-grid.is-tight {
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: var(--space-4);
 }
 
 .poster-card a {
-  color: var(--text);
+  display: block;
+  color: var(--ink);
 }
 
+.poster-card a:hover { text-decoration: none; }
+
 .poster-card .poster,
-.poster-card .headshot {
+.poster-card .headshot,
+.poster-card .placeholder {
   aspect-ratio: 2 / 3;
   width: 100%;
   object-fit: cover;
-  background: var(--surface-2);
+  background: var(--sheet);
+  border: var(--hairline);
+  transition: border-color var(--dur) var(--ease),
+              transform var(--dur) var(--ease);
 }
 
 .poster-card .placeholder {
-  aspect-ratio: 2 / 3;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-2);
-  color: var(--text-muted);
-  font-size: 2rem;
+  color: var(--rule-strong);
+  font-size: var(--text-xl);
+}
+
+.poster-card a:hover .poster,
+.poster-card a:hover .headshot,
+.poster-card a:hover .placeholder,
+.poster-card a:focus-visible .poster,
+.poster-card a:focus-visible .headshot {
+  border-color: var(--lime-mark);
+  transform: translateY(-3px);
 }
 
 .poster-card .card-body {
-  padding: 0.6rem 0.75rem 0.75rem;
+  padding-top: var(--space-3);
 }
 
 .poster-card .card-title {
-  font-weight: 600;
-  font-size: 0.92rem;
-  line-height: 1.3;
   display: block;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .poster-card .card-sub {
-  color: var(--text-muted);
-  font-size: 0.8rem;
+  display: block;
+  margin-top: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
 }
 
-/* --- Hero (movie detail) ---------------------------------------------------- */
-
-.hero {
-  border-radius: var(--radius);
-  overflow: hidden;
-  position: relative;
-  margin: 1rem 0;
-  background-size: cover;
-  background-position: center 25%;
-  background-color: var(--surface-2);
-}
-
-.hero .hero-overlay {
-  background: linear-gradient(to right, rgba(10, 10, 14, 0.88) 25%, rgba(10, 10, 14, 0.55));
-  color: #f2f1ee;
-  display: flex;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  align-items: flex-start;
-}
-
-.hero .hero-overlay a {
-  color: #f9b8b6;
-}
-
-.hero .hero-poster {
-  width: 160px;
-  flex-shrink: 0;
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.hero h1 {
-  margin-top: 0;
-  color: inherit;
-}
-
-.hero .muted,
-.hero .tagline {
-  color: #c9c7c2;
-}
-
-@media (max-width: 640px) {
-  .hero .hero-overlay {
-    flex-direction: column;
-  }
-
-  .hero .hero-poster {
-    width: 120px;
-  }
-}
-
-/* --- Chips (genres etc.) ------------------------------------------------------ */
+/* --- Chips ----------------------------------------------------------------- */
 
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin: 0.75rem 0;
+  gap: var(--space-3);
 }
 
 .chip {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.25rem 0.8rem;
-  font-size: 0.85rem;
-  color: var(--text);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
 }
 
 .chip:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--lime-wash);
+  border-color: var(--lime-mark);
   text-decoration: none;
 }
 
@@ -324,117 +575,461 @@ h2 {
 table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.92rem;
+  font-size: var(--text-sm);
 }
 
-th,
-td {
-  text-align: left;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--border);
-}
-
-th {
-  color: var(--text-muted);
-  font-size: 0.8rem;
+thead th {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.12em;
+  color: var(--ink-faint);
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--rule-strong);
+  white-space: nowrap;
+  background: var(--paper);
 }
 
-tbody tr:hover {
-  background: var(--surface-2);
+tbody td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--hairline);
+  vertical-align: middle;
 }
 
-/* --- Search & toolbar -------------------------------------------------------- */
+tbody tr:hover { background: var(--sheet); }
+
+/* Row-header cells are <th scope="row"> for structure, but should read as
+   body text, not as a column label. */
+tbody th[scope="row"] {
+  font-weight: 600;
+  font-size: var(--text-sm);
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--hairline);
+}
+
+/* Spline Sans Mono is loaded at 400/500 only. Asking for 600 makes the
+   browser synthesize the bold, which smears the glyphs — so mono cells cap
+   at the heaviest weight actually available. */
+tbody th[scope="row"].mono,
+.mono {
+  font-weight: 500;
+}
+
+tbody th.genre-cell a { color: var(--ink); }
+tbody th.genre-cell a:hover { color: var(--lime-text); }
+
+th.num, td.num {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+
+/* --- Meter cells -----------------------------------------------------------
+   A lime bar drawn behind the number, scaled to the column max. The bar is
+   below the 3:1 mark floor on purpose — the value is printed on top of it in
+   the same cell, which is the documented relief channel. Never use a bare
+   lime bar without its number. Driven by initMeters() in theoria.js.
+
+   The bar grows leftward from its right-aligned number, so the LEFT edge is
+   the one that moves with the value — that edge carries the lime rule, and
+   the fill behind it stays a pale wash. (Marking the right edge would put
+   every bar's rule in the same place, encoding nothing.)
+
+   The cell is width-limited rather than the fill: capping .meter-fill would
+   flatten the top of the range, making 34 and 15 land in the same place. */
+
+td[data-meter] {
+  position: relative;
+  isolation: isolate;
+  padding-right: var(--space-5);
+}
+
+/* Two-column ranked sheets (genres, revenue-by-year) give the bar real room,
+   so the range is legible. In a dense multi-column analytics table the bar
+   is a sparkline beside its number and takes whatever the column allows. */
+.table-2col td[data-meter] {
+  width: 42%;
+}
+
+/* The track: reserves the right-hand strip for the number so a full-width
+   bar can never run under its own digits. The fill's percentage width is
+   then relative to THIS box, not the cell, so 100% lands exactly here. */
+td[data-meter] .meter-track {
+  position: absolute;
+  inset: 4px 3.25rem 4px 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+td[data-meter] .meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 0;
+  background: var(--lime-wash);
+  border-left: 2px solid var(--lime);
+  transition: width var(--dur-slow) var(--ease);
+}
+
+/* --- Toolbar & controls ----------------------------------------------------- */
 
 .toolbar {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-5);
   align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
-  margin: 1rem 0;
+  margin-bottom: var(--space-6);
 }
 
 .toolbar form {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-3);
   flex-wrap: wrap;
   align-items: center;
 }
 
+.field {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.field:focus-within {
+  border-color: var(--lime-mark);
+}
+
 input[type="text"],
-select {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.45rem 0.7rem;
-  font-size: 0.95rem;
+input[type="search"] {
+  border: none;
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-3) var(--space-4);
+  min-width: 200px;
 }
 
 input[type="text"]:focus,
-select:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+input[type="search"]:focus {
+  outline: none;
 }
 
 button,
 .btn {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  border: none;
-  border-radius: 6px;
-  padding: 0.45rem 1rem;
-  font-size: 0.95rem;
+  font-family: var(--font-label);
   font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--ink);
+  color: var(--paper);
+  border: 1px solid var(--ink);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-5);
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
 }
 
 button:hover,
 .btn:hover {
-  filter: brightness(1.08);
+  background: var(--lime);
+  border-color: var(--lime);
+  color: var(--ink);
   text-decoration: none;
+}
+
+/* Segmented sort control — replaces a bare <select>. Radio inputs so it
+   works with no JS and submits with the form. Rendered as a <fieldset>, so
+   the browser's default fieldset chrome has to be zeroed out. */
+.segmented {
+  display: flex;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  min-width: 0; /* fieldsets default to min-content; without this it won't shrink */
+}
+
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented label {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  border-right: 1px solid var(--rule);
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+  white-space: nowrap;
+}
+
+.segmented label:last-of-type { border-right: none; }
+
+.segmented label:hover { background: var(--sheet); }
+
+.segmented input:checked + label {
+  background: var(--lime);
+  color: var(--ink);
+}
+
+.segmented input:focus-visible + label {
+  outline: 2px solid var(--lime-mark);
+  outline-offset: -2px;
+}
+
+.result-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+  white-space: nowrap;
 }
 
 /* --- Pagination ------------------------------------------------------------- */
 
 .pagination {
   display: flex;
-  gap: 0.75rem;
+  gap: var(--space-5);
   align-items: center;
   justify-content: center;
-  margin: 1.5rem 0;
-  color: var(--text-muted);
-  font-size: 0.92rem;
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: var(--hairline);
+}
+
+.pagination .page-state {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
 }
 
 .pagination a {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.35rem 0.9rem;
-  color: var(--text);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-5);
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
 }
 
 .pagination a:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--lime-wash);
+  border-color: var(--lime-mark);
   text-decoration: none;
 }
 
-/* --- Analytics dashboard ------------------------------------------------------- */
+/* --- Specimen (movie detail) -----------------------------------------------
+   A catalog record: framed plate + captioned facts. Deliberately NOT a
+   full-bleed darkened backdrop with text on top — that's the streaming-app
+   default and it makes every film look the same. The backdrop still appears,
+   as an honest strip below the record. */
 
-.panel-grid {
+.specimen {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 1rem;
+  grid-template-columns: 260px 1fr;
+  gap: var(--space-8);
   align-items: start;
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: var(--space-7);
 }
 
-.panel-grid .card {
+.specimen-plate .poster,
+.specimen-plate .placeholder {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  background: var(--sheet);
+  border: var(--hairline);
+}
+
+.specimen-plate .placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rule-strong);
+  font-size: var(--text-2xl);
+}
+
+.specimen-plate .plate-caption {
+  margin-top: var(--space-3);
+  font-size: var(--text-3xs);
+  color: var(--ink-faint);
+}
+
+.specimen-tagline {
+  margin-top: var(--space-4);
+  font-size: var(--text-md);
+  color: var(--ink-muted);
+  max-width: 54ch;
+  text-wrap: balance;
+}
+
+.record-list {
+  margin: var(--space-6) 0 0;
+  border-top: var(--hairline);
+}
+
+.record-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: var(--space-5);
+  padding: var(--space-3) 0;
+  border-bottom: var(--hairline);
+}
+
+.record-row dt {
+  padding-top: 2px;
+}
+
+.record-row dd {
   margin: 0;
+  font-size: var(--text-sm);
 }
 
-.card h2 {
-  margin-top: 0.25rem;
+.specimen .chips {
+  margin-top: var(--space-6);
+}
+
+/* The backdrop as a measured strip — cropped wide, hairline-framed. */
+.backdrop-strip {
+  margin: var(--space-7) 0 0;
+  border: var(--hairline);
+  overflow: hidden;
+}
+
+.backdrop-strip img {
+  width: 100%;
+  aspect-ratio: 32 / 9;
+  object-fit: cover;
+  object-position: center 30%;
+}
+
+@media (max-width: 860px) {
+  .specimen {
+    grid-template-columns: 180px 1fr;
+    gap: var(--space-6);
+  }
+}
+
+@media (max-width: 620px) {
+  .specimen {
+    grid-template-columns: 1fr;
+  }
+
+  .specimen-plate {
+    max-width: 180px;
+  }
+
+  .record-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+}
+
+/* --- Person record header --------------------------------------------------
+   A headshot plate beside the record. Shared by actor_detail and
+   director_detail, which used to be duplicated templates. */
+
+.person-head {
+  display: grid;
+  grid-template-columns: 148px 1fr;
+  gap: var(--space-7);
+  align-items: start;
+  border-bottom: 1px solid var(--rule-strong);
+  padding-bottom: var(--space-6);
+}
+
+.person-plate .headshot,
+.person-plate .placeholder {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  background: var(--sheet);
+  border: var(--hairline);
+}
+
+.person-plate .placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rule-strong);
+  font-size: var(--text-xl);
+}
+
+.person-record .stats {
+  margin-top: var(--space-6);
+}
+
+@media (max-width: 720px) {
+  .person-head {
+    grid-template-columns: 104px 1fr;
+    gap: var(--space-5);
+  }
+}
+
+/* --- Empty states ----------------------------------------------------------
+   An empty screen is an invitation to act — say what to do, not "no data". */
+
+.empty {
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius);
+  padding: var(--space-7);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+  /* Empty states are usually a {% empty %} clause inside a grid, so without
+     this they'd be sized to a single poster column. */
+  grid-column: 1 / -1;
+}
+
+/* --- Responsive ------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .container { padding-inline: var(--space-5); }
+  main.container { padding-block: var(--space-7) var(--space-8); }
+  .nav { gap: var(--space-4); }
+  .nav-links { gap: var(--space-4); width: 100%; margin-left: 0; }
+  .sheet-title { font-size: var(--text-xl); }
+  .stat { padding-right: var(--space-4); }
+}
+
+/* --- Quality floor ---------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

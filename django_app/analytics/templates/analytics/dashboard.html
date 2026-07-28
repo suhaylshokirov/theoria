@@ -6,26 +6,18 @@
 {% block body_class %}page-analytics{% endblock %}
 
 {% block extra_head %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="{% static 'css/analytics.css' %}">
 {% endblock %}
 
 {% block content %}
-<header class="booth-head">
-    <p class="eyebrow">Projection booth · Instrument readouts</p>
-    <h1 class="booth-title">Analytics</h1>
-    <p class="booth-sub">
-        Seven readouts off the warehouse — every number measured
-        from the star schema, nothing estimated.
-    </p>
-</header>
+{% include "movies/_sheet_header.html" with eyebrow="Readouts" accession="7 queries" title="Analytics" sub="Seven queries run straight against the star schema. Every number here is measured, not estimated." only %}
 
-<div class="booth-grid">
-    <section class="booth-panel" aria-labelledby="decade-h">
-        <h2 id="decade-h">Movies by decade <span class="sub">avg rating</span></h2>
+<div class="panel-grid">
+    <section class="panel is-wide" aria-labelledby="decade-h">
+        <div class="section-head">
+            <h2 id="decade-h">Rating by decade</h2>
+            <span class="section-note">movies_by_decade.sql</span>
+        </div>
         {% if movies_by_decade %}
         <div class="chart-stage">
             <canvas id="decade-chart" role="img" aria-label="Average rating by decade, line chart"></canvas>
@@ -33,12 +25,12 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>Decade</th><th class="num">Movies</th><th class="num">Avg rating</th><th class="num">Total revenue</th></tr>
+                    <tr><th scope="col">Decade</th><th scope="col" class="num">Films</th><th scope="col" class="num">Avg rating</th><th scope="col" class="num">Total revenue</th></tr>
                 </thead>
                 <tbody>
                     {% for row in movies_by_decade %}
                     <tr>
-                        <td>{{ row.decade }}</td>
+                        <th scope="row" class="mono">{{ row.decade }}</th>
                         <td class="num" data-meter>{{ row.movie_count }}</td>
                         <td class="num">{{ row.avg_rating|floatformat:2|default:"—" }}</td>
                         <td class="num">{{ row.total_revenue|default:"—" }}</td>
@@ -48,12 +40,15 @@
             </table>
         </div>
         {% else %}
-        <p class="stage-empty">No footage on this gauge yet — run the pipeline to feed the warehouse.</p>
+        <p class="empty">No films loaded yet. Run the pipeline to fill the warehouse.</p>
         {% endif %}
     </section>
 
-    <section class="booth-panel" aria-labelledby="revenue-h">
-        <h2 id="revenue-h">Revenue by genre <span class="sub">box office</span></h2>
+    <section class="panel is-wide" aria-labelledby="revenue-h">
+        <div class="section-head">
+            <h2 id="revenue-h">Revenue by genre</h2>
+            <span class="section-note">revenue_by_genre.sql</span>
+        </div>
         {% if revenue_by_genre %}
         <div class="chart-stage">
             <canvas id="revenue-chart" role="img" aria-label="Total revenue by genre, bar chart"></canvas>
@@ -61,12 +56,12 @@
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>Genre</th><th class="num">Movies</th><th class="num">Total revenue</th><th class="num">Avg / movie</th></tr>
+                    <tr><th scope="col">Genre</th><th scope="col" class="num">Films</th><th scope="col" class="num">Total revenue</th><th scope="col" class="num">Avg / film</th></tr>
                 </thead>
                 <tbody>
                     {% for row in revenue_by_genre %}
                     <tr>
-                        <td>{{ row.genre_name }}</td>
+                        <th scope="row">{{ row.genre_name }}</th>
                         <td class="num">{{ row.movie_count }}</td>
                         <td class="num" data-meter>{{ row.total_revenue|default:"—" }}</td>
                         <td class="num">{{ row.avg_revenue_per_movie|floatformat:0|default:"—" }}</td>
@@ -76,22 +71,25 @@
             </table>
         </div>
         {% else %}
-        <p class="stage-empty">No footage on this gauge yet — run the pipeline to feed the warehouse.</p>
+        <p class="empty">No films loaded yet. Run the pipeline to fill the warehouse.</p>
         {% endif %}
     </section>
 
-    <section class="booth-panel" aria-labelledby="directors-h">
-        <h2 id="directors-h">Top rated directors <span class="sub">min 3 films</span></h2>
+    <section class="panel" aria-labelledby="directors-h">
+        <div class="section-head">
+            <h2 id="directors-h">Top rated directors</h2>
+            <span class="section-note">min 3 films</span>
+        </div>
         {% if top_rated_directors %}
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>Director</th><th class="num">Movies</th><th class="num">Avg rating</th><th class="num">Total votes</th></tr>
+                    <tr><th scope="col">Director</th><th scope="col" class="num">Films</th><th scope="col" class="num">Avg rating</th><th scope="col" class="num">Votes</th></tr>
                 </thead>
                 <tbody>
                     {% for row in top_rated_directors %}
                     <tr>
-                        <td>{{ row.director_name }}</td>
+                        <th scope="row">{{ row.director_name }}</th>
                         <td class="num">{{ row.movie_count }}</td>
                         <td class="num" data-meter>{{ row.avg_rating|floatformat:2|default:"—" }}</td>
                         <td class="num">{{ row.total_votes|default:"—" }}</td>
@@ -101,22 +99,25 @@
             </table>
         </div>
         {% else %}
-        <p class="stage-empty">No director clears the three-film bar yet — a larger ingest will light this up.</p>
+        <p class="empty">No director has three films in the catalog yet. A larger ingest will fill this in.</p>
         {% endif %}
     </section>
 
-    <section class="booth-panel" aria-labelledby="actors-h">
-        <h2 id="actors-h">Most productive actors <span class="sub">by film count</span></h2>
+    <section class="panel" aria-labelledby="actors-h">
+        <div class="section-head">
+            <h2 id="actors-h">Most productive actors</h2>
+            <span class="section-note">by film count</span>
+        </div>
         {% if most_productive_actors %}
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th>Actor</th><th class="num">Popularity</th><th class="num">Movies</th></tr>
+                    <tr><th scope="col">Actor</th><th scope="col" class="num">Popularity</th><th scope="col" class="num">Films</th></tr>
                 </thead>
                 <tbody>
                     {% for row in most_productive_actors %}
                     <tr>
-                        <td>{{ row.actor_name }}</td>
+                        <th scope="row">{{ row.actor_name }}</th>
                         <td class="num">{{ row.popularity|floatformat:1|default:"—" }}</td>
                         <td class="num" data-meter>{{ row.movie_count }}</td>
                     </tr>
@@ -125,22 +126,25 @@
             </table>
         </div>
         {% else %}
-        <p class="stage-empty">No footage on this gauge yet — run the pipeline to feed the warehouse.</p>
+        <p class="empty">No films loaded yet. Run the pipeline to fill the warehouse.</p>
         {% endif %}
     </section>
 
-    <section class="booth-panel" aria-labelledby="collab-h">
-        <h2 id="collab-h">Actor collaborations <span class="sub">co-starring pairs</span></h2>
+    <section class="panel" aria-labelledby="collab-h">
+        <div class="section-head">
+            <h2 id="collab-h">Actor collaborations</h2>
+            <span class="section-note">co-starring pairs</span>
+        </div>
         {% if actor_collaboration_frequency %}
-        <div class="table-wrap table-scroll">
+        <div class="table-wrap is-scroll">
             <table>
                 <thead>
-                    <tr><th>Actor</th><th>Actor</th><th class="num">Films together</th></tr>
+                    <tr><th scope="col">Actor</th><th scope="col">Actor</th><th scope="col" class="num">Together</th></tr>
                 </thead>
                 <tbody>
                     {% for row in actor_collaboration_frequency %}
                     <tr>
-                        <td>{{ row.actor_1_name }}</td>
+                        <th scope="row">{{ row.actor_1_name }}</th>
                         <td>{{ row.actor_2_name }}</td>
                         <td class="num" data-meter>{{ row.movies_together }}</td>
                     </tr>
@@ -149,22 +153,25 @@
             </table>
         </div>
         {% else %}
-        <p class="stage-empty">No footage on this gauge yet — run the pipeline to feed the warehouse.</p>
+        <p class="empty">No films loaded yet. Run the pipeline to fill the warehouse.</p>
         {% endif %}
     </section>
 
-    <section class="booth-panel" aria-labelledby="dtrend-h">
-        <h2 id="dtrend-h">Director trend <span class="sub">by year</span></h2>
+    <section class="panel" aria-labelledby="dtrend-h">
+        <div class="section-head">
+            <h2 id="dtrend-h">Director trend</h2>
+            <span class="section-note">by year</span>
+        </div>
         {% if director_trend_over_time %}
-        <div class="table-wrap table-scroll">
+        <div class="table-wrap is-scroll">
             <table>
                 <thead>
-                    <tr><th>Director</th><th class="num">Year</th><th class="num">Movies</th><th class="num">Avg rating</th></tr>
+                    <tr><th scope="col">Director</th><th scope="col" class="num">Year</th><th scope="col" class="num">Films</th><th scope="col" class="num">Avg rating</th></tr>
                 </thead>
                 <tbody>
                     {% for row in director_trend_over_time %}
                     <tr>
-                        <td>{{ row.director_name }}</td>
+                        <th scope="row">{{ row.director_name }}</th>
                         <td class="num">{{ row.year }}</td>
                         <td class="num">{{ row.movie_count }}</td>
                         <td class="num">{{ row.avg_rating|floatformat:2|default:"—" }}</td>
@@ -174,22 +181,25 @@
             </table>
         </div>
         {% else %}
-        <p class="stage-empty">No footage on this gauge yet — run the pipeline to feed the warehouse.</p>
+        <p class="empty">No films loaded yet. Run the pipeline to fill the warehouse.</p>
         {% endif %}
     </section>
 
-    <section class="booth-panel" aria-labelledby="ggrowth-h">
-        <h2 id="ggrowth-h">Genre growth <span class="sub">by year</span></h2>
+    <section class="panel" aria-labelledby="ggrowth-h">
+        <div class="section-head">
+            <h2 id="ggrowth-h">Genre growth</h2>
+            <span class="section-note">by year</span>
+        </div>
         {% if genre_growth_over_time %}
-        <div class="table-wrap table-scroll">
+        <div class="table-wrap is-scroll">
             <table>
                 <thead>
-                    <tr><th>Genre</th><th class="num">Year</th><th class="num">Movies</th></tr>
+                    <tr><th scope="col">Genre</th><th scope="col" class="num">Year</th><th scope="col" class="num">Films</th></tr>
                 </thead>
                 <tbody>
                     {% for row in genre_growth_over_time %}
                     <tr>
-                        <td>{{ row.genre_name }}</td>
+                        <th scope="row">{{ row.genre_name }}</th>
                         <td class="num">{{ row.year }}</td>
                         <td class="num">{{ row.movie_count }}</td>
                     </tr>
@@ -198,11 +208,13 @@
             </table>
         </div>
         {% else %}
-        <p class="stage-empty">No footage on this gauge yet — run the pipeline to feed the warehouse.</p>
+        <p class="empty">No films loaded yet. Run the pipeline to fill the warehouse.</p>
         {% endif %}
     </section>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 {{ decade_labels|json_script:"decade-labels" }}
 {{ decade_avg_ratings|json_script:"decade-avg-ratings" }}
 {{ genre_labels|json_script:"genre-labels" }}

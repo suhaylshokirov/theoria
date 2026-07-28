@@ -76,6 +76,8 @@ def test_home_returns_200_with_expected_context():
         using.annotate.return_value.order_by.return_value.__getitem__.return_value = [movie]
         # newest: .order_by(...)[:12]
         using.order_by.return_value.__getitem__.return_value = [movie]
+        # mosaic: .filter(poster_path__isnull=False).order_by(...)[:120]
+        using.filter.return_value.order_by.return_value.__getitem__.return_value = [movie]
         actor_mgr.using.return_value.count.return_value = 3291
         director_mgr.using.return_value.count.return_value = 108
         metrics_mgr.using.return_value.aggregate.return_value = {
@@ -91,6 +93,10 @@ def test_home_returns_200_with_expected_context():
     assert response.context["avg_rating"] == Decimal("6.84")
     assert list(response.context["top_rated"]) == [movie]
     assert list(response.context["newest"]) == [movie]
+    assert list(response.context["mosaic"]) == [movie]
+    # The mosaic keys the top-rated films in lime; the view precomputes that
+    # id set so each tile can check membership without another query.
+    assert response.context["keyed_ids"] == {movie.movie_id}
 
 
 # ---------------------------------------------------------------------------
@@ -191,12 +197,19 @@ def test_genre_list_returns_200():
     genre = Genre(genre_id=1, genre_name="Action")
 
     with patch.object(Genre, "objects", new=MagicMock()) as genre_mgr:
-        genre_mgr.using.return_value.order_by.return_value = [genre]
+        # The view annotates a per-genre film count before ordering, so the
+        # mock has to mirror .using().annotate().order_by().
+        genre_mgr.using.return_value.annotate.return_value.order_by.return_value = [
+            genre
+        ]
 
         response = client.get("/genres/")
 
     assert response.status_code == 200
     assert list(response.context["genres"]) == [genre]
+    # A Genre built by hand has no movie_count annotation; the view's getattr
+    # guard means max_count still resolves rather than raising.
+    assert response.context["max_count"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +230,9 @@ def test_movie_detail_returns_200_with_expected_context():
         Director, "objects", new=MagicMock()
     ) as director_mgr:
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = [genre]
-        casting_mgr.using.return_value.filter.return_value.select_related.return_value = [
+        # The view orders credits before de-duplicating actors, so the mock
+        # chain runs .using().filter().select_related().order_by().
+        casting_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
             casting
         ]
         director_mgr.using.return_value.filter.return_value.distinct.return_value = [
@@ -231,6 +246,36 @@ def test_movie_detail_returns_200_with_expected_context():
     assert list(response.context["genres"]) == [genre]
     assert list(response.context["cast"]) == [casting]
     assert list(response.context["directors"]) == [director]
+
+
+def test_movie_detail_collapses_duplicate_actor_credits():
+    """fact_casting has one row per (actor, director) pair, so a film with two
+    credited directors yields two rows for the same actor. The page must show
+    each performer once."""
+    movie = _movie()
+    actor = Actor(actor_id=1, name="Test Actor")
+    d1 = Director(director_id=1, name="Director One")
+    d2 = Director(director_id=2, name="Director Two")
+    # Same actor, once under each director — what the warehouse really returns.
+    c1 = Casting(movie=movie, actor=actor, director=d1, role="Hero", ordering=0)
+    c2 = Casting(movie=movie, actor=actor, director=d2, role="Hero", ordering=0)
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Casting, "objects", new=MagicMock()) as casting_mgr, patch.object(
+        Director, "objects", new=MagicMock()
+    ) as director_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        casting_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
+            c1,
+            c2,
+        ]
+        director_mgr.using.return_value.filter.return_value.distinct.return_value = [d1, d2]
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    assert response.status_code == 200
+    assert list(response.context["cast"]) == [c1]
 
 
 def test_movie_detail_404_when_missing():

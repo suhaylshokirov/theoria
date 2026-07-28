@@ -1,5 +1,5 @@
 from django.core.paginator import Paginator
-from django.db.models import Avg, F, Max, Min, Sum
+from django.db.models import Avg, Count, F, Max, Min, Sum
 from django.db.models.functions import ExtractYear
 from django.shortcuts import get_object_or_404, render
 
@@ -7,6 +7,11 @@ from movies.models import Actor, Casting, Director, Genre, Movie, MovieMetrics
 
 MOVIES_PER_PAGE = 24
 PEOPLE_PER_PAGE = 30
+
+# How many posters the home contact sheet draws. The mosaic is meant to read
+# as "the whole catalog at once", so this is a ceiling, not a page size — at
+# the current warehouse size (99 postered films) every one of them appears.
+MOSAIC_LIMIT = 120
 
 # ?sort= values accepted by movie_list, mapped to an order_by expression.
 # Nulls always sort last so movies missing a field don't lead the list.
@@ -19,7 +24,7 @@ MOVIE_SORTS = {
 
 
 def home(request):
-    """Landing page: warehouse-wide stats plus browse strips into the lists."""
+    """Landing page: the catalog as a contact sheet, plus warehouse-wide stats."""
     top_rated = (
         Movie.objects.using("warehouse")
         .annotate(top_rating=Max("moviemetrics__rating"))
@@ -28,6 +33,14 @@ def home(request):
     newest = (
         Movie.objects.using("warehouse")
         .order_by(F("release_date").desc(nulls_last=True))[:12]
+    )
+
+    # The mosaic only holds films that actually have a poster — a missing
+    # image would punch a hole in the sheet.
+    mosaic = (
+        Movie.objects.using("warehouse")
+        .filter(poster_path__isnull=False)
+        .order_by(F("release_date").desc(nulls_last=True))[:MOSAIC_LIMIT]
     )
 
     context = {
@@ -39,6 +52,10 @@ def home(request):
         )["avg_rating"],
         "top_rated": top_rated,
         "newest": newest,
+        "mosaic": mosaic,
+        # Ids the sheet marks in lime. Rendered as a lookup in the template,
+        # so the mosaic can key a frame without a second query per tile.
+        "keyed_ids": {m.movie_id for m in top_rated},
     }
     return render(request, "movies/home.html", context)
 
@@ -92,9 +109,26 @@ def director_list(request):
 
 
 def genre_list(request):
-    """All genres, linking to each genre's detail page."""
-    genres = Genre.objects.using("warehouse").order_by("genre_name")
-    return render(request, "movies/genre_list.html", {"genres": genres})
+    """All genres, with how much of the catalog each one accounts for.
+
+    fact_movie_metrics holds one row per (movie, date, genre), so counting
+    movie_id needs distinct=True or a movie appearing under several date_ids
+    would inflate its genre's total.
+    """
+    genres = (
+        Genre.objects.using("warehouse")
+        .annotate(movie_count=Count("moviemetrics__movie_id", distinct=True))
+        .order_by("-movie_count", "genre_name")
+    )
+
+    # The share bars scale against the biggest genre, so the widest bar is
+    # always full — computed here rather than in the template, which can't.
+    # getattr guards the annotation: a Genre built outside this queryset has
+    # no movie_count, and an empty warehouse has no rows at all.
+    max_count = max((getattr(g, "movie_count", 0) or 0 for g in genres), default=0)
+
+    context = {"genres": genres, "max_count": max_count}
+    return render(request, "movies/genre_list.html", context)
 
 
 def movie_detail(request, movie_id):
@@ -107,11 +141,23 @@ def movie_detail(request, movie_id):
         .distinct()
     )
 
-    cast = (
+    # fact_casting stores one row per (actor, director) pair, so a film with
+    # two credited directors lists every actor twice. Collapse to one row per
+    # actor before rendering — .distinct() alone can't do it because the rows
+    # differ by director_id, so pick the first credit per actor in Python.
+    credits = (
         Casting.objects.using("warehouse")
         .filter(movie_id=movie_id)
         .select_related("actor", "director")
+        .order_by("ordering")
     )
+    seen_actors = set()
+    cast = []
+    for credit in credits:
+        if credit.actor_id in seen_actors:
+            continue
+        seen_actors.add(credit.actor_id)
+        cast.append(credit)
 
     # fact_casting has one row per (actor, director) pair, so the same
     # director repeats across every actor row — collect them separately.

@@ -1,8 +1,10 @@
-// Analytics booth instrumentation: themes the two Chart.js readouts to the
-// projection-room palette, and turns each cue sheet's marked column into an
-// exposure meter (a tungsten needle scaled to the column max). Progressive
-// enhancement — without JS the tables are plain numbers and the canvases
-// simply stay empty behind their tables.
+// Analytics charts. Two readouts, one series each — so per the chart rules
+// they take a single hue, not a categorical palette, and neither needs a
+// legend (the panel heading names the series).
+//
+// The palette is READ FROM CSS rather than hardcoded here, so the design
+// tokens in theoria.css stay the single source of truth. Previously this
+// file carried its own five hexes and they had to be changed in two places.
 (function () {
   "use strict";
 
@@ -10,11 +12,25 @@
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  var INK_LINE = "rgba(38, 43, 56, 0.9)";
-  var LUMEN = "#f5e9d0";
-  var LUMEN_DIM = "#948d7e";
-  var AMBER = "#c67e15"; // data-mark step, validated against the panel surface
-  var AMBER_WASH = "rgba(198, 126, 21, 0.12)";
+  // getPropertyValue returns "" for an unset property (no throw) and keeps
+  // the leading space from `--x: #fff`, so trim + fallback are both needed.
+  // Safe to read at this point: the stylesheet is render-blocking in <head>,
+  // so custom properties are resolved before any script runs.
+  function cssVar(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name);
+    v = v ? v.trim() : "";
+    return v || fallback;
+  }
+
+  var MARK = cssVar("--lime-mark", "#65a30d");
+  var WASH = "rgba(163, 230, 53, 0.18)"; // --lime at low alpha
+  var RULE = cssVar("--rule", "#e3e2dd");
+  var INK = cssVar("--ink", "#0b0b0b");
+  var INK_FAINT = cssVar("--ink-faint", "#78716c");
+  var PAPER = cssVar("--paper", "#ffffff");
+
+  var FONT_BODY = '"Instrument Sans", system-ui, sans-serif';
+  var FONT_MONO = '"Spline Sans Mono", ui-monospace, monospace';
 
   function readJSON(id) {
     var el = document.getElementById(id);
@@ -33,29 +49,26 @@
     return String(value);
   }
 
-  /* --- Charts ------------------------------------------------------------- */
-
-  function baseOptions(yTickFormat) {
+  function baseOptions(formatValue) {
     return {
       responsive: true,
       maintainAspectRatio: false,
-      animation: reduce ? false : { duration: 700 },
+      animation: reduce ? false : { duration: 600 },
       plugins: {
-        legend: { display: false }, // single series — the panel label names it
+        legend: { display: false }, // single series — the heading names it
         tooltip: {
-          backgroundColor: "#08090c",
-          borderColor: AMBER,
-          borderWidth: 1,
-          titleColor: LUMEN,
-          bodyColor: LUMEN,
-          titleFont: { family: '"Space Grotesk", sans-serif', weight: "700" },
-          bodyFont: { family: '"Space Grotesk", sans-serif' },
+          backgroundColor: INK,
+          titleColor: PAPER,
+          bodyColor: PAPER,
+          borderWidth: 0,
+          titleFont: { family: FONT_BODY, weight: "600", size: 12 },
+          bodyFont: { family: FONT_MONO, size: 12 },
           padding: 10,
           displayColors: false,
           callbacks: {
             label: function (ctx) {
-              return yTickFormat
-                ? yTickFormat(ctx.parsed.y)
+              return formatValue
+                ? formatValue(ctx.parsed.y)
                 : String(ctx.parsed.y);
             },
           },
@@ -64,20 +77,20 @@
       scales: {
         x: {
           grid: { display: false },
-          border: { color: INK_LINE },
+          border: { color: RULE },
           ticks: {
-            color: LUMEN_DIM,
-            font: { family: '"Space Grotesk", sans-serif', size: 11 },
+            color: INK_FAINT,
+            font: { family: FONT_MONO, size: 11 },
           },
         },
         y: {
-          grid: { color: INK_LINE },
+          grid: { color: RULE },
           border: { display: false },
           ticks: {
-            color: LUMEN_DIM,
-            font: { family: '"Space Grotesk", sans-serif', size: 11 },
+            color: INK_FAINT,
+            font: { family: FONT_MONO, size: 11 },
             callback: function (v) {
-              return yTickFormat ? yTickFormat(v) : v;
+              return formatValue ? formatValue(v) : v;
             },
           },
         },
@@ -100,13 +113,15 @@
             {
               label: "Avg rating",
               data: decadeRatings,
-              borderColor: AMBER,
+              borderColor: MARK,
               borderWidth: 2,
-              pointRadius: 3,
-              pointHoverRadius: 6,
-              pointHitRadius: 14,
-              pointBackgroundColor: AMBER,
-              backgroundColor: AMBER_WASH,
+              pointRadius: 4,
+              pointHoverRadius: 7,
+              pointHitRadius: 16,
+              pointBackgroundColor: MARK,
+              pointBorderColor: PAPER,
+              pointBorderWidth: 2,
+              backgroundColor: WASH,
               fill: true,
               tension: 0.25,
             },
@@ -130,7 +145,7 @@
             {
               label: "Total revenue",
               data: genreRevenue,
-              backgroundColor: AMBER,
+              backgroundColor: MARK,
               borderRadius: { topLeft: 4, topRight: 4 },
               borderSkipped: "bottom",
               maxBarThickness: 34,
@@ -145,66 +160,9 @@
     }
   }
 
-  /* --- Exposure meters ------------------------------------------------------ */
-
-  function parseCell(td) {
-    var n = parseFloat(td.textContent.replace(/[,$\s]/g, ""));
-    return isNaN(n) ? null : n;
-  }
-
-  function initMeters() {
-    var tables = document.querySelectorAll("table");
-    tables.forEach(function (table) {
-      var cells = table.querySelectorAll("td[data-meter]");
-      if (!cells.length) return;
-
-      var max = 0;
-      cells.forEach(function (td) {
-        var v = parseCell(td);
-        if (v !== null && v > max) max = v;
-      });
-      if (max <= 0) return;
-
-      cells.forEach(function (td) {
-        var v = parseCell(td);
-        if (v === null) return;
-        // Readout formatting: thousands separators, like the home counter.
-        if (Number.isInteger(v)) td.textContent = v.toLocaleString("en-US");
-        var fill = document.createElement("span");
-        fill.className = "meter-fill";
-        fill.setAttribute("aria-hidden", "true");
-        td.insertBefore(fill, td.firstChild);
-        var pct = ((v / max) * 100).toFixed(1) + "%";
-        if (reduce) {
-          fill.style.width = pct;
-        } else {
-          // Let the 0-width style land first so the needle sweeps to rest.
-          requestAnimationFrame(function () {
-            requestAnimationFrame(function () {
-              fill.style.width = pct;
-            });
-          });
-        }
-      });
-    });
-
-    // Plain numeric cells (no meter) still get readable separators.
-    document.querySelectorAll("td.num:not([data-meter])").forEach(function (td) {
-      var v = parseCell(td);
-      if (v !== null && Number.isInteger(v) && Math.abs(v) > 999) {
-        td.textContent = v.toLocaleString("en-US");
-      }
-    });
-  }
-
-  function init() {
-    initCharts();
-    initMeters();
-  }
-
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", initCharts);
   } else {
-    init();
+    initCharts();
   }
 })();

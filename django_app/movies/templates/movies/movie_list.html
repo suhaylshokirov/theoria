@@ -1,41 +1,56 @@
 {% extends "base.html" %}
 
-{% block title %}Theoria — Movies{% endblock %}
+{% block title %}Theoria — Films{% endblock %}
 
 {% block content %}
-<h1>Movies</h1>
+{% include "movies/_sheet_header.html" with eyebrow="Catalog" accession="dim_movie" title="Films" sub="Every title the warehouse holds. Search by name, or reorder by what was measured." only %}
 
-<div class="toolbar">
-    <form method="get" action="{% url 'movies:movie_list' %}">
-        <input type="text" name="q" value="{{ q }}" placeholder="Search by title…" aria-label="Search movies">
-        <select name="sort" aria-label="Sort movies">
-            <option value="release" {% if sort == "release" %}selected{% endif %}>Newest first</option>
-            <option value="rating" {% if sort == "rating" %}selected{% endif %}>Highest rated</option>
-            <option value="revenue" {% if sort == "revenue" %}selected{% endif %}>Highest revenue</option>
-            <option value="title" {% if sort == "title" %}selected{% endif %}>Title A–Z</option>
-        </select>
-        <button type="submit">Search</button>
-    </form>
-    <span class="muted">{{ page_obj.paginator.count }} movie{{ page_obj.paginator.count|pluralize }}</span>
-</div>
+<section class="sheet-section">
+    <div class="toolbar">
+        <form method="get" action="{% url 'movies:movie_list' %}">
+            <div class="field">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search titles" aria-label="Search films by title">
+            </div>
+            {% comment %} Radio segments rather than a <select>: the sort options are few
+               and fixed, so showing them is more useful than hiding them.
+               Still a plain form control — submits and works without JS. {% endcomment %}
+            <fieldset class="segmented">
+                <legend class="visually-hidden">Order by</legend>
+                <input type="radio" name="sort" id="sort-release" value="release" {% if sort == "release" %}checked{% endif %}>
+                <label for="sort-release">Newest</label>
+                <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
+                <label for="sort-rating">Rated</label>
+                <input type="radio" name="sort" id="sort-revenue" value="revenue" {% if sort == "revenue" %}checked{% endif %}>
+                <label for="sort-revenue">Revenue</label>
+                <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
+                <label for="sort-title">A–Z</label>
+            </fieldset>
+            <button type="submit">Apply</button>
+        </form>
+        <span class="result-count">{{ page_obj.paginator.count }} film{{ page_obj.paginator.count|pluralize }}</span>
+    </div>
 
-{% if page_obj.object_list %}
-<div class="poster-grid">
-    {% for movie in page_obj %}{% include "movies/_movie_card.html" %}{% endfor %}
-</div>
-{% else %}
-<p class="muted">No movies found{% if q %} for “{{ q }}”{% endif %}.</p>
-{% endif %}
+    <div class="poster-grid">
+        {% for movie in page_obj %}
+        {% include "movies/_movie_card.html" with movie=movie only %}
+        {% empty %}
+        <p class="empty">
+            {% if q %}No films match “{{ q }}”. Try a shorter title.
+            {% else %}No films loaded yet. Run the pipeline to fill the catalog.{% endif %}
+        </p>
+        {% endfor %}
+    </div>
 
-{% if page_obj.has_other_pages %}
-<div class="pagination">
-    {% if page_obj.has_previous %}
-    <a href="?q={{ q|urlencode }}&amp;sort={{ sort }}&amp;page={{ page_obj.previous_page_number }}">← Previous</a>
+    {% if page_obj.has_other_pages %}
+    <nav class="pagination" aria-label="Pagination">
+        {% if page_obj.has_previous %}
+        <a href="?q={{ q|urlencode }}&amp;sort={{ sort }}&amp;page={{ page_obj.previous_page_number }}">← Previous</a>
+        {% endif %}
+        <span class="page-state">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a href="?q={{ q|urlencode }}&amp;sort={{ sort }}&amp;page={{ page_obj.next_page_number }}">Next →</a>
+        {% endif %}
+    </nav>
     {% endif %}
-    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-    {% if page_obj.has_next %}
-    <a href="?q={{ q|urlencode }}&amp;sort={{ sort }}&amp;page={{ page_obj.next_page_number }}">Next →</a>
-    {% endif %}
-</div>
-{% endif %}
+</section>
 {% endblock %}

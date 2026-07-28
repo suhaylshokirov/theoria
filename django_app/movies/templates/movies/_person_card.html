@@ -1,14 +1,29 @@
+{% comment %} A person as a frame on the sheet.
+
+   Params — always pass with `only`, since this partial is included from
+   three different pages and inheriting the whole parent context is how a
+   stray same-named variable silently changes what renders:
+     person           : Actor or Director
+     detail_url_name  : URL name string, e.g. "movies:actor_detail"
+     card_sub         : optional sub-line. Named card_sub rather than `sub`
+                        because `sub` is already a CSS class elsewhere in the
+                        site and the collision would be easy to miss.
+                        Falls back to popularity when not given. {% endcomment %}
 {% load tmdb_images %}
 <div class="poster-card">
     <a href="{% url detail_url_name person.pk %}">
         {% if person.profile_path %}
         <img class="headshot" src="{{ person.profile_path|tmdb_image:'w185' }}" alt="{{ person.name }}" loading="lazy">
         {% else %}
-        <div class="placeholder">👤</div>
+        <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}
         <div class="card-body">
             <span class="card-title">{{ person.name }}</span>
-            {% if person.popularity %}<span class="card-sub">Popularity {{ person.popularity|floatformat:1 }}</span>{% endif %}
+            {% if card_sub %}
+            <span class="card-sub">{{ card_sub }}</span>
+            {% elif person.popularity %}
+            <span class="card-sub">Pop {{ person.popularity|floatformat:1 }}</span>
+            {% endif %}
         </div>
     </a>
 </div>
