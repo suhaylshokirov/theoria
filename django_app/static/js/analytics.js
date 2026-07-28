@@ -23,7 +23,10 @@
   }
 
   var MARK = cssVar("--lime-mark", "#65a30d");
-  var WASH = "rgba(163, 230, 53, 0.18)"; // --lime at low alpha
+  // The area fill under the line. Read from --chart-wash so each mode can set
+  // its own weight: a tint that reads as delicate on white is a heavy slab on
+  // ink, because the eye judges it against the surface it sits on.
+  var WASH = cssVar("--chart-wash", "rgba(163, 230, 53, 0.18)");
   var RULE = cssVar("--rule", "#e3e2dd");
   var INK = cssVar("--ink", "#0b0b0b");
   var INK_FAINT = cssVar("--ink-faint", "#78716c");
@@ -57,10 +60,13 @@
       plugins: {
         legend: { display: false }, // single series — the heading names it
         tooltip: {
-          backgroundColor: INK,
-          titleColor: PAPER,
-          bodyColor: PAPER,
-          borderWidth: 0,
+          // Sheet + ink rather than ink + paper: an inverted tooltip reads
+          // correctly on white but becomes a glaring pale box on dark.
+          backgroundColor: cssVar("--sheet-2", "#efeeea"),
+          titleColor: INK,
+          bodyColor: INK,
+          borderColor: RULE,
+          borderWidth: 1,
           titleFont: { family: FONT_BODY, weight: "600", size: 12 },
           bodyFont: { family: FONT_MONO, size: 12 },
           padding: 10,

@@ -59,6 +59,19 @@
   transform: scale(1.06);
 }
 
+/* On white the posters are held back so the headline leads. On dark they are
+   already the only bright thing on the page, so pulling saturation down as
+   well just makes them muddy — ease off instead. */
+@media (prefers-color-scheme: dark) {
+  .contact-sheet .frame img {
+    filter: saturate(0.95) brightness(0.86);
+  }
+
+  .contact-sheet .frame:hover img {
+    filter: none;
+  }
+}
+
 @keyframes develop {
   from { opacity: 0; }
   to { opacity: 1; }

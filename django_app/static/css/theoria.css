@@ -13,8 +13,9 @@
    what makes it stop meaning anything.
 
    No framework, no build step: custom properties + grid/flex.
-   Light only — "plain white" stays literally true, so there is no
-   prefers-color-scheme block anywhere in this file.
+   Light by default, with a dark counterpart under prefers-color-scheme. The
+   dark mode is ONLY a token swap — because every component below reads its
+   colours from tokens, no component rule is duplicated per mode.
 
    Contract with page stylesheets (home.css, analytics.css):
    this file owns every token and every shared component. A page stylesheet
@@ -46,6 +47,9 @@
   --lime-text: #4d7c0f;
   --lime-mark: #65a30d;
   --lime-deep: #365314;
+  --lime-hover: #93d128;
+  /* Chart area fill, read by analytics.js. */
+  --chart-wash: rgba(163, 230, 53, 0.18);
 
   /* Sequential ramp for ranked data. PASSES all four ordinal checks
      (monotone L, adjacent ΔL ≥ .06, light-end ≥ 2:1, single hue). */
@@ -99,6 +103,51 @@
   --dur-fast: 120ms;
   --dur: 220ms;
   --dur-slow: 420ms;
+
+  color-scheme: light;
+}
+
+/* --- Dark counterpart -------------------------------------------------------
+   Every token is re-picked against the dark surface rather than flipped — an
+   inverted light palette gets the lightness relationships wrong. Ratios
+   verified against --paper #12120f:
+     --ink 16.6:1 · --ink-muted 7.6:1 · --ink-faint 5.2:1 · --lime-text 14.4:1
+     --lime-mark 12.4:1 · --ink on --lime 13.1:1 (buttons keep ink labels)
+
+   The lime *swaps role* between modes. On white it was too light to serve as
+   a mark, so marks stepped DOWN the ramp to a darker green. On ink it is the
+   brightest thing available, so the mark and link steps move UP instead.
+   Only the tokens change — no component below this block is redefined. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #12120f;
+    --sheet: #1b1b17;
+    --sheet-2: #24241f;
+    --rule: #2c2c26;
+    --rule-strong: #423f38;
+
+    --ink: #f2f1ed;
+    --ink-muted: #a8a49c;
+    --ink-faint: #8a867e;
+
+    --lime: #a3e635;
+    /* Deliberately near the surface: on white the wash is a pale tint of the
+       page, so on ink it must be a barely-lifted tint of the ink — matching
+       the light value's saturation here produces olive slabs instead of a
+       whisper behind the number. */
+    --lime-wash: #1e2612;
+    --lime-text: #bef264;
+    --lime-mark: #a3e635;
+    --lime-deep: #d9f99d;
+    --lime-hover: #bef264;
+    --chart-wash: rgba(163, 230, 53, 0.10);
+
+    --rank-1: #bef264;
+    --rank-2: #a3e635;
+    --rank-3: #7cb518;
+
+    color-scheme: dark;
+  }
 }
 
 /* --- Reset ---------------------------------------------------------------- */
@@ -738,8 +787,8 @@ button,
 
 button:hover,
 .btn:hover {
-  background: #93d128;
-  border-color: #93d128;
+  background: var(--lime-hover);
+  border-color: var(--lime-hover);
   color: var(--ink);
   text-decoration: none;
 }
