@@ -22,20 +22,41 @@ CREATE INDEX IF NOT EXISTS idx_fmm_date_id   ON fact_movie_metrics (date_id);
 CREATE INDEX IF NOT EXISTS idx_fmm_genre_id  ON fact_movie_metrics (genre_id);
 CREATE INDEX IF NOT EXISTS idx_fmm_ingestion_date ON fact_movie_metrics (ingestion_date);
 
-CREATE TABLE IF NOT EXISTS fact_casting (
+-- fact_cast and fact_crew are independent facts (one row per credited actor /
+-- per credited director) rather than a single actor x director cross-join --
+-- see docs/architecture.md for why: TMDB's credits endpoint never pairs an
+-- actor with "their" director, so a joint fact table loses a movie's entire
+-- cast whenever it has no director credit.
+--
+-- fact_crew currently models director credits only, mirroring dim_director
+-- (which itself only contains people credited with job == "Director").
+-- Modeling other crew roles (writers, producers, ...) would need a new
+-- person-role dimension and is out of scope here.
+
+CREATE TABLE IF NOT EXISTS fact_cast (
     movie_id    INTEGER      NOT NULL,
     actor_id    INTEGER      NOT NULL,
-    director_id INTEGER      NOT NULL,
     role        TEXT,
     ordering    SMALLINT,
     ingestion_date DATE NOT NULL,
-    CONSTRAINT pk_fact_casting PRIMARY KEY (movie_id, actor_id, director_id),
-    CONSTRAINT fk_fc_movie    FOREIGN KEY (movie_id)    REFERENCES dim_movie    (movie_id),
-    CONSTRAINT fk_fc_actor    FOREIGN KEY (actor_id)    REFERENCES dim_actor    (actor_id),
-    CONSTRAINT fk_fc_director FOREIGN KEY (director_id) REFERENCES dim_director (director_id)
+    CONSTRAINT pk_fact_cast PRIMARY KEY (movie_id, actor_id),
+    CONSTRAINT fk_fcast_movie FOREIGN KEY (movie_id) REFERENCES dim_movie (movie_id),
+    CONSTRAINT fk_fcast_actor FOREIGN KEY (actor_id) REFERENCES dim_actor (actor_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_fc_movie_id    ON fact_casting (movie_id);
-CREATE INDEX IF NOT EXISTS idx_fc_actor_id    ON fact_casting (actor_id);
-CREATE INDEX IF NOT EXISTS idx_fc_director_id ON fact_casting (director_id);
-CREATE INDEX IF NOT EXISTS idx_fc_ingestion_date ON fact_casting (ingestion_date);
+CREATE INDEX IF NOT EXISTS idx_fcast_movie_id      ON fact_cast (movie_id);
+CREATE INDEX IF NOT EXISTS idx_fcast_actor_id      ON fact_cast (actor_id);
+CREATE INDEX IF NOT EXISTS idx_fcast_ingestion_date ON fact_cast (ingestion_date);
+
+CREATE TABLE IF NOT EXISTS fact_crew (
+    movie_id    INTEGER      NOT NULL,
+    director_id INTEGER      NOT NULL,
+    ingestion_date DATE NOT NULL,
+    CONSTRAINT pk_fact_crew PRIMARY KEY (movie_id, director_id),
+    CONSTRAINT fk_fcrew_movie    FOREIGN KEY (movie_id)    REFERENCES dim_movie    (movie_id),
+    CONSTRAINT fk_fcrew_director FOREIGN KEY (director_id) REFERENCES dim_director (director_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fcrew_movie_id      ON fact_crew (movie_id);
+CREATE INDEX IF NOT EXISTS idx_fcrew_director_id   ON fact_crew (director_id);
+CREATE INDEX IF NOT EXISTS idx_fcrew_ingestion_date ON fact_crew (ingestion_date);

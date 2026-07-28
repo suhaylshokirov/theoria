@@ -3,7 +3,7 @@ from django.db.models import Avg, Count, F, Max, Min, Sum
 from django.db.models.functions import ExtractYear
 from django.shortcuts import get_object_or_404, render
 
-from movies.models import Actor, Casting, Director, Genre, Movie, MovieMetrics
+from movies.models import Actor, Cast, Crew, Director, Genre, Movie, MovieMetrics
 
 MOVIES_PER_PAGE = 24
 PEOPLE_PER_PAGE = 30
@@ -138,29 +138,18 @@ def movie_detail(request, movie_id):
         .distinct()
     )
 
-    # fact_casting stores one row per (actor, director) pair, so a film with
-    # two credited directors lists every actor twice. Collapse to one row per
-    # actor before rendering — .distinct() alone can't do it because the rows
-    # differ by director_id, so pick the first credit per actor in Python.
-    credits = (
-        Casting.objects.using("warehouse")
+    # fact_cast has one row per (movie, actor) — no cross-join with directors,
+    # so cast renders even for movies with no credited director.
+    cast = (
+        Cast.objects.using("warehouse")
         .filter(movie_id=movie_id)
-        .select_related("actor", "director")
+        .select_related("actor")
         .order_by("ordering")
     )
-    seen_actors = set()
-    cast = []
-    for credit in credits:
-        if credit.actor_id in seen_actors:
-            continue
-        seen_actors.add(credit.actor_id)
-        cast.append(credit)
 
-    # fact_casting has one row per (actor, director) pair, so the same
-    # director repeats across every actor row — collect them separately.
     directors = (
         Director.objects.using("warehouse")
-        .filter(casting__movie_id=movie_id)
+        .filter(crew__movie_id=movie_id)
         .distinct()
     )
 
@@ -174,11 +163,11 @@ def movie_detail(request, movie_id):
 
 
 def actor_detail(request, actor_id):
-    """Single actor: filmography via fact_casting, with career stats computed in SQL."""
+    """Single actor: filmography via fact_cast, with career stats computed in SQL."""
     actor = get_object_or_404(Actor.objects.using("warehouse"), pk=actor_id)
 
     movie_ids = (
-        Casting.objects.using("warehouse")
+        Cast.objects.using("warehouse")
         .filter(actor_id=actor_id)
         .values_list("movie_id", flat=True)
         .distinct()
@@ -217,11 +206,11 @@ def actor_detail(request, actor_id):
 
 
 def director_detail(request, director_id):
-    """Single director: filmography via fact_casting, with career stats computed in SQL."""
+    """Single director: filmography via fact_crew, with career stats computed in SQL."""
     director = get_object_or_404(Director.objects.using("warehouse"), pk=director_id)
 
     movie_ids = (
-        Casting.objects.using("warehouse")
+        Crew.objects.using("warehouse")
         .filter(director_id=director_id)
         .values_list("movie_id", flat=True)
         .distinct()

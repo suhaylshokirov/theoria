@@ -150,7 +150,7 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# fields.W342: movies.MovieMetrics/Casting mark their `movie` FK as
+# fields.W342: movies.MovieMetrics/Cast/Crew mark their `movie` FK as
 # primary_key=True purely to satisfy Django's one-pk-per-model requirement
 # on tables whose real (composite) key Django can't express — see
 # movies/models.py module docstring. The implied unique=True is not

@@ -12,7 +12,7 @@ SELECT
     COUNT(DISTINCT fc.movie_id)     AS movie_count,
     ROUND(AVG(mr.rating), 2)        AS avg_rating,
     SUM(mr.vote_count)              AS total_votes
-FROM fact_casting fc
+FROM fact_crew fc
 JOIN dim_director d  ON d.director_id = fc.director_id
 JOIN movie_ratings mr ON mr.movie_id = fc.movie_id
 GROUP BY d.director_id, d.name

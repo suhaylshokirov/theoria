@@ -1301,3 +1301,67 @@ also asserting a director. Read up on **factless fact tables** and on why a many
 bridge usually gets its own grain (one row per credit) rather than a composite of two roles.
 Then look at Task 35's plan to split `fact_casting` into `fact_cast` + `fact_crew` and ask:
 which queries get *simpler*, and which need a join they didn't need before?
+
+## Task 35 — Split `fact_casting` into `fact_cast` + `fact_crew`
+
+### What Was Built
+Investigated a bug report ("movies are missing their Cast section") and traced it to the
+warehouse schema, not a display bug: 58 of 112 movies (52%) had zero cast rows in the
+warehouse. Fixed it by replacing the single `fact_casting` fact table with two independent
+ones, `fact_cast` and `fact_crew`, and re-ran the loader against the live database — cast
+coverage went from 54 to 99 of 112 movies, with the loader's reject count for cast rows
+dropping from 1,714 to 0.
+
+### Concepts Used
+- **Grain of a fact table**: the grain is "what does one row mean." `fact_casting`'s grain
+  was *(movie, actor, director)* — a triple, not a credit. That single decision is what
+  forced a cross-join to populate it, since TMDB never hands you that triple directly.
+- **Cross-join as an anti-pattern for independent facts**: joining two unrelated lists
+  (cast, crew) to satisfy one table's NOT NULL constraints makes each list's presence
+  depend on the other's, even though "this actor was in this film" and "this person
+  directed this film" are true independently of each other.
+- **Quarantine, not drop**: rejected rows (here, cast rows that couldn't find a director)
+  were never silently discarded — they were written to `data_quality/rejected/` with a
+  `rejection_reason`. That's *why* this bug was diagnosable at all: the reject file's 1,714
+  rows all sharing one reason (`"no director for movie"`) pointed straight at the cause.
+- **Defense-in-depth data quality checks**: `data_quality/warehouse_checks.py`'s FK checks
+  and fact-load-sanity checks are redundant with the database's own FOREIGN KEY constraints
+  and NOT NULL rules — they exist to catch corruption from *outside* the normal loaders
+  (bad backups, manual edits), not to replace the constraints.
+- **Idempotent re-migration**: because every load in this project is an `INSERT ... ON
+  CONFLICT DO UPDATE` upsert, re-running `load_facts()` against the same Silver partition
+  after a schema change was safe to do live, with no need to re-run Bronze/Silver ingestion.
+
+### Key Code
+`etl/warehouse_loader/load_facts.py` — `_build_cast_rows()` / `_build_crew_rows()`:
+> The old `_build_casting_rows()` grouped bridge rows by movie, then nested a loop over
+> directors inside a loop over actors — that nested loop *was* the cross-join, and the
+> `if directors.empty: reject every actor row` branch right before it was the bug. The new
+> functions each iterate their own bridge subset (`credit_type == "cast"` /
+> `credit_type == "crew" and role == "Director"`) and validate only the one dimension they
+> care about. Neither function's signature even takes the other dimension's valid-ID set
+> anymore — the independence is enforced by the function signature, not just by the logic
+> inside it.
+
+`data_quality/warehouse_checks.py` — `check_fact_load_sanity()`:
+> Previously this function had one check block for `fact_casting`, compared against the
+> *whole* Silver credits_bridge count. After the split it needs the bridge count broken
+> into a cast subset and a director-crew subset (`run_warehouse_checks()` computes both by
+> filtering the same DataFrame twice), so that `fact_cast` having zero rows and `fact_crew`
+> having zero rows are two separate, independently-triggerable failures — mirroring the
+> production fix at the data-quality layer, not just the loader.
+
+### What to Study Next
+While verifying this fix I found a second, unrelated bug in the same neighborhood:
+`etl/silver/transform_credits_bridge.py` deduplicates crew rows on
+`(movie_id, person_id, credit_type)`, but `credit_type` is only ever `"cast"` or `"crew"` —
+never per-job. A person credited with two crew jobs on one movie (very common for
+directors, who often also write or produce) collapses to a single row during
+`drop_duplicates()`, silently losing whichever job title didn't survive — including
+"Director" itself. This is why big, well-known films like *The Lord of the Rings* and
+*The Dark Knight* now show a full cast but no "Directed by" line. Study **surrogate vs.
+natural dedup keys**: what would the correct uniqueness key be here (hint: it needs `role`
+or `job` in it, not just `person_id` + a coarse `credit_type`), and what would break if you
+added it — would any *legitimate* duplicate you're currently relying on stop being
+collapsed?
+

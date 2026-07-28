@@ -1483,15 +1483,17 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Task 19 — etl/warehouse_loader/load_facts.py
+# Task 19 / Task 35 — etl/warehouse_loader/load_facts.py
 # ---------------------------------------------------------------------------
 from etl.warehouse_loader.load_facts import (
-    _build_casting_rows,
+    _build_cast_rows,
+    _build_crew_rows,
     _build_movie_metrics_rows,
     _existing_ids,
     _records,
     _write_rejects,
-    load_fact_casting,
+    load_fact_cast,
+    load_fact_crew,
     load_fact_movie_metrics,
     load_facts,
 )
@@ -1606,53 +1608,93 @@ def test_build_movie_metrics_rows_rejects_movie_with_no_genres():
     assert reject["rejection_reason"] == "no genres"
 
 
-def test_build_casting_rows_cross_joins_actors_and_directors():
-    """Every credited actor must be paired with every credited director for the same movie."""
-    rows, rejects = _build_casting_rows(
-        _fact_bridge_df(), valid_movie_ids={1}, valid_actor_ids={10, 11}, valid_director_ids={20},
+def test_build_cast_rows_resolves_known_ids():
+    """A cast row with a known movie_id/actor_id produces a fact_cast row."""
+    rows, rejects = _build_cast_rows(
+        _fact_bridge_df(), valid_movie_ids={1}, valid_actor_ids={10, 11},
         ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert len(rows) == 2
-    assert {(r["actor_id"], r["director_id"]) for r in rows} == {(10, 20), (11, 20)}
+    assert {r["actor_id"] for r in rows} == {10, 11}
     hero_row = next(r for r in rows if r["actor_id"] == 10)
     assert hero_row == {
-        "movie_id": 1, "actor_id": 10, "director_id": 20, "role": "Hero", "ordering": 0,
+        "movie_id": 1, "actor_id": 10, "role": "Hero", "ordering": 0,
         "ingestion_date": dt.date(2026, 6, 26),
     }
 
 
-def test_build_casting_rows_rejects_movie_with_no_director():
-    """A movie with credited actors but no credited director must reject those actor rows."""
-    rows, rejects = _build_casting_rows(
-        _fact_bridge_df(), valid_movie_ids={2}, valid_actor_ids={30}, valid_director_ids=set(),
+def test_build_cast_rows_independent_of_director():
+    """Movie 2 has a credited actor but no credited director — the cast row must still load.
+
+    This is the regression test for the fact_casting cross-join bug: fact_cast
+    has no director dependency at all, so a movie's cast no longer disappears
+    when it has no resolvable director.
+    """
+    rows, rejects = _build_cast_rows(
+        _fact_bridge_df(), valid_movie_ids={2}, valid_actor_ids={30},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == [{
+        "movie_id": 2, "actor_id": 30, "role": "Lead", "ordering": 0,
+        "ingestion_date": dt.date(2026, 6, 26),
+    }]
+    assert not any(r.get("movie_id") == 2 for r in rejects)
+
+
+def test_build_cast_rows_rejects_unknown_movie_id():
+    """An actor row whose movie_id isn't in dim_movie must be rejected."""
+    rows, rejects = _build_cast_rows(
+        _fact_bridge_df(), valid_movie_ids=set(), valid_actor_ids={10, 11, 30, 40},
         ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
-    assert any(r["rejection_reason"] == "no director for movie" for r in rejects)
+    assert all(r["rejection_reason"] == "unknown movie_id" for r in rejects)
 
 
-def test_build_casting_rows_rejects_unknown_actor_id():
-    """An actor_id absent from dim_actor must be rejected even if the movie has a valid director."""
-    rows, rejects = _build_casting_rows(
-        _fact_bridge_df(), valid_movie_ids={3}, valid_actor_ids=set(), valid_director_ids={40},
+def test_build_cast_rows_rejects_unknown_actor_id():
+    """An actor_id absent from dim_actor must be rejected even though its movie resolves."""
+    rows, rejects = _build_cast_rows(
+        _fact_bridge_df(), valid_movie_ids={1, 2, 3}, valid_actor_ids=set(),
         ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
-    assert any(r["rejection_reason"] == "unknown actor_id" for r in rejects)
+    assert all(r["rejection_reason"] == "unknown actor_id" for r in rejects)
 
 
-def test_build_casting_rows_rejects_unknown_director_id():
-    """A director_id absent from dim_director must be rejected even if the actor resolves."""
-    rows, rejects = _build_casting_rows(
-        _fact_bridge_df(), valid_movie_ids={3}, valid_actor_ids={40}, valid_director_ids=set(),
+def test_build_crew_rows_resolves_known_director():
+    """A crew row with role == 'Director' and known movie_id/director_id produces a fact_crew row."""
+    rows, rejects = _build_crew_rows(
+        _fact_bridge_df(), valid_movie_ids={1}, valid_director_ids={20},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == [{"movie_id": 1, "director_id": 20, "ingestion_date": dt.date(2026, 6, 26)}]
+
+
+def test_build_crew_rows_rejects_unknown_movie_id():
+    """A director row whose movie_id isn't in dim_movie must be rejected."""
+    rows, rejects = _build_crew_rows(
+        _fact_bridge_df(), valid_movie_ids=set(), valid_director_ids={20, 999},
         ingestion_date=dt.date(2026, 6, 26),
     )
 
     assert rows == []
-    assert any(r["rejection_reason"] == "unknown director_id" for r in rejects)
+    assert all(r["rejection_reason"] == "unknown movie_id" for r in rejects)
+
+
+def test_build_crew_rows_rejects_unknown_director_id():
+    """A director_id absent from dim_director must be rejected even though its movie resolves."""
+    rows, rejects = _build_crew_rows(
+        _fact_bridge_df(), valid_movie_ids={1, 3}, valid_director_ids=set(),
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == []
+    assert all(r["rejection_reason"] == "unknown director_id" for r in rejects)
 
 
 def test_write_rejects_writes_parquet_file(tmp_path):
@@ -1696,30 +1738,55 @@ def test_load_fact_movie_metrics_resolves_fks_and_upserts(monkeypatch):
     assert params[0]["ingestion_date"] == dt.date(2026, 6, 26)
 
 
-def test_load_fact_casting_resolves_fks_and_upserts(monkeypatch):
-    """load_fact_casting() must query dimension tables for valid IDs, then upsert only resolvable rows."""
+def test_load_fact_cast_resolves_fks_and_upserts(monkeypatch):
+    """load_fact_cast() must query dimension tables for valid IDs, then upsert only resolvable rows."""
     import etl.warehouse_loader.load_facts as load_facts_module
 
     mock_session = MagicMock()
     id_sets = {
-        "dim_movie": {1, 2, 3}, "dim_actor": {10, 11, 30, 40}, "dim_director": {20},
+        "dim_movie": {1, 2, 3}, "dim_actor": {10, 11, 30, 40},
     }
     monkeypatch.setattr(
         load_facts_module, "_existing_ids",
         lambda session, table, pk_col: id_sets[table],
     )
 
-    count, rejects = load_fact_casting(mock_session, _fact_bridge_df(), dt.date(2026, 6, 26))
+    count, rejects = load_fact_cast(mock_session, _fact_bridge_df(), dt.date(2026, 6, 26))
 
-    assert count == 2
-    assert any(r["rejection_reason"] == "no director for movie" for r in rejects)
+    # All four cast rows resolve (movies 1, 2, 3 each have a known actor) — no
+    # director lookup at all, so movies 2/3 having no/an-unresolvable
+    # director never rejects their cast.
+    assert count == 4
+    assert rejects == []
     (stmt, params), _ = mock_session.execute.call_args
-    assert "INSERT INTO fact_casting" in str(stmt)
+    assert "INSERT INTO fact_cast" in str(stmt)
+    assert params[0]["ingestion_date"] == dt.date(2026, 6, 26)
+
+
+def test_load_fact_crew_resolves_fks_and_upserts(monkeypatch):
+    """load_fact_crew() must query dimension tables for valid IDs, then upsert only resolvable rows."""
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    mock_session = MagicMock()
+    id_sets = {
+        "dim_movie": {1, 2, 3}, "dim_director": {20},
+    }
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids",
+        lambda session, table, pk_col: id_sets[table],
+    )
+
+    count, rejects = load_fact_crew(mock_session, _fact_bridge_df(), dt.date(2026, 6, 26))
+
+    assert count == 1
+    assert any(r["rejection_reason"] == "unknown director_id" for r in rejects)
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO fact_crew" in str(stmt)
     assert params[0]["ingestion_date"] == dt.date(2026, 6, 26)
 
 
 def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path):
-    """load_facts() must read movies + credits_bridge, upsert both fact tables, and write rejects."""
+    """load_facts() must read movies + credits_bridge, upsert all three fact tables, and write rejects."""
     date = dt.date(2026, 6, 26)
     mock_session = MagicMock()
 
@@ -1748,10 +1815,10 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
 
     counts = load_facts(ingestion_date=date, bucket="theoria-datalake", rejected_dir=tmp_path)
 
-    assert counts == {"fact_movie_metrics": 1, "fact_casting": 2}
+    assert counts == {"fact_movie_metrics": 1, "fact_cast": 4, "fact_crew": 1}
     rejected_files = sorted(p.name for p in tmp_path.iterdir())
     assert rejected_files == [
-        "fact_casting_rejected_2026-06-26.parquet",
+        "fact_crew_rejected_2026-06-26.parquet",
         "fact_movie_metrics_rejected_2026-06-26.parquet",
     ]
 
@@ -1938,7 +2005,7 @@ def test_load_facts_incremental_processes_pending_dates_and_advances_watermark(m
     monkeypatch.setattr(
         load_facts_module, "load_facts",
         lambda ingestion_date, bucket, rejected_dir: (
-            calls.append(ingestion_date) or {"fact_movie_metrics": 1, "fact_casting": 2}
+            calls.append(ingestion_date) or {"fact_movie_metrics": 1, "fact_cast": 2, "fact_crew": 1}
         ),
     )
     watermark_calls = []
@@ -1951,7 +2018,7 @@ def test_load_facts_incremental_processes_pending_dates_and_advances_watermark(m
 
     assert calls == [dt.date(2026, 6, 20)]
     assert watermark_calls == [("load_facts", dt.date(2026, 6, 20))]
-    assert results == {"2026-06-20": {"fact_movie_metrics": 1, "fact_casting": 2}}
+    assert results == {"2026-06-20": {"fact_movie_metrics": 1, "fact_cast": 2, "fact_crew": 1}}
 
 
 def test_load_facts_incremental_noop_when_no_pending_dates(monkeypatch):

@@ -28,7 +28,7 @@ django.setup()
 from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 
-from movies.models import Actor, Casting, Director, Genre, Movie, MovieMetrics  # noqa: E402
+from movies.models import Actor, Cast, Crew, Director, Genre, Movie, MovieMetrics  # noqa: E402
 
 client = Client()
 
@@ -219,18 +219,16 @@ def test_movie_detail_returns_200_with_expected_context():
     genre = Genre(genre_id=1, genre_name="Action")
     actor = Actor(actor_id=1, name="Test Actor")
     director = Director(director_id=1, name="Test Director")
-    casting = Casting(movie=movie, actor=actor, director=director, role="Actor", ordering=1)
+    cast_credit = Cast(movie=movie, actor=actor, role="Actor", ordering=1)
 
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
-    ) as genre_mgr, patch.object(Casting, "objects", new=MagicMock()) as casting_mgr, patch.object(
+    ) as genre_mgr, patch.object(Cast, "objects", new=MagicMock()) as cast_mgr, patch.object(
         Director, "objects", new=MagicMock()
     ) as director_mgr:
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = [genre]
-        # The view orders credits before de-duplicating actors, so the mock
-        # chain runs .using().filter().select_related().order_by().
-        casting_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
-            casting
+        cast_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
+            cast_credit
         ]
         director_mgr.using.return_value.filter.return_value.distinct.return_value = [
             director
@@ -241,38 +239,34 @@ def test_movie_detail_returns_200_with_expected_context():
     assert response.status_code == 200
     assert response.context["movie"] == movie
     assert list(response.context["genres"]) == [genre]
-    assert list(response.context["cast"]) == [casting]
+    assert list(response.context["cast"]) == [cast_credit]
     assert list(response.context["directors"]) == [director]
 
 
-def test_movie_detail_collapses_duplicate_actor_credits():
-    """fact_casting has one row per (actor, director) pair, so a film with two
-    credited directors yields two rows for the same actor. The page must show
-    each performer once."""
+def test_movie_detail_cast_present_when_no_director_credited():
+    """Regression test for the fact_casting cross-join bug (Task 35): a movie
+    with zero fact_crew rows must still render its cast, since fact_cast has
+    no dependency on fact_crew at all."""
     movie = _movie()
     actor = Actor(actor_id=1, name="Test Actor")
-    d1 = Director(director_id=1, name="Director One")
-    d2 = Director(director_id=2, name="Director Two")
-    # Same actor, once under each director — what the warehouse really returns.
-    c1 = Casting(movie=movie, actor=actor, director=d1, role="Hero", ordering=0)
-    c2 = Casting(movie=movie, actor=actor, director=d2, role="Hero", ordering=0)
+    cast_credit = Cast(movie=movie, actor=actor, role="Hero", ordering=0)
 
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
-    ) as genre_mgr, patch.object(Casting, "objects", new=MagicMock()) as casting_mgr, patch.object(
+    ) as genre_mgr, patch.object(Cast, "objects", new=MagicMock()) as cast_mgr, patch.object(
         Director, "objects", new=MagicMock()
     ) as director_mgr:
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
-        casting_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
-            c1,
-            c2,
+        cast_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
+            cast_credit
         ]
-        director_mgr.using.return_value.filter.return_value.distinct.return_value = [d1, d2]
+        director_mgr.using.return_value.filter.return_value.distinct.return_value = []
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
     assert response.status_code == 200
-    assert list(response.context["cast"]) == [c1]
+    assert list(response.context["cast"]) == [cast_credit]
+    assert list(response.context["directors"]) == []
 
 
 def test_movie_detail_404_when_missing():
@@ -302,11 +296,11 @@ def test_actor_detail_returns_200_with_expected_context():
     }
 
     with patch("movies.views.get_object_or_404", return_value=actor), patch.object(
-        Casting, "objects", new=MagicMock()
-    ) as casting_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Cast, "objects", new=MagicMock()
+    ) as cast_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
     ) as metrics_mgr:
-        casting_mgr.using.return_value.filter.return_value.values_list.return_value.distinct.return_value = [
+        cast_mgr.using.return_value.filter.return_value.values_list.return_value.distinct.return_value = [
             1
         ]
         movie_mgr.using.return_value.filter.return_value.order_by.return_value = filmography
@@ -352,11 +346,11 @@ def test_director_detail_returns_200_with_expected_context():
     }
 
     with patch("movies.views.get_object_or_404", return_value=director), patch.object(
-        Casting, "objects", new=MagicMock()
-    ) as casting_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Crew, "objects", new=MagicMock()
+    ) as crew_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
     ) as metrics_mgr:
-        casting_mgr.using.return_value.filter.return_value.values_list.return_value.distinct.return_value = [
+        crew_mgr.using.return_value.filter.return_value.values_list.return_value.distinct.return_value = [
             1
         ]
         movie_mgr.using.return_value.filter.return_value.order_by.return_value = filmography

@@ -7,7 +7,7 @@ refuses migrations against the `warehouse` database (see core/routers.py);
 `managed = False` here is defense-in-depth so a future `makemigrations`
 never generates a migration for these models even by accident.
 
-Both fact tables have a composite primary key in Postgres
+All fact tables have a composite primary key in Postgres
 (see warehouse/ddl/02_facts.sql), which Django's ORM does not support
 natively. Each fact model instead marks `movie_id` as `primary_key=True`
 purely to satisfy Django's "every model needs exactly one pk field"
@@ -126,15 +126,12 @@ class MovieMetrics(models.Model):
         return f"{self.movie_id}/{self.date_id}/{self.genre_id}"
 
 
-class Casting(models.Model):
+class Cast(models.Model):
     movie = models.ForeignKey(
         Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True
     )
     actor = models.ForeignKey(
         Actor, on_delete=models.DO_NOTHING, db_column="actor_id"
-    )
-    director = models.ForeignKey(
-        Director, on_delete=models.DO_NOTHING, db_column="director_id"
     )
     role = models.TextField(null=True)
     ordering = models.SmallIntegerField(null=True)
@@ -142,7 +139,27 @@ class Casting(models.Model):
 
     class Meta:
         managed = False
-        db_table = "fact_casting"
+        db_table = "fact_cast"
 
     def __str__(self):
-        return f"{self.movie_id}/{self.actor_id}/{self.director_id}"
+        return f"{self.movie_id}/{self.actor_id}"
+
+
+class Crew(models.Model):
+    # fact_crew currently models director credits only, mirroring dim_director
+    # (which itself only contains people credited as director) — see
+    # warehouse/ddl/02_facts.sql.
+    movie = models.ForeignKey(
+        Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True
+    )
+    director = models.ForeignKey(
+        Director, on_delete=models.DO_NOTHING, db_column="director_id"
+    )
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "fact_crew"
+
+    def __str__(self):
+        return f"{self.movie_id}/{self.director_id}"

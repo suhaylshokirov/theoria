@@ -1,4 +1,4 @@
--- Actor pairs who have appeared together most often, via a self-join on fact_casting.
+-- Actor pairs who have appeared together most often, via a self-join on fact_cast.
 -- fc1.actor_id < fc2.actor_id keeps each pair once (a,b) instead of twice (a,b)+(b,a)
 -- and avoids pairing an actor with themself.
 
@@ -8,8 +8,8 @@ SELECT
     a2.actor_id  AS actor_2_id,
     a2.name      AS actor_2_name,
     COUNT(DISTINCT fc1.movie_id) AS movies_together
-FROM fact_casting fc1
-JOIN fact_casting fc2
+FROM fact_cast fc1
+JOIN fact_cast fc2
     ON fc1.movie_id = fc2.movie_id
    AND fc1.actor_id < fc2.actor_id
 JOIN dim_actor a1 ON a1.actor_id = fc1.actor_id

@@ -10,7 +10,7 @@ SELECT
     dd.year,
     COUNT(DISTINCT fc.movie_id)     AS movie_count,
     ROUND(AVG(mr.rating), 2)        AS avg_rating
-FROM fact_casting fc
+FROM fact_crew fc
 JOIN dim_director d ON d.director_id = fc.director_id
 JOIN dim_movie dm   ON dm.movie_id = fc.movie_id
 JOIN dim_date dd    ON dd.full_date = dm.release_date

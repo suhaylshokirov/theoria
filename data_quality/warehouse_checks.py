@@ -21,11 +21,12 @@ for a given ingestion_date:
            just loaded.
          - Every Gold dataset must exist and be non-empty for the date
            whenever the Silver movies partition was non-empty.
-         - Both fact tables must have at least one row tagged with this
-           ingestion_date whenever the Silver data that feeds them was
+         - Every fact table must have at least one row tagged with this
+           ingestion_date whenever the Silver data that feeds it was
            non-empty — a loader that silently produced zero rows from real
            input is a bug, not "clean data" (genuine zero-row loads only
-           happen when Silver itself is empty).
+           happen when Silver itself is empty). fact_cast and fact_crew are
+           checked independently of each other.
 
 Produces one CheckResult per check; the overall run passes only if every
 CheckResult has passed=True.
@@ -73,9 +74,10 @@ _FK_CHECKS = [
     ("fact_movie_metrics", "movie_id", "dim_movie", "movie_id"),
     ("fact_movie_metrics", "date_id", "dim_date", "date_id"),
     ("fact_movie_metrics", "genre_id", "dim_genre", "genre_id"),
-    ("fact_casting", "movie_id", "dim_movie", "movie_id"),
-    ("fact_casting", "actor_id", "dim_actor", "actor_id"),
-    ("fact_casting", "director_id", "dim_director", "director_id"),
+    ("fact_cast", "movie_id", "dim_movie", "movie_id"),
+    ("fact_cast", "actor_id", "dim_actor", "actor_id"),
+    ("fact_crew", "movie_id", "dim_movie", "movie_id"),
+    ("fact_crew", "director_id", "dim_director", "director_id"),
 ]
 
 
@@ -310,9 +312,14 @@ def check_gold_sanity(bucket: str, ingestion_date: dt.date, silver_movies_count:
 
 def check_fact_load_sanity(
     session: Session, ingestion_date: dt.date,
-    silver_movies_count: int, silver_bridge_count: int,
+    silver_movies_count: int, silver_cast_count: int, silver_crew_count: int,
 ) -> list[CheckResult]:
-    """A loader that silently wrote zero rows from non-empty Silver input is a bug."""
+    """A loader that silently wrote zero rows from non-empty Silver input is a bug.
+
+    fact_cast and fact_crew are checked independently — one having zero rows
+    must never depend on whether the other does (that coupling was the
+    fact_casting cross-join bug this schema split fixes).
+    """
     results: list[CheckResult] = []
 
     fmm_count = _fact_ingestion_date_count(session, "fact_movie_metrics", ingestion_date)
@@ -326,16 +333,27 @@ def check_fact_load_sanity(
             f"{fmm_count} row(s) loaded for ingestion_date={ingestion_date}"))
         logger.info("[facts:fact_movie_metrics] OK (%d rows)", fmm_count)
 
-    fc_count = _fact_ingestion_date_count(session, "fact_casting", ingestion_date)
-    if silver_bridge_count > 0 and fc_count == 0:
-        results.append(CheckResult("facts:fact_casting", False,
-            f"fact_casting has 0 row(s) for ingestion_date={ingestion_date} despite "
-            f"{silver_bridge_count} Silver credits_bridge row(s)"))
-        logger.error("[facts:fact_casting] FAIL — 0 rows loaded")
+    fcast_count = _fact_ingestion_date_count(session, "fact_cast", ingestion_date)
+    if silver_cast_count > 0 and fcast_count == 0:
+        results.append(CheckResult("facts:fact_cast", False,
+            f"fact_cast has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"{silver_cast_count} Silver credits_bridge cast row(s)"))
+        logger.error("[facts:fact_cast] FAIL — 0 rows loaded")
     else:
-        results.append(CheckResult("facts:fact_casting", True,
-            f"{fc_count} row(s) loaded for ingestion_date={ingestion_date}"))
-        logger.info("[facts:fact_casting] OK (%d rows)", fc_count)
+        results.append(CheckResult("facts:fact_cast", True,
+            f"{fcast_count} row(s) loaded for ingestion_date={ingestion_date}"))
+        logger.info("[facts:fact_cast] OK (%d rows)", fcast_count)
+
+    fcrew_count = _fact_ingestion_date_count(session, "fact_crew", ingestion_date)
+    if silver_crew_count > 0 and fcrew_count == 0:
+        results.append(CheckResult("facts:fact_crew", False,
+            f"fact_crew has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"{silver_crew_count} Silver credits_bridge director row(s)"))
+        logger.error("[facts:fact_crew] FAIL — 0 rows loaded")
+    else:
+        results.append(CheckResult("facts:fact_crew", True,
+            f"{fcrew_count} row(s) loaded for ingestion_date={ingestion_date}"))
+        logger.info("[facts:fact_crew] OK (%d rows)", fcrew_count)
 
     return results
 
@@ -371,15 +389,20 @@ def run_warehouse_checks(
         except Exception:
             silver_movies_count = 0
         try:
-            silver_bridge_count = len(
-                _read_silver_parquet(bucket, "credits_bridge", ingestion_date, "credits_bridge.parquet")
+            silver_bridge_df = _read_silver_parquet(
+                bucket, "credits_bridge", ingestion_date, "credits_bridge.parquet"
+            )
+            silver_cast_count = int((silver_bridge_df["credit_type"] == "cast").sum())
+            silver_crew_count = int(
+                ((silver_bridge_df["credit_type"] == "crew") & (silver_bridge_df["role"] == "Director")).sum()
             )
         except Exception:
-            silver_bridge_count = 0
+            silver_cast_count = 0
+            silver_crew_count = 0
 
         all_results.extend(check_gold_sanity(bucket, ingestion_date, silver_movies_count))
         all_results.extend(
-            check_fact_load_sanity(session, ingestion_date, silver_movies_count, silver_bridge_count)
+            check_fact_load_sanity(session, ingestion_date, silver_movies_count, silver_cast_count, silver_crew_count)
         )
 
     passed = sum(1 for r in all_results if r.passed)

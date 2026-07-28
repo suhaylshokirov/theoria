@@ -76,14 +76,15 @@ gives:
 │ dim_genre │───────▶│ fact_movie_metrics │◀───────│ dim_movie  │
 └───────────┘        └────────────────────┘        └─────┬──────┘
                                                           │
-                     ┌────────────────────┐               │
-┌────────────┐       │   fact_casting     │◀──────────────┘
-│ dim_actor  │──────▶│                    │
-└────────────┘       └─────────┬──────────┘
-                                │
-                     ┌──────────▼─────────┐
-                     │   dim_director     │
-                     └────────────────────┘
+                          ┌────────────┐                  │
+┌────────────┐            │ fact_cast  │◀─────────────────┤
+│ dim_actor  │───────────▶│            │                  │
+└────────────┘            └────────────┘                  │
+                                                          │
+                          ┌────────────┐                  │
+┌────────────┐            │ fact_crew  │◀─────────────────┘
+│ dim_director│──────────▶│            │
+└────────────┘            └────────────┘
 ```
 
 **Dimensions** (`warehouse/ddl/01_dimensions.sql`): `dim_movie`, `dim_actor`, `dim_director`,
@@ -99,32 +100,38 @@ which uses a generated `YYYYMMDD` surrogate key and is populated as a full calen
   aggregating `rating`/`revenue`/`popularity` directly would double-count multi-genre movies. Every
   query in `warehouse/queries/` that touches these columns first collapses to
   `SELECT DISTINCT movie_id, ...` in a CTE before aggregating.
-- `fact_casting(movie_id, actor_id, director_id, role, ordering, ingestion_date)` — one row per
-  `(movie, actor, director)` triple.
+- `fact_cast(movie_id, actor_id, role, ordering, ingestion_date)` — one row per credited actor per
+  movie.
+- `fact_crew(movie_id, director_id, ingestion_date)` — one row per credited director per movie
+  (restricted to director credits, mirroring `dim_director`).
 
-Both fact tables carry named foreign keys to every dimension they reference, and an index on each
-FK column (PostgreSQL does not auto-index FKs). Both also carry an `ingestion_date` column purely
+All fact tables carry named foreign keys to every dimension they reference, and an index on each
+FK column (PostgreSQL does not auto-index FKs). All also carry an `ingestion_date` column purely
 for audit/traceability — it is *not* part of a uniqueness constraint, because legitimate data has
-multiple rows per `(movie_id, ingestion_date)` (one per genre, or one per actor/director pair).
+multiple rows per `(movie_id, ingestion_date)` (one per genre, one per actor, or one per director).
 Duplicate-guarding instead comes from the composite primary key plus `ON CONFLICT DO UPDATE`
 upserts in the loaders — idempotent by construction, not by an extra constraint.
 
-### A known data-shape limitation: `fact_casting`'s cross-join
+### Resolved: `fact_cast`/`fact_crew` replace the earlier `fact_casting` cross-join
 
-TMDB's credits endpoint returns cast and crew as two separate flat lists per movie — it does not
-pair a given actor with "their" director. `fact_casting` requires both `actor_id` and `director_id`
-to be non-null (matching the schema decision to model casting as actor/director pairs). To
-populate it, the loader (`etl/warehouse_loader/load_facts.py`) cross-joins, per movie, every
-credited actor with every credited director (crew rows where `job == "Director"`).
+TMDB's credits endpoint returns cast and crew as two separate flat lists per movie — it never
+pairs a given actor with "their" director. An earlier version of this schema modeled casting as a
+single `fact_casting(movie_id, actor_id, director_id, role, ordering, ingestion_date)` table with
+both `actor_id` and `director_id` non-null, populated by cross-joining, per movie, every credited
+actor with every credited director (crew rows where `job == "Director"`).
 
-Consequence: a movie with a credited director produces `(actors × directors)` rows, which is
-almost always just `actors × 1`. A movie with **no** credited director (TMDB metadata gaps, or a
-documentary/short with no "Director" job tag) produces **zero** `fact_casting` rows for all of its
-actors — those actor/movie rows are quarantined to `data_quality/rejected/`, not silently dropped.
-In the current sample data this affects roughly 46% of candidate rows. This is a consequence of the
-schema (choosing to model `fact_casting` as actor×director pairs rather than two separate bridge
-tables) interacting with real-world data gaps, not a bug in the loader — see Task 19's outcome note
-in `CLAUDE.md` for the full reasoning.
+That coupling meant a movie with **no** credited director (TMDB metadata gaps, or a
+documentary/short with no "Director" job tag) produced **zero** casting rows for *all* of its
+actors — losing its entire cast, not just its director. In the sample data this affected roughly
+46% of candidate rows.
+
+The fix (Task 35 / Workstream A) splits the actor and director sides into two independent fact
+tables: `fact_cast` and `fact_crew`. Neither loader (`etl/warehouse_loader/load_facts.py`,
+`_build_cast_rows`/`_build_crew_rows`) looks at the other dimension at all, so a movie's cast no
+longer depends on whether it has a resolvable director, and vice versa. `fact_crew` currently
+models director credits only (mirroring `dim_director`, which itself only contains people credited
+as director) — modeling other crew roles would need a new person-role dimension, out of scope for
+this fix.
 
 ## 4. Idempotency & incremental loads
 
@@ -181,12 +188,12 @@ Django never writes to the warehouse. This is enforced at three levels, not just
    tables; `warehouse` (Postgres) holds only the star schema. Views explicitly call
    `.using("warehouse")`.
 
-Two composite-PK fact tables (`fact_movie_metrics`, `fact_casting`) don't fit Django's
-one-primary-key-per-model assumption. Each model marks its `movie` FK as `primary_key=True`
-purely to satisfy that constraint — the real uniqueness lives only in the database's actual
-composite PK, and the resulting `fields.W342` warning is intentionally silenced in `settings.py`
-with a comment explaining why, rather than worked around with a fake single-column surrogate key
-that doesn't exist in the table.
+All three composite-PK fact tables (`fact_movie_metrics`, `fact_cast`, `fact_crew`) don't fit
+Django's one-primary-key-per-model assumption. Each model marks its `movie` FK as
+`primary_key=True` purely to satisfy that constraint — the real uniqueness lives only in the
+database's actual composite PK, and the resulting `fields.W342` warning is intentionally silenced
+in `settings.py` with a comment explaining why, rather than worked around with a fake single-column
+surrogate key that doesn't exist in the table.
 
 The **analytics dashboard** (`analytics/views.py`) takes a different approach from the `movies`
 app: instead of expressing the Task 22 SQL queries through the ORM, it reads the `.sql` files in

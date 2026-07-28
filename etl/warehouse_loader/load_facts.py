@@ -2,7 +2,7 @@
 
 Reads the Silver Parquet files for a given ingestion_date, resolves natural
 keys against the dimension tables already loaded by load_dimensions.py, and
-upserts into the two fact tables (fact_movie_metrics, fact_casting).
+upserts into three fact tables (fact_movie_metrics, fact_cast, fact_crew).
 
 Rows that fail an FK lookup (reference a movie/genre/date/actor/director not
 present in the dimensions) are never inserted and never silently dropped —
@@ -13,24 +13,29 @@ fact_movie_metrics is built by exploding each movie's genre_ids: one row per
 (movie_id, date_id, genre_id). date_id is derived from release_date to match
 the YYYYMMDD surrogate key produced by load_dim_date().
 
-fact_casting requires both actor_id and director_id NOT NULL (see
-warehouse/ddl/02_facts.sql), but Silver's credits_bridge stores cast and crew
-as separate per-person rows. We resolve this by cross-joining, per movie,
-every credited actor with every credited director — one row per
-(movie_id, actor_id, director_id) pair, carrying the actor's role/ordering.
-A movie with no credited director (or no credited actors) contributes no
-casting rows and its bridge rows are quarantined.
+fact_cast and fact_crew are independent facts built from Silver's
+credits_bridge, which stores cast and crew as separate per-person rows.
+fact_cast holds one row per (movie_id, actor_id); fact_crew holds one row
+per (movie_id, director_id), restricted to crew rows with role == "Director"
+(mirroring dim_director, which itself only contains people credited as
+director). Earlier this was a single fact_casting table requiring both
+actor_id and director_id NOT NULL, built by cross-joining every credited
+actor with every credited director per movie — but TMDB's credits endpoint
+never pairs an actor with "their" director, so a movie with no director
+credit lost its entire cast, not just its director. Splitting the two
+removes that coupling: a movie's cast rows no longer depend on whether it
+has a resolvable director.
 
 S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
     silver/credits_bridge/ingestion_date=YYYY-MM-DD/credits_bridge.parquet
 
-Both fact tables carry an ingestion_date column recording which Silver
-partition last wrote each row. It does not participate in either table's
+All fact tables carry an ingestion_date column recording which Silver
+partition last wrote each row. It does not participate in any table's
 PRIMARY KEY — the existing composite PK (movie_id, date_id, genre_id) /
-(movie_id, actor_id, director_id) already guards against duplicate inserts
-via the ON CONFLICT upsert, so re-running the same or an earlier partition
-is a no-op update rather than a new row.
+(movie_id, actor_id) / (movie_id, director_id) already guards against
+duplicate inserts via the ON CONFLICT upsert, so re-running the same or an
+earlier partition is a no-op update rather than a new row.
 
 Usage:
     python -m etl.warehouse_loader.load_facts
@@ -147,57 +152,78 @@ def _build_movie_metrics_rows(
     return rows, rejects
 
 
-def _build_casting_rows(
+def _build_cast_rows(
     bridge_df: pd.DataFrame,
     valid_movie_ids: set[int],
     valid_actor_ids: set[int],
-    valid_director_ids: set[int],
     ingestion_date: dt.date,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Cross-join cast and director bridge rows per movie into fact_casting rows.
+    """Resolve Silver credits_bridge cast rows into fact_cast rows.
 
-    Returns (rows, rejects).
+    Independent of directors: a movie's cast rows never depend on whether it
+    has a resolvable director credit. Returns (rows, rejects).
     """
     rows: list[dict[str, Any]] = []
     rejects: list[dict[str, Any]] = []
 
     cast_df = bridge_df[bridge_df["credit_type"] == "cast"]
+
+    for actor_row in cast_df.to_dict("records"):
+        movie_id = actor_row["movie_id"]
+        if pd.isna(movie_id) or int(movie_id) not in valid_movie_ids:
+            rejects.append({**actor_row, "rejection_reason": "unknown movie_id"})
+            continue
+
+        actor_id = actor_row["person_id"]
+        if pd.isna(actor_id) or int(actor_id) not in valid_actor_ids:
+            rejects.append({**actor_row, "rejection_reason": "unknown actor_id"})
+            continue
+
+        rows.append({
+            "movie_id": int(movie_id),
+            "actor_id": int(actor_id),
+            "role": actor_row.get("role"),
+            "ordering": actor_row.get("ordering"),
+            "ingestion_date": ingestion_date,
+        })
+
+    return rows, rejects
+
+
+def _build_crew_rows(
+    bridge_df: pd.DataFrame,
+    valid_movie_ids: set[int],
+    valid_director_ids: set[int],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Resolve Silver credits_bridge director rows into fact_crew rows.
+
+    Independent of cast: a movie's director rows never depend on whether it
+    has any resolvable actors. Returns (rows, rejects).
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+
     director_df = bridge_df[
         (bridge_df["credit_type"] == "crew") & (bridge_df["role"] == "Director")
     ]
 
-    for movie_id, actor_group in cast_df.groupby("movie_id"):
-        movie_id_int = int(movie_id) if not pd.isna(movie_id) else None
-        if movie_id_int is None or movie_id_int not in valid_movie_ids:
-            for actor_row in actor_group.to_dict("records"):
-                rejects.append({**actor_row, "rejection_reason": "unknown movie_id"})
+    for director_row in director_df.to_dict("records"):
+        movie_id = director_row["movie_id"]
+        if pd.isna(movie_id) or int(movie_id) not in valid_movie_ids:
+            rejects.append({**director_row, "rejection_reason": "unknown movie_id"})
             continue
 
-        directors = director_df[director_df["movie_id"] == movie_id]
-        if directors.empty:
-            for actor_row in actor_group.to_dict("records"):
-                rejects.append({**actor_row, "rejection_reason": "no director for movie"})
+        director_id = director_row["person_id"]
+        if pd.isna(director_id) or int(director_id) not in valid_director_ids:
+            rejects.append({**director_row, "rejection_reason": "unknown director_id"})
             continue
 
-        for actor_row in actor_group.to_dict("records"):
-            actor_id = actor_row["person_id"]
-            if pd.isna(actor_id) or int(actor_id) not in valid_actor_ids:
-                rejects.append({**actor_row, "rejection_reason": "unknown actor_id"})
-                continue
-
-            for director_row in directors.to_dict("records"):
-                director_id = director_row["person_id"]
-                if pd.isna(director_id) or int(director_id) not in valid_director_ids:
-                    rejects.append({**director_row, "rejection_reason": "unknown director_id"})
-                    continue
-                rows.append({
-                    "movie_id": movie_id_int,
-                    "actor_id": int(actor_id),
-                    "director_id": int(director_id),
-                    "role": actor_row.get("role"),
-                    "ordering": actor_row.get("ordering"),
-                    "ingestion_date": ingestion_date,
-                })
+        rows.append({
+            "movie_id": int(movie_id),
+            "director_id": int(director_id),
+            "ingestion_date": ingestion_date,
+        })
 
     return rows, rejects
 
@@ -222,20 +248,31 @@ def load_fact_movie_metrics(
     return count, rejects
 
 
-def load_fact_casting(
+def load_fact_cast(
     session: Session, bridge_df: pd.DataFrame, ingestion_date: dt.date,
 ) -> tuple[int, list[dict[str, Any]]]:
-    """Resolve and upsert Silver credits_bridge into fact_casting. Returns (count, rejects)."""
+    """Resolve and upsert Silver credits_bridge cast rows into fact_cast. Returns (count, rejects)."""
     valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
     valid_actor_ids = _existing_ids(session, "dim_actor", "actor_id")
+
+    rows, rejects = _build_cast_rows(bridge_df, valid_movie_ids, valid_actor_ids, ingestion_date)
+    columns = ["movie_id", "actor_id", "role", "ordering", "ingestion_date"]
+    count = _upsert(session, "fact_cast", ["movie_id", "actor_id"], columns, _records(rows))
+    logger.info("fact_cast: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
+def load_fact_crew(
+    session: Session, bridge_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert Silver credits_bridge director rows into fact_crew. Returns (count, rejects)."""
+    valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
     valid_director_ids = _existing_ids(session, "dim_director", "director_id")
 
-    rows, rejects = _build_casting_rows(
-        bridge_df, valid_movie_ids, valid_actor_ids, valid_director_ids, ingestion_date,
-    )
-    columns = ["movie_id", "actor_id", "director_id", "role", "ordering", "ingestion_date"]
-    count = _upsert(session, "fact_casting", ["movie_id", "actor_id", "director_id"], columns, _records(rows))
-    logger.info("fact_casting: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    rows, rejects = _build_crew_rows(bridge_df, valid_movie_ids, valid_director_ids, ingestion_date)
+    columns = ["movie_id", "director_id", "ingestion_date"]
+    count = _upsert(session, "fact_crew", ["movie_id", "director_id"], columns, _records(rows))
+    logger.info("fact_crew: upserted %d row(s), rejected %d row(s)", count, len(rejects))
     return count, rejects
 
 
@@ -264,10 +301,12 @@ def load_facts(
     counts: dict[str, int] = {}
     with get_session() as session:
         counts["fact_movie_metrics"], metrics_rejects = load_fact_movie_metrics(session, movies_df, ingestion_date)
-        counts["fact_casting"], casting_rejects = load_fact_casting(session, bridge_df, ingestion_date)
+        counts["fact_cast"], cast_rejects = load_fact_cast(session, bridge_df, ingestion_date)
+        counts["fact_crew"], crew_rejects = load_fact_crew(session, bridge_df, ingestion_date)
 
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)
-    _write_rejects(casting_rejects, "fact_casting", ingestion_date, rejected_dir)
+    _write_rejects(cast_rejects, "fact_cast", ingestion_date, rejected_dir)
+    _write_rejects(crew_rejects, "fact_crew", ingestion_date, rejected_dir)
 
     elapsed = time.monotonic() - t0
     logger.info(
