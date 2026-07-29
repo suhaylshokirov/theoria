@@ -30,8 +30,8 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 42 — discover/movie ingestion for a multi-decade corpus
-Currently on          : Phase 8 — Correctness & Catalog Depth (plan: ~/.claude/plans/what-else-can-we-lazy-unicorn.md)
+Last completed task   : Task 44 — Live re-run, verification, doc truth-up (Phase 8 complete)
+Currently on          : Phase 8 complete except Task 43 (person enrichment), deferred by user on cost grounds. No task in progress.
 Current phase         : Phase 8 — Correctness & Catalog Depth (Tasks 40–44)
 Blockers / open issues: Full test suite is 182/182 passing. The crew-dedup bug noted here previously is FIXED (Task 40): `transform_credits_bridge.py` now dedups on `(movie_id, person_id, credit_type, role)`, so a crew member with multiple jobs no longer loses their "Director" row. Movies with a director went 47/112 → 111/112; `fact_crew` 54 → 128 rows; "Top Rated Directors" renders for the first time. The single remaining movie without a director (`A Lustful Night`, 739277) genuinely has none in Bronze — real TMDB sparsity. Task 41 also done: `dim_movie.overview` added + backfilled (109/112 populated; 3 genuinely blank in TMDB) and `movie_detail` now shows rating + vote count. Task 42 also done: `discover/movie` source added and run live — catalog is now **1,215 films** (was 112), evenly spread ~200/decade (was 77/112 in the 2020s), 44,554 actors, 677 directors, 146 directors with 3+ films (was 1). Remaining known gaps (planned as Tasks 43–44): people have no bios/birthdays; orphan dimension members (people credited on films outside the loaded population) still produce thin pages. Not-yet-assigned: Gold is still a write-only dead end (built every run, read by nothing); `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`.
 Last updated          : 2026-07-29
@@ -197,7 +197,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 5     | Django UI               | 23–30 | Complete |
 | 6     | Polish                  | 31–33 | Complete |
 | 7     | Product Upgrade         | 34–39 | Complete |
-| 8     | Correctness & Catalog Depth | 40–44 | In progress |
+| 8     | Correctness & Catalog Depth | 40–44 | Complete (43 deferred) |
 
 ---
 
@@ -465,11 +465,14 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Files:** `etl/tmdb_client.py`, new `etl/bronze/ingest_discover.py`, `config.py`, `.env.example`, `scripts/run_pipeline.py`, `warehouse/queries/{director_trend_over_time,genre_growth_over_time}.sql`, `README.md`, `tests/test_etl.py`
 - **Outcome:** `movie/popular` returns whatever is trending *at call time*, which is why the catalog was 112 films with 77 of them from the 2020s — no transform or aggregate can recover a time axis the extraction step never collected. Added `TMDBClient.discover_movies()` (a thin wrapper on the existing `get()`, so it inherits retry/backoff) and `ingest_discover.py`, which iterates **one release year at a time** and pages within each year: windowing the request predicate is what makes an unbounded catalog reachable through an API that caps pagination depth. Ids are deduplicated across year windows while preserving discovery order. The four new `DISCOVER_*` config values are a *definition of the dataset*, not tuning knobs — lowering `DISCOVER_MIN_VOTES` doesn't slow the pipeline, it makes the warehouse describe a different population. `ingest_movies()` is untouched and still the default; `--source discover` selects between them and everything downstream is identical, since both return a plain `list[int]`. **Live run, 30.6 min end to end:** Bronze 1,140/1,140 details + 1,140/1,140 credits, **0 failures**; Silver 1,140 movies / 43,138 actors / 604 directors / 231,728 bridge rows, 0 parse errors; Silver DQ 20/20; warehouse checks 22/22. Warehouse went **112 → 1,215 films**, 3,548 → **44,554 actors**, 120 → **677 directors**, 3,345 → **62,713 cast credits**, evenly spread ~200 films/decade (2020s share 69% → 16%), and directors with 3+ films **1 → 146** — "Top Rated Directors" is now a real leaderboard (Miyazaki, Kubrick, Tarantino, Kurosawa). The bigger corpus exposed a latent bug: `director_trend_over_time.sql` and `genre_growth_over_time.sql` had **no `LIMIT`** and returned 1,304 / 791 rows into fixed-height panels — both capped at 300, and director trend now also requires ≥3 films so the panel shows careers rather than one-off credits. Tests **182/182** (5 new).
 
-#### [ ] Task 43 — Person enrichment (bios, birthdays, birthplaces)
+#### [ ] Task 43 — Person enrichment (bios, birthdays, birthplaces) — DEFERRED
 - **Goal:** `person/{id}` enrichment, restricted to people who actually have credits.
+- **Status:** Deferred by user decision on 2026-07-29, on cost grounds. Task 42 grew `dim_actor` from 3,548 to 44,554, so this went from ~3.5k API calls to ~45k (~6h at the observed ~2 req/s). Scoped options if resumed: top-5-billed actors + all directors ≈ 4k calls; actors in 2+ films + directors ≈ 9.6k calls; everyone ≈ 45k calls.
 
-#### [ ] Task 44 — Live re-run, verification, and doc truth-up
-- **Goal:** Full run at the new corpus size; fix README's missing DDL steps (`04`/`05`) and stale test counts.
+#### [x] Task 44 — Live re-run, verification, and doc truth-up
+- **Goal:** Full run at the new corpus size; fix README's missing DDL steps and stale test counts.
+- **Files:** `README.md`, `docs/architecture.md`, `CLAUDE.md`, `for_learning.md`
+- **Outcome:** Verified live at the new scale: all 11 routes + static assets return 200; `/movies/238/` (The Godfather) renders rating 8.7/10, 23,226 votes, synopsis, "Directed by Francis Ford Coppola" and a cast including Brando and Pacino — a page that before Phase 8 would have had no rating, no synopsis and possibly no director. A bad id still 404s. Silver DQ 20/20, warehouse checks 22/22 (incl. `bronze_to_silver` 1140=1140), tests 182/182. Three real doc defects fixed: (1) **README's schema-setup step listed only DDL `01`–`03`**, so anyone following it on a fresh machine built an incomplete warehouse — silent, not loud, which is the worst kind; (2) the test count was stale in three places; (3) `architecture.md` had no account of the corpus-source decision or the dedup-grain bug, both now written up (§2 "Choosing the corpus", §3 "Resolved: the credits-bridge dedup grain"), including why the DQ check *shared the bug's premise* and why total-row-count checks can't catch "right number of rows, wrong ones" — that needs reconciliation controls asserting a conserved quantity across a layer boundary.
 
 ---
 

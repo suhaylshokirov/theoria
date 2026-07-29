@@ -1670,3 +1670,65 @@ is the standard fix, and what rate limiting you must add so concurrency doesn't 
 throttled. Then the deeper question: at what data volume does the pandas-in-one-process
 Silver step (which currently downloads all 1,140 objects serially and holds every row in
 memory) stop being viable, and what changes first — the download, the memory, or the CPU?
+
+## Task 44 — Verifying the phase, and the docs that were quietly wrong
+
+### What Was Built
+No new features — the closing task of Phase 8: prove the numbers that motivated the phase
+actually moved, then correct documentation that had drifted away from the code.
+
+**Verification at the new scale.** Every route (11 URLs plus static assets) returns 200
+against the 1,215-film warehouse; `/movies/238/` (The Godfather) renders rating 8.7/10,
+23,226 votes, a synopsis, "Directed by Francis Ford Coppola", and a cast including Brando
+and Pacino — a page that before Phase 8 would have shown no rating, no synopsis, and quite
+possibly no director. Silver DQ 20/20, warehouse checks 22/22, 182/182 tests, and a bad id
+still 404s cleanly.
+
+**Documentation fixes.** Three real defects, all found by reading rather than by any tool:
+1. `README.md`'s schema-setup step listed only DDL files `01`–`03`. Files `04`–`06` exist and
+   add the image columns, split `fact_casting`, and add `overview` — so *anyone following the
+   README on a fresh machine got an incomplete warehouse.* This is the worst kind of doc bug:
+   it doesn't fail loudly, it produces a subtly wrong system.
+2. The test count was stale in three places (README, `architecture.md` §7, `CLAUDE.md`).
+3. `architecture.md` had no account of the corpus-source decision or the dedup-grain bug —
+   both of which are the most interesting things in this phase.
+
+### Concepts Used
+- **Verification vs. testing.** The 182 unit tests all passed *before* Phase 8 began, while
+  half the films were missing their director. Tests check that code does what it says; only
+  verification against live data checks that what it says is what you wanted. Both Phase 8
+  data bugs were invisible to the suite by construction.
+- **Documentation as part of the system.** A README that produces a broken install is a
+  broken build script written in English. Worth treating with the same seriousness.
+- **Reconciliation controls** (written up in `architecture.md` §3): asserting a *conserved
+  quantity* across a layer boundary — "the number of films with a director in Bronze must
+  equal the number in `fact_crew`" — rather than only checking internal consistency. This is
+  the check family that would have caught the Task 40 bug on the day it was introduced.
+
+### Phase 8 in numbers
+
+| | before | after |
+|---|---|---|
+| films | 112 | **1,215** |
+| actors | 3,548 | **44,554** |
+| directors | 120 | **677** |
+| cast credits | 3,345 | **62,713** |
+| films with a director | 47 (42%) | **1,214 (99.9%)** |
+| directors with 3+ films | 0 | **146** |
+| films from the 2020s | 69% | 16% |
+| decades covered meaningfully | 1 | **6** |
+| empty dashboard panels | 1 | **0** |
+| tests | 174 | **182** |
+
+### What to Study Next
+Phase 8 found two bugs of the same species: data that existed upstream but silently failed
+to arrive downstream (`overview` never loaded; director credits deduplicated away). Neither
+was caught by tests, DQ checks, or FK constraints, because all of those verify *internal
+consistency* and both bugs were internally consistent.
+
+The concrete follow-up is to add a **reconciliation check** to `warehouse_checks.py`: pick a
+quantity that must be conserved across a boundary (films-with-a-director, films-with-a-
+synopsis, distinct people credited) and assert Bronze == warehouse, failing loudly on drift.
+Then read about **data contracts** and dbt's `relationships` / `not_null` / custom singular
+tests — the broader idea being that the schema of what a layer *promises to deliver* should
+itself be a checked artifact, not folklore.

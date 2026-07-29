@@ -41,6 +41,28 @@ sequences all of them in-process for one `ingestion_date` — but every stage fu
 imported and run on its own, which is what the unit tests do (mocking S3/TMDB/Postgres at the
 boundary rather than mocking business logic).
 
+### Choosing the corpus: `movie/popular` vs `discover/movie`
+
+Ingestion has two selectable sources (`scripts/run_pipeline.py --source`), and the choice is a
+modelling decision rather than a tuning one.
+
+`movie/popular` (`etl/bronze/ingest_movies.py`) returns whatever TMDB is featuring at the moment
+you call it. It is fine for a "what's hot now" feed, but as the *only* source it produced a
+catalogue of 112 films of which 77 were from the 2020s — so every trend-over-time query was
+describing a dataset that barely had a time axis. No downstream transform can fix that: a
+perfectly correct pipeline over a biased sample yields perfectly correct, biased answers.
+
+`discover/movie` (`etl/bronze/ingest_discover.py`) accepts filters, so the population can be
+*defined*: "the most-voted films of each release year from `DISCOVER_START_YEAR` to
+`DISCOVER_END_YEAR`, with at least `DISCOVER_MIN_VOTES` votes". Because the endpoint caps how deep
+a single query can page, the crawl partitions its **request predicate** by year and pages within
+each window — the same technique used to split a large database read by key range. The current
+warehouse holds ~1,200 films spread evenly at roughly 200 per decade.
+
+The four `DISCOVER_*` values in `config.py` therefore define the dataset, not the runtime:
+lowering `DISCOVER_MIN_VOTES` doesn't make the pipeline slower, it makes the warehouse describe a
+different population.
+
 ### Why S3, and why three layers instead of loading straight into Postgres
 
 - **Bronze is the immutable source of truth.** Raw API responses are never edited in place. If a
@@ -132,6 +154,31 @@ longer depends on whether it has a resolvable director, and vice versa. `fact_cr
 models director credits only (mirroring `dim_director`, which itself only contains people credited
 as director) — modeling other crew roles would need a new person-role dimension, out of scope for
 this fix.
+
+### Resolved: the credits-bridge dedup grain
+
+A second, subtler bug lived in `etl/silver/transform_credits_bridge.py`, which deduplicated crew
+rows on `(movie_id, person_id, credit_type)`. `credit_type` is only ever the literal `"crew"` — it
+does not distinguish jobs — so any crew member holding more than one job on a film collapsed to a
+single row, `keep="last"` deciding which. Directors very often also produce or write their own
+films, so the surviving row was frequently *not* the "Director" one. The result: raw Bronze had a
+director for 99 of 99 films, while only 47 reached `fact_crew`, and the "Top Rated Directors"
+dashboard panel (which requires ≥3 films per director) was permanently empty.
+
+The fix was to include `role` in the dedup key, so it matches the true grain of a credit: *a person
+can hold several distinct jobs on one film, and each is a real fact.*
+
+Two things are worth noting beyond the one-line change:
+
+- **The data-quality check shared the bug's premise.** `silver_checks.py` validated uniqueness on
+  the *same* wrong key, so rather than catching the error it confirmed the corrupted data looked
+  correct. A check that encodes the same assumption as the code it checks cannot detect a fault in
+  that assumption.
+- **Every test and check passed throughout.** Nothing was corrupt — there were simply fewer rows
+  than there should have been. The existing `bronze_to_silver` row-count checks compare *totals per
+  entity*, which is why 9,282 crew rows in and 9,282 out looked perfectly healthy while the wrong
+  52 directors were missing among them. Catching this class of bug needs *reconciliation* controls
+  that assert a conserved quantity across a layer boundary, not just internal consistency.
 
 ## 4. Idempotency & incremental loads
 
