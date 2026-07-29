@@ -1024,6 +1024,14 @@ button:hover,
   text-wrap: balance;
 }
 
+.specimen-synopsis {
+  margin-top: var(--space-4);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--ink);
+  max-width: 62ch;
+}
+
 .record-list {
   margin: var(--space-6) 0 0;
   border-top: var(--hairline);

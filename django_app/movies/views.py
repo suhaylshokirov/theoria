@@ -153,11 +153,26 @@ def movie_detail(request, movie_id):
         .distinct()
     )
 
+    # fact_movie_metrics has one row per (movie, date, genre), and rating /
+    # vote_count are movie-level measures repeated identically across those
+    # rows. So take one row rather than averaging: .values(...).distinct()
+    # collapses the genre fan-out to a single tuple, and .first() reads it.
+    # Averaging here would be a silent trap — it happens to give the right
+    # answer only because the duplicated values are equal.
+    metrics = (
+        MovieMetrics.objects.using("warehouse")
+        .filter(movie_id=movie_id)
+        .values("rating", "vote_count")
+        .distinct()
+        .first()
+    )
+
     context = {
         "movie": movie,
         "genres": genres,
         "cast": cast,
         "directors": directors,
+        "metrics": metrics,
     }
     return render(request, "movies/movie_detail.html", context)
 

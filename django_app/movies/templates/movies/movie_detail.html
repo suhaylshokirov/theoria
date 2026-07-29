@@ -25,8 +25,15 @@
 
         <h1 class="sheet-title">{{ movie.title }}</h1>
         {% if movie.tagline %}<p class="specimen-tagline">{{ movie.tagline }}</p>{% endif %}
+        {% if movie.overview %}<p class="specimen-synopsis">{{ movie.overview }}</p>{% endif %}
 
         <dl class="record-list">
+            {% if metrics.rating %}
+            <div class="record-row">
+                <dt class="label">Rating</dt>
+                <dd class="mono">{{ metrics.rating|floatformat:1 }} / 10{% if metrics.vote_count %} <span class="faint">({{ metrics.vote_count|floatformat:"0g" }} votes)</span>{% endif %}</dd>
+            </div>
+            {% endif %}
             <div class="record-row">
                 <dt class="label">Released</dt>
                 <dd class="mono">{% if movie.release_date %}{{ movie.release_date|date:"j M Y" }}{% else %}—{% endif %}</dd>

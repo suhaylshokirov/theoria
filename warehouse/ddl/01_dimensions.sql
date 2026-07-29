@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS dim_movie (
     revenue          BIGINT,
     original_language VARCHAR(10),
     status           VARCHAR(50),
+    overview         TEXT,
     tagline          TEXT,
     poster_path      TEXT,
     backdrop_path    TEXT,

@@ -40,6 +40,7 @@ class Movie(models.Model):
     revenue = models.BigIntegerField(null=True)
     original_language = models.CharField(max_length=10, null=True)
     status = models.CharField(max_length=50, null=True)
+    overview = models.TextField(null=True)
     tagline = models.TextField(null=True)
     poster_path = models.TextField(null=True)
     backdrop_path = models.TextField(null=True)
