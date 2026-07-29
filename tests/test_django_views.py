@@ -225,7 +225,9 @@ def test_movie_detail_returns_200_with_expected_context():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Cast, "objects", new=MagicMock()) as cast_mgr, patch.object(
         Director, "objects", new=MagicMock()
-    ) as director_mgr:
+    ) as director_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = [genre]
         cast_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
             cast_credit
@@ -233,6 +235,10 @@ def test_movie_detail_returns_200_with_expected_context():
         director_mgr.using.return_value.filter.return_value.distinct.return_value = [
             director
         ]
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = {
+            "rating": Decimal("8.50"),
+            "vote_count": 1200,
+        }
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -241,6 +247,39 @@ def test_movie_detail_returns_200_with_expected_context():
     assert list(response.context["genres"]) == [genre]
     assert list(response.context["cast"]) == [cast_credit]
     assert list(response.context["directors"]) == [director]
+    assert response.context["metrics"]["rating"] == Decimal("8.50")
+
+
+def test_movie_detail_renders_rating_and_synopsis():
+    """Rating, vote count and overview must reach the rendered page.
+
+    The rating lives in fact_movie_metrics and the synopsis in dim_movie.overview
+    — both existed in the pipeline long before any page displayed them.
+    """
+    movie = _movie()
+    movie.overview = "A test synopsis describing the film."
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Cast, "objects", new=MagicMock()) as cast_mgr, patch.object(
+        Director, "objects", new=MagicMock()
+    ) as director_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        cast_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        director_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = {
+            "rating": Decimal("8.50"),
+            "vote_count": 1200,
+        }
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "8.5" in body
+    assert "A test synopsis describing the film." in body
 
 
 def test_movie_detail_cast_present_when_no_director_credited():
@@ -255,12 +294,15 @@ def test_movie_detail_cast_present_when_no_director_credited():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Cast, "objects", new=MagicMock()) as cast_mgr, patch.object(
         Director, "objects", new=MagicMock()
-    ) as director_mgr:
+    ) as director_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         cast_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
             cast_credit
         ]
         director_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 

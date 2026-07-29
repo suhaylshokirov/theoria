@@ -1439,7 +1439,8 @@ def test_load_dim_movie_upserts_expected_columns():
     assert "INSERT INTO dim_movie" in str(stmt)
     assert set(params[0].keys()) == {
         "movie_id", "title", "release_date", "runtime", "budget", "revenue",
-        "original_language", "status", "tagline", "poster_path", "backdrop_path",
+        "original_language", "status", "overview", "tagline", "poster_path",
+        "backdrop_path",
     }
 
 

@@ -1501,3 +1501,82 @@ row-count checks, but they only compare *totals per entity*, which is why 9,282 
 in and 9,282 out looked perfect while the wrong 52 directors were among them. Next question
 to explore: what would a check look like that catches "the right number of rows, but the
 wrong ones"?
+
+## Task 41 — Put the score and the synopsis on the movie page
+
+### What Was Built
+The movie detail page now shows a rating, a vote count, and a plot synopsis. Before this,
+a film's page listed Released / Runtime / Language / Budget / Revenue — and never told you
+whether the film was any good or what it was about. For a "mini IMDb", that's the two most
+important things on the page.
+
+Neither required a single new API call. Both values had been flowing through the pipeline
+for months:
+
+- `vote_average` / `vote_count` were already loaded into `fact_movie_metrics`. The view
+  simply never queried them.
+- `overview` was extracted in `transform_movies._flatten_movie()` and written to the Silver
+  Parquet (99/99 non-null), listed in `silver_checks` expected columns — and then dropped,
+  because `dim_movie` had no `overview` column, so `load_dim_movie()`'s explicit column
+  list couldn't carry it.
+
+That second one is a good illustration of a rule cutting both ways. "Never `SELECT *`" and
+"name columns explicitly" prevent accidental schema coupling, but they also mean a column
+can exist in every lake layer and still never reach the warehouse, silently, with no error
+anywhere — because *not selecting a column is indistinguishable from not having one*.
+
+### Concepts Used
+- **Additive schema migration**: `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` on a live table.
+  Adding a nullable column is a backwards-compatible change — existing rows get `NULL`,
+  existing queries are unaffected, and no downtime or table rewrite is needed.
+- **Dual-write the DDL**: the column goes in `01_dimensions.sql` (so a fresh bootstrap
+  builds it correctly) *and* in a new numbered migration `06_add_overview.sql` (so the
+  already-live database gets it). Same pattern as `04_add_image_columns.sql`.
+- **Backfill by replay, not by patch**: no `UPDATE` statement was written. Re-running
+  `load_dimensions()` for each existing partition re-upserted every movie with the new
+  column populated from Silver, which already had the data.
+- **Fact grain vs. display grain**: covered below — the most subtle part of this task.
+
+### Key Code
+`django_app/movies/views.py` — `movie_detail()`:
+> ```python
+> metrics = (
+>     MovieMetrics.objects.using("warehouse")
+>     .filter(movie_id=movie_id)
+>     .values("rating", "vote_count")
+>     .distinct()
+>     .first()
+> )
+> ```
+> `fact_movie_metrics` is at `(movie_id, date_id, genre_id)` grain, so a three-genre film
+> has *three* rows — each carrying the same rating. The instinct is `.aggregate(Avg(...))`,
+> and it would even print the right number, because averaging identical values returns that
+> value. But it would be right by accident: rating is a **movie-level** measure that has
+> been fanned out by the genre dimension, not a set of measurements to average. Taking one
+> row via `.values(...).distinct().first()` says what's actually true. This is the same
+> collapse the Task 22 analytics SQL does with `SELECT DISTINCT movie_id, rating` in a CTE.
+
+`etl/warehouse_loader/load_dimensions.py` — the `dim_movie` column list:
+> Adding `"overview"` to this list is the entire loader change. The `_upsert()` helper
+> builds `INSERT ... ON CONFLICT (movie_id) DO UPDATE` from the list, so the new column is
+> inserted for new rows *and* updated for existing ones — which is what makes the backfill
+> a re-run rather than a migration script.
+
+### Results
+- `dim_movie.overview` populated for **109/112** movies (the 3 blanks are genuinely empty
+  in TMDB, verified against Bronze).
+- `/movies/155/` (The Dark Knight) renders its synopsis, `Rating 8.5 / 10`, `36,040 votes`,
+  and `Directed by Christopher Nolan` — all four fields were absent before Tasks 40–41.
+- Tests 177/177. One existing loader test had to change: it asserted the exact set of
+  upserted `dim_movie` columns, and its fixture *already contained* `overview` — the test
+  was pinning the bug in place.
+
+### What to Study Next
+Two of the last three tasks (36, 41) were the same shape: a field present in Bronze and
+Silver but missing from the warehouse, found by a human looking at a rendered page. That's
+a **schema drift** detection gap. Look into how tools like dbt or Great Expectations handle
+this — specifically, a test that asserts *every column in the Silver contract has a
+corresponding warehouse column*, so the pipeline itself complains when a transform starts
+producing a field no loader consumes. Then ask the harder version: should an unconsumed
+Silver column be an error, or is it legitimate for the lake to carry more than the
+warehouse needs?
