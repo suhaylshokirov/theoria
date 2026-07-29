@@ -1418,3 +1418,86 @@ for a column added after some rows already exist, and how a data warehouse would
 detect and re-backfill "this dimension row predates this column" systematically, rather
 than an engineer noticing it by inspecting a rendered web page.
 
+
+## Task 40 — Fix the crew dedup key so directors survive Silver
+
+### What Was Built
+No new feature — a one-line fix to a *silent* data-loss bug, plus the DQ check and the Gold
+aggregation that were both quietly agreeing with it.
+
+The symptom: only 47 of 112 movies in the warehouse had a director. *The Dark Knight* and
+*LOTR: The Fellowship of the Ring* both rendered with no "Directed by" line, and the
+analytics dashboard's "Top Rated Directors" panel was permanently empty — its query needs
+directors with 3+ films, and **zero** directors qualified.
+
+The cause was in `transform_credits_bridge.py`, which deduplicated crew rows on
+`(movie_id, person_id, credit_type)`. But `credit_type` is only ever the literal string
+`"crew"` — it does *not* distinguish jobs. So for anyone credited with more than one job on
+the same film, all their rows collapsed to a single row, `keep="last"` picking whichever
+one happened to sort last. Directors very often also produce or write their own films: I
+measured **65 of 99 movies** where the director held a second job. In those cases the
+"Director" row was thrown away and a "Producer" row survived in its place.
+
+Bronze — immutable, and therefore still holding the truth — had a `job == "Director"` crew
+member for **99 out of 99** movies the whole time. The data was never missing; the
+transform was deleting it on every run.
+
+### Concepts Used
+- **Grain**: the level of detail one row represents. The real grain of a credit is
+  *(movie, person, credit type, job)* — "Nolan directed film X" and "Nolan produced film X"
+  are two distinct facts. The dedup key claimed the grain was coarser than it is, so pandas
+  did exactly what it was told and discarded a real fact as a "duplicate".
+- **A dedup key is a declaration, not a filter.** `drop_duplicates(subset=...)` is you
+  asserting "these columns uniquely identify a row." If that assertion is wrong, you get no
+  error — you get silent, permanent data loss that looks like clean data downstream.
+- **Self-consistently wrong data passes every test.** All 174 tests passed. All 20 Silver
+  DQ checks passed. All 22 warehouse checks passed. FK integrity passed. Nothing was
+  *corrupt* — there were simply fewer rows than there should have been, and no check
+  compared the count against the source.
+- **Idempotent replay from an immutable source**: fixing the code was enough, because
+  Silver is always rebuilt from Bronze. No data was recovered from a backup; it was
+  recomputed.
+
+### Key Code
+`etl/silver/transform_credits_bridge.py` — the dedup call:
+> ```python
+> df = df.drop_duplicates(
+>     subset=["movie_id", "person_id", "credit_type", "role"], keep="last"
+> )
+> ```
+> Adding `role` (which holds the job title for crew rows) makes the key match the true
+> grain. One person can now legitimately hold several crew credits on one film.
+
+`data_quality/silver_checks.py` — `ENTITY_CONFIGS["credits_bridge"]["pk_cols"]`:
+> This had to change in the same commit, and *why* is the interesting part. The duplicates
+> check validated uniqueness on the **same wrong key**. It wasn't an independent check that
+> failed to catch the bug — it encoded the identical false assumption, so it confirmed the
+> bug looked correct. Had it been left alone, it would have started failing on every
+> legitimate multi-job row after the fix. A DQ check that shares its premise with the code
+> it checks cannot catch an error in that premise.
+
+`etl/gold/build_gold_datasets.py` — `_build_director_ratings()`:
+> Filtered `credit_type == "crew"` but never `role == "Director"`, while
+> `load_facts._build_crew_rows()` filtered on both. Two layers, two different definitions of
+> "a director credit", drifting apart unnoticed because nothing compared them. Added the
+> missing filter so Gold and the warehouse now agree.
+
+### Results
+Rebuilt Silver from Bronze and reloaded facts for both partitions:
+- `fact_crew`: 54 → **128 rows**
+- Movies with a director: 47/112 → **111/112** (the one remaining, *A Lustful Night*,
+  genuinely has no director in Bronze — real source sparsity, not a bug)
+- Directors with 3+ films: 0 → **1**, so "Top Rated Directors" renders for the first time
+  (Christopher Nolan, 4 films, avg 8.22)
+- 0 rejected rows; Silver DQ 20/20, warehouse 22/22, tests 176/176
+
+### What to Study Next
+This bug was invisible to every automated check because all of them validated *internal
+consistency* and none validated *conservation* — that what came out matches what went in.
+Read about **reconciliation / row-count controls** in ETL: the practice of asserting
+`count(distinct movie_id with a director in Bronze) == count(in fact_crew)` across a layer
+boundary. `warehouse_checks.py` already has the right instinct with its `bronze_to_silver`
+row-count checks, but they only compare *totals per entity*, which is why 9,282 crew rows
+in and 9,282 out looked perfect while the wrong 52 directors were among them. Next question
+to explore: what would a check look like that catches "the right number of rows, but the
+wrong ones"?

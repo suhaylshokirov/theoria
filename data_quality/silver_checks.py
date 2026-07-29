@@ -91,7 +91,7 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
     },
     "credits_bridge": {
         "parquet": "credits_bridge.parquet",
-        "pk_cols": ["movie_id", "person_id", "credit_type"],
+        "pk_cols": ["movie_id", "person_id", "credit_type", "role"],
         "required_cols": ["movie_id", "person_id", "credit_type"],
         "expected_cols": ["movie_id", "person_id", "credit_type", "role", "ordering"],
         "ranges": {

@@ -177,9 +177,17 @@ def _build_director_ratings(
 ) -> pd.DataFrame:
     """Compute avg rating, film count, and total revenue per director.
 
-    Join: credits_bridge (crew rows only) → movies → directors.
+    Join: credits_bridge (director credits only) → movies → directors.
+
+    Filters on `role == "Director"` as well as `credit_type == "crew"` to match
+    `load_facts._build_crew_rows()`. Without the role filter this counts every
+    crew credit (writers, producers, editors), which both inflates film_count
+    and produces null-name rows for non-directors after the left join — i.e.
+    Gold and the warehouse would disagree on what a director credit is.
     """
-    crew = bridge[bridge["credit_type"] == "crew"][["movie_id", "person_id"]].copy()
+    crew = bridge[
+        (bridge["credit_type"] == "crew") & (bridge["role"] == "Director")
+    ][["movie_id", "person_id"]].copy()
 
     merged = crew.merge(
         movies[["movie_id", "vote_average", "revenue"]], on="movie_id", how="left"

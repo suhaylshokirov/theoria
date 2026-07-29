@@ -30,11 +30,11 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 39 — Backfill missing poster/backdrop/headshot images (stale Silver partition)
-Currently on          : Phase 7 wrap-up — Workstreams A/B/C/D all complete; no task currently in progress
-Current phase         : Phase 7 — Product Upgrade (plan: ~/.claude/plans/that-s-it-the-project-recursive-ocean.md)
-Blockers / open issues: Full test suite is 174/174 passing. Discovered (not yet fixed, no task assigned) while verifying Task 35 live: `etl/silver/transform_credits_bridge.py` dedups crew rows on `(movie_id, person_id, credit_type)`, and since `credit_type` is just `"crew"` (not per-job), a crew member credited with multiple jobs on the same movie (very common for directors, who often also write/produce) collapses to only their *last* Bronze row — silently dropping the "Director" role if a different job's row survives dedup. Confirmed live: LOTR: Fellowship of the Ring and The Dark Knight both have full casts in `fact_cast` now but zero rows in `fact_crew` (no director row) because of this, even though they have well-known single directors. This is a different bug from the fact_casting cross-join Task 35 fixed — it affects the "Directed by" line and `top_rated_directors`/`director_trend_over_time` accuracy, not the Cast section. Remaining image gaps (5 movies with no backdrop, ~898 actors/22 directors with no headshot) are confirmed genuine TMDB sparsity via direct Bronze reads, not a pipeline bug — no further action needed there.
-Last updated          : 2026-07-28
+Last completed task   : Task 40 — Fix the crew dedup key so directors survive Silver
+Currently on          : Phase 8 — Correctness & Catalog Depth (plan: ~/.claude/plans/what-else-can-we-lazy-unicorn.md)
+Current phase         : Phase 8 — Correctness & Catalog Depth (Tasks 40–44)
+Blockers / open issues: Full test suite is 176/176 passing. The crew-dedup bug noted here previously is FIXED (Task 40): `transform_credits_bridge.py` now dedups on `(movie_id, person_id, credit_type, role)`, so a crew member with multiple jobs no longer loses their "Director" row. Movies with a director went 47/112 → 111/112; `fact_crew` 54 → 128 rows; "Top Rated Directors" renders for the first time. The single remaining movie without a director (`A Lustful Night`, 739277) genuinely has none in Bronze — real TMDB sparsity. Remaining known gaps (planned as Tasks 41–44): `dim_movie` has no `overview` column though Silver carries it 99/99 non-null; `movie_detail` shows no rating/vote_count though `fact_movie_metrics` holds both; catalog is 112 films with 77 from the 2020s (only source is `movie/popular`); 415 actors + 70 directors have zero films (dead-end pages). Not-yet-assigned: Gold is still a write-only dead end (built every run, read by nothing); `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`.
+Last updated          : 2026-07-29
 ```
 
 **After finishing any task, in this order:**
@@ -196,7 +196,8 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 4     | SQL Analytics           | 22    | Complete |
 | 5     | Django UI               | 23–30 | Complete |
 | 6     | Polish                  | 31–33 | Complete |
-| 7     | Product Upgrade         | 34–37 | In progress |
+| 7     | Product Upgrade         | 34–39 | Complete |
+| 8     | Correctness & Catalog Depth | 40–44 | In progress |
 
 ---
 
@@ -440,6 +441,31 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 #### [x] Task 39 — Backfill missing poster/backdrop/headshot images (stale Silver partition)
 - **Goal:** Fix movies/actors/directors rendering with no picture, reported alongside the missing-Cast bug (Task 35).
 - **Outcome:** Not a TMDB data gap and not a code bug — `warehouse/ddl` and `etl/silver/transform_{movies,people}.py` were already correct as of Task 36. The cause: the `2026-07-06` Silver partition (99 movies, 3291 actors, 108 directors) was produced *before* Task 36 added `tagline`/`poster_path`/`backdrop_path`/`profile_path` to the transform code, so its Silver Parquet never had those columns at all. `dim_movie`/`dim_actor`/`dim_director` upsert only the movies/people present in whichever partition is (re)loaded — the later `2026-07-09` run (Task 37) covered a different, only-partially-overlapping set of 100 movies from TMDB's live "popular" list, so the ~13 movies (and their casts) unique to `2026-07-06` — including *The Lord of the Rings: The Return of the King*, *Superman*, *KPop Demon Hunters* — never got their image columns backfilled, despite Bronze (immutable) having always had the raw `poster_path`/`backdrop_path` values. Confirmed via direct Bronze reads before touching anything: TMDB's raw JSON for movie 122 (LOTR: ROTK) already had both paths; the Silver Parquet for that date simply didn't carry the column. Fix required no code changes — re-ran `transform_movies()`/`transform_people()` for `ingestion_date=2026-07-06` (Silver is rebuilt from immutable Bronze, so this is safe/idempotent per project convention), confirmed via `silver_checks.py` (20/20 pass), then re-ran `load_dimensions()` for the same date to upsert the now-complete rows. No `load_facts`/pipeline re-run needed — this only touched dimension attributes. Verified live: movies missing a poster went from 13→0, missing backdrop 17→5 (the remaining 5 — obscure/foreign titles — confirmed via direct Bronze read to genuinely have `backdrop_path: null` from TMDB itself, i.e. real sparsity, not a bug); actors missing a headshot went from 1206→898, directors 36→22 (spot-checked several high-profile names — Nathan Fillion, Halle Berry, James Gunn, Florence Pugh, Clint Eastwood — all now populated). `/movies/122/` (LOTR: ROTK) now renders real `image.tmdb.org` poster and backdrop URLs (previously blank). No test changes needed (pure data reprocessing, no code touched); full suite still 174/174.
+
+---
+
+### Phase 8 — Correctness & Catalog Depth
+
+> Full plan: `~/.claude/plans/what-else-can-we-lazy-unicorn.md`. Theme: the pipeline runs
+> clean and every check passes, which was hiding the fact that the warehouse was silently
+> discarding data it had already ingested. Fix the silent losses first, then grow the catalog.
+
+#### [x] Task 40 — Fix the crew dedup key so directors survive Silver
+- **Goal:** Stop `transform_credits_bridge` from destroying "Director" credits.
+- **Files:** `etl/silver/transform_credits_bridge.py`, `data_quality/silver_checks.py`, `etl/gold/build_gold_datasets.py`, `tests/test_etl.py`
+- **Outcome:** The bridge deduplicated crew rows on `(movie_id, person_id, credit_type)`, but `credit_type` is only ever the literal `"crew"` — it doesn't distinguish jobs. Any crew member with more than one job on a film collapsed to a single row via `keep="last"`, and since directors very often also produce or write (measured: **65 of 99 movies**), the "Director" row was usually the one thrown away. Bronze had a director for **99/99** movies the entire time; the transform was deleting them on every run. Fixed by adding `role` (which holds the job title for crew) to the dedup subset, making the key match the true grain of a credit. Two companion fixes in the same commit: `silver_checks.ENTITY_CONFIGS["credits_bridge"]["pk_cols"]` encoded the *same* wrong key — so it confirmed the bug rather than catching it, and would have started failing on every legitimate multi-job row after the fix; and `_build_director_ratings()` in Gold filtered `credit_type == "crew"` without `role == "Director"` (unlike `load_facts._build_crew_rows()`, which filters both), so Gold counted every producer/writer/editor as a director. Rebuilt Silver from immutable Bronze and reloaded facts for both partitions (`2026-07-06`, `2026-07-09`): `fact_crew` 54 → **128 rows** with 0 rejects; movies with a director 47/112 → **111/112** (the one holdout, *A Lustful Night*, genuinely has no director in Bronze — real TMDB sparsity); directors with 3+ films 0 → 1, so the **"Top Rated Directors" dashboard panel renders for the first time** (Christopher Nolan, 4 films, avg 8.22). Verified live: `/movies/155/` (The Dark Knight, previously zero crew rows) now shows "Directed by Christopher Nolan". Silver DQ 20/20, warehouse checks 22/22, tests **176/176** (2 new: a regression test that a Director+Producer double credit keeps both rows, and one that Gold excludes non-director crew).
+
+#### [ ] Task 41 — Put the score and the synopsis on the movie page
+- **Goal:** Surface `rating`/`vote_count` (already in `fact_movie_metrics`) and `overview` (already 99/99 non-null in Silver, but with no warehouse column).
+
+#### [ ] Task 42 — `discover/movie`: break out of the popular-list ceiling
+- **Goal:** Replace "popular right now" as the only corpus source; build a deliberate multi-decade catalog.
+
+#### [ ] Task 43 — Person enrichment (bios, birthdays, birthplaces)
+- **Goal:** `person/{id}` enrichment, restricted to people who actually have credits.
+
+#### [ ] Task 44 — Live re-run, verification, and doc truth-up
+- **Goal:** Full run at the new corpus size; fix README's missing DDL steps (`04`/`05`) and stale test counts.
 
 ---
 

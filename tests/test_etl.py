@@ -877,8 +877,8 @@ def test_transform_credits_bridge_writes_silver_parquet():
     assert set(df_out["credit_type"].tolist()) == {"cast", "crew"}
 
 
-def test_transform_credits_bridge_deduplicates_on_movie_person_credit_type():
-    """Same (movie_id, person_id, credit_type) across two files → one row."""
+def test_transform_credits_bridge_deduplicates_on_movie_person_credit_type_role():
+    """Same (movie_id, person_id, credit_type, role) across two files → one row."""
     key1 = "bronze/credits/ingestion_date=2026-06-22/550.json"
     key2 = "bronze/credits/ingestion_date=2026-06-22/550_dup.json"
     mock_s3 = _make_s3_mock_with_files({
@@ -892,6 +892,35 @@ def test_transform_credits_bridge_deduplicates_on_movie_person_credit_type():
     _, kwargs = mock_s3.put_object.call_args
     df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
     assert len(df_out) == 4  # still 4, not 8
+
+
+def test_transform_credits_bridge_keeps_every_job_for_a_multi_role_crew_member():
+    """A director who also produced the same film must keep BOTH crew rows.
+
+    Regression test for the dedup-grain bug: with the key
+    (movie_id, person_id, credit_type) the two crew rows for person 20 collapse
+    to whichever sorts last, silently destroying the "Director" role — which is
+    what left 52 of 99 movies with no director in the warehouse.
+    """
+    payload = {
+        "id": 550,
+        "cast": [],
+        "crew": [
+            {"id": 20, "name": "Carol", "job": "Director", "department": "Directing"},
+            {"id": 20, "name": "Carol", "job": "Producer", "department": "Production"},
+        ],
+    }
+    key = "bronze/credits/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: payload})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_credits_bridge(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    _, kwargs = mock_s3.put_object.call_args
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+
+    assert len(df_out) == 2
+    assert set(df_out["role"]) == {"Director", "Producer"}
 
 
 def test_transform_credits_bridge_flags_orphan_movie_ids(caplog):
@@ -1120,6 +1149,30 @@ def test_director_ratings_total_revenue():
     result = _build_director_ratings(_silver_movies(), _silver_directors(), _silver_bridge())
     dir_a = result[result["person_id"] == 20].iloc[0]
     assert int(dir_a["total_revenue"]) == 150_000_000
+
+
+def test_director_ratings_excludes_non_director_crew_credits():
+    """A Producer-only crew credit must not count as a directing credit.
+
+    Without the `role == "Director"` filter this counts every crew credit, which
+    both inflates film_count and emits a null-name row for the non-director —
+    making Gold disagree with fact_crew about what a director credit is.
+    """
+    bridge = pd.DataFrame(
+        _silver_bridge().to_dict("records")
+        + [
+            {"movie_id": 3, "person_id": 20, "credit_type": "crew",
+             "role": "Producer", "ordering": None},
+            {"movie_id": 3, "person_id": 21, "credit_type": "crew",
+             "role": "Editor", "ordering": None},
+        ]
+    )
+
+    result = _build_director_ratings(_silver_movies(), _silver_directors(), bridge)
+
+    dir_a = result[result["person_id"] == 20].iloc[0]
+    assert int(dir_a["film_count"]) == 2  # films 1 and 2 only, not 3
+    assert 21 not in set(result["person_id"].dropna())
 
 
 # --- build_gold_datasets (integration) ---

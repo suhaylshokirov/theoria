@@ -2,7 +2,7 @@
 
 Reads all Bronze credits JSON files for a given ingestion_date, extracts
 (movie_id, person_id, role, ordering, credit_type) rows, deduplicates on
-(movie_id, person_id, credit_type), validates referential integrity by
+(movie_id, person_id, credit_type, role), validates referential integrity by
 flagging orphan rows, and writes a single Parquet file to the Silver layer.
 
 S3 source:  bronze/credits/ingestion_date=YYYY-MM-DD/<movie_id>.json
@@ -15,8 +15,12 @@ Columns:
     role        string  — character name for cast; job title for crew
     ordering    Int64   — cast order (null for crew)
 
-Dedup key: (movie_id, person_id, credit_type) — the same person can appear
-as both an actor and a crew member in the same movie.
+Dedup key: (movie_id, person_id, credit_type, role) — the same person can
+appear as both an actor and a crew member in the same movie, and can hold
+several crew jobs on one film (a director who also produced or wrote it).
+`role` is part of the key because it *is* part of the grain: without it, a
+director credited with a second job collapses to whichever Bronze row happens
+to sort last, silently destroying the "Director" role.
 
 Orphan rows (null movie_id / person_id) are flagged with warnings and dropped,
 but never cause the transform to crash. Callers may pass `known_movie_ids` and
@@ -147,7 +151,7 @@ def transform_credits_bridge(
 
     For each Bronze credits file, extracts rows of
     (movie_id, person_id, credit_type, role, ordering) for every cast and crew
-    member. After deduplication on (movie_id, person_id, credit_type), rows
+    member. After deduplication on (movie_id, person_id, credit_type, role), rows
     with null movie_id or person_id are dropped with a warning. If
     `known_movie_ids` / `known_person_ids` are provided, orphan IDs are flagged
     but rows are kept so downstream tasks can decide.
@@ -193,10 +197,14 @@ def transform_credits_bridge(
     df = _cast_bridge_types(df)
 
     before_dedup = len(df)
-    df = df.drop_duplicates(subset=["movie_id", "person_id", "credit_type"], keep="last")
+    df = df.drop_duplicates(
+        subset=["movie_id", "person_id", "credit_type", "role"], keep="last"
+    )
     dupes = before_dedup - len(df)
     if dupes:
-        logger.info("Dropped %d duplicate (movie_id, person_id, credit_type) row(s)", dupes)
+        logger.info(
+            "Dropped %d duplicate (movie_id, person_id, credit_type, role) row(s)", dupes
+        )
 
     null_movie = df["movie_id"].isna().sum()
     null_person = df["person_id"].isna().sum()
