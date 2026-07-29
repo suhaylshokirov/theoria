@@ -126,6 +126,28 @@ class TMDBClient:
         """One page of the popular-movies catalogue."""
         return self.get("movie/popular", params={"page": page})
 
+    def discover_movies(
+        self,
+        page: int = 1,
+        release_year: int | None = None,
+        min_votes: int | None = None,
+        sort_by: str = "vote_count.desc",
+    ) -> dict[str, Any]:
+        """One page of `discover/movie`, filtered to a defined population.
+
+        Unlike `movie/popular` — which only ever returns what is popular right
+        now — discover lets the caller *choose* the corpus: a release year, a
+        minimum vote count (to keep obscure entries out), and a sort order.
+        Paging one year at a time also sidesteps TMDB's pagination ceiling,
+        which no single query can page past.
+        """
+        params: dict[str, Any] = {"page": page, "sort_by": sort_by}
+        if release_year is not None:
+            params["primary_release_year"] = release_year
+        if min_votes is not None:
+            params["vote_count.gte"] = min_votes
+        return self.get("discover/movie", params=params)
+
     def get_movie_details(self, movie_id: int) -> dict[str, Any]:
         """Full detail record for a single movie."""
         return self.get(f"movie/{movie_id}")

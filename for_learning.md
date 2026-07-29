@@ -1580,3 +1580,93 @@ corresponding warehouse column*, so the pipeline itself complains when a transfo
 producing a field no loader consumes. Then ask the harder version: should an unconsumed
 Silver column be an error, or is it legitimate for the lake to carry more than the
 warehouse needs?
+
+## Task 42 — `discover/movie`: designing the corpus instead of accepting one
+
+### What Was Built
+A second Bronze ingestion source. Until now the entire warehouse was built from TMDB's
+`movie/popular` endpoint, which returns whatever is popular *at the moment you call it*.
+That produced a catalogue of 112 films, **77 of them from the 2020s** and exactly one from
+before 1960. Every "trend over time" analytic was therefore describing a corpus that barely
+had a time axis.
+
+`etl/bronze/ingest_discover.py` uses TMDB's `discover/movie` endpoint instead, which accepts
+filters. Iterating one release year at a time and asking for the most-voted films of that
+year, with a vote-count floor, turns ingestion into a **deliberate sampling decision**:
+"the 20 most-voted films of each year from 1970 to 2026, with at least 300 votes."
+
+Result: 1,140 films discovered, evenly spread at roughly 200 per decade.
+
+### Concepts Used
+- **Corpus / population design.** The most important idea in this task. No transform, join
+  or aggregate can recover information the extraction step never collected. A perfectly
+  correct pipeline over a biased sample produces perfectly correct, biased answers.
+  `movie/popular` doesn't sample the population "films" — it samples "films trending today",
+  and no amount of downstream SQL fixes that.
+- **Windowed / partitioned extraction.** APIs cap how deep you can page, so you cannot pull
+  5,000 records from one query. You partition the *request predicate* (here, by release
+  year) and page within each window. This is the same technique as partitioning a large
+  database read by key range — the constraint is the API's, but the pattern is general.
+- **Fail-and-continue with early exit.** Each page is flushed to S3 before the next request,
+  so a failure in year 1994 never loses 1970–1993. And when a year reports `total_pages: 1`,
+  the loop breaks instead of requesting empty pages — cheap, but it saves one wasted HTTP
+  call per sparse year.
+- **Deduplication at the source.** A film can be returned under more than one year window,
+  so ids are deduplicated *while preserving discovery order* using a `set` for membership
+  plus a `list` for order, rather than `list(set(...))`, which would scramble it.
+- **Additive, not replacing.** `ingest_movies()` was left completely intact and remains the
+  default. `--source discover` selects between them, and everything downstream —
+  detail/credits ingestion, all four Silver transforms, Gold, the loaders — is byte-identical
+  in both paths, because both sources return the same thing: a plain `list[int]` of ids.
+
+### Key Code
+`etl/bronze/ingest_discover.py` — the year loop:
+> ```python
+> for year in range(start_year, end_year + 1):
+>     for page in range(1, pages_per_year + 1):
+>         payload = client.discover_movies(page=page, release_year=year, min_votes=min_votes)
+>         ...
+>         if not results or page >= payload.get("total_pages", page):
+>             break
+> ```
+> The nested loop *is* the windowing strategy. The outer loop moves the filter; the inner one
+> pages within it. This is what makes an unbounded catalogue reachable through a paginated API.
+
+`config.py` — the `DISCOVER_*` block:
+> These four values are not tuning knobs like `MAX_PAGES`; they are a **definition of the
+> dataset**. Changing `DISCOVER_MIN_VOTES` from 300 to 50 doesn't make the pipeline slower,
+> it makes the warehouse describe a different population — more obscure films, lower average
+> ratings, different genre mix. Worth being conscious that a config value can silently be a
+> research decision.
+
+### Results (live run, 30.6 minutes end to end)
+| | before | after |
+|---|---|---|
+| films | 112 | **1,215** |
+| actors | 3,548 | **44,554** |
+| directors | 120 | **677** |
+| cast credits | 3,345 | **62,713** |
+| films from the 2020s | 77 of 112 (69%) | 195 of 1,215 (16%) |
+| directors with 3+ films | 1 | **146** |
+
+Bronze: 1,140/1,140 details and 1,140/1,140 credits written, **0 failures**. Silver:
+231,728 credit-bridge rows, 0 parse errors. Silver DQ 20/20, warehouse checks 22/22.
+"Top Rated Directors" went from a single row to a real leaderboard — Miyazaki, Kubrick,
+Tarantino, Kurosawa.
+
+### A scaling problem the new corpus exposed
+`director_trend_over_time.sql` and `genre_growth_over_time.sql` had **no `LIMIT`**. At 112
+films nobody noticed; at 1,215 they returned 1,304 and 791 rows into fixed-height dashboard
+panels. Both were capped — and `director_trend` also now requires `>= 3` films, so the panel
+shows careers rather than one-off credits. The lesson: *a query with no bound isn't "simple",
+it's a query whose result size is controlled by your data volume instead of by you.*
+
+### What to Study Next
+The run took 30 minutes, almost entirely in two sequential loops issuing 2,280 HTTP requests
+one at a time. Look into (a) TMDB's `append_to_response`, which can return details *and*
+credits in a single request — halving the call count with no logic change — and (b) why
+issuing independent I/O-bound requests concurrently (a thread pool, or `asyncio` + `aiohttp`)
+is the standard fix, and what rate limiting you must add so concurrency doesn't just get you
+throttled. Then the deeper question: at what data volume does the pandas-in-one-process
+Silver step (which currently downloads all 1,140 objects serially and holds every row in
+memory) stop being viable, and what changes first — the download, the memory, or the CPU?

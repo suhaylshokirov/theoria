@@ -69,6 +69,16 @@ DATABASE_URL = _require("DATABASE_URL")
 # --- Ingestion tuning ------------------------------------------------------
 MAX_PAGES = int(_optional("MAX_PAGES", "5"))
 
+# Corpus design for the `discover/movie` source (etl/bronze/ingest_discover.py).
+# Unlike MAX_PAGES, which just caps the popular-list crawl, these define *which
+# films exist* in the warehouse: the most-voted titles of each year in the range
+# that clear a vote-count floor. Widening the years deepens the historical
+# corpus; raising the floor trades breadth for recognisability.
+DISCOVER_START_YEAR = int(_optional("DISCOVER_START_YEAR", "1970"))
+DISCOVER_END_YEAR = int(_optional("DISCOVER_END_YEAR", "2026"))
+DISCOVER_PAGES_PER_YEAR = int(_optional("DISCOVER_PAGES_PER_YEAR", "1"))
+DISCOVER_MIN_VOTES = int(_optional("DISCOVER_MIN_VOTES", "300"))
+
 # --- Django ----------------------------------------------------------------
 DJANGO_SECRET_KEY = _require("DJANGO_SECRET_KEY")
 DJANGO_DEBUG = _optional("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")

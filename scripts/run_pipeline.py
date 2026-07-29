@@ -13,6 +13,7 @@ so re-running this script for the same ingestion_date is safe.
 Usage:
     python -m scripts.run_pipeline
     python -m scripts.run_pipeline --date 2026-07-06 --max-pages 5
+    python -m scripts.run_pipeline --source discover
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ import config
 from data_quality.silver_checks import run_silver_checks
 from data_quality.warehouse_checks import run_warehouse_checks
 from etl.bronze.ingest_credits import ingest_credits
+from etl.bronze.ingest_discover import ingest_discover
 from etl.bronze.ingest_genres import ingest_genres
 from etl.bronze.ingest_movie_details import ingest_movie_details
 from etl.bronze.ingest_movies import ingest_movies
@@ -43,6 +45,7 @@ logger = logging.getLogger(__name__)
 def run_pipeline(
     ingestion_date: dt.date | None = None,
     max_pages: int | None = None,
+    source: str = "popular",
 ) -> None:
     """Run every ETL stage in order for a single ingestion_date.
 
@@ -52,6 +55,11 @@ def run_pipeline(
     loaded (it resolves foreign keys against them). Both DQ check suites run
     at the end and report failures without aborting, mirroring how they're
     used standalone elsewhere in the project.
+
+    `source` selects which Bronze catalogue defines the corpus: "popular"
+    (whatever TMDB is featuring today) or "discover" (the most-voted films of
+    each year in a configured range). Everything downstream is identical —
+    both return a plain list of movie_ids.
     """
     if ingestion_date is None:
         ingestion_date = dt.date.today()
@@ -60,13 +68,16 @@ def run_pipeline(
 
     t0 = time.monotonic()
     logger.info(
-        "Starting full pipeline run: ingestion_date=%s, max_pages=%d",
-        ingestion_date, max_pages,
+        "Starting full pipeline run: ingestion_date=%s, source=%s, max_pages=%d",
+        ingestion_date, source, max_pages,
     )
 
     ingest_genres(ingestion_date=ingestion_date)
-    movie_ids = ingest_movies(ingestion_date=ingestion_date, max_pages=max_pages)
-    logger.info("Bronze movies: %d movie_id(s) discovered", len(movie_ids))
+    if source == "discover":
+        movie_ids = ingest_discover(ingestion_date=ingestion_date)
+    else:
+        movie_ids = ingest_movies(ingestion_date=ingestion_date, max_pages=max_pages)
+    logger.info("Bronze %s: %d movie_id(s) discovered", source, len(movie_ids))
 
     succeeded_details, failed_details = ingest_movie_details(
         movie_ids, ingestion_date=ingestion_date
@@ -128,6 +139,16 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help=f"Number of Bronze movie-listing pages to fetch (default: config.MAX_PAGES={config.MAX_PAGES}).",
     )
+    parser.add_argument(
+        "--source",
+        choices=["popular", "discover"],
+        default="popular",
+        help=(
+            "Which Bronze catalogue defines the corpus: 'popular' (what TMDB "
+            "features today) or 'discover' (most-voted films per year over the "
+            "configured DISCOVER_* range). Default: popular."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -136,4 +157,6 @@ if __name__ == "__main__":
 
     setup_logging("run_pipeline")
     args = _parse_args()
-    run_pipeline(ingestion_date=args.date, max_pages=args.max_pages)
+    run_pipeline(
+        ingestion_date=args.date, max_pages=args.max_pages, source=args.source
+    )

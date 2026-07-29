@@ -45,12 +45,18 @@ paths through it, never hardcoded.
 
 ## 2. Create the warehouse schema
 
-With `DATABASE_URL` pointing at an empty database, apply the DDL once (idempotent, safe to re-run):
+With `DATABASE_URL` pointing at an empty database, apply the DDL once (idempotent, safe to re-run).
+Apply the files in numeric order — `01`–`03` build the schema, and `04`–`06` are migrations that
+bring an already-live warehouse up to date. On a genuinely fresh database `04`–`06` are no-ops,
+because `01_dimensions.sql` already declares those columns; run them anyway so both paths converge.
 
 ```bash
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/01_dimensions.sql
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/02_facts.sql
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/03_watermark.sql
+psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/04_add_image_columns.sql
+psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/05_split_fact_casting.sql
+psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/06_add_overview.sql
 ```
 
 (`DATABASE_URL` in `.env` uses the SQLAlchemy `postgresql+psycopg2://...` form; strip the
@@ -65,10 +71,20 @@ by a single script:
 python -m scripts.run_pipeline --date 2026-07-06 --max-pages 5
 ```
 
+By default the catalogue comes from TMDB's `movie/popular` list, which only ever returns what is
+popular *right now* — so the resulting corpus skews heavily to the last few years. To build a
+historical catalogue instead, use the `discover` source, which fetches the most-voted films of
+each release year over the configured `DISCOVER_*` range in `.env`:
+
+```bash
+python -m scripts.run_pipeline --source discover
+```
+
 This calls, in order, for the given `ingestion_date`:
 
-1. **Bronze** — `ingest_genres`, `ingest_movies` (paginated, `max_pages` pages), then
-   `ingest_movie_details` + `ingest_credits` for every movie ID discovered.
+1. **Bronze** — `ingest_genres`, then either `ingest_movies` (paginated, `max_pages` pages) or
+   `ingest_discover` (year-partitioned), then `ingest_movie_details` + `ingest_credits` for every
+   movie ID discovered.
 2. **Silver** — `transform_movies`, `transform_people`, `transform_genres`,
    `transform_credits_bridge`, followed by `run_silver_checks` (data quality gate; bad rows are
    quarantined to `data_quality/rejected/`, never dropped).
@@ -108,7 +124,7 @@ separate local SQLite database.
 pytest
 ```
 
-The full suite (159 tests) runs against mocked S3/TMDB/Postgres boundaries only — no network
+The full suite (182 tests) runs against mocked S3/TMDB/Postgres boundaries only — no network
 access or live database is required. It covers ETL transforms, data quality checks, warehouse
 loaders, and Django views.
 

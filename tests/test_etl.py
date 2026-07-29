@@ -254,6 +254,124 @@ def test_ingest_movies_partial_failure_does_not_lose_written_pages():
     assert ids == [10, 20, 50, 60]
 
 
+# --- ingest_discover ----------------------------------------------------------
+
+from etl.bronze.ingest_discover import ingest_discover
+
+
+def _discover_page(page: int, ids: list[int], total_pages: int = 1) -> dict:
+    return {
+        "page": page,
+        "total_pages": total_pages,
+        "results": [{"id": mid, "title": f"Movie {mid}"} for mid in ids],
+    }
+
+
+def test_discover_movies_sends_year_and_vote_filters():
+    """discover_movies() must translate its args into TMDB query params."""
+    client = _client()
+    with patch.object(
+        client.session, "get", return_value=_fake_response(200, {"results": []})
+    ) as mock_get:
+        client.discover_movies(page=2, release_year=1994, min_votes=300)
+
+    _, kwargs = mock_get.call_args
+    params = kwargs["params"]
+    assert params["primary_release_year"] == 1994
+    assert params["vote_count.gte"] == 300
+    assert params["page"] == 2
+    assert params["sort_by"] == "vote_count.desc"
+
+
+def test_ingest_discover_writes_one_file_per_year_and_page():
+    """Each year's page must land under its own year= prefix."""
+    mock_client = MagicMock()
+    mock_client.discover_movies.side_effect = [
+        _discover_page(1, [10, 20]),
+        _discover_page(1, [30, 40]),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ingest_discover(
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+            start_year=1994,
+            end_year=1995,
+            pages_per_year=1,
+        )
+
+    keys = [call[1]["Key"] for call in mock_s3.put_object.call_args_list]
+    assert "bronze/discover/ingestion_date=2026-06-22/year=1994/page_0001.json" in keys
+    assert "bronze/discover/ingestion_date=2026-06-22/year=1995/page_0001.json" in keys
+
+
+def test_ingest_discover_deduplicates_ids_across_years():
+    """A film returned for two years must appear once in the returned list."""
+    mock_client = MagicMock()
+    mock_client.discover_movies.side_effect = [
+        _discover_page(1, [1, 2]),
+        _discover_page(1, [2, 3]),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ids = ingest_discover(
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+            start_year=1994,
+            end_year=1995,
+            pages_per_year=1,
+        )
+
+    assert ids == [1, 2, 3]
+
+
+def test_ingest_discover_continues_after_a_failed_year():
+    """One year raising must not lose the years already written."""
+    mock_client = MagicMock()
+    mock_client.discover_movies.side_effect = [
+        _discover_page(1, [10]),
+        TMDBAPIError("boom"),
+        _discover_page(1, [30]),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ids = ingest_discover(
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+            start_year=1994,
+            end_year=1996,
+            pages_per_year=1,
+        )
+
+    assert mock_s3.put_object.call_count == 2
+    assert ids == [10, 30]
+
+
+def test_ingest_discover_stops_early_when_year_has_no_more_pages():
+    """total_pages=1 must stop the crawl rather than request empty page 2."""
+    mock_client = MagicMock()
+    mock_client.discover_movies.side_effect = [_discover_page(1, [10], total_pages=1)]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ingest_discover(
+            ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client,
+            start_year=1994,
+            end_year=1994,
+            pages_per_year=5,
+        )
+
+    assert mock_client.discover_movies.call_count == 1
+
+
 # --- ingest_movie_details -----------------------------------------------------
 
 from etl.bronze.ingest_movie_details import ingest_movie_details

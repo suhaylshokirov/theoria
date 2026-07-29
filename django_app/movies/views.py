@@ -9,8 +9,9 @@ MOVIES_PER_PAGE = 24
 PEOPLE_PER_PAGE = 30
 
 # How many posters the home contact sheet draws. The mosaic is meant to read
-# as "the whole catalog at once", so this is a ceiling, not a page size — at
-# the current warehouse size (99 postered films) every one of them appears.
+# as "the whole catalog at once", so this is a ceiling, not a page size. Since
+# the Task 42 corpus expansion (1,200+ films) it is a genuine sample of the
+# most recent films rather than the entire catalog.
 MOSAIC_LIMIT = 120
 
 # ?sort= values accepted by movie_list, mapped to an order_by expression.
