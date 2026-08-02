@@ -561,21 +561,19 @@ main.container {
    Ruled cells rather than boxed tiles — a catalog record, not a dashboard. */
 
 .stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  border-top: 1px solid var(--rule-strong);
-  border-bottom: 1px solid var(--rule-strong);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
 }
 
 .stat {
-  padding: var(--space-5) var(--space-5) var(--space-5) 0;
-  border-right: var(--hairline);
+  padding: var(--space-5) 0 0;
 }
 
-.stat:last-child { border-right: none; }
-
 .stat .stat-value {
+  position: relative;
   display: block;
+  padding-top: var(--space-3);
   font-family: var(--font-mono);
   font-weight: 500;
   font-size: var(--text-lg);
@@ -583,6 +581,18 @@ main.container {
   min-height: 1.3em; /* an em-dash placeholder occupies the same height */
   font-variant-numeric: tabular-nums;
   color: var(--ink);
+}
+
+/* The tick above each figure is the same "this one is measured" mark as the
+   active nav rule and the meter fills — a caliper mark, not a divider. */
+.stat .stat-value::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 3px;
+  background: var(--lime);
 }
 
 .stat .stat-label {
@@ -1103,7 +1113,6 @@ button:hover,
   grid-template-columns: 148px 1fr;
   gap: var(--space-7);
   align-items: start;
-  border-bottom: 1px solid var(--rule-strong);
   padding-bottom: var(--space-6);
 }
 
@@ -1158,7 +1167,7 @@ button:hover,
   .nav { gap: var(--space-4); }
   .nav-links { gap: var(--space-4); width: 100%; margin-left: 0; }
   .sheet-title { font-size: var(--text-xl); }
-  .stat { padding-right: var(--space-4); }
+  .stats { gap: var(--space-6); }
 }
 
 /* --- Quality floor ---------------------------------------------------------- */
