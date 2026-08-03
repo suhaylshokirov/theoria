@@ -259,8 +259,8 @@ p {
   text-transform: uppercase;
 }
 
-/* The shelf label: condensed, spaced, small. Used for every eyebrow,
-   table header, stat label and chip on the site. */
+/* The shelf label: condensed, spaced, small. Used for record-row labels,
+   table headers, stat labels and chips on the site. */
 .label {
   font-family: var(--font-label);
   font-weight: 600;
@@ -473,31 +473,13 @@ main.container {
 }
 
 /* --- The sheet header ------------------------------------------------------
-   Every page opens with this band: shelf label + accession number, the
-   title in expanded display, an optional sub-line, then a hairline. It is
-   the single device that makes ten different pages read as one site. */
+   Every page opens with this band: the title in expanded display, an
+   optional sub-line, then a hairline. It is the single device that makes
+   ten different pages read as one site. */
 
 .sheet-head {
   border-bottom: 1px solid var(--rule-strong);
   padding-bottom: var(--space-5);
-}
-
-/* Unscoped on purpose: movie_detail and the person header build their own
-   record layouts around these same pieces, so a `.sheet-head .x` descendant
-   selector would silently drop the display type on those pages. */
-.sheet-eyebrow {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-4);
-}
-
-.sheet-accession {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  color: var(--ink-faint);
-  letter-spacing: 0.02em;
 }
 
 .sheet-title {

@@ -3,7 +3,7 @@
 {% block title %}Theoria — {{ genre.genre_name }}{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with eyebrow="Genre" accession="dim_genre" title=genre.genre_name only %}
+{% include "movies/_sheet_header.html" with title=genre.genre_name only %}
 
 <section class="sheet-section">
     <div class="stats">

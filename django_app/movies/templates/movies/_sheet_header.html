@@ -1,18 +1,12 @@
 {% comment %} The sheet header — every page opens with this band.
 
    Params (pass with `only`):
-     eyebrow    : shelf label, e.g. "Film" / "Catalog"
-     accession  : mono record locator, e.g. "dim_movie · 120"  (optional)
      title      : the page title, set in expanded display type
      sub        : one supporting line (optional)
 
    It is the single device that makes ten different pages read as one site,
    so pages should not hand-roll their own <h1>. {% endcomment %}
 <header class="sheet-head">
-    <div class="sheet-eyebrow">
-        <span class="label">{{ eyebrow }}</span>
-        {% if accession %}<span class="sheet-accession">{{ accession }}</span>{% endif %}
-    </div>
     <h1 class="sheet-title">{{ title }}</h1>
     {% if sub %}<p class="sheet-sub">{{ sub }}</p>{% endif %}
 </header>

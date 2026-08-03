@@ -18,11 +18,6 @@
     </div>
 
     <div class="specimen-record">
-        <div class="sheet-eyebrow">
-            <span class="label">Film</span>
-            {% if movie.status %}<span class="sheet-accession">{{ movie.status }}</span>{% endif %}
-        </div>
-
         <h1 class="sheet-title">{{ movie.title }}</h1>
         {% if movie.tagline %}<p class="specimen-tagline">{{ movie.tagline }}</p>{% endif %}
         {% if movie.overview %}<p class="specimen-synopsis">{{ movie.overview }}</p>{% endif %}

@@ -3,9 +3,7 @@
 
    Params (pass with `only`):
      person       : Actor or Director
-     kind         : "Actor" / "Director" — the shelf label
-     table, pk    : warehouse table name + primary key, shown as the accession
-     film_count, avg_rating, career_start, career_end : the measured stats {% endcomment %}
+     film_count, avg_rating, career_period : the measured stats {% endcomment %}
 {% load tmdb_images %}
 <header class="person-head">
     <div class="person-plate">
@@ -17,10 +15,6 @@
     </div>
 
     <div class="person-record">
-        <div class="sheet-eyebrow">
-            <span class="label">{{ kind }}</span>
-            <span class="sheet-accession">{{ table }} · {{ pk }}</span>
-        </div>
         <h1 class="sheet-title">{{ person.name }}</h1>
 
         <div class="stats">
@@ -33,9 +27,7 @@
                 <span class="stat-label">Avg rating</span>
             </div>
             <div class="stat">
-                <span class="stat-value">
-                    {% if career_start %}{{ career_start|date:"Y" }}–{{ career_end|date:"Y" }}{% else %}—{% endif %}
-                </span>
+                <span class="stat-value">{{ career_period }}</span>
                 <span class="stat-label">Active</span>
             </div>
         </div>

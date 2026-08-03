@@ -321,6 +321,47 @@ def test_movie_detail_404_when_missing():
 
 
 # ---------------------------------------------------------------------------
+# _career_period
+# ---------------------------------------------------------------------------
+
+
+def test_career_period_no_start_is_em_dash():
+    from movies.views import _career_period
+
+    assert _career_period(None, None) == "—"
+
+
+def test_career_period_single_past_year_shown_once():
+    from movies.views import _career_period
+
+    # A one-film career shouldn't render as "2015–2015" — that reads as a
+    # typo, not a fact.
+    assert _career_period(date(2015, 6, 1), date(2015, 6, 1)) == "2015"
+
+
+def test_career_period_single_current_year_reads_active():
+    from movies.views import _career_period
+
+    today = date.today()
+    # A single film released this year isn't a closed range ending "now" —
+    # it's a career that just started.
+    assert _career_period(today, today) == "Active"
+
+
+def test_career_period_multi_year_past_is_a_closed_range():
+    from movies.views import _career_period
+
+    assert _career_period(date(1997, 1, 1), date(2015, 1, 1)) == "1997–2015"
+
+
+def test_career_period_ongoing_career_reads_start_dash_active():
+    from movies.views import _career_period
+
+    today = date.today()
+    assert _career_period(date(1997, 1, 1), today) == "1997–Active"
+
+
+# ---------------------------------------------------------------------------
 # actor_detail
 # ---------------------------------------------------------------------------
 
@@ -357,8 +398,7 @@ def test_actor_detail_returns_200_with_expected_context():
     assert list(response.context["filmography"]) == [movie]
     assert response.context["film_count"] == 1
     assert response.context["avg_rating"] == Decimal("7.50")
-    assert response.context["career_start"] == date(2020, 1, 1)
-    assert response.context["career_end"] == date(2020, 1, 1)
+    assert response.context["career_period"] == "2020"
 
 
 def test_actor_detail_404_when_missing():
@@ -407,8 +447,7 @@ def test_director_detail_returns_200_with_expected_context():
     assert list(response.context["filmography"]) == [movie]
     assert response.context["film_count"] == 1
     assert response.context["avg_rating"] == Decimal("8.10")
-    assert response.context["career_start"] == date(2020, 1, 1)
-    assert response.context["career_end"] == date(2020, 1, 1)
+    assert response.context["career_period"] == "2020"
 
 
 def test_director_detail_404_when_missing():

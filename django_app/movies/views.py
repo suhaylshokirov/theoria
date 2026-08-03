@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, F, Max, Min, Sum
 from django.db.models.functions import ExtractYear
@@ -178,6 +180,22 @@ def movie_detail(request, movie_id):
     return render(request, "movies/movie_detail.html", context)
 
 
+def _career_period(start, end):
+    """Render a career span as a person-page stat, e.g. "1997–2019" or "2019–Active".
+
+    A closed range naming the same year twice (e.g. "2026–2026" for a single
+    film released this year) reads as a typo, not a fact. And a range that
+    ends in the current year isn't really "closed" — the person's latest
+    known film is one that just came out, not one that ended their career.
+    """
+    if not start:
+        return "—"
+    current_year = date.today().year
+    if end.year >= current_year:
+        return "Active" if start.year == end.year else f"{start.year}–Active"
+    return str(start.year) if start.year == end.year else f"{start.year}–{end.year}"
+
+
 def actor_detail(request, actor_id):
     """Single actor: filmography via fact_cast, with career stats computed in SQL."""
     actor = get_object_or_404(Actor.objects.using("warehouse"), pk=actor_id)
@@ -215,8 +233,7 @@ def actor_detail(request, actor_id):
         "filmography": filmography,
         "film_count": filmography.count(),
         "avg_rating": avg_rating,
-        "career_start": career_span["earliest"],
-        "career_end": career_span["latest"],
+        "career_period": _career_period(career_span["earliest"], career_span["latest"]),
     }
     return render(request, "movies/actor_detail.html", context)
 
@@ -258,8 +275,7 @@ def director_detail(request, director_id):
         "filmography": filmography,
         "film_count": filmography.count(),
         "avg_rating": avg_rating,
-        "career_start": career_span["earliest"],
-        "career_end": career_span["latest"],
+        "career_period": _career_period(career_span["earliest"], career_span["latest"]),
     }
     return render(request, "movies/director_detail.html", context)
 
