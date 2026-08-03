@@ -1732,3 +1732,105 @@ synopsis, distinct people credited) and assert Bronze == warehouse, failing loud
 Then read about **data contracts** and dbt's `relationships` / `not_null` / custom singular
 tests — the broader idea being that the schema of what a layer *promises to deliver* should
 itself be a checked artifact, not folklore.
+
+## Task 45 — Person-page stat row and career-period fixes
+
+### What Was Built
+Three small, user-driven frontend fixes on the actor/director pages: (1) the Films/Avg
+rating/Active stat row no longer looks like a boxed table — the vertical and horizontal
+ruled dividers are gone, replaced by a tight cluster of stats each carrying a small lime
+"measured" tick; (2) the small "eyebrow" kicker line above every page title (`INDEX Actors`,
+`FILM CATALOG · MEASURED`, `dim_actor · 880`) was removed site-wide, after discovering that
+on the actor/director list pages it was literally duplicating the title text right below it;
+(3) the "Active" stat no longer shows a nonsensical closed range like "2026–2026" for a
+director whose only known film releases this year.
+
+### Concepts Used
+- **CSS specificity and dead code.** Removing a border isn't just deleting one rule — a
+  `border-right` on every cell but the last (`.stat:last-child { border-right: none; }`) is a
+  small system that has to be removed as a unit, or the spacing logic it was compensating for
+  (a mobile media-query override) becomes orphaned and wrong.
+- **Deriving display strings in the view, not the template.** Django templates can do simple
+  conditionals, but "is this range still open, and does that change three different labels"
+  is exactly the kind of branching logic that belongs in a small, independently testable
+  Python function (`_career_period()`), not spread across `{% if %}` tags.
+- **Regression via a shared partial.** `_person_header.html` is included by both
+  `actor_detail.html` and `director_detail.html`, so one CSS/logic fix instantly applies to
+  both pages — the payoff of Task 34's decision to de-duplicate those templates.
+
+### Key Code
+`django_app/movies/views.py` — `_career_period(start, end)`:
+> Takes the earliest and latest release dates in a person's filmography and returns a
+> display string. A single-year career collapses to one bare year instead of repeating it
+> ("2015" not "2015–2015"), and a career whose latest film is this year or later renders as
+> `"<start>–Active"` — because a range that ends in the current year isn't a closed fact yet,
+> it's a career that's still going. This is the same category of bug as Task 40/41: a value
+> was technically correct (2026 really is both the min and max release year) but *misleading*
+> because the code didn't model what the number meant to a reader.
+
+`django_app/static/css/theoria.css` — `.stat .stat-value::before`:
+> A 22px lime bar drawn above each figure via a `::before` pseudo-element, reusing the exact
+> visual language already established for the active nav link's underline
+> (`.nav-links a[aria-current="page"]::after`) and the meter fills elsewhere in the design
+> system. Reusing an existing signature element instead of inventing new decoration is what
+> keeps a ten-page site reading as one system rather than one page redesigned in isolation.
+
+### What to Study Next
+Look at how many other places in this codebase encode "is this still ongoing" as a raw
+date comparison scattered inline vs. centralized in one function — `_career_period()` is a
+small example of the general pattern of pulling "what does this data *mean* to a viewer"
+logic out of templates and into testable Python.
+
+## Task 46 — URL slugs for movies, actors, and directors
+
+### What Was Built
+Every movie, actor, and director page was addressed by its raw warehouse primary key
+(`/actors/880/`, `/movies/238/`) — a database implementation detail leaking straight into
+the URL bar. Added a `slug` column to `dim_movie`/`dim_actor`/`dim_director`, populated it
+for the entire live catalog (1,215 movies, 44,554 actors, 677 directors), and switched all
+three detail routes to be addressed by that slug instead (`/actors/tom-holland/`). The old
+numeric URLs now 404.
+
+### Concepts Used
+- **Surrogate key vs. natural/display key.** `movie_id`/`actor_id`/`director_id` remain the
+  real primary keys everywhere in the warehouse (facts still join on them) — `slug` is a
+  second, URL-facing key derived from the name, not a replacement for the PK. This is the
+  same distinction as a product's SKU vs. its user-facing product-page URL.
+- **Deterministic collision resolution.** With 44,554 actors, name collisions ("John Smith")
+  are certain. The fix sorts by `actor_id` ascending and numbers repeats in that fixed order
+  (`john-smith`, `john-smith-2`, ...) — deterministic means the *same* row gets the *same*
+  slug every time the function runs, which matters because a slug that could silently change
+  on a rerun would break every bookmark and inbound link pointing at it.
+- **Idempotent recomputation over incremental patching.** `assign_slugs()` re-derives every
+  row's slug from a fresh `SELECT ... ORDER BY id` over the *whole* table on every call,
+  rather than only slugifying the newly-upserted partition. That's the only way to guarantee
+  global uniqueness: a collision-check scoped to just the current batch would miss a name
+  that collides with someone loaded in an earlier partition, and the unique index would then
+  reject the load. At this table size (tens of thousands of rows) recomputing everything
+  every run costs about a second — cheap enough that correctness didn't need to be traded
+  for incremental cleverness.
+- **Unicode normalization.** `unicodedata.normalize("NFKD", name)` decomposes an accented
+  character like "ë" into its base letter plus a separate combining accent mark, so encoding
+  to ASCII with `errors="ignore"` drops only the accent and keeps the letter — "Zoë Kravitz"
+  becomes `zoe-kravitz`, not `zo-kravitz`.
+
+### Key Code
+`etl/warehouse_loader/load_dimensions.py` — `assign_slugs(session, table, id_col, name_col)`:
+> Reads every `(id, name)` pair from the table ordered by id, walks them in that order
+> building a `seen` dict of `base_slug -> count`, and writes back one `slug` per row via a
+> single batched `UPDATE ... WHERE id = :id`. The ordering is the whole mechanism: because
+> it's always the same or a superset of the ids seen last time (new rows only ever add larger
+> ids), the numbering assigned to every existing id never changes across reruns.
+
+`etl/warehouse_loader/load_dimensions.py` — `_slugify(name)`:
+> `unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")` before the
+> regex hyphenation — written in that order specifically so accented letters survive as their
+> plain-ASCII form instead of being silently deleted by the `[^a-z0-9]+` regex that runs next.
+
+### What to Study Next
+This is a hand-rolled version of what libraries like `django-autoslug` or a dedicated
+`slugify` package (e.g. `python-slugify`) do out of the box, including their own collision
+strategies. Worth comparing this project's "recompute the whole table" approach against
+their typical "check-then-append-a-random-suffix-on-conflict" approach, and think about why
+a read-mostly analytics warehouse (bulk loads, no concurrent writers) can afford the simpler,
+fully-deterministic strategy that a live multi-writer web app generally can't.

@@ -46,8 +46,8 @@ paths through it, never hardcoded.
 ## 2. Create the warehouse schema
 
 With `DATABASE_URL` pointing at an empty database, apply the DDL once (idempotent, safe to re-run).
-Apply the files in numeric order — `01`–`03` build the schema, and `04`–`06` are migrations that
-bring an already-live warehouse up to date. On a genuinely fresh database `04`–`06` are no-ops,
+Apply the files in numeric order — `01`–`03` build the schema, and `04`–`07` are migrations that
+bring an already-live warehouse up to date. On a genuinely fresh database `04`–`07` are no-ops,
 because `01_dimensions.sql` already declares those columns; run them anyway so both paths converge.
 
 ```bash
@@ -57,7 +57,11 @@ psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/03_watermark.sql
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/04_add_image_columns.sql
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/05_split_fact_casting.sql
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/06_add_overview.sql
+psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/07_add_slugs.sql
 ```
+
+`07_add_slugs.sql` only adds the `slug` column and its unique index — the slugs themselves are
+populated by `load_dimensions()` (see below), not by this script.
 
 (`DATABASE_URL` in `.env` uses the SQLAlchemy `postgresql+psycopg2://...` form; strip the
 `+psycopg2` driver suffix when passing the URL to plain `psql`.)
@@ -111,8 +115,11 @@ cd django_app
 python manage.py runserver
 ```
 
-Pages: `/` (home stats), `/movies/<id>/`, `/actors/<id>/`, `/directors/<id>/`, `/genres/<id>/`,
-`/analytics/` (7-panel dashboard built on the Task 22 SQL queries in `warehouse/queries/`).
+Pages: `/` (home stats), `/movies/<slug>/`, `/actors/<slug>/`, `/directors/<slug>/`, `/genres/<id>/`,
+`/analytics/` (7-panel dashboard built on the Task 22 SQL queries in `warehouse/queries/`). Movies,
+actors, and directors are addressed by a URL slug (e.g. `/actors/tom-holland/`) rather than their
+warehouse surrogate key — see `dim_*.slug` and `assign_slugs()` in `load_dimensions.py`. Genres are
+few enough (~19) that collisions aren't a concern, so they're still addressed by id.
 
 Django never writes to the warehouse — models are `managed = False` and a custom router
 (`core/routers.py`) blocks migrations against it. Django's own auth/session tables live in a
@@ -124,7 +131,7 @@ separate local SQLite database.
 pytest
 ```
 
-The full suite (182 tests) runs against mocked S3/TMDB/Postgres boundaries only — no network
+The full suite (192 tests) runs against mocked S3/TMDB/Postgres boundaries only — no network
 access or live database is required. It covers ETL transforms, data quality checks, warehouse
 loaders, and Django views.
 

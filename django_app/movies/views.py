@@ -131,9 +131,10 @@ def genre_list(request):
     return render(request, "movies/genre_list.html", context)
 
 
-def movie_detail(request, movie_id):
+def movie_detail(request, movie_slug):
     """Single movie: core facts, genres, directors, and cast."""
-    movie = get_object_or_404(Movie.objects.using("warehouse"), pk=movie_id)
+    movie = get_object_or_404(Movie.objects.using("warehouse"), slug=movie_slug)
+    movie_id = movie.movie_id
 
     genres = (
         Genre.objects.using("warehouse")
@@ -196,9 +197,10 @@ def _career_period(start, end):
     return str(start.year) if start.year == end.year else f"{start.year}–{end.year}"
 
 
-def actor_detail(request, actor_id):
+def actor_detail(request, actor_slug):
     """Single actor: filmography via fact_cast, with career stats computed in SQL."""
-    actor = get_object_or_404(Actor.objects.using("warehouse"), pk=actor_id)
+    actor = get_object_or_404(Actor.objects.using("warehouse"), slug=actor_slug)
+    actor_id = actor.actor_id
 
     movie_ids = (
         Cast.objects.using("warehouse")
@@ -238,9 +240,10 @@ def actor_detail(request, actor_id):
     return render(request, "movies/actor_detail.html", context)
 
 
-def director_detail(request, director_id):
+def director_detail(request, director_slug):
     """Single director: filmography via fact_crew, with career stats computed in SQL."""
-    director = get_object_or_404(Director.objects.using("warehouse"), pk=director_id)
+    director = get_object_or_404(Director.objects.using("warehouse"), slug=director_slug)
+    director_id = director.director_id
 
     movie_ids = (
         Crew.objects.using("warehouse")

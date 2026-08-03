@@ -52,7 +52,7 @@
     <div class="contact-sheet" aria-hidden="true">
         {% for movie in mosaic %}
         <a class="frame"
-           href="{% url 'movies:movie_detail' movie.movie_id %}"
+           href="{% url 'movies:movie_detail' movie.slug %}"
            tabindex="-1"
            style="--i: {{ forloop.counter0 }}">
             <img src="{{ movie.poster_path|tmdb_image:'w185' }}" alt="" loading="lazy">

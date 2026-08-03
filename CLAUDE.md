@@ -30,11 +30,11 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 44 — Live re-run, verification, doc truth-up (Phase 8 complete)
-Currently on          : Phase 8 complete except Task 43 (person enrichment), deferred by user on cost grounds. No task in progress.
-Current phase         : Phase 8 — Correctness & Catalog Depth (Tasks 40–44)
-Blockers / open issues: Full test suite is 182/182 passing. The crew-dedup bug noted here previously is FIXED (Task 40): `transform_credits_bridge.py` now dedups on `(movie_id, person_id, credit_type, role)`, so a crew member with multiple jobs no longer loses their "Director" row. Movies with a director went 47/112 → 111/112; `fact_crew` 54 → 128 rows; "Top Rated Directors" renders for the first time. The single remaining movie without a director (`A Lustful Night`, 739277) genuinely has none in Bronze — real TMDB sparsity. Task 41 also done: `dim_movie.overview` added + backfilled (109/112 populated; 3 genuinely blank in TMDB) and `movie_detail` now shows rating + vote count. Task 42 also done: `discover/movie` source added and run live — catalog is now **1,215 films** (was 112), evenly spread ~200/decade (was 77/112 in the 2020s), 44,554 actors, 677 directors, 146 directors with 3+ films (was 1). Remaining known gaps (planned as Tasks 43–44): people have no bios/birthdays; orphan dimension members (people credited on films outside the loaded population) still produce thin pages. Not-yet-assigned: Gold is still a write-only dead end (built every run, read by nothing); `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`.
-Last updated          : 2026-07-29
+Last completed task   : Task 46 — URL slugs for movies, actors, and directors (Phase 9 complete)
+Currently on          : Phase 9 complete. No task in progress.
+Current phase         : Phase 9 — Frontend Polish & URL Design (Tasks 45–46)
+Blockers / open issues: Full test suite is 192/192 passing. Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows). Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds (see Phase 8). Remaining known gaps, still open: orphan dimension members (people credited on films outside the loaded population) still produce thin pages; Gold is still a write-only dead end (built every run, read by nothing); `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`.
+Last updated          : 2026-08-03
 ```
 
 **After finishing any task, in this order:**
@@ -198,6 +198,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 6     | Polish                  | 31–33 | Complete |
 | 7     | Product Upgrade         | 34–39 | Complete |
 | 8     | Correctness & Catalog Depth | 40–44 | Complete (43 deferred) |
+| 9     | Frontend Polish & URL Design | 45–46 | Complete |
 
 ---
 
@@ -473,6 +474,23 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Goal:** Full run at the new corpus size; fix README's missing DDL steps and stale test counts.
 - **Files:** `README.md`, `docs/architecture.md`, `CLAUDE.md`, `for_learning.md`
 - **Outcome:** Verified live at the new scale: all 11 routes + static assets return 200; `/movies/238/` (The Godfather) renders rating 8.7/10, 23,226 votes, synopsis, "Directed by Francis Ford Coppola" and a cast including Brando and Pacino — a page that before Phase 8 would have had no rating, no synopsis and possibly no director. A bad id still 404s. Silver DQ 20/20, warehouse checks 22/22 (incl. `bronze_to_silver` 1140=1140), tests 182/182. Three real doc defects fixed: (1) **README's schema-setup step listed only DDL `01`–`03`**, so anyone following it on a fresh machine built an incomplete warehouse — silent, not loud, which is the worst kind; (2) the test count was stale in three places; (3) `architecture.md` had no account of the corpus-source decision or the dedup-grain bug, both now written up (§2 "Choosing the corpus", §3 "Resolved: the credits-bridge dedup grain"), including why the DQ check *shared the bug's premise* and why total-row-count checks can't catch "right number of rows, wrong ones" — that needs reconciliation controls asserting a conserved quantity across a layer boundary.
+
+---
+
+### Phase 9 — Frontend Polish & URL Design
+
+> Ad hoc user-driven polish after Phase 8, working directly against the live 1,215-film
+> catalog rather than through the numbered-task planning process used for Phases 1–8.
+
+#### [x] Task 45 — Person-page stat row and career-period fixes
+- **Goal:** The actor/director Films/Avg rating/Active stat row read as a boxed table (ruled dividers on every side), the small "eyebrow" kicker labels above every page title were redundant or actively duplicated the title, and the Active-period stat showed a closed year range even for an ongoing career (e.g. "2026–2026" for a director whose only dated film releases this year).
+- **Files:** `django_app/static/css/theoria.css`, `movies/templates/movies/{_person_header,_sheet_header,movie_detail,actor_detail,director_detail,genre_detail,genre_list,home,movie_list,person_list}.html`, `movies/views.py`, `tests/test_django_views.py`
+- **Outcome:** Removed `.stat`'s `border-right` and `.stats`'/`.person-head`'s top/bottom rules entirely, then reworked `.stats` into a tight flex cluster where each figure carries a small lime tick — the same "this one is measured" mark already used on the active nav link and meter fills, rather than a divider. Separately removed the eyebrow/accession row (`INDEX Actors`, `FILM CATALOG · MEASURED`, `dim_actor · 880`, etc.) from every page per user decision, after finding `person_list.html` was passing the accession the *same* text as the title (a real duplication bug, not by design). For the Active stat, added `_career_period(start, end)` in `views.py`: collapses a single-year career to one bare year instead of repeating it (`"2015"` not `"2015–2015"`), and renders an open-ended career as `"<start>–Active"` (or bare `"Active"`) whenever the latest known film is this year or later, instead of implying a career that's still going already "ended". Tests 187/187 (5 new, covering each `_career_period` branch).
+
+#### [x] Task 46 — URL slugs for movies, actors, and directors
+- **Goal:** Hide the warehouse surrogate keys from movie/actor/director URLs (`/actors/880/` → `/actors/tom-holland/`) — a bare integer id in the URL exposes internal identifiers for no reason a browsing user needs.
+- **Files:** `warehouse/ddl/01_dimensions.sql` + new `07_add_slugs.sql`, `etl/warehouse_loader/load_dimensions.py`, `django_app/movies/{models,views,urls}.py`, `movies/templates/movies/{_movie_card,_person_card,home,movie_detail}.html`, `tests/{test_etl,test_django_views}.py`, `README.md`, `docs/architecture.md`
+- **Outcome:** Added a nullable `slug VARCHAR(300)` column + unique index to `dim_movie`/`dim_actor`/`dim_director` (`07_add_slugs.sql` for the live DB, `01_dimensions.sql` for a fresh bootstrap). New `assign_slugs(session, table, id_col, name_col)` in `load_dimensions.py` runs after each table's normal Silver upsert and **recomputes every row's slug from the whole table**, not just the partition just loaded — a slug scheme where a collision is only checked against the current batch would silently produce two rows with the same slug the moment a later partition introduced a same-named person, and Postgres's unique index would then reject the load outright. Collisions are broken by walking the table in ascending id order and numbering repeats (`john-smith`, `john-smith-2`, ...), which is what makes the scheme idempotent across reruns: the same row always gets the same slug, since only a new (larger) id can ever be appended after the existing numbering, never inserted ahead of it. `_slugify()` NFKD-folds accented characters to their ASCII base (e.g. "Zoë Kravitz" → `zoe-kravitz`) rather than dropping them. Django's `urls.py` swapped `<int:*_id>` for `<slug:*_slug>` on all three detail routes (genres stay id-based — only ~19 rows, collisions aren't a concern); `movie_detail`/`actor_detail`/`director_detail` now fetch by `slug=` and read the numeric id off the fetched object for every downstream query, so the rest of each view is unchanged. **Live backfill:** applied `07_add_slugs.sql`, then one `load_dimensions()` run against the existing `2026-07-29` Silver partition assigned slugs to all **1,215 movies, 44,554 actors, 677 directors** in ~25s, zero collisions left unresolved, zero nulls. Verified live: `/actors/tom-holland/`, `/movies/the-godfather/`, `/directors/christopher-nolan/` all 200; the old `/actors/880/`, `/movies/238/` now 404 (ids are no longer reachable, as intended); cast/director links on a movie page render as `/actors/marlon-brando/` etc. Tests 192/192 (5 new: slug collision numbering, accent folding, rerun stability).
 
 ---
 

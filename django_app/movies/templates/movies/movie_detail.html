@@ -53,7 +53,7 @@
             <div class="record-row">
                 <dt class="label">Directed by</dt>
                 <dd>
-                    {% for director in directors %}<a href="{% url 'movies:director_detail' director.director_id %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                    {% for director in directors %}<a href="{% url 'movies:director_detail' director.slug %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
                 </dd>
             </div>
             {% endif %}

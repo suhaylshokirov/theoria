@@ -7,7 +7,10 @@ does not depend on any Silver data.
 
 Upserts use ON CONFLICT (pk) DO UPDATE, so re-running the loader for the
 same or a later ingestion_date is idempotent — existing rows are refreshed
-in place rather than duplicated.
+in place rather than duplicated. After upserting, dim_movie/dim_actor/
+dim_director each get a `slug` column recomputed over the whole table via
+assign_slugs() — the URL-facing identifier for those pages, so a movie or
+person is reachable at a readable path instead of a bare surrogate key.
 
 S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
@@ -26,10 +29,13 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import logging
+import re
 import time
+import unicodedata
 from typing import Any
 
 import pandas as pd
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import config
@@ -38,6 +44,8 @@ from etl.warehouse_loader.common import _read_silver_parquet, _upsert
 from warehouse.db import get_session
 
 logger = logging.getLogger(__name__)
+
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 _DEFAULT_CALENDAR_START = dt.date(1900, 1, 1)
 _DEFAULT_CALENDAR_END = dt.date(2035, 12, 31)
@@ -89,6 +97,50 @@ def load_dim_genre(session: Session, df: pd.DataFrame) -> int:
     count = _upsert(session, "dim_genre", ["genre_id"], columns, records)
     logger.info("dim_genre: upserted %d row(s)", count)
     return count
+
+
+def _slugify(name: str) -> str:
+    """Lowercase, ASCII, hyphenated form of a name/title for use in a URL.
+
+    Accented characters are folded to their plain-ASCII base (e.g. "Zoe"
+    Kravitz stays readable) via NFKD decomposition before anything else is
+    stripped, rather than dropping the whole character.
+    """
+    ascii_name = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    slug = _SLUG_RE.sub("-", ascii_name.lower()).strip("-")
+    return slug or "untitled"
+
+
+def assign_slugs(session: Session, table: str, id_col: str, name_col: str) -> int:
+    """Recompute every row's slug in `table`, deterministically and idempotently.
+
+    Reruns must never change a slug that's already been linked to or bookmarked,
+    so this can't just slugify each new batch in isolation — a name added in a
+    later partition could collide with one already in the table. Instead it
+    re-derives every row's slug from the *whole* table each time, walked in
+    ascending `id_col` order: a genuine collision (two rows slugifying to the
+    same base) is broken by numbering in that fixed order, so the same row
+    always lands on the same slug across reruns, and a newly discovered row
+    (always a new, larger id) can only ever be appended after the existing
+    numbering, never insert itself ahead of it.
+    """
+    rows = session.execute(
+        text(f"SELECT {id_col}, {name_col} FROM {table} ORDER BY {id_col}")
+    ).fetchall()
+
+    seen: dict[str, int] = {}
+    records = []
+    for row_id, name in rows:
+        base = _slugify(name or "")
+        n = seen.get(base, 0) + 1
+        seen[base] = n
+        slug = base if n == 1 else f"{base}-{n}"
+        records.append({"id": row_id, "slug": slug})
+
+    if records:
+        session.execute(text(f"UPDATE {table} SET slug = :slug WHERE {id_col} = :id"), records)
+    logger.info("%s: assigned %d slug(s)", table, len(records))
+    return len(records)
 
 
 def _build_calendar(start: dt.date, end: dt.date) -> pd.DataFrame:
@@ -145,6 +197,9 @@ def load_dimensions(
         counts["dim_director"] = load_dim_director(session, directors_df)
         counts["dim_genre"] = load_dim_genre(session, genres_df)
         counts["dim_date"] = load_dim_date(session, calendar_start, calendar_end)
+        counts["dim_movie_slugs"] = assign_slugs(session, "dim_movie", "movie_id", "title")
+        counts["dim_actor_slugs"] = assign_slugs(session, "dim_actor", "actor_id", "name")
+        counts["dim_director_slugs"] = assign_slugs(session, "dim_director", "director_id", "name")
 
     elapsed = time.monotonic() - t0
     logger.info(

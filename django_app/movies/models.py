@@ -44,6 +44,7 @@ class Movie(models.Model):
     tagline = models.TextField(null=True)
     poster_path = models.TextField(null=True)
     backdrop_path = models.TextField(null=True)
+    slug = models.SlugField(max_length=300, unique=True, null=True)
 
     class Meta:
         managed = False
@@ -59,6 +60,7 @@ class Actor(models.Model):
     gender = models.SmallIntegerField(null=True)
     popularity = models.DecimalField(max_digits=10, decimal_places=4, null=True)
     profile_path = models.TextField(null=True)
+    slug = models.SlugField(max_length=300, unique=True, null=True)
 
     class Meta:
         managed = False
@@ -74,6 +76,7 @@ class Director(models.Model):
     gender = models.SmallIntegerField(null=True)
     popularity = models.DecimalField(max_digits=10, decimal_places=4, null=True)
     profile_path = models.TextField(null=True)
+    slug = models.SlugField(max_length=300, unique=True, null=True)
 
     class Meta:
         managed = False

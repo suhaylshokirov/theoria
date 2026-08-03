@@ -250,7 +250,7 @@ collaboration frequency — that are naturally SQL-shaped.
 
 ## 7. Testing philosophy
 
-The full suite (182 tests, `pytest`) never touches a real network, S3 bucket, or Postgres
+The full suite (192 tests, `pytest`) never touches a real network, S3 bucket, or Postgres
 instance. Every ETL/loader test mocks the boundary (the `boto3` client, the `requests` session, the
 SQLAlchemy session) and asserts on the transformation logic itself. Django view tests construct
 real (unsaved) ORM model instances and patch each model's `.objects` manager, using

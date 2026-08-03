@@ -11,7 +11,7 @@
                         Falls back to popularity when not given. {% endcomment %}
 {% load tmdb_images %}
 <div class="poster-card">
-    <a href="{% url detail_url_name person.pk %}">
+    <a href="{% url detail_url_name person.slug %}">
         {% if person.profile_path %}
         <img class="headshot" src="{{ person.profile_path|tmdb_image:'w185' }}" alt="{{ person.name }}" loading="lazy">
         {% else %}

@@ -1467,7 +1467,9 @@ def test_reset_engine_disposes_and_clears():
 from etl.warehouse_loader.load_dimensions import (
     _build_calendar,
     _records,
+    _slugify,
     _upsert,
+    assign_slugs,
     load_dim_actor,
     load_dim_date,
     load_dim_director,
@@ -1595,6 +1597,54 @@ def test_load_dim_genre_upserts_expected_columns():
     assert set(params[0].keys()) == {"genre_id", "genre_name"}
 
 
+def test_slugify_lowercases_and_hyphenates():
+    """_slugify() must produce a lowercase, hyphenated, ASCII-only slug."""
+    assert _slugify("Tom Holland") == "tom-holland"
+
+
+def test_slugify_folds_accented_characters():
+    """Accents fold to their plain-ASCII base rather than vanishing entirely."""
+    assert _slugify("Zoë Kravitz") == "zoe-kravitz"
+
+
+def test_slugify_empty_name_falls_back_to_untitled():
+    """An empty/blank name must not produce an empty slug."""
+    assert _slugify("") == "untitled"
+
+
+def test_assign_slugs_numbers_name_collisions_in_id_order():
+    """Two rows with the same name must get distinct slugs, numbered by id order."""
+    mock_session = MagicMock()
+    mock_session.execute.return_value.fetchall.return_value = [
+        (1, "John Smith"), (2, "John Smith"), (3, "Jane Doe"),
+    ]
+
+    count = assign_slugs(mock_session, "dim_actor", "actor_id", "name")
+
+    assert count == 3
+    (_, update_params), _ = mock_session.execute.call_args
+    assert update_params == [
+        {"id": 1, "slug": "john-smith"},
+        {"id": 2, "slug": "john-smith-2"},
+        {"id": 3, "slug": "jane-doe"},
+    ]
+
+
+def test_assign_slugs_is_stable_across_reruns():
+    """Re-running assign_slugs() over the same rows must produce the same slugs."""
+    mock_session = MagicMock()
+    rows = [(1, "John Smith"), (2, "John Smith"), (3, "Jane Doe")]
+    mock_session.execute.return_value.fetchall.return_value = rows
+
+    assign_slugs(mock_session, "dim_actor", "actor_id", "name")
+    (_, first_run), _ = mock_session.execute.call_args
+
+    assign_slugs(mock_session, "dim_actor", "actor_id", "name")
+    (_, second_run), _ = mock_session.execute.call_args
+
+    assert first_run == second_run
+
+
 def test_build_calendar_computes_surrogate_key_and_decade():
     """_build_calendar() must produce one row per day with a YYYYMMDD date_id and correct decade."""
     df = _build_calendar(dt.date(1999, 12, 30), dt.date(2000, 1, 1))
@@ -1650,8 +1700,11 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
 
     assert counts == {
         "dim_movie": 2, "dim_actor": 2, "dim_director": 2, "dim_genre": 2, "dim_date": 2,
+        "dim_movie_slugs": 0, "dim_actor_slugs": 0, "dim_director_slugs": 0,
     }
-    assert mock_session.execute.call_count == 5
+    # 5 upserts + 3 slug SELECTs (the mocked session's empty fetchall() means
+    # no matching UPDATE is issued for any of the three slugged tables).
+    assert mock_session.execute.call_count == 8
 
 
 # ---------------------------------------------------------------------------

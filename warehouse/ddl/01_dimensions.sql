@@ -14,8 +14,10 @@ CREATE TABLE IF NOT EXISTS dim_movie (
     tagline          TEXT,
     poster_path      TEXT,
     backdrop_path    TEXT,
+    slug             VARCHAR(300),
     CONSTRAINT pk_dim_movie PRIMARY KEY (movie_id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_movie_slug ON dim_movie (slug);
 
 CREATE TABLE IF NOT EXISTS dim_actor (
     actor_id    INTEGER      NOT NULL,
@@ -23,8 +25,10 @@ CREATE TABLE IF NOT EXISTS dim_actor (
     gender      SMALLINT,
     popularity  NUMERIC(10, 4),
     profile_path TEXT,
+    slug        VARCHAR(300),
     CONSTRAINT pk_dim_actor PRIMARY KEY (actor_id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_actor_slug ON dim_actor (slug);
 
 CREATE TABLE IF NOT EXISTS dim_director (
     director_id INTEGER      NOT NULL,
@@ -32,8 +36,10 @@ CREATE TABLE IF NOT EXISTS dim_director (
     gender      SMALLINT,
     popularity  NUMERIC(10, 4),
     profile_path TEXT,
+    slug        VARCHAR(300),
     CONSTRAINT pk_dim_director PRIMARY KEY (director_id)
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_director_slug ON dim_director (slug);
 
 CREATE TABLE IF NOT EXISTS dim_genre (
     genre_id    INTEGER  NOT NULL,

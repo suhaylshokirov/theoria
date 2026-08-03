@@ -3,7 +3,7 @@
    Note genre_detail passes `movie=m.movie`, since its rows are MovieMetrics. {% endcomment %}
 {% load tmdb_images %}
 <div class="poster-card">
-    <a href="{% url 'movies:movie_detail' movie.movie_id %}">
+    <a href="{% url 'movies:movie_detail' movie.slug %}">
         {% if movie.poster_path %}
         <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster" loading="lazy">
         {% else %}
