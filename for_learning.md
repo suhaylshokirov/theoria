@@ -1990,3 +1990,82 @@ on the difference between a unique index and a deferrable unique constraint, why
 latter can be deferred, and what that costs — then decide which one a bulk-reload warehouse
 should actually prefer. Related: look at how `UPDATE ... FROM (VALUES ...)` as a single
 statement would also sidestep the per-row check entirely.
+
+---
+
+## Task 49 — Gold earns a reader: deriving `fact_collaboration`
+
+### What Was Built
+A `fact_collaboration` table: one row per pair of people who have worked together, with how
+many films they share and the years they span. **193,064 edges over 12,301 people** —
+11,828 pairs with 2+ films, 3,232 with 3+.
+
+It's built in Gold from Silver, then loaded into Postgres by a new
+`etl/warehouse_loader/load_gold.py`. That's the first time anything has read the Gold layer.
+Gold has been written on every pipeline run since Task 14 and consumed by **nothing** —
+`warehouse_checks` confirmed the files existed and were non-empty, and that was all.
+
+What it can now answer, live from the warehouse:
+
+| Pair | Films | Span |
+|---|---|---|
+| Steven Spielberg + Michael Kahn (editor) | 20 | 1977–2018 |
+| Steven Spielberg + John Williams | 19 | 1975–2026 |
+| Martin Scorsese + Thelma Schoonmaker (editor) | 11 | 1980–2023 |
+| Tim Burton + Danny Elfman | 11 | 1988–2010 |
+
+### Concepts Used
+- **Bounding a derived dataset by meaning, not by `LIMIT`.** Pairing every credit on every
+  film produces **33.1 million** edges on this corpus — and, worse, asserts that a caterer
+  and a stunt double "collaborated". Restricting to *key credits* (top-10 billing + nine
+  principal craft jobs) gives **181,538** for the same partition. That 180x reduction is a
+  definition, not an optimisation: it decides what the table *means*. Compare Task 42, where
+  two dashboard queries had no bound at all and returned whatever the corpus happened to
+  contain — same lesson from the other direction.
+- **Why a Gold layer exists.** The honest test for "does this belong in Gold" is: expensive
+  to compute, cheap to serve, and shaped for a read the star schema can't answer directly.
+  A quadratic expansion over every film is all three. The other four Gold datasets fail that
+  test, which is why nothing reads them — they're cheap enough to recompute in SQL, and the
+  Django views do exactly that.
+- **Canonical ordering for unordered pairs.** Storing both `(a,b)` and `(b,a)` doubles the
+  table and makes every query say `OR`. Storing one, with `person_a_id < person_b_id`, means
+  a lookup for a person must check *both* columns — the cost moves from write to read, which
+  is the right trade for a table written once per load and read on every person page.
+- **Constraints belong to the table, not the writer.** That ordering is enforced by a SQL
+  `CHECK`, so it holds no matter what writes to it.
+- **Different layers, different failure semantics.** The Silver-sourced fact loaders
+  quarantine unresolvable rows. `load_gold` doesn't: a Gold edge references people the
+  pipeline just derived from the same partition, so an FK miss means the Gold build and the
+  dimension load disagree with each other. That's a bug to log at ERROR, not a bad record to
+  set aside.
+
+### Key Code
+`etl/gold/build_gold_datasets.py` — `_build_collaboration_edges()`:
+> ```python
+> people = sorted({int(p) for p in group["person_id"]})
+> for pair in itertools.combinations(people, 2):
+> ```
+> `sorted()` is what makes the pair canonical — `combinations()` over an ascending list can
+> only ever emit `(smaller, larger)`, so the `CHECK` constraint is satisfied by construction
+> rather than by a comparison afterwards. `itertools.combinations` also matters: the obvious
+> alternative is a self-merge of the credits frame on `movie_id`, which materialises n² rows
+> per film *including* both mirror images and the self-pairs, before you filter any of it
+> away. On a 51-cast film that's 2,601 rows to produce 1,275.
+
+`warehouse/ddl/09_collaboration.sql` — the two ranked indexes:
+> ```sql
+> CREATE INDEX ... ON fact_collaboration (person_a_id, films_together DESC);
+> CREATE INDEX ... ON fact_collaboration (person_b_id, films_together DESC);
+> ```
+> Two indexes, one per side, because canonical ordering means a person can appear in either
+> column. Each is a composite ending in the sort column, so "this person's top collaborators"
+> is an index range scan with the ordering already satisfied — no sort step at all.
+
+### What to Study Next
+`fact_collaboration` is a **derived** table: nothing outside the pipeline can tell it's stale,
+and re-running Gold for an old partition happily overwrites counts computed from a newer one.
+Read up on **materialized views** (`CREATE MATERIALIZED VIEW ... WITH DATA`, `REFRESH
+MATERIALIZED VIEW CONCURRENTLY`) and compare: Postgres would then own the derivation and the
+refresh, at the cost of the aggregation no longer being expressible in pandas or reusable
+outside the database. Which is the better home for this table, and does the answer change if
+the corpus grows 50x?

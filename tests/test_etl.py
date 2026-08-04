@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import logging
 from unittest.mock import MagicMock, call, patch
 
 import pandas as pd
@@ -1120,9 +1121,11 @@ def test_transform_credits_bridge_raises_when_no_bronze_files():
 
 from etl.gold.build_gold_datasets import (
     _build_actor_filmography,
+    _build_collaboration_edges,
     _build_decade_stats,
     _build_director_ratings,
     _build_genre_metrics,
+    _key_credits,
     build_gold_datasets,
 )
 
@@ -1168,6 +1171,70 @@ def _silver_bridge() -> pd.DataFrame:
         {"movie_id": 1, "person_id": 20, "credit_type": "crew", "role": "Director", "ordering": None},
         {"movie_id": 2, "person_id": 20, "credit_type": "crew", "role": "Director", "ordering": None},
     ])
+
+
+def _collab_bridge() -> pd.DataFrame:
+    """One film with 2 top-billed actors, 1 deep-billed actor, a director and a caterer."""
+    return pd.DataFrame([
+        {"movie_id": 1, "person_id": 10, "credit_type": "cast", "role": "Hero", "ordering": 0},
+        {"movie_id": 1, "person_id": 11, "credit_type": "cast", "role": "Villain", "ordering": 1},
+        {"movie_id": 1, "person_id": 12, "credit_type": "cast", "role": "Extra", "ordering": 40},
+        {"movie_id": 1, "person_id": 20, "credit_type": "crew", "role": "Director", "ordering": None},
+        {"movie_id": 1, "person_id": 30, "credit_type": "crew", "role": "Craft Service", "ordering": None},
+    ])
+
+
+def test_key_credits_excludes_deep_billing_and_minor_crew():
+    """Only top-billed cast and principal craft roles count as collaborators."""
+    key = _key_credits(_collab_bridge())
+
+    assert set(key["person_id"]) == {10, 11, 20}
+
+
+def test_build_collaboration_edges_pairs_are_canonical_and_counted_once():
+    """Each pair appears once, with person_a_id < person_b_id."""
+    movies = pd.DataFrame([{"movie_id": 1, "release_date": dt.date(1994, 1, 1)}])
+
+    edges = _build_collaboration_edges(movies, _collab_bridge())
+
+    pairs = {(int(r.person_a_id), int(r.person_b_id)) for r in edges.itertuples()}
+    # 3 key people -> exactly C(3,2) = 3 pairs, never their mirror images.
+    assert pairs == {(10, 11), (10, 20), (11, 20)}
+    assert all(r.person_a_id < r.person_b_id for r in edges.itertuples())
+
+
+def test_build_collaboration_edges_counts_repeat_pairings_and_spans_years():
+    """Two people on two films are one edge with films_together=2 and a year span."""
+    movies = pd.DataFrame([
+        {"movie_id": 1, "release_date": dt.date(1994, 1, 1)},
+        {"movie_id": 2, "release_date": dt.date(2001, 5, 1)},
+    ])
+    bridge = pd.DataFrame([
+        {"movie_id": 1, "person_id": 10, "credit_type": "cast", "role": "Hero", "ordering": 0},
+        {"movie_id": 1, "person_id": 20, "credit_type": "crew", "role": "Director", "ordering": None},
+        {"movie_id": 2, "person_id": 10, "credit_type": "cast", "role": "Hero", "ordering": 0},
+        {"movie_id": 2, "person_id": 20, "credit_type": "crew", "role": "Director", "ordering": None},
+    ])
+
+    edges = _build_collaboration_edges(movies, bridge)
+
+    assert len(edges) == 1
+    row = edges.iloc[0]
+    assert (row["person_a_id"], row["person_b_id"]) == (10, 20)
+    assert row["films_together"] == 2
+    assert row["first_year"] == 1994
+    assert row["last_year"] == 2001
+
+
+def test_build_collaboration_edges_survives_a_film_with_no_release_date():
+    """A missing year must leave first/last null, not crash or poison the count."""
+    movies = pd.DataFrame([{"movie_id": 1, "release_date": None}])
+
+    edges = _build_collaboration_edges(movies, _collab_bridge())
+
+    assert len(edges) == 3
+    assert edges["first_year"].isna().all()
+    assert (edges["films_together"] == 1).all()
 
 
 def _parquet_body(df: pd.DataFrame) -> bytes:
@@ -1345,8 +1412,11 @@ def test_build_gold_datasets_writes_four_parquet_files():
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         uris = build_gold_datasets(ingestion_date=date, bucket="theoria-datalake")
 
-    assert mock_s3.put_object.call_count == 4
-    assert set(uris.keys()) == {"genre_metrics", "decade_stats", "actor_filmography", "director_ratings"}
+    assert mock_s3.put_object.call_count == 5
+    assert set(uris.keys()) == {
+        "genre_metrics", "decade_stats", "actor_filmography", "director_ratings",
+        "collaboration_edges",
+    }
 
 
 def test_build_gold_datasets_keys_follow_path_convention():
@@ -2434,3 +2504,70 @@ def test_load_facts_incremental_noop_when_no_pending_dates(monkeypatch):
     )
 
     assert load_facts_incremental(bucket="theoria-datalake") == {}
+
+
+# --- load_gold ----------------------------------------------------------------
+
+from etl.warehouse_loader.load_gold import load_fact_collaboration, load_gold
+
+
+def _gold_edges_df() -> pd.DataFrame:
+    return pd.DataFrame({
+        "person_a_id": pd.array([10, 10, 11], dtype="Int64"),
+        "person_b_id": pd.array([20, 99, 20], dtype="Int64"),
+        "films_together": pd.array([3, 1, 2], dtype="Int64"),
+        "first_year": pd.array([1994, 2001, 1998], dtype="Int64"),
+        "last_year": pd.array([2005, 2001, 1998], dtype="Int64"),
+    })
+
+
+def test_load_fact_collaboration_upserts_resolved_edges(monkeypatch):
+    """Edges whose two people both exist in dim_person are upserted."""
+    import etl.warehouse_loader.load_gold as load_gold_module
+
+    monkeypatch.setattr(load_gold_module, "_existing_ids",
+                        lambda session, table, pk_col: {10, 11, 20})
+    mock_session = MagicMock()
+
+    count = load_fact_collaboration(mock_session, _gold_edges_df())
+
+    # The (10, 99) edge references a person absent from dim_person.
+    assert count == 2
+    (_, params), _ = mock_session.execute.call_args
+    assert {(p["person_a_id"], p["person_b_id"]) for p in params} == {(10, 20), (11, 20)}
+
+
+def test_load_fact_collaboration_logs_unresolvable_edges_as_an_error(caplog):
+    """An FK miss here means Gold and the dimension load disagree — surface it loudly."""
+    import etl.warehouse_loader.load_gold as load_gold_module
+
+    with patch.object(load_gold_module, "_existing_ids", return_value={10, 11, 20}):
+        with caplog.at_level(logging.ERROR):
+            load_fact_collaboration(MagicMock(), _gold_edges_df())
+
+    assert "absent from dim_person" in caplog.text
+
+
+def test_load_gold_reads_gold_not_silver(monkeypatch):
+    """load_gold must read from the gold/ prefix — the layer is the whole point."""
+    import etl.warehouse_loader.load_gold as load_gold_module
+
+    mock_session = MagicMock()
+    monkeypatch.setattr(
+        load_gold_module, "get_session",
+        lambda: MagicMock(__enter__=MagicMock(return_value=mock_session), __exit__=MagicMock(return_value=False)),
+    )
+    monkeypatch.setattr(load_gold_module, "_existing_ids",
+                        lambda session, table, pk_col: {10, 11, 20})
+
+    mock_s3 = MagicMock()
+    body = MagicMock()
+    body.read.return_value = _parquet_body(_gold_edges_df())
+    mock_s3.get_object.return_value = {"Body": body}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        counts = load_gold(ingestion_date=dt.date(2026, 6, 26), bucket="theoria-datalake")
+
+    assert counts == {"fact_collaboration": 2}
+    key = mock_s3.get_object.call_args[1]["Key"]
+    assert key == "gold/collaboration_edges/ingestion_date=2026-06-26/collaboration_edges.parquet"
