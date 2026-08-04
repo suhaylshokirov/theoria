@@ -1,8 +1,8 @@
 """Silver transform: Credits bridge.
 
 Reads all Bronze credits JSON files for a given ingestion_date, extracts
-(movie_id, person_id, role, ordering, credit_type) rows, deduplicates on
-(movie_id, person_id, credit_type, role), validates referential integrity by
+(movie_id, person_id, credit_type, department, role, ordering) rows, deduplicates
+on (movie_id, person_id, credit_type, role), validates referential integrity by
 flagging orphan rows, and writes a single Parquet file to the Silver layer.
 
 S3 source:  bronze/credits/ingestion_date=YYYY-MM-DD/<movie_id>.json
@@ -12,6 +12,8 @@ Columns:
     movie_id    Int64   — TMDB movie ID (from root payload `id`)
     person_id   Int64   — TMDB person ID (from cast/crew `id`)
     credit_type string  — "cast" or "crew"
+    department  string  — "Acting" for cast; TMDB crew department otherwise
+                          (Directing, Writing, Camera, Editing, Sound, Art, …)
     role        string  — character name for cast; job title for crew
     ordering    Int64   — cast order (null for crew)
 
@@ -21,6 +23,11 @@ several crew jobs on one film (a director who also produced or wrote it).
 `role` is part of the key because it *is* part of the grain: without it, a
 director credited with a second job collapses to whichever Bronze row happens
 to sort last, silently destroying the "Director" role.
+
+`department` is deliberately NOT in the key. TMDB assigns each job to exactly
+one department, so department is functionally determined by role — adding it
+would widen the key without changing the grain, and a key that claims a finer
+grain than the data has is how the Task 40 bug happened in the first place.
 
 Orphan rows (null movie_id / person_id) are flagged with warnings and dropped,
 but never cause the transform to crash. Callers may pass `known_movie_ids` and
@@ -85,6 +92,8 @@ def _extract_bridge_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "movie_id": movie_id,
             "person_id": member.get("id"),
             "credit_type": "cast",
+            # TMDB gives cast members no department/job — they are all one craft.
+            "department": "Acting",
             "role": member.get("character"),
             "ordering": member.get("order"),
         })
@@ -94,6 +103,7 @@ def _extract_bridge_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
             "movie_id": movie_id,
             "person_id": member.get("id"),
             "credit_type": "crew",
+            "department": member.get("department"),
             "role": member.get("job"),
             "ordering": None,
         })
@@ -107,6 +117,7 @@ def _cast_bridge_types(df: pd.DataFrame) -> pd.DataFrame:
     df["movie_id"] = pd.to_numeric(df["movie_id"], errors="coerce").astype("Int64")
     df["person_id"] = pd.to_numeric(df["person_id"], errors="coerce").astype("Int64")
     df["credit_type"] = df["credit_type"].astype("string")
+    df["department"] = df["department"].astype("string")
     df["role"] = df["role"].astype("string")
     df["ordering"] = pd.to_numeric(df["ordering"], errors="coerce").astype("Int64")
     return df

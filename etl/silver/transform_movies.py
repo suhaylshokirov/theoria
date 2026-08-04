@@ -55,6 +55,10 @@ def _read_json_from_s3(bucket: str, key: str) -> dict[str, Any]:
 
 def _flatten_movie(raw: dict[str, Any]) -> dict[str, Any]:
     """Extract and rename the fields we keep from one TMDB movie-detail payload."""
+    # TMDB nests the franchise as an object, or omits it entirely (~48% of films).
+    # Flattened to three scalars here so Silver stays a flat table; dim_collection
+    # is built from the distinct values downstream.
+    collection = raw.get("belongs_to_collection") or {}
     return {
         "movie_id": raw.get("id"),
         "title": raw.get("title"),
@@ -73,6 +77,9 @@ def _flatten_movie(raw: dict[str, Any]) -> dict[str, Any]:
         "tagline": raw.get("tagline") or None,
         "poster_path": raw.get("poster_path") or None,
         "backdrop_path": raw.get("backdrop_path") or None,
+        "collection_id": collection.get("id"),
+        "collection_name": collection.get("name"),
+        "collection_poster_path": collection.get("poster_path") or None,
         # Flatten nested genres list to a list of IDs for the bridge table.
         "genre_ids": [g["id"] for g in raw.get("genres", [])],
     }
@@ -88,6 +95,7 @@ def _cast_types(df: pd.DataFrame) -> pd.DataFrame:
     df["vote_count"] = pd.to_numeric(df["vote_count"], errors="coerce").astype("Int64")
     df["vote_average"] = pd.to_numeric(df["vote_average"], errors="coerce")
     df["popularity"] = pd.to_numeric(df["popularity"], errors="coerce")
+    df["collection_id"] = pd.to_numeric(df["collection_id"], errors="coerce").astype("Int64")
     # Empty strings from TMDB for missing dates become NaT, not errors.
     df["release_date"] = pd.to_datetime(df["release_date"], errors="coerce").dt.date
     return df

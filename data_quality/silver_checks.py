@@ -56,12 +56,28 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "movie_id", "title", "release_date", "runtime", "budget", "revenue",
             "original_language", "status", "vote_average", "vote_count",
             "popularity", "overview", "tagline", "poster_path", "backdrop_path",
+            "collection_id", "collection_name", "collection_poster_path",
             "genre_ids",
         ],
         "ranges": {
             "vote_average": (0.0, 10.0),
             "vote_count":   (0,   None),
             "popularity":   (0.0, None),
+        },
+    },
+    # Written from the shape of the TMDB credits payload, not from what
+    # transform_people happens to emit. A check that mirrors the transform can
+    # only ever confirm the transform agrees with itself (see Task 40).
+    "people": {
+        "parquet": "people.parquet",
+        "pk_cols": ["person_id"],
+        "required_cols": ["person_id", "name"],
+        "expected_cols": [
+            "person_id", "name", "gender", "popularity", "profile_path",
+            "known_for_department",
+        ],
+        "ranges": {
+            "popularity": (0.0, None),
         },
     },
     "actors": {
@@ -93,7 +109,9 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         "parquet": "credits_bridge.parquet",
         "pk_cols": ["movie_id", "person_id", "credit_type", "role"],
         "required_cols": ["movie_id", "person_id", "credit_type"],
-        "expected_cols": ["movie_id", "person_id", "credit_type", "role", "ordering"],
+        "expected_cols": [
+            "movie_id", "person_id", "credit_type", "department", "role", "ordering",
+        ],
         "ranges": {
             "ordering": (0, None),
         },

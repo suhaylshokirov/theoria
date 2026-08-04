@@ -1834,3 +1834,86 @@ strategies. Worth comparing this project's "recompute the whole table" approach 
 their typical "check-then-append-a-random-suffix-on-conflict" approach, and think about why
 a read-mostly analytics warehouse (bulk loads, no concurrent writers) can afford the simpler,
 fully-deterministic strategy that a live multi-writer web app generally can't.
+
+---
+
+## Task 47 — Silver: every person, every department, every collection
+
+### What Was Built
+Three changes to the Silver transforms, all reading data that was already sitting in
+Bronze — zero new TMDB calls.
+
+1. **One `silver/people` dataset covering everybody.** Until now a person only existed in
+   Silver if they were in the cast (`silver/actors`) or if their crew credit had
+   `job == "Director"` (`silver/directors`). Everybody else — editors, composers,
+   cinematographers, writers, production designers, stunt performers — was read out of
+   Bronze, looked at, and thrown away. That's **79,523 people** and, downstream,
+   **169,682 credits**. `transform_people()` now also writes `silver/people/people.parquet`
+   with one row per distinct credited person, plus their `known_for_department`.
+2. **`department` on the credits bridge.** The bridge already recorded *what* each crew
+   member did (`role` holds the job title), but not which craft that job belongs to. TMDB
+   supplies `department` on every crew object; it's now carried through, with cast rows
+   normalised to `"Acting"`.
+3. **Franchises reach Silver.** `belongs_to_collection` — a nested object TMDB returns on
+   every movie-detail payload — was being dropped whole. It's now flattened to
+   `collection_id` / `collection_name` / `collection_poster_path`. Verified live on the
+   rebuilt partition: **591 of 1,140 films (51.8%) belong to one of 344 collections.**
+
+The old `actors`/`directors` outputs are deliberately still written. They're retired in a
+later task, once the warehouse and the Django app have stopped reading them.
+
+### Concepts Used
+- **Extraction-stage scoping**: a filter applied while *reading* a source is not a cleanup
+  step, it's a decision about what will exist. `if member.get("job") == "Director"` was one
+  line long and it defined the population of the entire warehouse. No transform,
+  aggregate or query downstream could ever recover a person it excluded.
+- **Identity vs. role**: the old design let the credit decide the table — you were an
+  "actor" because you appeared in the cast array. But a person is one person; what they did
+  on a given film is a *fact*, not an attribute of who they are. Splitting those apart is
+  what makes one `dim_person` possible in the next task.
+- **Functional dependency and dedup keys**: `department` was deliberately *not* added to
+  the bridge's dedup key. TMDB assigns each job to exactly one department, so department is
+  functionally determined by job — adding it would widen the key without changing the grain.
+- **Flattening a nested source field**: Silver is a flat, typed table, so a nested object
+  gets flattened at the transform, not stored as a struct and unpacked later.
+- **Rebuild-from-immutable-Bronze**: none of this needed the API. Bronze has been holding
+  every one of these fields since the first ingestion run; re-running the transforms is safe
+  and idempotent by project convention.
+
+### Key Code
+`etl/silver/transform_people.py` — `_extract_people()` / `_person_row()`:
+> ```python
+> return [
+>     _person_row(member)
+>     for member in (*payload.get("cast", []), *payload.get("crew", []))
+> ]
+> ```
+> The two arrays are chained and mapped through the *same* function. That's the whole fix.
+> Both TMDB arrays carry identical person fields (`id`, `name`, `gender`, `popularity`,
+> `profile_path`, `known_for_department`), so there was never a reason for two extractors —
+> the second one existed only to carry a filter, and the filter was the bug.
+
+`etl/silver/transform_movies.py` — `_flatten_movie()`:
+> ```python
+> collection = raw.get("belongs_to_collection") or {}
+> ```
+> The `or {}` matters: TMDB omits the key *and* returns `null` for it, on ~48% of films.
+> Defaulting to an empty dict means the three `.get()` calls below produce `None` uniformly
+> instead of needing a branch, so a film without a franchise is an ordinary row with null
+> columns rather than a special case.
+
+`data_quality/silver_checks.py` — the new `people` entity config:
+> Written from the shape of the **TMDB credits payload**, not from what `transform_people`
+> happens to emit. This is the Task 40 lesson made into a habit: the `credits_bridge` check
+> back then encoded the same wrong key the transform used, so it confirmed the bug instead of
+> catching it. A check that mirrors the code it checks can only ever prove the code agrees
+> with itself.
+
+### What to Study Next
+Both `transform_people()` and `transform_credits_bridge()` read all 1,140 Bronze files
+**sequentially**, one blocking S3 `GET` at a time — the rebuild for this task took minutes
+per transform, and almost all of it was waiting on the network rather than computing.
+Look into `concurrent.futures.ThreadPoolExecutor` for I/O-bound fan-out like this (a
+threaded read of the same 1,140 objects finishes in well under a minute), and think about
+where the natural limit is: what does S3 rate-limit on, and at what point does the
+bottleneck move from network latency to the single-process pandas step that follows?

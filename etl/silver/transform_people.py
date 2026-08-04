@@ -1,16 +1,26 @@
-"""Silver transform: People (actors & directors).
+"""Silver transform: People.
 
-Reads all Bronze credits JSON files for a given ingestion_date, splits each
-payload into cast and crew records, standardizes and casts types, deduplicates
-on person_id, and writes two separate Parquet files to the Silver layer.
+Reads all Bronze credits JSON files for a given ingestion_date, standardizes and
+casts types, deduplicates on person_id, and writes Parquet files to the Silver
+layer.
 
 S3 source:    bronze/credits/ingestion_date=YYYY-MM-DD/<movie_id>.json
 S3 outputs:
-    silver/actors/ingestion_date=YYYY-MM-DD/actors.parquet
-    silver/directors/ingestion_date=YYYY-MM-DD/directors.parquet
+    silver/people/ingestion_date=YYYY-MM-DD/people.parquet
+    silver/actors/ingestion_date=YYYY-MM-DD/actors.parquet          (legacy)
+    silver/directors/ingestion_date=YYYY-MM-DD/directors.parquet    (legacy)
 
-Actors come from the TMDB `cast` array (all entries).
-Directors come from the TMDB `crew` array filtered to job == "Director".
+`people` is the real output: one row per distinct person holding *any* credit,
+cast or crew, in any department. The narrower `actors`/`directors` datasets are
+retained only until the warehouse finishes migrating to dim_person.
+
+Why one dataset and not three: the previous split defined a person by the credit
+that happened to introduce them — cast members became "actors", and crew members
+became "directors" only if job == "Director". That filter silently decided who
+existed at all, and it excluded roughly 79,500 people (editors, composers,
+cinematographers, writers, production designers) whose credits were already
+ingested and sitting in Bronze. Identity belongs to the person; what they did on
+a given film belongs to the credits bridge.
 
 Idempotent: running twice for the same date overwrites the same keys with
 the same content.
@@ -36,6 +46,13 @@ from etl import s3_utils
 
 logger = logging.getLogger(__name__)
 
+PEOPLE_COLUMNS = [
+    "person_id", "name", "gender", "popularity", "profile_path", "known_for_department",
+]
+# The narrower shape of the legacy actors/directors datasets, retired once the
+# warehouse reads dim_person.
+LEGACY_COLUMNS = ["person_id", "name", "gender", "popularity", "profile_path"]
+
 
 def _list_bronze_keys(bucket: str, ingestion_date: dt.date) -> list[str]:
     """Return every .json key under the bronze/credits partition for this date."""
@@ -55,6 +72,35 @@ def _read_json_from_s3(bucket: str, key: str) -> dict[str, Any]:
     client = s3_utils.get_s3_client()
     response = client.get_object(Bucket=bucket, Key=key)
     return json.loads(response["Body"].read())
+
+
+def _person_row(member: dict[str, Any]) -> dict[str, Any]:
+    """Map one TMDB cast/crew member object to a person row.
+
+    Both arrays carry the same person fields, so identity is extracted the same
+    way regardless of which credit introduced the person.
+    """
+    return {
+        "person_id": member.get("id"),
+        "name": member.get("name"),
+        "gender": member.get("gender"),
+        "popularity": member.get("popularity"),
+        "profile_path": member.get("profile_path") or None,
+        "known_for_department": member.get("known_for_department") or None,
+    }
+
+
+def _extract_people(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract one row per credited person — cast and crew alike — from a payload.
+
+    No job or department filter: a person is a person whether they acted, shot,
+    cut, scored or designed the film. Which of those they did is recorded once,
+    per film, in the credits bridge — not baked into which table they land in.
+    """
+    return [
+        _person_row(member)
+        for member in (*payload.get("cast", []), *payload.get("crew", []))
+    ]
 
 
 def _extract_actors(payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -92,23 +138,48 @@ def _cast_people_types(df: pd.DataFrame) -> pd.DataFrame:
     df["person_id"] = pd.to_numeric(df["person_id"], errors="coerce").astype("Int64")
     df["gender"] = pd.to_numeric(df["gender"], errors="coerce").astype("Int64")
     df["popularity"] = pd.to_numeric(df["popularity"], errors="coerce")
+    if "known_for_department" in df.columns:
+        df["known_for_department"] = df["known_for_department"].astype("string")
+    return df
+
+
+def _dedupe_people(rows: list[dict[str, Any]], label: str, columns: list[str]) -> pd.DataFrame:
+    """Build a typed, person_id-unique frame from raw person rows.
+
+    The same person appears once per film they are credited on, so deduplication
+    here is expected and large — it is not a sign of bad input.
+    """
+    df = pd.DataFrame(rows) if rows else pd.DataFrame(columns=columns)
+    df = _cast_people_types(df)
+
+    before_dedup = len(df)
+    df = df.drop_duplicates(subset=["person_id"], keep="last")
+    dupes = before_dedup - len(df)
+    if dupes:
+        logger.info("%s: collapsed %d repeat person_id row(s)", label, dupes)
+
+    null_ids = df["person_id"].isna().sum()
+    if null_ids:
+        logger.warning("%s: dropping %d row(s) with null person_id", label, null_ids)
+        df = df.dropna(subset=["person_id"])
+
     return df
 
 
 def transform_people(
     ingestion_date: dt.date | None = None,
     bucket: str | None = None,
-) -> tuple[str, str]:
-    """Read Bronze credits JSON → extract actors & directors → deduplicate → write Silver Parquet.
+) -> tuple[str, str, str]:
+    """Read Bronze credits JSON → extract every credited person → write Silver Parquet.
 
     Reads every .json file from the bronze/credits partition for `ingestion_date`,
-    extracts cast rows (actors) and crew rows filtered to job=="Director", casts
-    fields to target types, deduplicates each group on person_id (keeping
-    last-seen record), and writes two Parquet files:
-        silver/actors/ingestion_date=YYYY-MM-DD/actors.parquet
-        silver/directors/ingestion_date=YYYY-MM-DD/directors.parquet
+    extracts one identity row per cast and crew member, casts fields to target
+    types, deduplicates on person_id (keeping last-seen record), and writes:
+        silver/people/ingestion_date=YYYY-MM-DD/people.parquet
+        silver/actors/ingestion_date=YYYY-MM-DD/actors.parquet          (legacy)
+        silver/directors/ingestion_date=YYYY-MM-DD/directors.parquet    (legacy)
 
-    Returns (actors_uri, directors_uri).
+    Returns (people_uri, actors_uri, directors_uri).
 
     Raises FileNotFoundError if no Bronze credits files exist for the given date.
     Raises RuntimeError if every file fails to parse.
@@ -128,6 +199,7 @@ def transform_people(
         )
     logger.info("Found %d Bronze JSON file(s) to process", len(keys))
 
+    people_rows: list[dict[str, Any]] = []
     actor_rows: list[dict[str, Any]] = []
     director_rows: list[dict[str, Any]] = []
     errors = 0
@@ -135,61 +207,37 @@ def transform_people(
     for key in keys:
         try:
             payload = _read_json_from_s3(bucket, key)
+            people_rows.extend(_extract_people(payload))
             actor_rows.extend(_extract_actors(payload))
             director_rows.extend(_extract_directors(payload))
         except Exception as exc:
             errors += 1
             logger.error("Failed to read/parse %s: %s", key, exc)
 
-    if not actor_rows and not director_rows:
+    if not people_rows:
         raise RuntimeError(
             f"Every Bronze credits file failed to parse for ingestion_date={ingestion_date} — aborting."
         )
 
-    # --- Actors ---
-    df_actors = pd.DataFrame(actor_rows)
-    df_actors = _cast_people_types(df_actors)
+    df_people = _dedupe_people(people_rows, "People", PEOPLE_COLUMNS)
+    people_key = s3_utils.build_path("silver", "people", ingestion_date, "people.parquet")
+    people_uri = s3_utils.write_parquet(bucket, people_key, df_people)
 
-    before_dedup = len(df_actors)
-    df_actors = df_actors.drop_duplicates(subset=["person_id"], keep="last")
-    dupes = before_dedup - len(df_actors)
-    if dupes:
-        logger.info("Actors: dropped %d duplicate person_id row(s)", dupes)
-
-    null_ids = df_actors["person_id"].isna().sum()
-    if null_ids:
-        logger.warning("Actors: dropping %d row(s) with null person_id", null_ids)
-        df_actors = df_actors.dropna(subset=["person_id"])
-
+    df_actors = _dedupe_people(actor_rows, "Actors", LEGACY_COLUMNS)
     actors_key = s3_utils.build_path("silver", "actors", ingestion_date, "actors.parquet")
     actors_uri = s3_utils.write_parquet(bucket, actors_key, df_actors)
 
-    # --- Directors ---
-    df_directors = pd.DataFrame(director_rows) if director_rows else pd.DataFrame(
-        columns=["person_id", "name", "gender", "popularity", "profile_path"]
-    )
-    df_directors = _cast_people_types(df_directors)
-
-    before_dedup = len(df_directors)
-    df_directors = df_directors.drop_duplicates(subset=["person_id"], keep="last")
-    dupes = before_dedup - len(df_directors)
-    if dupes:
-        logger.info("Directors: dropped %d duplicate person_id row(s)", dupes)
-
-    null_ids = df_directors["person_id"].isna().sum()
-    if null_ids:
-        logger.warning("Directors: dropping %d row(s) with null person_id", null_ids)
-        df_directors = df_directors.dropna(subset=["person_id"])
-
+    df_directors = _dedupe_people(director_rows, "Directors", LEGACY_COLUMNS)
     directors_key = s3_utils.build_path("silver", "directors", ingestion_date, "directors.parquet")
     directors_uri = s3_utils.write_parquet(bucket, directors_key, df_directors)
 
     elapsed = time.monotonic() - t0
     logger.info(
-        "Silver people transform complete: %d actors, %d directors written, %d parse errors in %.2fs",
-        len(df_actors), len(df_directors), errors, elapsed,
+        "Silver people transform complete: %d people (%d actors, %d directors) written, "
+        "%d parse errors in %.2fs",
+        len(df_people), len(df_actors), len(df_directors), errors, elapsed,
     )
-    return actors_uri, directors_uri
+    return people_uri, actors_uri, directors_uri
 
 
 def _parse_args() -> argparse.Namespace:

@@ -30,10 +30,10 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 46 — URL slugs for movies, actors, and directors (Phase 9 complete)
-Currently on          : Phase 9 complete. No task in progress.
-Current phase         : Phase 9 — Frontend Polish & URL Design (Tasks 45–46)
-Blockers / open issues: Full test suite is 192/192 passing. Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows). Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds (see Phase 8). Remaining known gaps, still open: orphan dimension members (people credited on films outside the loaded population) still produce thin pages; Gold is still a write-only dead end (built every run, read by nothing); `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`.
+Last completed task   : Task 47 — Silver: every person, every department, every collection
+Currently on          : Task 48 — dim_person + fact_credit
+Current phase         : Phase 10 — People, Partnerships & Franchises (Tasks 47–53)
+Blockers / open issues: Full test suite is 195/195 passing. Phase 10 is underway: Task 47 made Silver carry every credited person (not just cast + directors), the craft `department` on every credit, and `belongs_to_collection`. Known risk to check during Task 48: unifying `dim_actor`/`dim_director`'s separate slug namespaces into one `dim_person` namespace can reassign an existing actor's slug when a crew member shares their name, so some current `/actors/<slug>/` URLs will change once — verify and report after the backfill rather than assume it's harmless. Older notes: Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows). Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds (see Phase 8). Remaining known gaps, still open: orphan dimension members (people credited on films outside the loaded population) still produce thin pages; Gold is still a write-only dead end (built every run, read by nothing); `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`.
 Last updated          : 2026-08-03
 ```
 
@@ -199,6 +199,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 7     | Product Upgrade         | 34–39 | Complete |
 | 8     | Correctness & Catalog Depth | 40–44 | Complete (43 deferred) |
 | 9     | Frontend Polish & URL Design | 45–46 | Complete |
+| 10    | People, Partnerships & Franchises | 47–53 | In progress |
 
 ---
 
@@ -491,6 +492,28 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Goal:** Hide the warehouse surrogate keys from movie/actor/director URLs (`/actors/880/` → `/actors/tom-holland/`) — a bare integer id in the URL exposes internal identifiers for no reason a browsing user needs.
 - **Files:** `warehouse/ddl/01_dimensions.sql` + new `07_add_slugs.sql`, `etl/warehouse_loader/load_dimensions.py`, `django_app/movies/{models,views,urls}.py`, `movies/templates/movies/{_movie_card,_person_card,home,movie_detail}.html`, `tests/{test_etl,test_django_views}.py`, `README.md`, `docs/architecture.md`
 - **Outcome:** Added a nullable `slug VARCHAR(300)` column + unique index to `dim_movie`/`dim_actor`/`dim_director` (`07_add_slugs.sql` for the live DB, `01_dimensions.sql` for a fresh bootstrap). New `assign_slugs(session, table, id_col, name_col)` in `load_dimensions.py` runs after each table's normal Silver upsert and **recomputes every row's slug from the whole table**, not just the partition just loaded — a slug scheme where a collision is only checked against the current batch would silently produce two rows with the same slug the moment a later partition introduced a same-named person, and Postgres's unique index would then reject the load outright. Collisions are broken by walking the table in ascending id order and numbering repeats (`john-smith`, `john-smith-2`, ...), which is what makes the scheme idempotent across reruns: the same row always gets the same slug, since only a new (larger) id can ever be appended after the existing numbering, never inserted ahead of it. `_slugify()` NFKD-folds accented characters to their ASCII base (e.g. "Zoë Kravitz" → `zoe-kravitz`) rather than dropping them. Django's `urls.py` swapped `<int:*_id>` for `<slug:*_slug>` on all three detail routes (genres stay id-based — only ~19 rows, collisions aren't a concern); `movie_detail`/`actor_detail`/`director_detail` now fetch by `slug=` and read the numeric id off the fetched object for every downstream query, so the rest of each view is unchanged. **Live backfill:** applied `07_add_slugs.sql`, then one `load_dimensions()` run against the existing `2026-07-29` Silver partition assigned slugs to all **1,215 movies, 44,554 actors, 677 directors** in ~25s, zero collisions left unresolved, zero nulls. Verified live: `/actors/tom-holland/`, `/movies/the-godfather/`, `/directors/christopher-nolan/` all 200; the old `/actors/880/`, `/movies/238/` now 404 (ids are no longer reachable, as intended); cast/director links on a movie page render as `/actors/marlon-brando/` etc. Tests 192/192 (5 new: slug collision numbering, accent folding, rerun stability).
+
+---
+
+### Phase 10 — People, Partnerships & Franchises
+
+> Full plan: `~/.claude/plans/explore-the-project-look-snuggly-whistle.md`. Theme: the
+> warehouse models a catalog of titles when the data it already holds describes a network of
+> people. Crew is ingested and then discarded at the loader (169,682 of 170,915 crew credits,
+> 79,523 people); `belongs_to_collection` has never been read at any layer. Zero new TMDB
+> calls — every task below rebuilds from immutable Bronze.
+
+#### [x] Task 47 — Silver: every person, every department, every collection
+- **Goal:** Stop the Silver transforms from discarding crew identity, craft, and franchises.
+- **Files:** `etl/silver/{transform_people,transform_credits_bridge,transform_movies}.py`, `data_quality/silver_checks.py`, `tests/{test_etl,test_data_quality}.py`
+- **Outcome:** `transform_people()` gained `_extract_people()`, which chains the TMDB `cast` and `crew` arrays through one `_person_row()` mapper and writes a new `silver/people/people.parquet` — one row per distinct credited person, with `known_for_department`. The old `_extract_directors()` filter (`job == "Director"`) was the single line deciding who existed in the warehouse at all; it excluded 79,523 people whose credits were already in Bronze. The legacy `actors`/`directors` outputs are still written (retired in Task 53) so nothing downstream breaks mid-phase. `transform_credits_bridge()` now carries `department` (`"Acting"` for cast, TMDB's crew department otherwise) — deliberately **not** added to the dedup key, since TMDB assigns each job to exactly one department so department is functionally determined by `role`, and widening a key past the true grain is what caused the Task 40 bug. `transform_movies._flatten_movie()` flattens `belongs_to_collection` (nested, and `null` on ~48% of films — hence `or {}`) into `collection_id`/`collection_name`/`collection_poster_path`. `silver_checks.py` gained a `people` entity config written from the *credits payload shape* rather than mirroring the transform, plus the three new movie columns and `department` in the bridge's expected schema. Silver rebuilt from immutable Bronze for all three partitions; verified live on `2026-07-29`: 1,140 movies with **591 (51.8%) in one of 344 collections**. Tests 192 → 195.
+
+#### [ ] Task 48 — Warehouse: `dim_person` + `fact_credit`
+#### [ ] Task 49 — Gold earns a reader: derive `fact_collaboration`
+#### [ ] Task 50 — Franchises: `dim_collection` and the series pages
+#### [ ] Task 51 — Django: unified person pages + repeat collaborators
+#### [ ] Task 52 — The path finder: `/connect/`
+#### [ ] Task 53 — Analytics, retirement, live re-run, doc truth-up
 
 ---
 

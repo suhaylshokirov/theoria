@@ -50,6 +50,9 @@ def _movies_df(**overrides) -> pd.DataFrame:
         "tagline": "Mischief. Mayhem. Soap.",
         "poster_path": "/poster.jpg",
         "backdrop_path": "/backdrop.jpg",
+        "collection_id": None,
+        "collection_name": None,
+        "collection_poster_path": None,
         "genre_ids": [18, 53],
     }
     row.update(overrides)
@@ -62,6 +65,7 @@ def _bridge_df(**overrides) -> pd.DataFrame:
         "movie_id": 550,
         "person_id": 10,
         "credit_type": "cast",
+        "department": "Acting",
         "role": "Narrator",
         "ordering": 0,
     }
@@ -276,12 +280,19 @@ def _make_multi_entity_s3_mock(entity_dfs: dict[str, pd.DataFrame]) -> MagicMock
 
 
 def _all_entity_dfs() -> dict[str, pd.DataFrame]:
-    """Minimal valid Silver DataFrames for all five entities."""
+    """Minimal valid Silver DataFrames for every checked entity."""
+    people_df = pd.DataFrame([
+        {"person_id": 10, "name": "Alice", "gender": 1, "popularity": 20.0,
+         "profile_path": "/a.jpg", "known_for_department": "Acting"},
+        {"person_id": 30, "name": "Erin", "gender": 1, "popularity": 3.0,
+         "profile_path": None, "known_for_department": "Editing"},
+    ])
     actors_df = pd.DataFrame([{"person_id": 10, "name": "Alice", "gender": 1, "popularity": 20.0, "profile_path": "/a.jpg"}])
     directors_df = pd.DataFrame([{"person_id": 20, "name": "Carol", "gender": 1, "popularity": 30.0, "profile_path": "/c.jpg"}])
     genres_df = pd.DataFrame([{"genre_id": 28, "genre_name": "Action"}])
     return {
         "movies": _movies_df(),
+        "people": people_df,
         "actors": actors_df,
         "directors": directors_df,
         "genres": genres_df,

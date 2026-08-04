@@ -693,6 +693,7 @@ from etl.silver.transform_people import (
     _cast_people_types,
     _extract_actors,
     _extract_directors,
+    _extract_people,
     transform_people,
 )
 
@@ -704,8 +705,11 @@ def _raw_credits(movie_id: int, extra_cast: list | None = None, extra_crew: list
         {"id": 11, "name": "Bob", "gender": 2, "popularity": 15.0, "profile_path": "/bob.jpg"},
     ]
     crew = [
-        {"id": 20, "name": "Carol", "job": "Director", "gender": 1, "popularity": 30.0, "profile_path": "/carol.jpg"},
-        {"id": 21, "name": "Dave", "job": "Producer", "gender": 2, "popularity": 5.0},
+        {"id": 20, "name": "Carol", "job": "Director", "department": "Directing",
+         "gender": 1, "popularity": 30.0, "profile_path": "/carol.jpg",
+         "known_for_department": "Directing"},
+        {"id": 21, "name": "Dave", "job": "Producer", "department": "Production",
+         "gender": 2, "popularity": 5.0},
     ]
     if extra_cast:
         cast.extend(extra_cast)
@@ -747,20 +751,58 @@ def test_cast_people_types_coerces_bad_values_to_null():
     assert pd.isna(df["popularity"].iloc[0])
 
 
-def test_transform_people_writes_actors_and_directors_parquet():
-    """transform_people must write two Silver Parquet files."""
+def test_extract_people_includes_every_crew_member_not_just_directors():
+    """A person is a person: non-director crew must survive extraction.
+
+    Regression guard for the pre-Phase-10 behaviour, where _extract_directors'
+    job=="Director" filter silently decided who existed in the warehouse at all.
+    """
+    payload = _raw_credits(550)
+    rows = _extract_people(payload)
+    ids = {r["person_id"] for r in rows}
+    # 2 cast + the director + the producer — the producer is the point.
+    assert ids == {10, 11, 20, 21}
+    producer = next(r for r in rows if r["person_id"] == 21)
+    assert producer["name"] == "Dave"
+
+
+def test_extract_people_carries_known_for_department():
+    rows = _extract_people(_raw_credits(550))
+    carol = next(r for r in rows if r["person_id"] == 20)
+    assert carol["known_for_department"] == "Directing"
+
+
+def test_transform_people_writes_people_actors_and_directors_parquet():
+    """transform_people must write the people dataset plus both legacy files."""
     key = "bronze/credits/ingestion_date=2026-06-22/550.json"
     mock_s3 = _make_s3_mock_with_files({key: _raw_credits(550)})
 
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
-        actors_uri, directors_uri = transform_people(
+        people_uri, actors_uri, directors_uri = transform_people(
             ingestion_date=dt.date(2026, 6, 22),
             bucket="theoria-datalake",
         )
 
+    assert people_uri == "s3://theoria-datalake/silver/people/ingestion_date=2026-06-22/people.parquet"
     assert actors_uri == "s3://theoria-datalake/silver/actors/ingestion_date=2026-06-22/actors.parquet"
     assert directors_uri == "s3://theoria-datalake/silver/directors/ingestion_date=2026-06-22/directors.parquet"
-    assert mock_s3.put_object.call_count == 2
+    assert mock_s3.put_object.call_count == 3
+
+
+def test_transform_people_people_dataset_covers_cast_and_crew():
+    """silver/people must hold everyone; silver/actors must still hold only cast."""
+    key = "bronze/credits/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_credits(550)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_people(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    calls = mock_s3.put_object.call_args_list
+    people_call = next(c for c in calls if "people.parquet" in c[1]["Key"])
+    df_people = pd.read_parquet(io.BytesIO(people_call[1]["Body"]))
+
+    assert set(df_people["person_id"]) == {10, 11, 20, 21}
+    assert "known_for_department" in df_people.columns
 
 
 def test_transform_people_deduplicates_actors_across_movies():
@@ -967,7 +1009,7 @@ def test_cast_bridge_types_converts_numerics():
 
 def test_cast_bridge_types_coerces_bad_values_to_null():
     rows = [{"movie_id": "bad", "person_id": None, "credit_type": "cast",
-             "role": "Hero", "ordering": "nope"}]
+             "department": "Acting", "role": "Hero", "ordering": "nope"}]
     df = pd.DataFrame(rows)
     df = _cast_bridge_types(df)
     assert pd.isna(df["movie_id"].iloc[0])
@@ -1507,6 +1549,7 @@ def _dim_people_df():
         "gender": pd.array([1, 2], dtype="Int64"),
         "popularity": [3.5, 4.5],
         "profile_path": ["/p.jpg", None],
+        "known_for_department": ["Acting", "Directing"],
     })
 
 
@@ -1744,6 +1787,7 @@ def _fact_bridge_df():
         "movie_id": pd.array([1, 1, 1, 2, 3, 3], dtype="Int64"),
         "person_id": pd.array([10, 11, 20, 30, 40, 999], dtype="Int64"),
         "credit_type": ["cast", "cast", "crew", "cast", "cast", "crew"],
+        "department": ["Acting", "Acting", "Directing", "Acting", "Acting", "Directing"],
         "role": ["Hero", "Villain", "Director", "Lead", "Lead", "Director"],
         "ordering": pd.array([0, 1, None, 0, 0, None], dtype="Int64"),
     })
