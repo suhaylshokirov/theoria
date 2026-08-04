@@ -22,6 +22,28 @@ CREATE INDEX IF NOT EXISTS idx_fmm_date_id   ON fact_movie_metrics (date_id);
 CREATE INDEX IF NOT EXISTS idx_fmm_genre_id  ON fact_movie_metrics (genre_id);
 CREATE INDEX IF NOT EXISTS idx_fmm_ingestion_date ON fact_movie_metrics (ingestion_date);
 
+-- fact_credit records every credit on every film, at the grain TMDB actually
+-- publishes: one row per (movie, person, department, job). See
+-- 08_person_credits.sql for the full rationale.
+CREATE TABLE IF NOT EXISTS fact_credit (
+    movie_id       INTEGER NOT NULL,
+    person_id      INTEGER NOT NULL,
+    department     TEXT    NOT NULL,
+    job            TEXT    NOT NULL,
+    character_name TEXT,
+    ordering       SMALLINT,
+    ingestion_date DATE    NOT NULL,
+    CONSTRAINT pk_fact_credit PRIMARY KEY (movie_id, person_id, department, job),
+    CONSTRAINT fk_fcredit_movie  FOREIGN KEY (movie_id)  REFERENCES dim_movie  (movie_id),
+    CONSTRAINT fk_fcredit_person FOREIGN KEY (person_id) REFERENCES dim_person (person_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fcredit_movie_id       ON fact_credit (movie_id);
+CREATE INDEX IF NOT EXISTS idx_fcredit_person_id      ON fact_credit (person_id);
+CREATE INDEX IF NOT EXISTS idx_fcredit_department     ON fact_credit (department);
+CREATE INDEX IF NOT EXISTS idx_fcredit_ingestion_date ON fact_credit (ingestion_date);
+CREATE INDEX IF NOT EXISTS idx_fcredit_person_dept    ON fact_credit (person_id, department);
+
 -- fact_cast and fact_crew are independent facts (one row per credited actor /
 -- per credited director) rather than a single actor x director cross-join --
 -- see docs/architecture.md for why: TMDB's credits endpoint never pairs an

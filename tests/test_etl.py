@@ -1688,6 +1688,27 @@ def test_assign_slugs_is_stable_across_reruns():
     assert first_run == second_run
 
 
+def test_assign_slugs_clears_slugs_before_rewriting_them():
+    """The rewrite must be preceded by a clear, or a permutation hits the unique index.
+
+    Recomputing over the whole table can hand row B a slug that row A still
+    holds (A moves to `-2` in the same batch). The rewrite is an executemany, so
+    the index is checked per row and Postgres rejects that transient duplicate
+    even though the final state is unique. Live regression from the Task 48
+    backfill, which failed with "Key (slug)=(dee-wallace) already exists".
+    """
+    mock_session = MagicMock()
+    mock_session.execute.return_value.fetchall.return_value = [
+        (1, "Dee Wallace"), (2, "Dee Wallace"),
+    ]
+
+    assign_slugs(mock_session, "dim_person", "person_id", "name")
+
+    statements = [str(call.args[0]) for call in mock_session.execute.call_args_list]
+    assert "SET slug = NULL" in statements[1]
+    assert "SET slug = :slug" in statements[2]
+
+
 def test_build_calendar_computes_surrogate_key_and_decade():
     """_build_calendar() must produce one row per day with a YYYYMMDD date_id and correct decade."""
     df = _build_calendar(dt.date(1999, 12, 30), dt.date(2000, 1, 1))
@@ -1720,7 +1741,7 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
     def fake_read(bucket, entity, ingestion_date, filename):
         if entity == "movies":
             return _dim_movies_df()
-        if entity in ("actors", "directors"):
+        if entity in ("people", "actors", "directors"):
             return _dim_people_df()
         if entity == "genres":
             return _dim_genres_df()
@@ -1742,12 +1763,14 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
     )
 
     assert counts == {
-        "dim_movie": 2, "dim_actor": 2, "dim_director": 2, "dim_genre": 2, "dim_date": 2,
-        "dim_movie_slugs": 0, "dim_actor_slugs": 0, "dim_director_slugs": 0,
+        "dim_movie": 2, "dim_person": 2, "dim_actor": 2, "dim_director": 2,
+        "dim_genre": 2, "dim_date": 2,
+        "dim_movie_slugs": 0, "dim_person_slugs": 0,
+        "dim_actor_slugs": 0, "dim_director_slugs": 0,
     }
-    # 5 upserts + 3 slug SELECTs (the mocked session's empty fetchall() means
-    # no matching UPDATE is issued for any of the three slugged tables).
-    assert mock_session.execute.call_count == 8
+    # 6 upserts + 4 slug SELECTs (the mocked session's empty fetchall() means
+    # no matching UPDATE is issued for any of the four slugged tables).
+    assert mock_session.execute.call_count == 10
 
 
 # ---------------------------------------------------------------------------
@@ -1755,6 +1778,7 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
 # ---------------------------------------------------------------------------
 from etl.warehouse_loader.load_facts import (
     _build_cast_rows,
+    _build_credit_rows,
     _build_crew_rows,
     _build_movie_metrics_rows,
     _existing_ids,
@@ -1875,6 +1899,103 @@ def test_build_movie_metrics_rows_rejects_movie_with_no_genres():
     assert rows == []
     reject = next(r for r in rejects if r["movie_id"] == 4)
     assert reject["rejection_reason"] == "no genres"
+
+
+def _credit_bridge_df():
+    """Bridge rows exercising cast, director, and non-director crew on one film."""
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 1, 1, 1, 1], dtype="Int64"),
+        "person_id": pd.array([10, 11, 20, 20, 21], dtype="Int64"),
+        "credit_type": ["cast", "cast", "crew", "crew", "crew"],
+        "department": ["Acting", "Acting", "Directing", "Writing", "Editing"],
+        "role": ["Hero", "Villain", "Director", "Screenplay", "Editor"],
+        "ordering": pd.array([0, 1, None, None, None], dtype="Int64"),
+    })
+
+
+def test_build_credit_rows_keeps_non_director_crew():
+    """Every crew credit survives — this is the ~99% of crew the old loader dropped.
+
+    _build_crew_rows() filters role == "Director"; fact_credit must not.
+    """
+    rows, rejects = _build_credit_rows(
+        _credit_bridge_df(), valid_movie_ids={1}, valid_person_ids={10, 11, 20, 21},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert len(rows) == 5
+    assert not rejects
+    jobs = {(r["person_id"], r["job"]) for r in rows}
+    assert (21, "Editor") in jobs
+    assert (20, "Screenplay") in jobs
+
+
+def test_build_credit_rows_keeps_both_jobs_of_a_multi_job_person():
+    """A director who also wrote the film is two credits, not one.
+
+    The PK is (movie, person, department, job) precisely so this cannot collapse.
+    """
+    rows, _ = _build_credit_rows(
+        _credit_bridge_df(), valid_movie_ids={1}, valid_person_ids={20},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    person_20 = sorted(r["job"] for r in rows if r["person_id"] == 20)
+    assert person_20 == ["Director", "Screenplay"]
+
+
+def test_build_credit_rows_normalises_cast_to_actor_job():
+    """Cast credits become department=Acting / job=Actor, with the part in character_name."""
+    rows, _ = _build_credit_rows(
+        _credit_bridge_df(), valid_movie_ids={1}, valid_person_ids={10},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == [{
+        "movie_id": 1, "person_id": 10, "department": "Acting", "job": "Actor",
+        "character_name": "Hero", "ordering": 0,
+        "ingestion_date": dt.date(2026, 6, 26),
+    }]
+
+
+def test_build_credit_rows_leaves_character_null_for_crew():
+    rows, _ = _build_credit_rows(
+        _credit_bridge_df(), valid_movie_ids={1}, valid_person_ids={21},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows[0]["character_name"] is None
+    assert rows[0]["ordering"] is None
+
+
+def test_build_credit_rows_collapses_one_actor_playing_two_characters():
+    """Two character credits share the fact PK; keep the top-billed one, don't duplicate."""
+    df = pd.DataFrame({
+        "movie_id": pd.array([1, 1], dtype="Int64"),
+        "person_id": pd.array([10, 10], dtype="Int64"),
+        "credit_type": ["cast", "cast"],
+        "department": ["Acting", "Acting"],
+        "role": ["Twin B", "Twin A"],
+        "ordering": pd.array([4, 1], dtype="Int64"),
+    })
+
+    rows, _ = _build_credit_rows(
+        df, valid_movie_ids={1}, valid_person_ids={10},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["character_name"] == "Twin A"
+
+
+def test_build_credit_rows_rejects_unknown_person_id():
+    rows, rejects = _build_credit_rows(
+        _credit_bridge_df(), valid_movie_ids={1}, valid_person_ids={10},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert len(rows) == 1
+    assert {r["rejection_reason"] for r in rejects} == {"unknown person_id"}
 
 
 def test_build_cast_rows_resolves_known_ids():
@@ -2076,6 +2197,7 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
     id_sets = {
         "dim_movie": {1, 2, 3, 4}, "dim_date": {20200101, 20200102}, "dim_genre": {1},
         "dim_actor": {10, 11, 30, 40}, "dim_director": {20},
+        "dim_person": {10, 11, 20, 30, 40},
     }
     monkeypatch.setattr(
         load_facts_module, "_existing_ids",
@@ -2084,9 +2206,12 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
 
     counts = load_facts(ingestion_date=date, bucket="theoria-datalake", rejected_dir=tmp_path)
 
-    assert counts == {"fact_movie_metrics": 1, "fact_cast": 4, "fact_crew": 1}
+    assert counts == {
+        "fact_movie_metrics": 1, "fact_credit": 5, "fact_cast": 4, "fact_crew": 1,
+    }
     rejected_files = sorted(p.name for p in tmp_path.iterdir())
     assert rejected_files == [
+        "fact_credit_rejected_2026-06-26.parquet",
         "fact_crew_rejected_2026-06-26.parquet",
         "fact_movie_metrics_rejected_2026-06-26.parquet",
     ]

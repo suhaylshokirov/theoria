@@ -52,14 +52,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 7
+    assert len(results) == 9
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5, 0, 0, 0, 0, 0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [5, 0, 0, 0, 0, 0, 0, 0, 0]
 
     results = check_fk_integrity(mock_session)
 
@@ -289,11 +289,12 @@ def test_check_gold_sanity_passes_when_no_data_expected():
 
 def test_check_fact_load_sanity_passes_when_facts_loaded():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [10, 25, 18]
+    mock_session.execute.return_value.scalar.side_effect = [10, 300, 25, 18]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
         silver_movies_count=5, silver_cast_count=20, silver_crew_count=15,
+        silver_credit_count=280,
     )
 
     assert all(r.passed for r in results)
@@ -301,11 +302,12 @@ def test_check_fact_load_sanity_passes_when_facts_loaded():
 
 def test_check_fact_load_sanity_fails_when_zero_rows_loaded_despite_silver_data():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0, 0]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
         silver_movies_count=5, silver_cast_count=20, silver_crew_count=15,
+        silver_credit_count=280,
     )
 
     assert all(r.passed is False for r in results)
@@ -314,26 +316,29 @@ def test_check_fact_load_sanity_fails_when_zero_rows_loaded_despite_silver_data(
 def test_check_fact_load_sanity_fails_only_the_fact_table_with_no_data():
     """fact_cast and fact_crew must be judged independently — this is the fix under test."""
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [10, 25, 0]
+    mock_session.execute.return_value.scalar.side_effect = [10, 300, 25, 0]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
         silver_movies_count=5, silver_cast_count=20, silver_crew_count=15,
+        silver_credit_count=280,
     )
 
     by_check = {r.check: r.passed for r in results}
     assert by_check["facts:fact_movie_metrics"] is True
+    assert by_check["facts:fact_credit"] is True
     assert by_check["facts:fact_cast"] is True
     assert by_check["facts:fact_crew"] is False
 
 
 def test_check_fact_load_sanity_passes_when_zero_rows_and_zero_silver():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0, 0]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
         silver_movies_count=0, silver_cast_count=0, silver_crew_count=0,
+        silver_credit_count=0,
     )
 
     assert all(r.passed for r in results)
@@ -358,7 +363,7 @@ def test_run_warehouse_checks_combines_all_check_groups(monkeypatch):
     monkeypatch.setattr(warehouse_checks_module, "check_gold_sanity",
                          lambda bucket, date, silver_movies_count: [CheckResult("gold:a", True, "ok")])
     monkeypatch.setattr(warehouse_checks_module, "check_fact_load_sanity",
-                         lambda session, date, silver_movies_count, silver_cast_count, silver_crew_count: [CheckResult("facts:a", True, "ok")])
+                         lambda session, date, silver_movies_count, silver_cast_count, silver_crew_count, silver_credit_count: [CheckResult("facts:a", True, "ok")])
     monkeypatch.setattr(warehouse_checks_module, "_read_silver_parquet",
                          lambda bucket, entity, date, filename: pd.DataFrame([{"x": 1}]))
 

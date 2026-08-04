@@ -1917,3 +1917,76 @@ Look into `concurrent.futures.ThreadPoolExecutor` for I/O-bound fan-out like thi
 threaded read of the same 1,140 objects finishes in well under a minute), and think about
 where the natural limit is: what does S3 rate-limit on, and at what point does the
 bottleneck move from network latency to the single-process pandas step that follows?
+
+---
+
+## Task 48 — Warehouse: `dim_person` + `fact_credit`
+
+### What Was Built
+The warehouse stopped modelling people as two disjoint kinds and started modelling them as
+one kind with many credits.
+
+- **`dim_person`** — one row per person who holds any credit. **122,685 rows**, replacing
+  `dim_actor` (44,554) + `dim_director` (677), which between them could only ever describe
+  45,231 people because everyone else was filtered out upstream.
+- **`fact_credit`** — one row per `(movie, person, department, job)`. **237,454 rows**,
+  against the 64,031 that `fact_cast` + `fact_crew` held. 13 departments, **858 distinct
+  job titles**.
+
+Both tables were loaded from the Silver output of Task 47 with no new API calls. The legacy
+tables are still present and still loading — nothing reads the new ones yet, so no commit in
+this phase leaves the site broken.
+
+Concretely: *The Godfather* went from "81 cast rows and one director" to **187 credits
+across 12 departments**, and the warehouse can now answer "Spielberg has made 19 films with
+John Williams, 19 with Michael Kahn, and 11 with Janusz Kamiński" — a query that was
+impossible to express yesterday because the data didn't exist in Postgres.
+
+### Concepts Used
+- **Choosing the grain before the first load.** `fact_credit`'s PK is
+  `(movie_id, person_id, department, job)` because that is the grain TMDB actually
+  publishes — a director who also wrote and produced a film is three credits. Task 40 was a
+  bug precisely because a key claimed a coarser grain than the data had; here the key was
+  derived from the source, not from convenience.
+- **Additive migration.** New tables are created alongside the old ones and both are loaded.
+  The cutover is a separate, later step. This is what makes "one task, one commit" possible
+  on a schema change this large without a broken intermediate state.
+- **Normalising two shapes into one.** Cast credits have no department or job in TMDB, so
+  they're stored as `department='Acting', job='Actor'` with the part in `character_name`.
+  Once `job` exists as a column, "what they did" is expressed identically for everyone, and
+  a query no longer needs to know which table a person came from.
+- **Unique indexes are checked per row, not per statement.** See below — this is the real
+  lesson of the task.
+
+### Key Code
+`etl/warehouse_loader/load_facts.py` — `_build_credit_rows()`:
+> Deliberately has **no job filter**. The function it replaces, `_build_crew_rows()`, ends
+> with `& (bridge_df["role"] == "Director")`, and that single predicate is what discarded
+> 169,682 of 170,915 crew credits at the loader. The new builder rejects a row only when its
+> `movie_id` or `person_id` can't be resolved — i.e. for referential reasons, never for
+> editorial ones.
+
+`etl/warehouse_loader/load_dimensions.py` — `assign_slugs()`, the `SET slug = NULL` line:
+> This was a **live bug found by running the backfill**, not by the test suite. Recomputing
+> slugs over the whole table can *permute* them: a newly loaded crew member with a lower
+> TMDB id takes `dee-wallace`, so the actor who held it moves to `dee-wallace-2`. The rewrite
+> is a batched `executemany`, and Postgres validates the unique index **after every
+> individual row** — so the row that gains the slug can be written before the row that gives
+> it up, and the transient duplicate is rejected even though the final state is unique.
+> Clearing the column first removes the intermediate collision (a unique index permits many
+> NULLs), and both statements sit inside the caller's transaction, so no reader ever sees a
+> table without slugs.
+>
+> Note that this defect shipped in Task 46 and had been latent ever since. It never fired
+> because those tables had only ever been loaded in ways where the recomputed slugs were
+> *identical* to the stored ones — the design was right about the final state and silent
+> about the write order, and nothing had exercised the difference until now.
+
+### What to Study Next
+The fix above works because Postgres checks a unique **index** immediately. Postgres also
+supports `DEFERRABLE INITIALLY DEFERRED` unique *constraints*, which postpone validation to
+commit time and would let the permutation succeed with no clear-first step at all. Read up
+on the difference between a unique index and a deferrable unique constraint, why only the
+latter can be deferred, and what that costs — then decide which one a bulk-reload warehouse
+should actually prefer. Related: look at how `UPDATE ... FROM (VALUES ...)` as a single
+statement would also sidestep the per-row check entirely.

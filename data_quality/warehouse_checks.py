@@ -74,6 +74,8 @@ _FK_CHECKS = [
     ("fact_movie_metrics", "movie_id", "dim_movie", "movie_id"),
     ("fact_movie_metrics", "date_id", "dim_date", "date_id"),
     ("fact_movie_metrics", "genre_id", "dim_genre", "genre_id"),
+    ("fact_credit", "movie_id", "dim_movie", "movie_id"),
+    ("fact_credit", "person_id", "dim_person", "person_id"),
     ("fact_cast", "movie_id", "dim_movie", "movie_id"),
     ("fact_cast", "actor_id", "dim_actor", "actor_id"),
     ("fact_crew", "movie_id", "dim_movie", "movie_id"),
@@ -313,6 +315,7 @@ def check_gold_sanity(bucket: str, ingestion_date: dt.date, silver_movies_count:
 def check_fact_load_sanity(
     session: Session, ingestion_date: dt.date,
     silver_movies_count: int, silver_cast_count: int, silver_crew_count: int,
+    silver_credit_count: int = 0,
 ) -> list[CheckResult]:
     """A loader that silently wrote zero rows from non-empty Silver input is a bug.
 
@@ -332,6 +335,17 @@ def check_fact_load_sanity(
         results.append(CheckResult("facts:fact_movie_metrics", True,
             f"{fmm_count} row(s) loaded for ingestion_date={ingestion_date}"))
         logger.info("[facts:fact_movie_metrics] OK (%d rows)", fmm_count)
+
+    fcredit_count = _fact_ingestion_date_count(session, "fact_credit", ingestion_date)
+    if silver_credit_count > 0 and fcredit_count == 0:
+        results.append(CheckResult("facts:fact_credit", False,
+            f"fact_credit has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"{silver_credit_count} Silver credits_bridge row(s)"))
+        logger.error("[facts:fact_credit] FAIL — 0 rows loaded")
+    else:
+        results.append(CheckResult("facts:fact_credit", True,
+            f"{fcredit_count} row(s) loaded for ingestion_date={ingestion_date}"))
+        logger.info("[facts:fact_credit] OK (%d rows)", fcredit_count)
 
     fcast_count = _fact_ingestion_date_count(session, "fact_cast", ingestion_date)
     if silver_cast_count > 0 and fcast_count == 0:
@@ -392,17 +406,22 @@ def run_warehouse_checks(
             silver_bridge_df = _read_silver_parquet(
                 bucket, "credits_bridge", ingestion_date, "credits_bridge.parquet"
             )
+            silver_credit_count = len(silver_bridge_df)
             silver_cast_count = int((silver_bridge_df["credit_type"] == "cast").sum())
             silver_crew_count = int(
                 ((silver_bridge_df["credit_type"] == "crew") & (silver_bridge_df["role"] == "Director")).sum()
             )
         except Exception:
+            silver_credit_count = 0
             silver_cast_count = 0
             silver_crew_count = 0
 
         all_results.extend(check_gold_sanity(bucket, ingestion_date, silver_movies_count))
         all_results.extend(
-            check_fact_load_sanity(session, ingestion_date, silver_movies_count, silver_cast_count, silver_crew_count)
+            check_fact_load_sanity(
+                session, ingestion_date, silver_movies_count,
+                silver_cast_count, silver_crew_count, silver_credit_count,
+            )
         )
 
     passed = sum(1 for r in all_results if r.passed)

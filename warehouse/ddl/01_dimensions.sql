@@ -19,6 +19,21 @@ CREATE TABLE IF NOT EXISTS dim_movie (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_movie_slug ON dim_movie (slug);
 
+-- Every person holding any credit, in any department. What they did on a given
+-- film lives in fact_credit, not in which table they land in. See
+-- 08_person_credits.sql for why this replaced the dim_actor/dim_director split.
+CREATE TABLE IF NOT EXISTS dim_person (
+    person_id            INTEGER      NOT NULL,
+    name                 TEXT         NOT NULL,
+    gender               SMALLINT,
+    popularity           NUMERIC(10, 4),
+    profile_path         TEXT,
+    known_for_department TEXT,
+    slug                 VARCHAR(300),
+    CONSTRAINT pk_dim_person PRIMARY KEY (person_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_person_slug ON dim_person (slug);
+
 CREATE TABLE IF NOT EXISTS dim_actor (
     actor_id    INTEGER      NOT NULL,
     name        TEXT         NOT NULL,

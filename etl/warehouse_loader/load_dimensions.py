@@ -1,19 +1,23 @@
 """Warehouse loader: Dimensions.
 
 Reads the Silver Parquet files for a given ingestion_date and upserts them
-into the PostgreSQL dimension tables (dim_movie, dim_actor, dim_director,
-dim_genre). dim_date is populated separately as a full calendar table that
-does not depend on any Silver data.
+into the PostgreSQL dimension tables (dim_movie, dim_person, dim_actor,
+dim_director, dim_genre). dim_date is populated separately as a full calendar
+table that does not depend on any Silver data.
+
+dim_actor/dim_director are legacy and are superseded by dim_person; they are
+still loaded until the Django app and analytics queries finish migrating.
 
 Upserts use ON CONFLICT (pk) DO UPDATE, so re-running the loader for the
 same or a later ingestion_date is idempotent — existing rows are refreshed
-in place rather than duplicated. After upserting, dim_movie/dim_actor/
-dim_director each get a `slug` column recomputed over the whole table via
-assign_slugs() — the URL-facing identifier for those pages, so a movie or
+in place rather than duplicated. After upserting, dim_movie/dim_person/
+dim_actor/dim_director each get a `slug` column recomputed over the whole table
+via assign_slugs() — the URL-facing identifier for those pages, so a movie or
 person is reachable at a readable path instead of a bare surrogate key.
 
 S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
+    silver/people/ingestion_date=YYYY-MM-DD/people.parquet
     silver/actors/ingestion_date=YYYY-MM-DD/actors.parquet
     silver/directors/ingestion_date=YYYY-MM-DD/directors.parquet
     silver/genres/ingestion_date=YYYY-MM-DD/genres.parquet
@@ -70,6 +74,21 @@ def load_dim_movie(session: Session, df: pd.DataFrame) -> int:
     return count
 
 
+def load_dim_person(session: Session, df: pd.DataFrame) -> int:
+    """Upsert Silver people into dim_person.
+
+    No rename: person_id is the natural key here, unlike dim_actor/dim_director,
+    which had to relabel the same TMDB id twice because the same person could be
+    two rows in two tables.
+    """
+    columns = ["person_id", "name", "gender", "popularity", "profile_path",
+               "known_for_department"]
+    records = _records(df, columns)
+    count = _upsert(session, "dim_person", ["person_id"], columns, records)
+    logger.info("dim_person: upserted %d row(s)", count)
+    return count
+
+
 def load_dim_actor(session: Session, df: pd.DataFrame) -> int:
     """Upsert Silver actors into dim_actor (person_id -> actor_id)."""
     df = df.rename(columns={"person_id": "actor_id"})
@@ -123,6 +142,16 @@ def assign_slugs(session: Session, table: str, id_col: str, name_col: str) -> in
     always lands on the same slug across reruns, and a newly discovered row
     (always a new, larger id) can only ever be appended after the existing
     numbering, never insert itself ahead of it.
+
+    The slugs are cleared before they are rewritten. Recomputing over the whole
+    table can *permute* slugs — when a newly loaded person with a lower id takes
+    a base slug, its previous owner moves to `-2` — and the rewrite is a batched
+    executemany, so the unique index is checked after every individual row. The
+    row that gains the slug can therefore be written before the row that gives
+    it up, and Postgres rejects that transient duplicate even though the final
+    state is perfectly unique. Clearing first removes the intermediate collision
+    (the index permits many NULLs); both statements run in the caller's
+    transaction, so no reader ever observes the table without slugs.
     """
     rows = session.execute(
         text(f"SELECT {id_col}, {name_col} FROM {table} ORDER BY {id_col}")
@@ -138,6 +167,7 @@ def assign_slugs(session: Session, table: str, id_col: str, name_col: str) -> in
         records.append({"id": row_id, "slug": slug})
 
     if records:
+        session.execute(text(f"UPDATE {table} SET slug = NULL WHERE slug IS NOT NULL"))
         session.execute(text(f"UPDATE {table} SET slug = :slug WHERE {id_col} = :id"), records)
     logger.info("%s: assigned %d slug(s)", table, len(records))
     return len(records)
@@ -186,6 +216,7 @@ def load_dimensions(
     logger.info("Starting dimension load for ingestion_date=%s", ingestion_date)
 
     movies_df = _read_silver_parquet(bucket, "movies", ingestion_date, "movies.parquet")
+    people_df = _read_silver_parquet(bucket, "people", ingestion_date, "people.parquet")
     actors_df = _read_silver_parquet(bucket, "actors", ingestion_date, "actors.parquet")
     directors_df = _read_silver_parquet(bucket, "directors", ingestion_date, "directors.parquet")
     genres_df = _read_silver_parquet(bucket, "genres", ingestion_date, "genres.parquet")
@@ -193,11 +224,13 @@ def load_dimensions(
     counts: dict[str, int] = {}
     with get_session() as session:
         counts["dim_movie"] = load_dim_movie(session, movies_df)
+        counts["dim_person"] = load_dim_person(session, people_df)
         counts["dim_actor"] = load_dim_actor(session, actors_df)
         counts["dim_director"] = load_dim_director(session, directors_df)
         counts["dim_genre"] = load_dim_genre(session, genres_df)
         counts["dim_date"] = load_dim_date(session, calendar_start, calendar_end)
         counts["dim_movie_slugs"] = assign_slugs(session, "dim_movie", "movie_id", "title")
+        counts["dim_person_slugs"] = assign_slugs(session, "dim_person", "person_id", "name")
         counts["dim_actor_slugs"] = assign_slugs(session, "dim_actor", "actor_id", "name")
         counts["dim_director_slugs"] = assign_slugs(session, "dim_director", "director_id", "name")
 

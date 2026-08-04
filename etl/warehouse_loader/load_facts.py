@@ -228,6 +228,78 @@ def _build_crew_rows(
     return rows, rejects
 
 
+def _build_credit_rows(
+    bridge_df: pd.DataFrame,
+    valid_movie_ids: set[int],
+    valid_person_ids: set[int],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Resolve every Silver credits_bridge row into a fact_credit row.
+
+    No job or department filter: every credit TMDB published is kept. The old
+    loaders discarded ~99% of crew here by keeping only role == "Director".
+
+    Cast rows are normalised to department="Acting", job="Actor" so that "what
+    they did" is expressed the same way for everyone; the part played moves to
+    `character_name`, which is where it belongs once `job` exists.
+
+    Returns (rows, rejects).
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+    # fact_credit's PK is finer than the bridge's only for cast, where one
+    # person can hold two character credits on a film. Collapse those to the
+    # top-billed one rather than letting the upsert pick arbitrarily.
+    seen: set[tuple[int, int, str, str]] = set()
+    collapsed = 0
+
+    # Sorting by billing makes "keep the first one seen" mean "keep the
+    # top-billed one" rather than "keep whichever Bronze row sorted first".
+    bridge_df = bridge_df.sort_values("ordering", na_position="last", kind="stable")
+
+    for credit in bridge_df.to_dict("records"):
+        movie_id = credit["movie_id"]
+        if pd.isna(movie_id) or int(movie_id) not in valid_movie_ids:
+            rejects.append({**credit, "rejection_reason": "unknown movie_id"})
+            continue
+
+        person_id = credit["person_id"]
+        if pd.isna(person_id) or int(person_id) not in valid_person_ids:
+            rejects.append({**credit, "rejection_reason": "unknown person_id"})
+            continue
+
+        is_cast = credit.get("credit_type") == "cast"
+        department = credit.get("department")
+        job = "Actor" if is_cast else credit.get("role")
+        if not department or not job:
+            rejects.append({**credit, "rejection_reason": "missing department or job"})
+            continue
+
+        key = (int(movie_id), int(person_id), department, job)
+        if key in seen:
+            collapsed += 1
+            continue
+        seen.add(key)
+
+        rows.append({
+            "movie_id": int(movie_id),
+            "person_id": int(person_id),
+            "department": department,
+            "job": job,
+            "character_name": credit.get("role") if is_cast else None,
+            "ordering": credit.get("ordering") if is_cast else None,
+            "ingestion_date": ingestion_date,
+        })
+
+    if collapsed:
+        logger.info(
+            "fact_credit: collapsed %d repeat (movie, person, department, job) credit(s) "
+            "— usually one actor playing two characters",
+            collapsed,
+        )
+    return rows, rejects
+
+
 def load_fact_movie_metrics(
     session: Session, movies_df: pd.DataFrame, ingestion_date: dt.date,
 ) -> tuple[int, list[dict[str, Any]]]:
@@ -245,6 +317,29 @@ def load_fact_movie_metrics(
     logger.info(
         "fact_movie_metrics: upserted %d row(s), rejected %d row(s)", count, len(rejects)
     )
+    return count, rejects
+
+
+def load_fact_credit(
+    session: Session, bridge_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert every Silver credits_bridge row into fact_credit.
+
+    Returns (count, rejects).
+    """
+    valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
+    valid_person_ids = _existing_ids(session, "dim_person", "person_id")
+
+    rows, rejects = _build_credit_rows(
+        bridge_df, valid_movie_ids, valid_person_ids, ingestion_date
+    )
+    columns = ["movie_id", "person_id", "department", "job", "character_name",
+               "ordering", "ingestion_date"]
+    count = _upsert(
+        session, "fact_credit",
+        ["movie_id", "person_id", "department", "job"], columns, _records(rows),
+    )
+    logger.info("fact_credit: upserted %d row(s), rejected %d row(s)", count, len(rejects))
     return count, rejects
 
 
@@ -301,10 +396,12 @@ def load_facts(
     counts: dict[str, int] = {}
     with get_session() as session:
         counts["fact_movie_metrics"], metrics_rejects = load_fact_movie_metrics(session, movies_df, ingestion_date)
+        counts["fact_credit"], credit_rejects = load_fact_credit(session, bridge_df, ingestion_date)
         counts["fact_cast"], cast_rejects = load_fact_cast(session, bridge_df, ingestion_date)
         counts["fact_crew"], crew_rejects = load_fact_crew(session, bridge_df, ingestion_date)
 
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)
+    _write_rejects(credit_rejects, "fact_credit", ingestion_date, rejected_dir)
     _write_rejects(cast_rejects, "fact_cast", ingestion_date, rejected_dir)
     _write_rejects(crew_rejects, "fact_crew", ingestion_date, rejected_dir)
 
