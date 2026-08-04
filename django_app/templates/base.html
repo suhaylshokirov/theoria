@@ -56,8 +56,7 @@
             {% with vn=request.resolver_match.url_name %}
             <div class="nav-links">
                 <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>Films</a>
-                <a href="{% url 'movies:actor_list' %}"{% if vn in "actor_list,actor_detail" %} aria-current="page"{% endif %}>Actors</a>
-                <a href="{% url 'movies:director_list' %}"{% if vn in "director_list,director_detail" %} aria-current="page"{% endif %}>Directors</a>
+                <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>People</a>
                 <a href="{% url 'movies:genre_list' %}"{% if vn in "genre_list,genre_detail" %} aria-current="page"{% endif %}>Genres</a>
                 <a href="{% url 'movies:collection_list' %}"{% if vn in "collection_list,collection_detail" %} aria-current="page"{% endif %}>Franchises</a>
                 <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>

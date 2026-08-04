@@ -2139,3 +2139,81 @@ query, print `str(queryset.query)` for each, and work out which one answers "fra
 at least one film in the catalog" and which answers something subtly different. This
 ordering-sensitivity is one of the most common sources of wrong numbers in Django reporting
 code.
+
+---
+
+## Task 51 — One person, every credit, and who they keep working with
+
+### What Was Built
+The data from Tasks 47–49 finally became a page.
+
+- **`/people/<slug>/`** — a single person page replacing the actor and director pages.
+  Credits grouped by department (Acting first, then the crafts), a **"Works with"** readout
+  from `fact_collaboration`, and stats that now distinguish **films** from **credits**.
+- **`/people/`**, with `/actors/` and `/directors/` kept as *scopes* of it — they're now
+  "people holding an Acting credit" and "people holding a Directing credit", which is a
+  question about `fact_credit`, not about which table someone landed in.
+- **Legacy detail URLs 301** to the person page.
+- **Crew on the movie page** — *The Godfather* went from "81 cast + 1 director" to the full
+  187 credits across 11 departments: Directing 8, Writing 4, Production 18, Camera 13,
+  Editing 9, Sound 19, Art 7, Costume & Make-Up 8, Visual Effects 1, Lighting 4.
+
+Thelma Schoonmaker — an editor, so invisible to this warehouse before Phase 10 — now has a
+page: 11 films, ★7.82, 1980–2023, 12 credits, top collaborator Martin Scorsese.
+
+### Concepts Used
+- **Redirect by id, never by slug.** Unifying the two slug namespaces re-numbered 381 slugs
+  — `/actors/tom-holland/` now 301s to `/people/tom-holland-2/`, because a crew member with
+  a lower TMDB id claimed the base name. The redirect looks the legacy row up by slug, takes
+  its **id**, and finds the person by that. The id is the only stable link between the two
+  namespaces; a slug-to-slug redirect would have silently sent 381 URLs to the wrong person
+  or to a 404.
+- **301 vs 302.** Permanent, because the move is permanent — it tells caches and search
+  engines to update rather than to keep asking.
+- **Group in Python, not in SQL.** A `GROUP BY` returns aggregates, not the rows themselves,
+  and one query per department would be an N+1 in the number of crafts a person works in.
+  So: one `select_related` query, grouped into a dict on the way out.
+- **Ordering a categorical axis by meaning.** Departments sort by an explicit
+  `DEPARTMENT_ORDER` list, with anything unrecognised appended alphabetically. Alphabetical
+  order would put Art before Directing; frequency order would reshuffle between people.
+- **Films ≠ credits.** A director who also wrote and produced a film is one film and three
+  credits. The header prints the second stat only when the two differ, so the distinction
+  appears exactly where it's informative.
+- **Paying a storage saving back on read.** `fact_collaboration` stores each pair once, so
+  finding one person's collaborators means querying **both** id columns and merging. That
+  cost is real and it's paid here, once per page — the deliberate other half of Task 49's
+  canonical-ordering decision.
+
+### Key Code
+`django_app/movies/views.py` — `_redirect_to_person()`:
+> ```python
+> legacy = get_object_or_404(legacy_model.objects.using("warehouse"), slug=slug)
+> person = get_object_or_404(Person.objects.using("warehouse"), pk=getattr(legacy, legacy_pk))
+> return redirect("movies:person_detail", person_slug=person.slug, permanent=True)
+> ```
+> Two lookups where one looks sufficient. The second is the whole point: it re-derives the
+> *current* slug from the id rather than assuming the old one still means the same person.
+
+`django_app/movies/views.py` — `_top_collaborators()`:
+> Queries `person_a_id=` and `person_b_id=` separately, then reads the person off the
+> **opposite** side of each row before merging and sorting. Written as two queries rather
+> than a `Q(...) | Q(...)`, because each row also needs a different `select_related` target
+> — the interesting person is whichever one isn't you.
+
+`django_app/movies/views.py` — `_person_queryset()`:
+> ```python
+> people.filter(credits__department=department).distinct()
+> ```
+> `.distinct()` is load-bearing: joining `dim_person` to `fact_credit` yields one row per
+> matching credit, so an actor with 40 acting credits would otherwise appear 40 times in the
+> index. This is the same join-fan-out family as the `fact_movie_metrics` genre problem, met
+> in a new place.
+
+### What to Study Next
+`_person_queryset("Acting")` does a join + `DISTINCT` over ~63,000 credit rows to list
+people. The alternative is `Person.objects.filter(person_id__in=Credit.objects.filter(...).values("person_id"))`,
+which compiles to a subquery instead. Run both with `EXPLAIN ANALYZE` against the live
+warehouse and compare: `DISTINCT` on a large join usually means a hash aggregate over every
+matched row, while `IN (subquery)` can become a semi-join that stops at the first match per
+person. Then look at `EXISTS` as a third form, and work out which one Postgres actually
+prefers here and why.

@@ -32,6 +32,16 @@
                 <span class="stat-value">{{ career_period }}</span>
                 <span class="stat-label">Active</span>
             </div>
+            {% comment %} Credits and films differ whenever someone holds more than one
+               job on a film — a director who also wrote and produced it is
+               one film and three credits. Only shown when it's been
+               passed, so the legacy actor/director pages are unaffected. {% endcomment %}
+            {% if credit_count and credit_count != film_count %}
+            <div class="stat">
+                <span class="stat-value" data-count="{{ credit_count }}">{{ credit_count }}</span>
+                <span class="stat-label">Credits</span>
+            </div>
+            {% endif %}
         </div>
     </div>
 </header>

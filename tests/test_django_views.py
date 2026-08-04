@@ -29,7 +29,8 @@ from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 
 from movies.models import (  # noqa: E402
-    Actor, Cast, Collection, Crew, Director, Genre, Movie, MovieMetrics,
+    Actor, Cast, Collaboration, Collection, Credit, Crew, Director, Genre,
+    Movie, MovieMetrics, Person,
 )
 
 client = Client()
@@ -68,8 +69,8 @@ def test_home_returns_200_with_expected_context():
     movie = _movie()
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        Actor, "objects", new=MagicMock()
-    ) as actor_mgr, patch.object(Director, "objects", new=MagicMock()) as director_mgr, patch.object(
+        Person, "objects", new=MagicMock()
+    ) as person_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
     ) as metrics_mgr:
         using = movie_mgr.using.return_value
@@ -80,8 +81,8 @@ def test_home_returns_200_with_expected_context():
         using.order_by.return_value.__getitem__.return_value = [movie]
         # mosaic: .filter(poster_path__isnull=False).order_by(...)[:120]
         using.filter.return_value.order_by.return_value.__getitem__.return_value = [movie]
-        actor_mgr.using.return_value.count.return_value = 3291
-        director_mgr.using.return_value.count.return_value = 108
+        person_mgr.using.return_value.count.return_value = 122685
+        credit_mgr.using.return_value.count.return_value = 237454
         metrics_mgr.using.return_value.aggregate.return_value = {
             "avg_rating": Decimal("6.84")
         }
@@ -90,8 +91,8 @@ def test_home_returns_200_with_expected_context():
 
     assert response.status_code == 200
     assert response.context["movie_count"] == 99
-    assert response.context["actor_count"] == 3291
-    assert response.context["director_count"] == 108
+    assert response.context["person_count"] == 122685
+    assert response.context["credit_count"] == 237454
     assert response.context["avg_rating"] == Decimal("6.84")
     assert list(response.context["top_rated"]) == [movie]
     assert list(response.context["newest"]) == [movie]
@@ -156,35 +157,56 @@ def test_movie_list_invalid_sort_falls_back_to_release():
 # ---------------------------------------------------------------------------
 
 
-def test_actor_list_returns_200_with_search():
-    actor = Actor(actor_id=1, name="Test Actor", popularity=Decimal("9.5"))
+def _person(person_id=1, name="Test Person", slug="test-person"):
+    return Person(person_id=person_id, name=name, slug=slug,
+                  popularity=Decimal("9.5"))
 
-    with patch.object(Actor, "objects", new=MagicMock()) as actor_mgr:
-        qs = actor_mgr.using.return_value.all.return_value
+
+def test_person_list_returns_200_with_search():
+    person = _person()
+
+    with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
+        qs = person_mgr.using.return_value
         qs.filter.return_value = qs
-        qs.order_by.return_value = [actor]
+        qs.order_by.return_value = [person]
 
-        response = client.get("/actors/", {"q": "test"})
+        response = client.get("/people/", {"q": "test"})
 
     assert response.status_code == 200
     qs.filter.assert_called_once_with(name__icontains="test")
-    assert list(response.context["page_obj"]) == [actor]
-    assert response.context["list_title"] == "Actors"
+    assert list(response.context["page_obj"]) == [person]
+    assert response.context["scope"] == "all"
 
 
-def test_director_list_returns_200():
-    director = Director(director_id=1, name="Test Director", popularity=Decimal("5.0"))
+def test_actor_list_filters_people_by_acting_credit():
+    """"Actors" is now a question about fact_credit, not a separate table."""
+    person = _person()
 
-    with patch.object(Director, "objects", new=MagicMock()) as director_mgr:
-        qs = director_mgr.using.return_value.all.return_value
-        qs.filter.return_value = qs
-        qs.order_by.return_value = [director]
+    with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
+        using = person_mgr.using.return_value
+        scoped = using.filter.return_value.distinct.return_value
+        scoped.order_by.return_value = [person]
+
+        response = client.get("/actors/")
+
+    assert response.status_code == 200
+    using.filter.assert_called_once_with(credits__department="Acting")
+    assert response.context["scope"] == "acting"
+
+
+def test_director_list_filters_people_by_directing_credit():
+    person = _person()
+
+    with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
+        using = person_mgr.using.return_value
+        scoped = using.filter.return_value.distinct.return_value
+        scoped.order_by.return_value = [person]
 
         response = client.get("/directors/")
 
     assert response.status_code == 200
-    assert list(response.context["page_obj"]) == [director]
-    assert response.context["list_title"] == "Directors"
+    using.filter.assert_called_once_with(credits__department="Directing")
+    assert response.context["scope"] == "directing"
 
 
 # ---------------------------------------------------------------------------
@@ -219,23 +241,21 @@ def test_genre_list_returns_200():
 def test_movie_detail_returns_200_with_expected_context():
     movie = _movie()
     genre = Genre(genre_id=1, genre_name="Action")
-    actor = Actor(actor_id=1, name="Test Actor")
-    director = Director(director_id=1, name="Test Director")
-    cast_credit = Cast(movie=movie, actor=actor, role="Actor", ordering=1)
+    actor = _person(person_id=1, name="Test Actor", slug="test-actor")
+    director = _person(person_id=2, name="Test Director", slug="test-director")
+    cast_credit = Credit(movie=movie, person=actor, department="Acting",
+                         job="Actor", character_name="Hero", ordering=1)
+    crew_credit = Credit(movie=movie, person=director, department="Directing",
+                         job="Director")
 
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
-    ) as genre_mgr, patch.object(Cast, "objects", new=MagicMock()) as cast_mgr, patch.object(
-        Director, "objects", new=MagicMock()
-    ) as director_mgr, patch.object(
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
     ) as metrics_mgr:
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = [genre]
-        cast_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
-            cast_credit
-        ]
-        director_mgr.using.return_value.filter.return_value.distinct.return_value = [
-            director
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
+            cast_credit, crew_credit
         ]
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = {
             "rating": Decimal("8.50"),
@@ -249,6 +269,8 @@ def test_movie_detail_returns_200_with_expected_context():
     assert list(response.context["genres"]) == [genre]
     assert list(response.context["cast"]) == [cast_credit]
     assert list(response.context["directors"]) == [director]
+    # Non-acting credits are grouped by department for the Crew sections.
+    assert [d["name"] for d in response.context["crew"]] == ["Directing"]
     assert response.context["metrics"]["rating"] == Decimal("8.50")
 
 
@@ -263,14 +285,11 @@ def test_movie_detail_renders_rating_and_synopsis():
 
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
-    ) as genre_mgr, patch.object(Cast, "objects", new=MagicMock()) as cast_mgr, patch.object(
-        Director, "objects", new=MagicMock()
-    ) as director_mgr, patch.object(
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
     ) as metrics_mgr:
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
-        cast_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        director_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = {
             "rating": Decimal("8.50"),
             "vote_count": 1200,
@@ -289,21 +308,19 @@ def test_movie_detail_cast_present_when_no_director_credited():
     with zero fact_crew rows must still render its cast, since fact_cast has
     no dependency on fact_crew at all."""
     movie = _movie()
-    actor = Actor(actor_id=1, name="Test Actor")
-    cast_credit = Cast(movie=movie, actor=actor, role="Hero", ordering=0)
+    actor = _person(person_id=1, name="Test Actor", slug="test-actor")
+    cast_credit = Credit(movie=movie, person=actor, department="Acting",
+                         job="Actor", character_name="Hero", ordering=0)
 
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
-    ) as genre_mgr, patch.object(Cast, "objects", new=MagicMock()) as cast_mgr, patch.object(
-        Director, "objects", new=MagicMock()
-    ) as director_mgr, patch.object(
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
     ) as metrics_mgr:
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
-        cast_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
             cast_credit
         ]
-        director_mgr.using.return_value.filter.return_value.distinct.return_value = []
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
@@ -364,99 +381,121 @@ def test_career_period_ongoing_career_reads_start_dash_active():
 
 
 # ---------------------------------------------------------------------------
-# actor_detail
+# person_detail, and the legacy actor/director redirects
 # ---------------------------------------------------------------------------
 
 
-def test_actor_detail_returns_200_with_expected_context():
-    actor = Actor(actor_id=1, name="Test Actor")
+def test_actor_detail_redirects_permanently_to_person_page():
+    """Legacy /actors/<slug>/ 301s to /people/<slug>/, resolved by id.
+
+    Unifying the two slug namespaces re-numbered 381 slugs, so the legacy slug
+    and the person slug are not interchangeable — only the id links them.
+    """
+    actor = Actor(actor_id=7, name="Test Actor", slug="test-actor")
+    person = _person(person_id=7, name="Test Actor", slug="test-actor-2")
+
+    with patch("movies.views.get_object_or_404", side_effect=[actor, person]):
+        response = client.get("/actors/test-actor/")
+
+    assert response.status_code == 301
+    assert response["Location"] == "/people/test-actor-2/"
+
+
+def test_director_detail_redirects_permanently_to_person_page():
+    director = Director(director_id=7, name="Test Director", slug="test-director")
+    person = _person(person_id=7, name="Test Director", slug="test-director")
+
+    with patch("movies.views.get_object_or_404", side_effect=[director, person]):
+        response = client.get("/directors/test-director/")
+
+    assert response.status_code == 301
+    assert response["Location"] == "/people/test-director/"
+
+
+def test_person_detail_groups_credits_by_department():
+    """Every credit shows, grouped by craft, with Acting first."""
+    person = _person()
     movie = _movie()
+    credits = [
+        Credit(movie=movie, person=person, department="Editing", job="Editor"),
+        Credit(movie=movie, person=person, department="Acting", job="Actor",
+               character_name="Hero", ordering=0),
+        Credit(movie=movie, person=person, department="Directing", job="Director"),
+    ]
 
-    filmography = MagicMock()
-    filmography.__iter__.side_effect = lambda: iter([movie])
-    filmography.count.return_value = 1
-    filmography.aggregate.return_value = {
-        "earliest": date(2020, 1, 1),
-        "latest": date(2020, 1, 1),
-    }
-
-    with patch("movies.views.get_object_or_404", return_value=actor), patch.object(
-        Cast, "objects", new=MagicMock()
-    ) as cast_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+    with patch("movies.views.get_object_or_404", return_value=person), patch.object(
+        Credit, "objects", new=MagicMock()
+    ) as credit_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
-        cast_mgr.using.return_value.filter.return_value.values_list.return_value.distinct.return_value = [
-            1
-        ]
-        movie_mgr.using.return_value.filter.return_value.order_by.return_value = filmography
+    ) as metrics_mgr, patch.object(
+        Collaboration, "objects", new=MagicMock()
+    ) as collab_mgr:
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
             "avg_rating": Decimal("7.50")
         }
-
-        response = client.get(f"/actors/{actor.actor_id}/")
-
-    assert response.status_code == 200
-    assert response.context["actor"] == actor
-    assert list(response.context["filmography"]) == [movie]
-    assert response.context["film_count"] == 1
-    assert response.context["avg_rating"] == Decimal("7.50")
-    assert response.context["career_period"] == "2020"
-
-
-def test_actor_detail_404_when_missing():
-    from django.http import Http404
-
-    with patch("movies.views.get_object_or_404", side_effect=Http404()):
-        response = client.get("/actors/999999/")
-
-    assert response.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# director_detail
-# ---------------------------------------------------------------------------
-
-
-def test_director_detail_returns_200_with_expected_context():
-    director = Director(director_id=1, name="Test Director")
-    movie = _movie()
-
-    filmography = MagicMock()
-    filmography.__iter__.side_effect = lambda: iter([movie])
-    filmography.count.return_value = 1
-    filmography.aggregate.return_value = {
-        "earliest": date(2020, 1, 1),
-        "latest": date(2020, 1, 1),
-    }
-
-    with patch("movies.views.get_object_or_404", return_value=director), patch.object(
-        Crew, "objects", new=MagicMock()
-    ) as crew_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
-        crew_mgr.using.return_value.filter.return_value.values_list.return_value.distinct.return_value = [
-            1
-        ]
-        movie_mgr.using.return_value.filter.return_value.order_by.return_value = filmography
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
-            "avg_rating": Decimal("8.10")
+        movie_mgr.using.return_value.filter.return_value.aggregate.return_value = {
+            "earliest": date(2020, 1, 1), "latest": date(2020, 1, 1),
         }
+        collab_mgr.using.return_value.filter.return_value.select_related.return_value = []
 
-        response = client.get(f"/directors/{director.director_id}/")
+        response = client.get("/people/test-person/")
 
     assert response.status_code == 200
-    assert response.context["director"] == director
-    assert list(response.context["filmography"]) == [movie]
+    assert [d["name"] for d in response.context["departments"]] == [
+        "Acting", "Directing", "Editing",
+    ]
+    # Three credits, one film — a person holding several jobs on one title.
+    assert response.context["credit_count"] == 3
     assert response.context["film_count"] == 1
-    assert response.context["avg_rating"] == Decimal("8.10")
     assert response.context["career_period"] == "2020"
 
 
-def test_director_detail_404_when_missing():
+def test_person_detail_lists_repeat_collaborators_from_both_pair_sides():
+    """Pairs are stored canonically, so a person can be person_a or person_b."""
+    person = _person(person_id=5, name="Director", slug="director")
+    editor = _person(person_id=9, name="Editor", slug="editor")
+    composer = _person(person_id=2, name="Composer", slug="composer")
+
+    with patch("movies.views.get_object_or_404", return_value=person), patch.object(
+        Credit, "objects", new=MagicMock()
+    ) as credit_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr, patch.object(
+        Collaboration, "objects", new=MagicMock()
+    ) as collab_mgr:
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
+            "avg_rating": None
+        }
+        movie_mgr.using.return_value.filter.return_value.aggregate.return_value = {
+            "earliest": None, "latest": None,
+        }
+        # person 5 is the lower id here, so this pair stores them as person_a...
+        as_a = Collaboration(person_a=person, person_b=editor, films_together=11,
+                             first_year=1980, last_year=2023)
+        # ...and the higher id here, so this one stores them as person_b.
+        as_b = Collaboration(person_a=composer, person_b=person, films_together=19,
+                             first_year=1975, last_year=2026)
+        collab_mgr.using.return_value.filter.return_value.select_related.side_effect = [
+            [as_a], [as_b],
+        ]
+
+        response = client.get("/people/director/")
+
+    assert response.status_code == 200
+    rows = response.context["collaborators"]
+    # Sorted by shared films, and the person on the *other* side is the one named.
+    assert [(r["person"].name, r["films_together"]) for r in rows] == [
+        ("Composer", 19), ("Editor", 11),
+    ]
+
+
+def test_person_detail_404_when_missing():
     from django.http import Http404
 
     with patch("movies.views.get_object_or_404", side_effect=Http404()):
-        response = client.get("/directors/999999/")
+        response = client.get("/people/nobody/")
 
     assert response.status_code == 404
 

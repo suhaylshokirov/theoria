@@ -123,6 +123,87 @@ class Date(models.Model):
         return str(self.full_date)
 
 
+class Person(models.Model):
+    """Anyone holding any credit, in any department.
+
+    Supersedes Actor/Director, which split one person across two tables
+    according to whichever credit happened to introduce them.
+    """
+
+    person_id = models.IntegerField(primary_key=True)
+    name = models.TextField()
+    gender = models.SmallIntegerField(null=True)
+    popularity = models.DecimalField(max_digits=10, decimal_places=4, null=True)
+    profile_path = models.TextField(null=True)
+    known_for_department = models.TextField(null=True)
+    slug = models.SlugField(max_length=300, unique=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_person"
+
+    def __str__(self):
+        return self.name
+
+
+class Credit(models.Model):
+    """One row per (movie, person, department, job).
+
+    Same fake-primary-key workaround as the other fact models: the real key is
+    composite in Postgres and Django can't express that, so `movie` carries
+    primary_key=True purely to satisfy the ORM. A person legitimately has
+    several rows per film (director + writer + producer), so this PK is not
+    unique in the data — the fields.W342 warning is expected and silenced.
+    """
+
+    movie = models.ForeignKey(
+        Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True
+    )
+    person = models.ForeignKey(
+        Person, on_delete=models.DO_NOTHING, db_column="person_id",
+        related_name="credits",
+    )
+    department = models.TextField()
+    job = models.TextField()
+    character_name = models.TextField(null=True)
+    ordering = models.SmallIntegerField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "fact_credit"
+
+    def __str__(self):
+        return f"{self.movie_id}/{self.person_id}/{self.job}"
+
+
+class Collaboration(models.Model):
+    """How often two people have worked together. Derived in Gold.
+
+    Pairs are canonical (person_a_id < person_b_id), so a lookup for one person
+    has to check both columns — see views.person_detail.
+    """
+
+    person_a = models.ForeignKey(
+        Person, on_delete=models.DO_NOTHING, db_column="person_a_id",
+        primary_key=True, related_name="collaborations_as_a",
+    )
+    person_b = models.ForeignKey(
+        Person, on_delete=models.DO_NOTHING, db_column="person_b_id",
+        related_name="collaborations_as_b",
+    )
+    films_together = models.IntegerField()
+    first_year = models.SmallIntegerField(null=True)
+    last_year = models.SmallIntegerField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "fact_collaboration"
+
+    def __str__(self):
+        return f"{self.person_a_id}+{self.person_b_id} ({self.films_together})"
+
+
 class MovieMetrics(models.Model):
     # unique=True is implied by primary_key=True but is not actually true in
     # the data (one row per movie/date/genre) — see module docstring. The

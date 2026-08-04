@@ -3,10 +3,11 @@ from datetime import date
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, F, Max, Min, Sum
 from django.db.models.functions import ExtractYear
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from movies.models import (
-    Actor, Cast, Collection, Crew, Director, Genre, Movie, MovieMetrics,
+    Actor, Cast, Collaboration, Collection, Credit, Crew, Director, Genre,
+    Movie, MovieMetrics, Person,
 )
 
 MOVIES_PER_PAGE = 24
@@ -50,8 +51,8 @@ def home(request):
 
     context = {
         "movie_count": Movie.objects.using("warehouse").count(),
-        "actor_count": Actor.objects.using("warehouse").count(),
-        "director_count": Director.objects.using("warehouse").count(),
+        "person_count": Person.objects.using("warehouse").count(),
+        "credit_count": Credit.objects.using("warehouse").count(),
         "avg_rating": MovieMetrics.objects.using("warehouse").aggregate(
             avg_rating=Avg("rating")
         )["avg_rating"],
@@ -82,11 +83,15 @@ def movie_list(request):
     return render(request, "movies/movie_list.html", context)
 
 
-def _person_list(request, model, list_title, detail_url_name):
-    """Shared list view for actors and directors: name search + pagination."""
+def _person_list(request, people, list_title, scope):
+    """Shared list view for every people index: name search + pagination.
+
+    Takes a queryset rather than a model, because the three indexes now differ
+    by which credits a person holds, not by which table they live in. Every
+    person page lives at /people/<slug>/, so there is no per-list URL name.
+    """
     q = request.GET.get("q", "").strip()
 
-    people = model.objects.using("warehouse").all()
     if q:
         people = people.filter(name__icontains=q)
     people = people.order_by(F("popularity").desc(nulls_last=True))
@@ -97,17 +102,35 @@ def _person_list(request, model, list_title, detail_url_name):
         "page_obj": page_obj,
         "q": q,
         "list_title": list_title,
-        "detail_url_name": detail_url_name,
+        "scope": scope,
+        "detail_url_name": "movies:person_detail",
     }
     return render(request, "movies/person_list.html", context)
 
 
+def _person_queryset(department=None):
+    """dim_person, optionally narrowed to people with a credit in one department.
+
+    "Actors" and "Directors" are no longer separate tables — they're the people
+    holding an Acting or Directing credit, which is a question about
+    fact_credit, not about which dimension someone landed in.
+    """
+    people = Person.objects.using("warehouse")
+    if department:
+        people = people.filter(credits__department=department).distinct()
+    return people
+
+
+def person_list(request):
+    return _person_list(request, _person_queryset(), "People", "all")
+
+
 def actor_list(request):
-    return _person_list(request, Actor, "Actors", "movies:actor_detail")
+    return _person_list(request, _person_queryset("Acting"), "Acting", "acting")
 
 
 def director_list(request):
-    return _person_list(request, Director, "Directors", "movies:director_detail")
+    return _person_list(request, _person_queryset("Directing"), "Directing", "directing")
 
 
 def genre_list(request):
@@ -204,20 +227,36 @@ def movie_detail(request, movie_slug):
         .distinct()
     )
 
-    # fact_cast has one row per (movie, actor) — no cross-join with directors,
-    # so cast renders even for movies with no credited director.
-    cast = (
-        Cast.objects.using("warehouse")
+    # One query for every credit on the film, cast and crew alike, then split
+    # in Python. Cast leads by billing order; crew is grouped by department.
+    # Before fact_credit this page could only show the cast and the director —
+    # the ~150 other people who made the film had no warehouse row at all.
+    credits = list(
+        Credit.objects.using("warehouse")
         .filter(movie_id=movie_id)
-        .select_related("actor")
-        .order_by("ordering")
+        .select_related("person")
+        .order_by(F("ordering").asc(nulls_last=True), "job")
     )
 
-    directors = (
-        Director.objects.using("warehouse")
-        .filter(crew__movie_id=movie_id)
-        .distinct()
-    )
+    cast = [c for c in credits if c.department == "Acting"]
+
+    crew_by_department = {}
+    for credit in credits:
+        if credit.department != "Acting":
+            crew_by_department.setdefault(credit.department, []).append(credit)
+    crew = [
+        {"name": name, "credits": rows, "count": len(rows)}
+        for name, rows in sorted(
+            crew_by_department.items(),
+            key=lambda kv: (
+                DEPARTMENT_ORDER.index(kv[0]) if kv[0] in DEPARTMENT_ORDER
+                else len(DEPARTMENT_ORDER),
+                kv[0],
+            ),
+        )
+    ]
+
+    directors = [c.person for c in credits if c.job == "Director"]
 
     # fact_movie_metrics has one row per (movie, date, genre), and rating /
     # vote_count are movie-level measures repeated identically across those
@@ -237,6 +276,8 @@ def movie_detail(request, movie_slug):
         "movie": movie,
         "genres": genres,
         "cast": cast,
+        "crew": crew,
+        "credit_count": len(credits),
         "directors": directors,
         "metrics": metrics,
     }
@@ -259,90 +300,129 @@ def _career_period(start, end):
     return str(start.year) if start.year == end.year else f"{start.year}–{end.year}"
 
 
+# Acting first, then the crafts in roughly the order a viewer thinks about
+# them; anything TMDB reports outside this list is appended alphabetically.
+DEPARTMENT_ORDER = [
+    "Acting", "Directing", "Writing", "Production", "Camera", "Editing",
+    "Sound", "Art", "Costume & Make-Up", "Visual Effects", "Lighting", "Crew",
+]
+
+# How many repeat collaborators the person page prints.
+COLLABORATORS_SHOWN = 8
+
+
+def _redirect_to_person(request, legacy_model, legacy_pk, slug):
+    """301 a legacy /actors/<slug>/ or /directors/<slug>/ URL to /people/<slug>/.
+
+    Resolved by id, never by slug. Unifying dim_actor and dim_director into one
+    dim_person namespace re-numbered 381 slugs (a crew member with a lower TMDB
+    id claims the base name), so the legacy slug and the person slug are not
+    interchangeable — the id is the only stable link between them.
+    """
+    legacy = get_object_or_404(legacy_model.objects.using("warehouse"), slug=slug)
+    person = get_object_or_404(
+        Person.objects.using("warehouse"), pk=getattr(legacy, legacy_pk)
+    )
+    return redirect("movies:person_detail", person_slug=person.slug, permanent=True)
+
+
 def actor_detail(request, actor_slug):
-    """Single actor: filmography via fact_cast, with career stats computed in SQL."""
-    actor = get_object_or_404(Actor.objects.using("warehouse"), slug=actor_slug)
-    actor_id = actor.actor_id
-
-    movie_ids = (
-        Cast.objects.using("warehouse")
-        .filter(actor_id=actor_id)
-        .values_list("movie_id", flat=True)
-        .distinct()
-    )
-
-    filmography = (
-        Movie.objects.using("warehouse")
-        .filter(movie_id__in=movie_ids)
-        .order_by("-release_date")
-    )
-
-    # fact_movie_metrics has one row per (movie_id, genre_id), so a multi-genre
-    # movie would be double-counted by a plain Avg — collapse to one row per
-    # movie first, then average across that.
-    movie_ratings = (
-        MovieMetrics.objects.using("warehouse")
-        .filter(movie_id__in=movie_ids)
-        .values("movie_id", "rating")
-        .distinct()
-    )
-    avg_rating = movie_ratings.aggregate(avg_rating=Avg("rating"))["avg_rating"]
-
-    career_span = filmography.aggregate(
-        earliest=Min("release_date"), latest=Max("release_date")
-    )
-
-    context = {
-        "actor": actor,
-        "filmography": filmography,
-        "film_count": filmography.count(),
-        "avg_rating": avg_rating,
-        "career_period": _career_period(career_span["earliest"], career_span["latest"]),
-    }
-    return render(request, "movies/actor_detail.html", context)
+    return _redirect_to_person(request, Actor, "actor_id", actor_slug)
 
 
 def director_detail(request, director_slug):
-    """Single director: filmography via fact_crew, with career stats computed in SQL."""
-    director = get_object_or_404(Director.objects.using("warehouse"), slug=director_slug)
-    director_id = director.director_id
+    return _redirect_to_person(request, Director, "director_id", director_slug)
 
-    movie_ids = (
-        Crew.objects.using("warehouse")
-        .filter(director_id=director_id)
-        .values_list("movie_id", flat=True)
-        .distinct()
+
+def person_detail(request, person_slug):
+    """One person, every credit they hold, and who they keep working with."""
+    person = get_object_or_404(Person.objects.using("warehouse"), slug=person_slug)
+    person_id = person.person_id
+
+    # One query for every credit, joined to its film. Grouping happens in
+    # Python below: a GROUP BY can't return the rows themselves, and one query
+    # per department would be an N+1 in the number of crafts a person works in.
+    credits = (
+        Credit.objects.using("warehouse")
+        .filter(person_id=person_id)
+        .select_related("movie")
+        .order_by(F("movie__release_date").desc(nulls_last=True))
     )
 
-    filmography = (
-        Movie.objects.using("warehouse")
-        .filter(movie_id__in=movie_ids)
-        .order_by("-release_date")
-    )
+    by_department = {}
+    for credit in credits:
+        by_department.setdefault(credit.department, []).append(credit)
 
-    # fact_movie_metrics has one row per (movie_id, genre_id), so a multi-genre
-    # movie would be double-counted by a plain Avg — collapse to one row per
-    # movie first, then average across that.
-    movie_ratings = (
+    ordered = sorted(
+        by_department.items(),
+        key=lambda kv: (
+            DEPARTMENT_ORDER.index(kv[0]) if kv[0] in DEPARTMENT_ORDER
+            else len(DEPARTMENT_ORDER),
+            kv[0],
+        ),
+    )
+    departments = [
+        {"name": name, "credits": rows, "count": len(rows)} for name, rows in ordered
+    ]
+
+    movie_ids = {c.movie_id for c in credits}
+
+    # Same genre-fanout guard as everywhere else: fact_movie_metrics repeats a
+    # movie's rating once per genre, so collapse before averaging.
+    avg_rating = (
         MovieMetrics.objects.using("warehouse")
         .filter(movie_id__in=movie_ids)
         .values("movie_id", "rating")
         .distinct()
+        .aggregate(avg_rating=Avg("rating"))["avg_rating"]
     )
-    avg_rating = movie_ratings.aggregate(avg_rating=Avg("rating"))["avg_rating"]
 
-    career_span = filmography.aggregate(
+    span = Movie.objects.using("warehouse").filter(movie_id__in=movie_ids).aggregate(
         earliest=Min("release_date"), latest=Max("release_date")
     )
 
     context = {
-        "director": director,
-        "filmography": filmography,
-        "film_count": filmography.count(),
+        "person": person,
+        "departments": departments,
+        "film_count": len(movie_ids),
+        "credit_count": len(credits),
         "avg_rating": avg_rating,
-        "career_period": _career_period(career_span["earliest"], career_span["latest"]),
+        "career_period": _career_period(span["earliest"], span["latest"]),
+        "collaborators": _top_collaborators(person_id),
     }
-    return render(request, "movies/director_detail.html", context)
+    return render(request, "movies/person_detail.html", context)
+
+
+def _top_collaborators(person_id):
+    """The people this person has worked with most, from fact_collaboration.
+
+    Pairs are stored canonically (person_a_id < person_b_id), so a person can
+    be on either side and both columns have to be searched. That's the cost of
+    halving the table — paid here, on read, once per page.
+    """
+    as_a = (
+        Collaboration.objects.using("warehouse")
+        .filter(person_a_id=person_id)
+        .select_related("person_b")
+    )
+    as_b = (
+        Collaboration.objects.using("warehouse")
+        .filter(person_b_id=person_id)
+        .select_related("person_a")
+    )
+
+    rows = [
+        {"person": c.person_b, "films_together": c.films_together,
+         "first_year": c.first_year, "last_year": c.last_year}
+        for c in as_a
+    ] + [
+        {"person": c.person_a, "films_together": c.films_together,
+         "first_year": c.first_year, "last_year": c.last_year}
+        for c in as_b
+    ]
+
+    rows.sort(key=lambda r: (-r["films_together"], r["person"].name))
+    return rows[:COLLABORATORS_SHOWN]
 
 
 def genre_detail(request, genre_id):

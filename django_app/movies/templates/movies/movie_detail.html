@@ -53,7 +53,7 @@
             <div class="record-row">
                 <dt class="label">Directed by</dt>
                 <dd>
-                    {% for director in directors %}<a href="{% url 'movies:director_detail' director.slug %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                    {% for director in directors %}<a href="{% url 'movies:person_detail' director.slug %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
                 </dd>
             </div>
             {% endif %}
@@ -86,14 +86,28 @@
 <section class="sheet-section">
     <div class="section-head">
         <h2>Cast</h2>
-        <span class="section-note">fact_cast</span>
+        <span class="section-note">{{ cast|length }} of {{ credit_count }} credit{{ credit_count|pluralize }}</span>
     </div>
     <div class="poster-grid is-tight">
         {% for credit in cast %}
-        {% include "movies/_person_card.html" with person=credit.actor detail_url_name="movies:actor_detail" card_sub=credit.role only %}
+        {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
         {% empty %}
         <p class="empty">No cast recorded for this film.</p>
         {% endfor %}
     </div>
 </section>
+
+{% for department in crew %}
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>{{ department.name }}</h2>
+        <span class="section-note">{{ department.count }} credit{{ department.count|pluralize }}</span>
+    </div>
+    <div class="poster-grid is-tight">
+        {% for credit in department.credits %}
+        {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.job only %}
+        {% endfor %}
+    </div>
+</section>
+{% endfor %}
 {% endblock %}

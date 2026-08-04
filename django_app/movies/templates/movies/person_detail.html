@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% load tmdb_images %}
+
+{% block title %}Theoria — {{ person.name }}{% endblock %}
+{% block description %}{{ person.name }}: {{ credit_count }} credit{{ credit_count|pluralize }} across {{ departments|length }} department{{ departments|length|pluralize }} in the Theoria catalog.{% endblock %}
+
+{% block content %}
+{% include "movies/_person_header.html" with person=person film_count=film_count avg_rating=avg_rating career_period=career_period credit_count=credit_count only %}
+
+{% if collaborators %}
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>Works with</h2>
+        <span class="section-note">fact_collaboration</span>
+    </div>
+    {% comment %} A measurement, not a recommendation: each row states how many films
+       two people share and over what span. The count is the lime figure
+       because it is the measured quantity on this page. {% endcomment %}
+    <ul class="collab-list">
+        {% for row in collaborators %}
+        <li class="collab-row">
+            <a class="collab-name" href="{% url 'movies:person_detail' row.person.slug %}">{{ row.person.name }}</a>
+            <span class="collab-count mono">{{ row.films_together }}</span>
+            <span class="collab-unit">film{{ row.films_together|pluralize }}</span>
+            {% if row.first_year %}
+            <span class="collab-span mono">{{ row.first_year }}{% if row.last_year and row.last_year != row.first_year %}–{{ row.last_year }}{% endif %}</span>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% for department in departments %}
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>{{ department.name }}</h2>
+        <span class="section-note">{{ department.count }} credit{{ department.count|pluralize }}</span>
+    </div>
+    <div class="poster-grid is-tight">
+        {% for credit in department.credits %}
+        {% if department.name == "Acting" %}
+        {% include "movies/_movie_card.html" with movie=credit.movie card_sub=credit.character_name only %}
+        {% else %}
+        {% include "movies/_movie_card.html" with movie=credit.movie card_sub=credit.job only %}
+        {% endif %}
+        {% endfor %}
+    </div>
+</section>
+{% empty %}
+<section class="sheet-section">
+    <p class="empty">No credits recorded for this person yet.</p>
+</section>
+{% endfor %}
+{% endblock %}

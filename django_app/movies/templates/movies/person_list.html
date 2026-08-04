@@ -13,6 +13,16 @@
             </div>
             <button type="submit">Apply</button>
         </form>
+        {% comment %} Actors and directors are no longer separate tables — they're the
+           people holding an Acting or Directing credit. So this is a scope
+           switch over one index, not three different indexes. Plain links
+           rather than the radio `.segmented` control because each scope is
+           its own URL. {% endcomment %}
+        <nav class="scope" aria-label="Filter people by credit">
+            <a href="{% url 'movies:person_list' %}"{% if scope == "all" %} aria-current="true"{% endif %}>All</a>
+            <a href="{% url 'movies:actor_list' %}"{% if scope == "acting" %} aria-current="true"{% endif %}>Acting</a>
+            <a href="{% url 'movies:director_list' %}"{% if scope == "directing" %} aria-current="true"{% endif %}>Directing</a>
+        </nav>
         <span class="result-count">{{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}</span>
     </div>
 
