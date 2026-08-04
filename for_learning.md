@@ -2069,3 +2069,73 @@ MATERIALIZED VIEW CONCURRENTLY`) and compare: Postgres would then own the deriva
 refresh, at the cost of the aggregation no longer being expressible in pandas or reusable
 outside the database. Which is the better home for this table, and does the answer change if
 the corpus grows 50x?
+
+---
+
+## Task 50 — Franchises: `dim_collection` and the series pages
+
+### What Was Built
+Film series became a first-class thing. TMDB returns `belongs_to_collection` on every
+movie-detail payload and it had never been read at any layer — Task 47 carried it into
+Silver, and this task gave it a dimension, a foreign key, and two pages.
+
+- **`dim_collection`** — 358 franchises, all slugged.
+- **`dim_movie.collection_id`** — a *nullable* FK. **613 of 1,215 films** belong to a
+  series; 127 franchises have 2 or more entries in the catalog.
+- **`/franchises/`** — every series ranked by entries held, reusing the same
+  `table-2col` + `data-meter` share-bar pattern as the genre sheet.
+- **`/franchises/<slug>/`** — the series in release order, with entries, span, average
+  rating and total revenue. James Bond: **17 films, 1971–2021, $6,082,635,670.**
+- **"Part of"** on the movie page, linking a film to its series.
+
+### Concepts Used
+- **When an attribute should become a dimension.** The lazy version of this is three
+  columns on `dim_movie` (`collection_id`, `collection_name`, `collection_poster_path`) —
+  which is exactly what Silver stores. The test for promoting it: does the thing have its
+  own identity, its own attributes, and is it shared by many rows? A franchise has a name,
+  artwork, a slug and a URL, and 17 Bond films would otherwise repeat that name 17 times
+  with no row to hang a page off. Silver keeps it inline because Silver is a flat table
+  per entity; the warehouse normalises it because the warehouse models relationships.
+- **A nullable foreign key as a real statement.** Half the catalog belongs to no series.
+  That is a fact about films, not missing data, and the schema says so — `NULL` here means
+  "stands alone", not "not yet loaded".
+- **Load order follows referential order.** `load_dim_collection()` must run before
+  `load_dim_movie()`, because the FK points that way. Made explicit with a comment rather
+  than left as an accident of dict ordering.
+- **Deriving a dimension from a denormalised source.** Silver has one collection value per
+  *movie*; the dimension needs one row per *collection*. That's a `drop_duplicates` on the
+  key — the same shape as `transform_people`'s dedup, one layer further along.
+- **Reusing a design component rather than inventing one.** The franchise sheet is the
+  genre sheet with a different noun. `data-meter` and `initMeters()` already scale a lime
+  bar to the column max client-side, so the new page needed no new CSS and no new JS.
+
+### Key Code
+`etl/warehouse_loader/load_dimensions.py` — `load_dim_collection()`:
+> ```python
+> named = df[df["collection_id"].notna() & df["collection_name"].notna()]
+> collections = named[[...]].drop_duplicates(subset=["collection_id"], keep="last")
+> ```
+> Filter before dedupe, and filter on *both* id and name. A row with an id but no name
+> would produce a `dim_collection` row violating `name NOT NULL`; a row with neither is the
+> ordinary standalone-film case and simply contributes nothing. The dimension is the set of
+> franchises that actually exist, derived from the films that reference them.
+
+`django_app/movies/views.py` — `collection_detail()`:
+> `total_revenue` is a plain `Sum` over `dim_movie` — one row per film, no fan-out. But
+> `avg_rating` reads `fact_movie_metrics`, which is at `(movie, date, genre)` grain, so it
+> collapses with `.values("movie_id", "rating").distinct()` **before** averaging. Two
+> aggregates on the same page, only one of which needs the guard — which is the whole
+> reason that grain is worth understanding rather than memorising a rule.
+
+`django_app/movies/views.py` — `collection_list()`:
+> `.annotate(movie_count=Count("movies")).filter(movie_count__gt=0)` — the `filter` after
+> `annotate` becomes a `HAVING` clause, not a `WHERE`. It excludes franchises whose films
+> aren't in this corpus, so the page never lists an empty series.
+
+### What to Study Next
+`.annotate()` then `.filter()` compiles to `HAVING`; `.filter()` then `.annotate()` compiles
+to `WHERE` and changes *what gets counted*. Write both orderings of `collection_list`'s
+query, print `str(queryset.query)` for each, and work out which one answers "franchises with
+at least one film in the catalog" and which answers something subtly different. This
+ordering-sensitivity is one of the most common sources of wrong numbers in Django reporting
+code.

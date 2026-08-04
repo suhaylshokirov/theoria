@@ -1583,6 +1583,7 @@ from etl.warehouse_loader.load_dimensions import (
     _upsert,
     assign_slugs,
     load_dim_actor,
+    load_dim_collection,
     load_dim_date,
     load_dim_director,
     load_dim_genre,
@@ -1605,6 +1606,9 @@ def _dim_movies_df():
         "vote_count": pd.array([100, 50], dtype="Int64"),
         "popularity": [10.0, 5.0],
         "overview": ["a", "b"],
+        "collection_id": pd.array([100, None], dtype="Int64"),
+        "collection_name": ["Alpha Collection", None],
+        "collection_poster_path": ["/ac.jpg", None],
         "tagline": ["Tag A", None],
         "poster_path": ["/a.jpg", None],
         "backdrop_path": ["/a_bd.jpg", None],
@@ -1673,8 +1677,34 @@ def test_load_dim_movie_upserts_expected_columns():
     assert set(params[0].keys()) == {
         "movie_id", "title", "release_date", "runtime", "budget", "revenue",
         "original_language", "status", "overview", "tagline", "poster_path",
-        "backdrop_path",
+        "backdrop_path", "collection_id",
     }
+
+
+def test_load_dim_collection_takes_the_distinct_named_collections():
+    """Films without a franchise contribute no dimension row — that's ~half the catalog."""
+    mock_session = MagicMock()
+    count = load_dim_collection(mock_session, _dim_movies_df())
+
+    assert count == 1
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_collection" in str(stmt)
+    assert params == [
+        {"collection_id": 100, "name": "Alpha Collection", "poster_path": "/ac.jpg"},
+    ]
+
+
+def test_load_dim_collection_deduplicates_a_franchise_shared_by_several_films():
+    """Silver stores the collection inline per movie, so the dimension must dedupe it."""
+    df = _dim_movies_df()
+    df.loc[1, ["collection_id", "collection_name", "collection_poster_path"]] = [
+        100, "Alpha Collection", "/ac.jpg",
+    ]
+    mock_session = MagicMock()
+
+    count = load_dim_collection(mock_session, df)
+
+    assert count == 1
 
 
 def test_load_dim_actor_renames_person_id():
@@ -1833,14 +1863,14 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
     )
 
     assert counts == {
-        "dim_movie": 2, "dim_person": 2, "dim_actor": 2, "dim_director": 2,
-        "dim_genre": 2, "dim_date": 2,
-        "dim_movie_slugs": 0, "dim_person_slugs": 0,
+        "dim_collection": 1, "dim_movie": 2, "dim_person": 2, "dim_actor": 2,
+        "dim_director": 2, "dim_genre": 2, "dim_date": 2,
+        "dim_movie_slugs": 0, "dim_person_slugs": 0, "dim_collection_slugs": 0,
         "dim_actor_slugs": 0, "dim_director_slugs": 0,
     }
-    # 6 upserts + 4 slug SELECTs (the mocked session's empty fetchall() means
-    # no matching UPDATE is issued for any of the four slugged tables).
-    assert mock_session.execute.call_count == 10
+    # 7 upserts + 5 slug SELECTs (the mocked session's empty fetchall() means
+    # no matching UPDATE is issued for any of the five slugged tables).
+    assert mock_session.execute.call_count == 12
 
 
 # ---------------------------------------------------------------------------

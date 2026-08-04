@@ -1,6 +1,17 @@
 -- Dimension tables for the Theoria star schema.
 -- Run once to bootstrap the warehouse; all tables use IF NOT EXISTS so re-runs are safe.
 
+-- Declared before dim_movie because dim_movie carries an FK to it. Roughly half
+-- the catalog belongs to no collection, so that FK is nullable by design.
+CREATE TABLE IF NOT EXISTS dim_collection (
+    collection_id INTEGER      NOT NULL,
+    name          TEXT         NOT NULL,
+    poster_path   TEXT,
+    slug          VARCHAR(300),
+    CONSTRAINT pk_dim_collection PRIMARY KEY (collection_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_collection_slug ON dim_collection (slug);
+
 CREATE TABLE IF NOT EXISTS dim_movie (
     movie_id         INTEGER      NOT NULL,
     title            TEXT         NOT NULL,
@@ -15,9 +26,12 @@ CREATE TABLE IF NOT EXISTS dim_movie (
     poster_path      TEXT,
     backdrop_path    TEXT,
     slug             VARCHAR(300),
-    CONSTRAINT pk_dim_movie PRIMARY KEY (movie_id)
+    collection_id    INTEGER,
+    CONSTRAINT pk_dim_movie PRIMARY KEY (movie_id),
+    CONSTRAINT fk_dim_movie_collection FOREIGN KEY (collection_id) REFERENCES dim_collection (collection_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_movie_slug ON dim_movie (slug);
+CREATE INDEX IF NOT EXISTS idx_dim_movie_collection_id ON dim_movie (collection_id);
 
 -- Every person holding any credit, in any department. What they did on a given
 -- film lives in fact_credit, not in which table they land in. See

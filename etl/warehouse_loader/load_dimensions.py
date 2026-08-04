@@ -1,9 +1,11 @@
 """Warehouse loader: Dimensions.
 
 Reads the Silver Parquet files for a given ingestion_date and upserts them
-into the PostgreSQL dimension tables (dim_movie, dim_person, dim_actor,
-dim_director, dim_genre). dim_date is populated separately as a full calendar
-table that does not depend on any Silver data.
+into the PostgreSQL dimension tables (dim_collection, dim_movie, dim_person,
+dim_actor, dim_director, dim_genre). dim_date is populated separately as a full
+calendar table that does not depend on any Silver data.
+
+dim_collection is loaded first: dim_movie.collection_id is an FK to it.
 
 dim_actor/dim_director are legacy and are superseded by dim_person; they are
 still loaded until the Django app and analytics queries finish migrating.
@@ -63,11 +65,32 @@ def _records(df: pd.DataFrame, columns: list[str]) -> list[dict[str, Any]]:
     return subset.to_dict("records")
 
 
+def load_dim_collection(session: Session, df: pd.DataFrame) -> int:
+    """Upsert the distinct franchises referenced by Silver movies into dim_collection.
+
+    Silver carries the collection inline on each movie row, so the dimension is
+    the *distinct* set of those values — roughly half the catalog contributes
+    nothing here, which is a real property of films rather than missing data.
+    Must run before load_dim_movie(), which has an FK to this table.
+    """
+    named = df[df["collection_id"].notna() & df["collection_name"].notna()]
+    collections = (
+        named[["collection_id", "collection_name", "collection_poster_path"]]
+        .drop_duplicates(subset=["collection_id"], keep="last")
+        .rename(columns={"collection_name": "name", "collection_poster_path": "poster_path"})
+    )
+    columns = ["collection_id", "name", "poster_path"]
+    records = _records(collections, columns)
+    count = _upsert(session, "dim_collection", ["collection_id"], columns, records)
+    logger.info("dim_collection: upserted %d row(s)", count)
+    return count
+
+
 def load_dim_movie(session: Session, df: pd.DataFrame) -> int:
     """Upsert Silver movies into dim_movie."""
     columns = ["movie_id", "title", "release_date", "runtime", "budget", "revenue",
                "original_language", "status", "overview", "tagline", "poster_path",
-               "backdrop_path"]
+               "backdrop_path", "collection_id"]
     records = _records(df, columns)
     count = _upsert(session, "dim_movie", ["movie_id"], columns, records)
     logger.info("dim_movie: upserted %d row(s)", count)
@@ -223,6 +246,8 @@ def load_dimensions(
 
     counts: dict[str, int] = {}
     with get_session() as session:
+        # Before dim_movie: dim_movie.collection_id is an FK to this table.
+        counts["dim_collection"] = load_dim_collection(session, movies_df)
         counts["dim_movie"] = load_dim_movie(session, movies_df)
         counts["dim_person"] = load_dim_person(session, people_df)
         counts["dim_actor"] = load_dim_actor(session, actors_df)
@@ -231,6 +256,7 @@ def load_dimensions(
         counts["dim_date"] = load_dim_date(session, calendar_start, calendar_end)
         counts["dim_movie_slugs"] = assign_slugs(session, "dim_movie", "movie_id", "title")
         counts["dim_person_slugs"] = assign_slugs(session, "dim_person", "person_id", "name")
+        counts["dim_collection_slugs"] = assign_slugs(session, "dim_collection", "collection_id", "name")
         counts["dim_actor_slugs"] = assign_slugs(session, "dim_actor", "actor_id", "name")
         counts["dim_director_slugs"] = assign_slugs(session, "dim_director", "director_id", "name")
 

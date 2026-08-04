@@ -59,6 +59,7 @@
                 <a href="{% url 'movies:actor_list' %}"{% if vn in "actor_list,actor_detail" %} aria-current="page"{% endif %}>Actors</a>
                 <a href="{% url 'movies:director_list' %}"{% if vn in "director_list,director_detail" %} aria-current="page"{% endif %}>Directors</a>
                 <a href="{% url 'movies:genre_list' %}"{% if vn in "genre_list,genre_detail" %} aria-current="page"{% endif %}>Genres</a>
+                <a href="{% url 'movies:collection_list' %}"{% if vn in "collection_list,collection_detail" %} aria-current="page"{% endif %}>Franchises</a>
                 <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>
                 <button type="button" class="theme-toggle" id="theme-toggle"
                         aria-label="Switch to dark theme" title="Switch theme">

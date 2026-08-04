@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — Franchises{% endblock %}
+{% block description %}Film series in the Theoria catalog, ranked by how many entries are held.{% endblock %}
+
+{% block content %}
+{% include "movies/_sheet_header.html" with title="Franchises" sub="Films that belong to a series. The bar shows each franchise's size against the largest — roughly half the catalog belongs to none." only %}
+
+<section class="sheet-section">
+    {% if collections %}
+    <div class="table-wrap">
+        <table class="table-2col">
+            <caption class="visually-hidden">Franchises by number of films held in the catalog</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Franchise</th>
+                    <th scope="col" class="num">Films</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for collection in collections %}
+                <tr>
+                    <th scope="row" class="genre-cell">
+                        <a href="{% url 'movies:collection_detail' collection.slug %}">{{ collection.name }}</a>
+                    </th>
+                    {% comment %} Same data-meter contract as genre_list: theoria.js scales
+                       the lime bar to the column max and leaves the number printed
+                       on top, which is what keeps the cell legible. {% endcomment %}
+                    <td class="num" data-meter>{{ collection.movie_count|default:0 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty">No franchises loaded yet. Run the pipeline to fill the catalog.</p>
+    {% endif %}
+</section>
+{% endblock %}

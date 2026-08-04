@@ -57,6 +57,14 @@
                 </dd>
             </div>
             {% endif %}
+            {% if movie.collection %}
+            <div class="record-row">
+                <dt class="label">Part of</dt>
+                <dd>
+                    <a href="{% url 'movies:collection_detail' movie.collection.slug %}">{{ movie.collection.name }}</a>
+                </dd>
+            </div>
+            {% endif %}
         </dl>
 
         {% if genres %}
