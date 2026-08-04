@@ -8,6 +8,7 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("movies/", views.movie_list, name="movie_list"),
     path("movies/<slug:movie_slug>/", views.movie_detail, name="movie_detail"),
+    path("connect/", views.connect, name="connect"),
     path("people/", views.person_list, name="person_list"),
     path("people/<slug:person_slug>/", views.person_detail, name="person_detail"),
     # /actors/ and /directors/ survive as *indexes* — they're now filtered views

@@ -2217,3 +2217,80 @@ warehouse and compare: `DISTINCT` on a large join usually means a hash aggregate
 matched row, while `IN (subquery)` can become a semi-join that stops at the first match per
 person. Then look at `EXISTS` as a third form, and work out which one Postgres actually
 prefers here and why.
+
+---
+
+## Task 52 — The path finder: measuring distance through the graph
+
+### What Was Built
+`/connect/` — type two names, get the shortest chain of films linking them. The signature
+page of the phase, and the one thing here no other movie site does.
+
+Measured live:
+
+- **Tom Hanks → Thelma Schoonmaker: 2 degrees** — *Catch Me If You Can* → Leonardo DiCaprio
+  → *The Wolf of Wall Street*. **30 ms.**
+- **Marlon Brando → Zendaya: 3 degrees** — *Last Tango in Paris* → **Franco Arcalli, an
+  editor** → *Once Upon a Time in America* → Jennifer Connelly → *Spider-Man: Homecoming*.
+  That middle hop was impossible before this phase; editors didn't exist in the warehouse.
+- The graph itself: **49,276 people, 23 separate pieces, 99.1% in the largest.**
+
+Four outcomes, each a real state of the data with a designed answer: a path, the same
+person twice, an unconnected pair, and a name nobody matches.
+
+### Concepts Used
+- **Two graphs, two questions.** `fact_collaboration` (Task 49) is scoped to key credits and
+  answers *"who works together repeatedly"*. This one is wider — all cast plus principal
+  crew — and answers *"is there any path"*. A 40th-billed extra is a real connection but not
+  a working relationship, so the same edge belongs in one graph and not the other. They
+  deliberately share no code.
+- **Why not SQL.** A recursive CTE over this graph times out (measured, >60s): it re-expands
+  the same nodes at every depth because Postgres can't memoise the visited set across
+  iterations. BFS in Python is fast precisely *because* the visited set is the algorithm.
+  Knowing when to pull data out of the database is as much a data-engineering skill as
+  knowing how to push work into it.
+- **Bidirectional search.** From a hub, a one-sided BFS reaches ~31,000 people at depth 2
+  and ~41,000 at depth 3 — the frontier explodes. Searching from both ends and expanding
+  whichever side is smaller turns one depth-*d* search into two of depth *d/2*, which on a
+  branching factor this large is the difference between milliseconds and seconds.
+- **Caching against a data version, not a clock.** The adjacency is keyed on
+  `count(*) + max(ingestion_date)` from `fact_credit`. A TTL would either serve stale edges
+  after a load or rebuild for nothing during a quiet afternoon; a version key rebuilds
+  exactly when the data changes and never otherwise.
+- **Connected components.** The graph isn't one piece, and saying so is more honest than
+  pretending every query has an answer.
+
+### Key Code
+`django_app/movies/graph.py` — `find_path()`:
+> ```python
+> if len(forward_frontier) <= len(backward_frontier):
+>     frontier, seen, other = forward_frontier, forward, backward
+> else:
+>     frontier, seen, other = backward_frontier, backward, forward
+> ```
+> The whole bidirectional trick in four lines: each round, expand the cheaper side. The
+> `seen` dicts double as the parent pointers, so no separate bookkeeping is needed — and the
+> moment an expansion lands on a node the *other* side already reached, the two halves are
+> stitched into one chain.
+
+`django_app/movies/graph.py` — `_build_adjacency()`:
+> ```python
+> edges.setdefault(other, movie_id)
+> ```
+> `setdefault`, not assignment: two people often share several films, and keeping the *first*
+> rather than the last makes the rendered path reproducible across rebuilds. A path that
+> silently cited a different film each time would look like a bug.
+
+`django_app/movies/views.py` — `_describe_path()`:
+> Collects every person id and film id from the whole chain first, then issues **two**
+> queries. The obvious version walks the chain looking things up per hop — an N+1 whose N is
+> the answer's length, i.e. worse precisely when the result is most interesting.
+
+### What to Study Next
+BFS finds the shortest path when every edge costs the same. But a film with 4 credits is a
+much stronger connection than a blockbuster with 200, and treating them as equal is why hub
+films dominate every route. Read up on **Dijkstra's algorithm** and edge weighting, then
+work out what weight would express "this connection is meaningful" — 1/cast_size? shared
+films? — and whether the resulting "strongest" path is more interesting to a viewer than the
+shortest one. Also worth knowing: A* and why it needs a distance heuristic that a social
+graph doesn't naturally have.
