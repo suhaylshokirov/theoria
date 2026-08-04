@@ -10,7 +10,9 @@
         {% if person.profile_path %}
         <img class="headshot" src="{{ person.profile_path|tmdb_image:'w185' }}" alt="{{ person.name }}">
         {% else %}
-        <div class="placeholder" aria-hidden="true">◻</div>
+        <div class="placeholder placeholder-person" aria-hidden="true">
+            <svg class="person-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8z"/></svg>
+        </div>
         {% endif %}
     </div>
 

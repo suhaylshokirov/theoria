@@ -630,6 +630,20 @@ main.container {
   font-size: var(--text-xl);
 }
 
+/* Person fallback: a generic profile silhouette, not an empty box — reads
+   as a deliberate stand-in for a missing TMDB photo rather than a broken
+   image. */
+.poster-card .placeholder-person,
+.person-plate .placeholder-person {
+  background: linear-gradient(160deg, var(--sheet) 0%, var(--sheet-2) 100%);
+}
+
+.placeholder-person .person-icon {
+  width: 42%;
+  height: 42%;
+  color: var(--rule-strong);
+}
+
 .poster-card a:hover .poster,
 .poster-card a:hover .headshot,
 .poster-card a:hover .placeholder,
