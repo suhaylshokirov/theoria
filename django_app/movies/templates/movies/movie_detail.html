@@ -125,7 +125,16 @@
             <ul class="credit-list">
                 {% for m in department.people %}
                 <li class="credit-row">
-                    <a class="credit-name" href="{% url 'movies:person_detail' m.person.slug %}">{{ m.person.name }}</a>
+                    <a class="credit-person" href="{% url 'movies:person_detail' m.person.slug %}">
+                        {% if m.person.profile_path %}
+                        <img class="credit-avatar" src="{{ m.person.profile_path|tmdb_image:'w185' }}" alt="" loading="lazy">
+                        {% else %}
+                        <span class="credit-avatar placeholder-person" aria-hidden="true">
+                            <svg class="person-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8z"/></svg>
+                        </span>
+                        {% endif %}
+                        <span class="credit-name">{{ m.person.name }}</span>
+                    </a>
                     <span class="credit-jobs">{{ m.job_display }}</span>
                 </li>
                 {% endfor %}

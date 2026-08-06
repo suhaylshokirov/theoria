@@ -651,7 +651,8 @@ main.container {
    as a deliberate stand-in for a missing TMDB photo rather than a broken
    image. */
 .poster-card .placeholder-person,
-.person-plate .placeholder-person {
+.person-plate .placeholder-person,
+.credit-list .placeholder-person {
   background: linear-gradient(160deg, var(--sheet) 0%, var(--sheet-2) 100%);
 }
 
@@ -1343,6 +1344,10 @@ button:hover,
   gap: 1px;
   background: var(--rule);
   border-block: var(--hairline);
+  /* Same UA default-padding fix as .credit-list above — this component had
+     the identical defect from the day it was written. */
+  padding: 0;
+  margin: 0;
 }
 
 .collab-row {
@@ -1414,16 +1419,65 @@ button:hover,
   gap: 1px;
   background: var(--rule);
   border-block: var(--hairline);
-  margin-bottom: var(--space-6);
+  /* A <ul> carries a UA default padding-inline-start of 40px. These lists
+     paint their own background to draw the 1px gaps as hairlines, so that
+     padding rendered as an unexplained grey column down the left of every
+     crew list. Zero it explicitly. */
+  padding: 0;
+  margin: 0 0 var(--space-6);
 }
 
 .credit-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding: var(--space-4) 0;
+  padding: var(--space-3) 0;
   background: var(--paper);
+}
+
+/* Name plus face, as one link target. */
+.credit-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+
+.credit-avatar {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius);
+  object-fit: cover;
+  border: 1px solid var(--rule);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+/* The ~76% of crew with no headshot get the same person silhouette the cast
+   cards use — one placeholder vocabulary across the page, rather than a
+   second invention that has to be learned. .placeholder-person supplies the
+   gradient and .person-icon its 42% sizing, both already defined above; this
+   only has to centre the icon in a square instead of a 2:3 plate. */
+.credit-list .placeholder-person {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The shared 42% is tuned to a 116px-wide poster plate; in a 36px square it
+   leaves a 15px figure swimming in space. Scaled up so the silhouette reads
+   at this size. */
+.credit-list .placeholder-person .person-icon {
+  width: 58%;
+  height: 58%;
+}
+
+.credit-person:hover .credit-avatar,
+.credit-person:focus-visible .credit-avatar {
+  border-color: var(--lime-mark);
 }
 
 .credit-name {
@@ -1433,7 +1487,7 @@ button:hover,
 }
 
 .credit-row:hover .credit-name,
-.credit-name:focus-visible {
+.credit-person:focus-visible .credit-name {
   border-bottom-color: var(--lime-mark);
 }
 

@@ -489,6 +489,44 @@ def test_movie_detail_crew_grouped_in_department_order():
     assert response.content.decode().count("data-page-group") == 4
 
 
+def test_movie_detail_crew_rows_carry_a_face_or_silhouette():
+    """Crew rows lead with a headshot where one exists and the same person
+    silhouette the cast cards use where it doesn't — one placeholder
+    vocabulary across the page. Only 23.8% of credited crew have a photo, so
+    the fallback is the common case.
+    """
+    movie = _movie()
+    with_photo = _person(person_id=1, name="Wally Pfister", slug="wally-pfister")
+    with_photo.profile_path = "/abc123.jpg"
+    without = _person(person_id=2, name="Michelle Gonsiorek",
+                      slug="michelle-gonsiorek")
+    credits = [
+        Credit(movie=movie, person=with_photo, department="Camera",
+               job="Director of Photography"),
+        Credit(movie=movie, person=without, department="Directing",
+               job="Second Assistant Director"),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    body = response.content.decode()
+    # One real headshot, one silhouette — and the silhouette is the shared
+    # .placeholder-person component, not a second invention.
+    assert body.count('class="credit-avatar" src=') == 1
+    assert "/abc123.jpg" in body
+    assert body.count("credit-avatar placeholder-person") == 1
+    assert body.count('class="person-icon"') == 1
+
+
 def test_movie_detail_404_when_missing():
     from django.http import Http404
 

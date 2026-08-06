@@ -2559,3 +2559,42 @@ to 1 heading. That worked, but writing a fake DOM by hand doesn't scale past one
 `jsdom` (a real DOM implementation in Node) and at Playwright (a real browser, driven from Python),
 and work out which one this project would want: what can a real browser catch that a fake DOM
 can't, and is that class of bug one this codebase actually has?
+
+### Addendum 3 — the grey column, and one placeholder vocabulary
+
+Two fixes from looking at the finished page in dark mode.
+
+**A bug that only one theme could show.** A grey block sat down the left of every crew list.
+It was a `<ul>` keeping its user-agent default `padding-inline-start: 40px`. Normally invisible —
+but `.credit-list` paints its *own* background (`var(--rule)`) so that the 1px grid gaps read as
+hairline dividers, and that background fills the padding box too. So the browser default became a
+40px stripe of rule-grey. On white paper it's imperceptible; against the dark surface it's the
+first thing you see. `.collab-list` had carried the identical defect since it was written.
+
+The lesson isn't "remember to zero list padding". It's that **a component which paints its own
+background inherits every default box it didn't ask for.** The fix is one line, `padding: 0`, and
+the bug is invisible until a token swap makes it visible.
+
+**One placeholder vocabulary, not two.** Crew rows needed faces, and only ~24% of crew have a
+photo. The first attempt drew initials (`MG`, `SG`) for the rest — reasoning that 108 identical
+silhouettes read as "image failed to load". That was rejected: the cast grid two sections up
+*already* uses a person silhouette for the same situation, so initials meant a reader had to learn
+two different marks for one meaning on a single page. Consistency beat the cleverer idea, and the
+silhouette is now shared — the same `.placeholder-person` class, with only its icon scaled up
+(42% → 58%) because a percentage tuned to a 116px poster plate leaves a tiny figure swimming in a
+36px square.
+
+### Concepts Used (addendum 3)
+- **User-agent stylesheet**: the browser's own default CSS. `<ul>` has `padding-inline-start: 40px`
+  there. You inherit it unless you say otherwise.
+- **Padding box vs content box**: `background` paints under the padding, which is why the default
+  padding was *visible* here and not on an ordinary list.
+- **Design-system consistency**: one meaning, one mark. A second, better-looking solution to a
+  problem already solved elsewhere in the page makes the page harder to read, not easier.
+
+### What to Study Next
+This bug was found by a human looking at a screenshot, and neither the 215 tests nor the Node
+simulation could have caught it — they assert structure and behaviour, never appearance. Read up on
+**visual regression testing** (screenshot diffing, e.g. Playwright's `toHaveScreenshot`), then
+decide honestly whether this project should have it: what would it have cost to catch a 40px grey
+stripe automatically, and how many false alarms would a font-rendering difference produce?
