@@ -1,8 +1,7 @@
-{% comment %} The person record header — used by both actor_detail and director_detail,
-   which were previously near-identical 44-line twins.
+{% comment %} The person record header.
 
    Params (pass with `only`):
-     person       : Actor or Director
+     person       : a Person
      film_count, avg_rating, career_period : the measured stats {% endcomment %}
 {% load tmdb_images %}
 <header class="person-head">

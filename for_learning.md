@@ -2294,3 +2294,70 @@ work out what weight would express "this connection is meaningful" — 1/cast_si
 films? — and whether the resulting "strongest" path is more interesting to a viewer than the
 shortest one. Also worth knowing: A* and why it needs a distance heuristic that a social
 graph doesn't naturally have.
+
+---
+
+## Task 53 — Analytics, retirement, and telling the truth in the docs
+
+### What Was Built
+The last task of Phase 10: three new dashboard panels, the four legacy tables dropped, and every
+document brought back into line with what the code actually does.
+
+**Analytics — 7 panels to 10.** New: *Signature partnerships* (directors and their recurring
+craft collaborators, 3+ films), *Department reach* (people and credits per craft), *Franchise box
+office*. The four person-dependent queries were rewritten onto `dim_person`/`fact_credit`. All ten
+run in under half a second; the dashboard shows **zero empty panels**.
+
+**Retirement.** `dim_actor`, `dim_director`, `fact_cast` and `fact_crew` dropped, along with their
+loaders, models, Silver datasets, DQ configs and tests. The live warehouse is now **9 tables**, and
+a fresh bootstrap from `01`–`03` produces exactly those 9 — verified by creating a scratch database
+and running it, not by reading the files.
+
+**Verification.** Full re-run across all three partitions: Silver DQ **16/16**, warehouse checks
+**20/20**, all 16 routes correct, 210 tests green.
+
+### Concepts Used
+- **Retire last, not first.** Every reader moved to the new tables in Tasks 51–53 *before* the drop
+  in Task 53. That ordering is what let each of the seven commits in this phase stand on its own —
+  at no point was the site broken or the schema half-migrated.
+- **Drop order follows referential order.** Facts before dimensions: `fact_cast` holds the FK into
+  `dim_actor`, so dropping the dimension first would simply fail.
+- **A migration chain is not a bootstrap script.** This is the subtle one. `01`–`03` describe the
+  *current* schema; `04`–`11` are the historical path to it. Once a migration *drops* something,
+  "run every file in order on a fresh database" stops being equivalent to "build the current
+  schema" — `11` would drop tables `01` no longer creates. The README now says so explicitly and
+  the two paths are documented separately.
+- **Verify the install, don't read it.** Task 44 found a README that produced a silently incomplete
+  warehouse. The fix this time was to actually create a throwaway database, run the documented
+  steps, and list the resulting tables.
+- **`ORDER BY` as a correctness requirement.** See below.
+
+### Key Code
+`django_app/movies/graph.py` — the `ORDER BY` in `_build_adjacency()`:
+> Caught by running the same `/connect/` query before and after a reload and getting two *different*
+> 2-hop paths. Both were correct — with ties, BFS returns *a* shortest path, not *the* one — but
+> Postgres returns rows in no guaranteed order without `ORDER BY`, and Python dicts preserve
+> insertion order, so the adjacency was being built differently after every reload. A shortest path
+> that changes between rebuilds looks like a bug even when it isn't. One clause makes the whole
+> search reproducible.
+
+`warehouse/queries/actor_collaboration_frequency.sql`:
+> Was a self-join over `fact_cast` recomputing every co-starring pair on every dashboard load. Now
+> reads `fact_collaboration`, where the counts are already derived, canonically ordered and indexed.
+> The panel's numbers are unchanged; the work moved from request time to load time, which is the
+> entire argument for having a Gold layer.
+
+`warehouse/ddl/11_drop_legacy_person_tables.sql`:
+> Documents what each dropped table *became* rather than just naming it, and states the cost
+> honestly: the 376 slugs that moved when the namespaces merged lose their redirect, because the
+> mapping lived in the tables being dropped. Keeping two dimension tables alive purely as a
+> redirect map would cost more than it's worth.
+
+### What to Study Next
+Every schema change in this phase was applied by hand-written, hand-ordered `.sql` files, and this
+task exposed the limit of that: the numbering encodes *history*, but nothing in the database records
+which files have been applied, so "is this warehouse up to date?" can only be answered by looking.
+Read up on migration frameworks that track applied state in the database itself — **Alembic** (the
+SQLAlchemy-native one), **Flyway**, **dbt** — and specifically on how they handle the exact problem
+here: keeping a repeatable "build the current schema from scratch" path alongside an append-only
+migration history.

@@ -19,8 +19,7 @@ Usage:
     python -m data_quality.silver_checks
     python -m data_quality.silver_checks --date 2026-06-22
 
-Auto-run after Tasks 9–12 (Silver transforms for movies, actors, directors,
-genres, and credits bridge).
+Auto-run after the Silver transforms (movies, people, genres, credits bridge).
 """
 
 from __future__ import annotations
@@ -76,24 +75,6 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "person_id", "name", "gender", "popularity", "profile_path",
             "known_for_department",
         ],
-        "ranges": {
-            "popularity": (0.0, None),
-        },
-    },
-    "actors": {
-        "parquet": "actors.parquet",
-        "pk_cols": ["person_id"],
-        "required_cols": ["person_id", "name"],
-        "expected_cols": ["person_id", "name", "gender", "popularity", "profile_path"],
-        "ranges": {
-            "popularity": (0.0, None),
-        },
-    },
-    "directors": {
-        "parquet": "directors.parquet",
-        "pk_cols": ["person_id"],
-        "required_cols": ["person_id", "name"],
-        "expected_cols": ["person_id", "name", "gender", "popularity", "profile_path"],
         "ranges": {
             "popularity": (0.0, None),
         },

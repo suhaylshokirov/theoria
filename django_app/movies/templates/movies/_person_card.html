@@ -3,8 +3,8 @@
    Params — always pass with `only`, since this partial is included from
    three different pages and inheriting the whole parent context is how a
    stray same-named variable silently changes what renders:
-     person           : Actor or Director
-     detail_url_name  : URL name string, e.g. "movies:actor_detail"
+     person           : a Person
+     detail_url_name  : URL name string, e.g. "movies:person_detail"
      card_sub         : optional sub-line. Named card_sub rather than `sub`
                         because `sub` is already a CSS class elsewhere in the
                         site and the collision would be easy to miss.

@@ -60,11 +60,17 @@ def _data_version(cursor) -> str:
 def _build_adjacency(cursor) -> tuple[dict[int, dict[int, int]], dict[int, str]]:
     """Return {person_id: {neighbour_id: connecting_movie_id}} and {person_id: name}."""
     placeholders = ", ".join(["%s"] * len(PATH_CREW_JOBS))
+    # ORDER BY is load-bearing, not tidiness. Postgres gives no row order without
+    # it, and dicts preserve insertion order — so unordered rows mean the
+    # adjacency is built in a different order after every reload, and BFS picks
+    # a different one of the equally-short paths each time. A shortest path that
+    # changes between rebuilds looks like a bug even though it isn't.
     cursor.execute(
         f"""
         SELECT movie_id, person_id
         FROM fact_credit
         WHERE department = 'Acting' OR job IN ({placeholders})
+        ORDER BY movie_id, person_id
         """,
         PATH_CREW_JOBS,
     )

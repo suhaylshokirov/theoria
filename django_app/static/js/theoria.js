@@ -173,10 +173,44 @@
     }
   }
 
+  /* --- Mobile nav ------------------------------------------------------------
+     Pure show/hide of the existing .nav-links panel; the collapse itself is
+     CSS, gated on html.has-js (see base.html) so this only ever runs where
+     the button is actually visible. Closes on Escape and on a route change
+     via pageshow (back/forward cache can restore an open menu otherwise). */
+
+  function initNavToggle() {
+    var btn = document.getElementById("nav-toggle");
+    var panel = document.getElementById("nav-links");
+    if (!btn || !panel) return;
+
+    function setOpen(open) {
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+      btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+      panel.classList.toggle("is-open", open);
+    }
+
+    btn.addEventListener("click", function () {
+      setOpen(btn.getAttribute("aria-expanded") !== "true");
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && btn.getAttribute("aria-expanded") === "true") {
+        setOpen(false);
+        btn.focus();
+      }
+    });
+
+    window.addEventListener("pageshow", function () {
+      setOpen(false);
+    });
+  }
+
   function init() {
     initMeters();
     initCounters();
     initThemeToggle();
+    initNavToggle();
   }
 
   if (document.readyState === "loading") {

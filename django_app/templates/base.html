@@ -30,6 +30,12 @@
           document.documentElement.setAttribute("data-theme", t);
         }
       } catch (e) {}
+      {% comment %} Same reasoning as the theme script above: this has to run
+         before first paint, synchronously, so the mobile nav starts collapsed
+         with no flash of an open menu. Without JS, html carries no has-js
+         class, and the nav CSS's has-js-scoped rules simply never apply — the
+         links fall back to the plain wrapping row they've always been. {% endcomment %}
+      document.documentElement.classList.add("has-js");
     </script>
     <script defer src="{% static 'js/theoria.js' %}"></script>
 </head>
@@ -49,35 +55,50 @@
                 </svg>
                 Theoria
             </a>
+            {% comment %} Hamburger, mobile-only (see the has-js CSS gate on
+               .nav-toggle). Two glyphs stacked and opacity-swapped by
+               aria-expanded, same device as the theme toggle below so the
+               button never resizes when it opens. {% endcomment %}
+            <button type="button" class="nav-toggle" id="nav-toggle"
+                    aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+                <svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6h18M3 12h18M3 18h18"/>
+                </svg>
+                <svg class="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M5 5l14 14M19 5L5 19"/>
+                </svg>
+            </button>
             {% comment %} resolver_match.url_name, not request.path: "/" would prefix every
                route, and view_name equality would drop the highlight as soon as
                you opened a detail page. Grouping the list and detail names keeps
                "Films" lit while you're on /movies/120/. {% endcomment %}
             {% with vn=request.resolver_match.url_name %}
-            <div class="nav-links">
+            <div class="nav-links" id="nav-links">
                 <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>Films</a>
                 <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>People</a>
                 <a href="{% url 'movies:genre_list' %}"{% if vn in "genre_list,genre_detail" %} aria-current="page"{% endif %}>Genres</a>
                 <a href="{% url 'movies:collection_list' %}"{% if vn in "collection_list,collection_detail" %} aria-current="page"{% endif %}>Franchises</a>
                 <a href="{% url 'movies:connect' %}"{% if vn == "connect" %} aria-current="page"{% endif %}>Connect</a>
                 <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>
-                <button type="button" class="theme-toggle" id="theme-toggle"
-                        aria-label="Switch to dark theme" title="Switch theme">
-                    {% comment %} Moon = "go dark", sun = "go light". Only one is
-                       visible at a time; both are always in the DOM so the
-                       button never resizes. {% endcomment %}
-                    <svg class="icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
-                    </svg>
-                    <svg class="icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <circle cx="12" cy="12" r="4.2"/>
-                        <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>
-                    </svg>
-                </button>
             </div>
             {% endwith %}
+            <button type="button" class="theme-toggle" id="theme-toggle"
+                    aria-label="Switch to dark theme" title="Switch theme">
+                {% comment %} Moon = "go dark", sun = "go light". Only one is
+                   visible at a time; both are always in the DOM so the
+                   button never resizes. {% endcomment %}
+                <svg class="icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+                </svg>
+                <svg class="icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4.2"/>
+                    <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>
+                </svg>
+            </button>
         </nav>
     </header>
 

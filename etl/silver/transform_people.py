@@ -7,12 +7,9 @@ layer.
 S3 source:    bronze/credits/ingestion_date=YYYY-MM-DD/<movie_id>.json
 S3 outputs:
     silver/people/ingestion_date=YYYY-MM-DD/people.parquet
-    silver/actors/ingestion_date=YYYY-MM-DD/actors.parquet          (legacy)
-    silver/directors/ingestion_date=YYYY-MM-DD/directors.parquet    (legacy)
 
-`people` is the real output: one row per distinct person holding *any* credit,
-cast or crew, in any department. The narrower `actors`/`directors` datasets are
-retained only until the warehouse finishes migrating to dim_person.
+One row per distinct person holding *any* credit, cast or crew, in any
+department.
 
 Why one dataset and not three: the previous split defined a person by the credit
 that happened to introduce them — cast members became "actors", and crew members
@@ -49,9 +46,6 @@ logger = logging.getLogger(__name__)
 PEOPLE_COLUMNS = [
     "person_id", "name", "gender", "popularity", "profile_path", "known_for_department",
 ]
-# The narrower shape of the legacy actors/directors datasets, retired once the
-# warehouse reads dim_person.
-LEGACY_COLUMNS = ["person_id", "name", "gender", "popularity", "profile_path"]
 
 
 def _list_bronze_keys(bucket: str, ingestion_date: dt.date) -> list[str]:
@@ -103,35 +97,6 @@ def _extract_people(payload: dict[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _extract_actors(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract one row per cast member from a TMDB credits payload."""
-    rows = []
-    for member in payload.get("cast", []):
-        rows.append({
-            "person_id": member.get("id"),
-            "name": member.get("name"),
-            "gender": member.get("gender"),
-            "popularity": member.get("popularity"),
-            "profile_path": member.get("profile_path") or None,
-        })
-    return rows
-
-
-def _extract_directors(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Extract one row per Director from the crew array of a TMDB credits payload."""
-    rows = []
-    for member in payload.get("crew", []):
-        if member.get("job") == "Director":
-            rows.append({
-                "person_id": member.get("id"),
-                "name": member.get("name"),
-                "gender": member.get("gender"),
-                "popularity": member.get("popularity"),
-                "profile_path": member.get("profile_path") or None,
-            })
-    return rows
-
-
 def _cast_people_types(df: pd.DataFrame) -> pd.DataFrame:
     """Cast columns to intended types; bad values become NaN, not crashes."""
     df = df.copy()
@@ -169,17 +134,15 @@ def _dedupe_people(rows: list[dict[str, Any]], label: str, columns: list[str]) -
 def transform_people(
     ingestion_date: dt.date | None = None,
     bucket: str | None = None,
-) -> tuple[str, str, str]:
+) -> str:
     """Read Bronze credits JSON → extract every credited person → write Silver Parquet.
 
     Reads every .json file from the bronze/credits partition for `ingestion_date`,
     extracts one identity row per cast and crew member, casts fields to target
-    types, deduplicates on person_id (keeping last-seen record), and writes:
-        silver/people/ingestion_date=YYYY-MM-DD/people.parquet
-        silver/actors/ingestion_date=YYYY-MM-DD/actors.parquet          (legacy)
-        silver/directors/ingestion_date=YYYY-MM-DD/directors.parquet    (legacy)
+    types, deduplicates on person_id (keeping last-seen record), and writes
+    silver/people/ingestion_date=YYYY-MM-DD/people.parquet.
 
-    Returns (people_uri, actors_uri, directors_uri).
+    Returns the s3:// URI of the written Parquet file.
 
     Raises FileNotFoundError if no Bronze credits files exist for the given date.
     Raises RuntimeError if every file fails to parse.
@@ -200,16 +163,12 @@ def transform_people(
     logger.info("Found %d Bronze JSON file(s) to process", len(keys))
 
     people_rows: list[dict[str, Any]] = []
-    actor_rows: list[dict[str, Any]] = []
-    director_rows: list[dict[str, Any]] = []
     errors = 0
 
     for key in keys:
         try:
             payload = _read_json_from_s3(bucket, key)
             people_rows.extend(_extract_people(payload))
-            actor_rows.extend(_extract_actors(payload))
-            director_rows.extend(_extract_directors(payload))
         except Exception as exc:
             errors += 1
             logger.error("Failed to read/parse %s: %s", key, exc)
@@ -223,26 +182,17 @@ def transform_people(
     people_key = s3_utils.build_path("silver", "people", ingestion_date, "people.parquet")
     people_uri = s3_utils.write_parquet(bucket, people_key, df_people)
 
-    df_actors = _dedupe_people(actor_rows, "Actors", LEGACY_COLUMNS)
-    actors_key = s3_utils.build_path("silver", "actors", ingestion_date, "actors.parquet")
-    actors_uri = s3_utils.write_parquet(bucket, actors_key, df_actors)
-
-    df_directors = _dedupe_people(director_rows, "Directors", LEGACY_COLUMNS)
-    directors_key = s3_utils.build_path("silver", "directors", ingestion_date, "directors.parquet")
-    directors_uri = s3_utils.write_parquet(bucket, directors_key, df_directors)
-
     elapsed = time.monotonic() - t0
     logger.info(
-        "Silver people transform complete: %d people (%d actors, %d directors) written, "
-        "%d parse errors in %.2fs",
-        len(df_people), len(df_actors), len(df_directors), errors, elapsed,
+        "Silver people transform complete: %d people written, %d parse errors in %.2fs",
+        len(df_people), errors, elapsed,
     )
-    return people_uri, actors_uri, directors_uri
+    return people_uri
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Transform Bronze credits JSON to Silver actors and directors Parquet."
+        description="Transform Bronze credits JSON to a Silver people Parquet."
     )
     parser.add_argument(
         "--date",

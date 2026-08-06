@@ -2,26 +2,21 @@
 
 Reads the Silver Parquet files for a given ingestion_date and upserts them
 into the PostgreSQL dimension tables (dim_collection, dim_movie, dim_person,
-dim_actor, dim_director, dim_genre). dim_date is populated separately as a full
-calendar table that does not depend on any Silver data.
+dim_genre). dim_date is populated separately as a full calendar table that does
+not depend on any Silver data.
 
 dim_collection is loaded first: dim_movie.collection_id is an FK to it.
-
-dim_actor/dim_director are legacy and are superseded by dim_person; they are
-still loaded until the Django app and analytics queries finish migrating.
 
 Upserts use ON CONFLICT (pk) DO UPDATE, so re-running the loader for the
 same or a later ingestion_date is idempotent — existing rows are refreshed
 in place rather than duplicated. After upserting, dim_movie/dim_person/
-dim_actor/dim_director each get a `slug` column recomputed over the whole table
+dim_collection each get a `slug` column recomputed over the whole table
 via assign_slugs() — the URL-facing identifier for those pages, so a movie or
 person is reachable at a readable path instead of a bare surrogate key.
 
 S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
     silver/people/ingestion_date=YYYY-MM-DD/people.parquet
-    silver/actors/ingestion_date=YYYY-MM-DD/actors.parquet
-    silver/directors/ingestion_date=YYYY-MM-DD/directors.parquet
     silver/genres/ingestion_date=YYYY-MM-DD/genres.parquet
 
 Usage:
@@ -109,26 +104,6 @@ def load_dim_person(session: Session, df: pd.DataFrame) -> int:
     records = _records(df, columns)
     count = _upsert(session, "dim_person", ["person_id"], columns, records)
     logger.info("dim_person: upserted %d row(s)", count)
-    return count
-
-
-def load_dim_actor(session: Session, df: pd.DataFrame) -> int:
-    """Upsert Silver actors into dim_actor (person_id -> actor_id)."""
-    df = df.rename(columns={"person_id": "actor_id"})
-    columns = ["actor_id", "name", "gender", "popularity", "profile_path"]
-    records = _records(df, columns)
-    count = _upsert(session, "dim_actor", ["actor_id"], columns, records)
-    logger.info("dim_actor: upserted %d row(s)", count)
-    return count
-
-
-def load_dim_director(session: Session, df: pd.DataFrame) -> int:
-    """Upsert Silver directors into dim_director (person_id -> director_id)."""
-    df = df.rename(columns={"person_id": "director_id"})
-    columns = ["director_id", "name", "gender", "popularity", "profile_path"]
-    records = _records(df, columns)
-    count = _upsert(session, "dim_director", ["director_id"], columns, records)
-    logger.info("dim_director: upserted %d row(s)", count)
     return count
 
 
@@ -240,8 +215,6 @@ def load_dimensions(
 
     movies_df = _read_silver_parquet(bucket, "movies", ingestion_date, "movies.parquet")
     people_df = _read_silver_parquet(bucket, "people", ingestion_date, "people.parquet")
-    actors_df = _read_silver_parquet(bucket, "actors", ingestion_date, "actors.parquet")
-    directors_df = _read_silver_parquet(bucket, "directors", ingestion_date, "directors.parquet")
     genres_df = _read_silver_parquet(bucket, "genres", ingestion_date, "genres.parquet")
 
     counts: dict[str, int] = {}
@@ -250,15 +223,11 @@ def load_dimensions(
         counts["dim_collection"] = load_dim_collection(session, movies_df)
         counts["dim_movie"] = load_dim_movie(session, movies_df)
         counts["dim_person"] = load_dim_person(session, people_df)
-        counts["dim_actor"] = load_dim_actor(session, actors_df)
-        counts["dim_director"] = load_dim_director(session, directors_df)
         counts["dim_genre"] = load_dim_genre(session, genres_df)
         counts["dim_date"] = load_dim_date(session, calendar_start, calendar_end)
         counts["dim_movie_slugs"] = assign_slugs(session, "dim_movie", "movie_id", "title")
         counts["dim_person_slugs"] = assign_slugs(session, "dim_person", "person_id", "name")
         counts["dim_collection_slugs"] = assign_slugs(session, "dim_collection", "collection_id", "name")
-        counts["dim_actor_slugs"] = assign_slugs(session, "dim_actor", "actor_id", "name")
-        counts["dim_director_slugs"] = assign_slugs(session, "dim_director", "director_id", "name")
 
     elapsed = time.monotonic() - t0
     logger.info(

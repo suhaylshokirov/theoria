@@ -606,12 +606,6 @@ def test_flatten_movie_carries_image_fields():
     assert empty["tagline"] is None
 
 
-def test_extract_actors_carries_profile_path():
-    """Task 36: actor profile_path flows through from Bronze credits."""
-    rows = _extract_actors(_raw_credits(550))
-    assert rows[0]["profile_path"] == "/alice.jpg"
-
-
 def test_flatten_movie_handles_missing_release_date():
     raw = _raw_movie(1, release_date="")
     row = _flatten_movie(raw)
@@ -692,8 +686,6 @@ def test_transform_movies_raises_when_no_bronze_files():
 
 from etl.silver.transform_people import (
     _cast_people_types,
-    _extract_actors,
-    _extract_directors,
     _extract_people,
     transform_people,
 )
@@ -719,24 +711,8 @@ def _raw_credits(movie_id: int, extra_cast: list | None = None, extra_crew: list
     return {"id": movie_id, "cast": cast, "crew": crew}
 
 
-def test_extract_actors_returns_all_cast_members():
-    payload = _raw_credits(550)
-    rows = _extract_actors(payload)
-    assert len(rows) == 2
-    assert rows[0]["person_id"] == 10
-    assert rows[0]["name"] == "Alice"
-
-
-def test_extract_directors_filters_to_director_job_only():
-    payload = _raw_credits(550)
-    rows = _extract_directors(payload)
-    assert len(rows) == 1
-    assert rows[0]["person_id"] == 20
-    assert rows[0]["name"] == "Carol"
-
-
 def test_cast_people_types_converts_numerics():
-    rows = _extract_actors(_raw_credits(550))
+    rows = _extract_people(_raw_credits(550))
     df = pd.DataFrame(rows)
     df = _cast_people_types(df)
     assert df["person_id"].dtype.name == "Int64"
@@ -773,57 +749,23 @@ def test_extract_people_carries_known_for_department():
     assert carol["known_for_department"] == "Directing"
 
 
-def test_transform_people_writes_people_actors_and_directors_parquet():
-    """transform_people must write the people dataset plus both legacy files."""
+def test_transform_people_writes_one_people_parquet():
+    """One dataset now: everyone with a credit, cast or crew."""
     key = "bronze/credits/ingestion_date=2026-06-22/550.json"
     mock_s3 = _make_s3_mock_with_files({key: _raw_credits(550)})
 
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
-        people_uri, actors_uri, directors_uri = transform_people(
+        people_uri = transform_people(
             ingestion_date=dt.date(2026, 6, 22),
             bucket="theoria-datalake",
         )
 
     assert people_uri == "s3://theoria-datalake/silver/people/ingestion_date=2026-06-22/people.parquet"
-    assert actors_uri == "s3://theoria-datalake/silver/actors/ingestion_date=2026-06-22/actors.parquet"
-    assert directors_uri == "s3://theoria-datalake/silver/directors/ingestion_date=2026-06-22/directors.parquet"
-    assert mock_s3.put_object.call_count == 3
+    assert mock_s3.put_object.call_count == 1
 
-
-def test_transform_people_people_dataset_covers_cast_and_crew():
-    """silver/people must hold everyone; silver/actors must still hold only cast."""
-    key = "bronze/credits/ingestion_date=2026-06-22/550.json"
-    mock_s3 = _make_s3_mock_with_files({key: _raw_credits(550)})
-
-    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
-        transform_people(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
-
-    calls = mock_s3.put_object.call_args_list
-    people_call = next(c for c in calls if "people.parquet" in c[1]["Key"])
-    df_people = pd.read_parquet(io.BytesIO(people_call[1]["Body"]))
-
-    assert set(df_people["person_id"]) == {10, 11, 20, 21}
-    assert "known_for_department" in df_people.columns
-
-
-def test_transform_people_deduplicates_actors_across_movies():
-    """The same person appearing in two movies' casts must produce one actor row."""
-    key1 = "bronze/credits/ingestion_date=2026-06-22/550.json"
-    key2 = "bronze/credits/ingestion_date=2026-06-22/551.json"
-    # Both movies share actor id=10
-    mock_s3 = _make_s3_mock_with_files({
-        key1: _raw_credits(550),
-        key2: _raw_credits(551),
-    })
-
-    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
-        transform_people(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
-
-    calls = mock_s3.put_object.call_args_list
-    actors_call = next(c for c in calls if "actors.parquet" in c[1]["Key"])
-    df_actors = pd.read_parquet(io.BytesIO(actors_call[1]["Body"]))
-    # person_id 10 and 11 each appear twice across the two files — should collapse to 2 rows
-    assert len(df_actors) == 2
+    df = pd.read_parquet(io.BytesIO(mock_s3.put_object.call_args[1]["Body"]))
+    assert set(df["person_id"]) == {10, 11, 20, 21}
+    assert "known_for_department" in df.columns
 
 
 def test_transform_people_raises_when_no_bronze_files():
@@ -1150,15 +1092,10 @@ def _silver_genres() -> pd.DataFrame:
     ])
 
 
-def _silver_actors() -> pd.DataFrame:
+def _silver_people() -> pd.DataFrame:
     return pd.DataFrame([
         {"person_id": 10, "name": "Actor A", "gender": 2, "popularity": 50.0},
         {"person_id": 11, "name": "Actor B", "gender": 1, "popularity": 30.0},
-    ])
-
-
-def _silver_directors() -> pd.DataFrame:
-    return pd.DataFrame([
         {"person_id": 20, "name": "Dir A", "gender": 2, "popularity": 40.0},
     ])
 
@@ -1247,8 +1184,7 @@ def _make_multi_entity_s3_mock(ingestion_date: dt.date) -> MagicMock:
     """S3 mock that returns correct Silver Parquet for each entity."""
     entities = {
         "movies": _silver_movies(),
-        "actors": _silver_actors(),
-        "directors": _silver_directors(),
+        "people": _silver_people(),
         "genres": _silver_genres(),
         "credits_bridge": _silver_bridge(),
     }
@@ -1334,7 +1270,7 @@ def test_decade_stats_sorted_by_decade():
 
 def test_actor_filmography_film_counts():
     """Actor A (id=10) appears in 2 films; Actor B (id=11) in 1 film."""
-    result = _build_actor_filmography(_silver_movies(), _silver_actors(), _silver_bridge())
+    result = _build_actor_filmography(_silver_movies(), _silver_people(), _silver_bridge())
     actor_a = result[result["person_id"] == 10].iloc[0]
     actor_b = result[result["person_id"] == 11].iloc[0]
     assert int(actor_a["film_count"]) == 2
@@ -1343,14 +1279,14 @@ def test_actor_filmography_film_counts():
 
 def test_actor_filmography_avg_rating_for_actor_a():
     """Actor A avg rating = (8.0 + 7.0) / 2 = 7.5."""
-    result = _build_actor_filmography(_silver_movies(), _silver_actors(), _silver_bridge())
+    result = _build_actor_filmography(_silver_movies(), _silver_people(), _silver_bridge())
     actor_a = result[result["person_id"] == 10].iloc[0]
     assert abs(float(actor_a["avg_rating"]) - 7.5) < 0.01
 
 
 def test_actor_filmography_excludes_crew_rows():
     """Director rows (credit_type='crew') must not be counted in actor filmography."""
-    result = _build_actor_filmography(_silver_movies(), _silver_actors(), _silver_bridge())
+    result = _build_actor_filmography(_silver_movies(), _silver_people(), _silver_bridge())
     # person_id=20 is a director — should not appear
     assert 20 not in list(result["person_id"])
 
@@ -1359,21 +1295,21 @@ def test_actor_filmography_excludes_crew_rows():
 
 def test_director_ratings_film_count():
     """Director A (id=20) directed films 1 and 2 → film_count=2."""
-    result = _build_director_ratings(_silver_movies(), _silver_directors(), _silver_bridge())
+    result = _build_director_ratings(_silver_movies(), _silver_people(), _silver_bridge())
     dir_a = result[result["person_id"] == 20].iloc[0]
     assert int(dir_a["film_count"]) == 2
 
 
 def test_director_ratings_avg_rating():
     """Director A avg rating = (8.0 + 7.0) / 2 = 7.5."""
-    result = _build_director_ratings(_silver_movies(), _silver_directors(), _silver_bridge())
+    result = _build_director_ratings(_silver_movies(), _silver_people(), _silver_bridge())
     dir_a = result[result["person_id"] == 20].iloc[0]
     assert abs(float(dir_a["avg_rating"]) - 7.5) < 0.01
 
 
 def test_director_ratings_total_revenue():
     """Director A total revenue = 100M + 50M = 150M."""
-    result = _build_director_ratings(_silver_movies(), _silver_directors(), _silver_bridge())
+    result = _build_director_ratings(_silver_movies(), _silver_people(), _silver_bridge())
     dir_a = result[result["person_id"] == 20].iloc[0]
     assert int(dir_a["total_revenue"]) == 150_000_000
 
@@ -1395,7 +1331,7 @@ def test_director_ratings_excludes_non_director_crew_credits():
         ]
     )
 
-    result = _build_director_ratings(_silver_movies(), _silver_directors(), bridge)
+    result = _build_director_ratings(_silver_movies(), _silver_people(), bridge)
 
     dir_a = result[result["person_id"] == 20].iloc[0]
     assert int(dir_a["film_count"]) == 2  # films 1 and 2 only, not 3
@@ -1582,10 +1518,8 @@ from etl.warehouse_loader.load_dimensions import (
     _slugify,
     _upsert,
     assign_slugs,
-    load_dim_actor,
     load_dim_collection,
     load_dim_date,
-    load_dim_director,
     load_dim_genre,
     load_dim_movie,
     load_dimensions,
@@ -1707,28 +1641,6 @@ def test_load_dim_collection_deduplicates_a_franchise_shared_by_several_films():
     assert count == 1
 
 
-def test_load_dim_actor_renames_person_id():
-    """load_dim_actor() must map the Silver person_id column to actor_id."""
-    mock_session = MagicMock()
-    count = load_dim_actor(mock_session, _dim_people_df())
-
-    assert count == 2
-    (stmt, params), _ = mock_session.execute.call_args
-    assert "INSERT INTO dim_actor" in str(stmt)
-    assert params[0]["actor_id"] == 10
-
-
-def test_load_dim_director_renames_person_id():
-    """load_dim_director() must map the Silver person_id column to director_id."""
-    mock_session = MagicMock()
-    count = load_dim_director(mock_session, _dim_people_df())
-
-    assert count == 2
-    (stmt, params), _ = mock_session.execute.call_args
-    assert "INSERT INTO dim_director" in str(stmt)
-    assert params[0]["director_id"] == 10
-
-
 def test_load_dim_genre_upserts_expected_columns():
     """load_dim_genre() must upsert genre_id and genre_name only."""
     mock_session = MagicMock()
@@ -1841,7 +1753,7 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
     def fake_read(bucket, entity, ingestion_date, filename):
         if entity == "movies":
             return _dim_movies_df()
-        if entity in ("people", "actors", "directors"):
+        if entity == "people":
             return _dim_people_df()
         if entity == "genres":
             return _dim_genres_df()
@@ -1863,29 +1775,24 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
     )
 
     assert counts == {
-        "dim_collection": 1, "dim_movie": 2, "dim_person": 2, "dim_actor": 2,
-        "dim_director": 2, "dim_genre": 2, "dim_date": 2,
+        "dim_collection": 1, "dim_movie": 2, "dim_person": 2,
+        "dim_genre": 2, "dim_date": 2,
         "dim_movie_slugs": 0, "dim_person_slugs": 0, "dim_collection_slugs": 0,
-        "dim_actor_slugs": 0, "dim_director_slugs": 0,
     }
-    # 7 upserts + 5 slug SELECTs (the mocked session's empty fetchall() means
-    # no matching UPDATE is issued for any of the five slugged tables).
-    assert mock_session.execute.call_count == 12
+    # 5 upserts + 3 slug SELECTs (the mocked session's empty fetchall() means
+    # no matching UPDATE is issued for any of the three slugged tables).
+    assert mock_session.execute.call_count == 8
 
 
 # ---------------------------------------------------------------------------
 # Task 19 / Task 35 — etl/warehouse_loader/load_facts.py
 # ---------------------------------------------------------------------------
 from etl.warehouse_loader.load_facts import (
-    _build_cast_rows,
     _build_credit_rows,
-    _build_crew_rows,
     _build_movie_metrics_rows,
     _existing_ids,
     _records,
     _write_rejects,
-    load_fact_cast,
-    load_fact_crew,
     load_fact_movie_metrics,
     load_facts,
 )
@@ -2098,95 +2005,6 @@ def test_build_credit_rows_rejects_unknown_person_id():
     assert {r["rejection_reason"] for r in rejects} == {"unknown person_id"}
 
 
-def test_build_cast_rows_resolves_known_ids():
-    """A cast row with a known movie_id/actor_id produces a fact_cast row."""
-    rows, rejects = _build_cast_rows(
-        _fact_bridge_df(), valid_movie_ids={1}, valid_actor_ids={10, 11},
-        ingestion_date=dt.date(2026, 6, 26),
-    )
-
-    assert len(rows) == 2
-    assert {r["actor_id"] for r in rows} == {10, 11}
-    hero_row = next(r for r in rows if r["actor_id"] == 10)
-    assert hero_row == {
-        "movie_id": 1, "actor_id": 10, "role": "Hero", "ordering": 0,
-        "ingestion_date": dt.date(2026, 6, 26),
-    }
-
-
-def test_build_cast_rows_independent_of_director():
-    """Movie 2 has a credited actor but no credited director — the cast row must still load.
-
-    This is the regression test for the fact_casting cross-join bug: fact_cast
-    has no director dependency at all, so a movie's cast no longer disappears
-    when it has no resolvable director.
-    """
-    rows, rejects = _build_cast_rows(
-        _fact_bridge_df(), valid_movie_ids={2}, valid_actor_ids={30},
-        ingestion_date=dt.date(2026, 6, 26),
-    )
-
-    assert rows == [{
-        "movie_id": 2, "actor_id": 30, "role": "Lead", "ordering": 0,
-        "ingestion_date": dt.date(2026, 6, 26),
-    }]
-    assert not any(r.get("movie_id") == 2 for r in rejects)
-
-
-def test_build_cast_rows_rejects_unknown_movie_id():
-    """An actor row whose movie_id isn't in dim_movie must be rejected."""
-    rows, rejects = _build_cast_rows(
-        _fact_bridge_df(), valid_movie_ids=set(), valid_actor_ids={10, 11, 30, 40},
-        ingestion_date=dt.date(2026, 6, 26),
-    )
-
-    assert rows == []
-    assert all(r["rejection_reason"] == "unknown movie_id" for r in rejects)
-
-
-def test_build_cast_rows_rejects_unknown_actor_id():
-    """An actor_id absent from dim_actor must be rejected even though its movie resolves."""
-    rows, rejects = _build_cast_rows(
-        _fact_bridge_df(), valid_movie_ids={1, 2, 3}, valid_actor_ids=set(),
-        ingestion_date=dt.date(2026, 6, 26),
-    )
-
-    assert rows == []
-    assert all(r["rejection_reason"] == "unknown actor_id" for r in rejects)
-
-
-def test_build_crew_rows_resolves_known_director():
-    """A crew row with role == 'Director' and known movie_id/director_id produces a fact_crew row."""
-    rows, rejects = _build_crew_rows(
-        _fact_bridge_df(), valid_movie_ids={1}, valid_director_ids={20},
-        ingestion_date=dt.date(2026, 6, 26),
-    )
-
-    assert rows == [{"movie_id": 1, "director_id": 20, "ingestion_date": dt.date(2026, 6, 26)}]
-
-
-def test_build_crew_rows_rejects_unknown_movie_id():
-    """A director row whose movie_id isn't in dim_movie must be rejected."""
-    rows, rejects = _build_crew_rows(
-        _fact_bridge_df(), valid_movie_ids=set(), valid_director_ids={20, 999},
-        ingestion_date=dt.date(2026, 6, 26),
-    )
-
-    assert rows == []
-    assert all(r["rejection_reason"] == "unknown movie_id" for r in rejects)
-
-
-def test_build_crew_rows_rejects_unknown_director_id():
-    """A director_id absent from dim_director must be rejected even though its movie resolves."""
-    rows, rejects = _build_crew_rows(
-        _fact_bridge_df(), valid_movie_ids={1, 3}, valid_director_ids=set(),
-        ingestion_date=dt.date(2026, 6, 26),
-    )
-
-    assert rows == []
-    assert all(r["rejection_reason"] == "unknown director_id" for r in rejects)
-
-
 def test_write_rejects_writes_parquet_file(tmp_path):
     """_write_rejects() must write a Parquet file named <entity>_rejected_<date>.parquet."""
     path = _write_rejects(
@@ -2228,53 +2046,6 @@ def test_load_fact_movie_metrics_resolves_fks_and_upserts(monkeypatch):
     assert params[0]["ingestion_date"] == dt.date(2026, 6, 26)
 
 
-def test_load_fact_cast_resolves_fks_and_upserts(monkeypatch):
-    """load_fact_cast() must query dimension tables for valid IDs, then upsert only resolvable rows."""
-    import etl.warehouse_loader.load_facts as load_facts_module
-
-    mock_session = MagicMock()
-    id_sets = {
-        "dim_movie": {1, 2, 3}, "dim_actor": {10, 11, 30, 40},
-    }
-    monkeypatch.setattr(
-        load_facts_module, "_existing_ids",
-        lambda session, table, pk_col: id_sets[table],
-    )
-
-    count, rejects = load_fact_cast(mock_session, _fact_bridge_df(), dt.date(2026, 6, 26))
-
-    # All four cast rows resolve (movies 1, 2, 3 each have a known actor) — no
-    # director lookup at all, so movies 2/3 having no/an-unresolvable
-    # director never rejects their cast.
-    assert count == 4
-    assert rejects == []
-    (stmt, params), _ = mock_session.execute.call_args
-    assert "INSERT INTO fact_cast" in str(stmt)
-    assert params[0]["ingestion_date"] == dt.date(2026, 6, 26)
-
-
-def test_load_fact_crew_resolves_fks_and_upserts(monkeypatch):
-    """load_fact_crew() must query dimension tables for valid IDs, then upsert only resolvable rows."""
-    import etl.warehouse_loader.load_facts as load_facts_module
-
-    mock_session = MagicMock()
-    id_sets = {
-        "dim_movie": {1, 2, 3}, "dim_director": {20},
-    }
-    monkeypatch.setattr(
-        load_facts_module, "_existing_ids",
-        lambda session, table, pk_col: id_sets[table],
-    )
-
-    count, rejects = load_fact_crew(mock_session, _fact_bridge_df(), dt.date(2026, 6, 26))
-
-    assert count == 1
-    assert any(r["rejection_reason"] == "unknown director_id" for r in rejects)
-    (stmt, params), _ = mock_session.execute.call_args
-    assert "INSERT INTO fact_crew" in str(stmt)
-    assert params[0]["ingestion_date"] == dt.date(2026, 6, 26)
-
-
 def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path):
     """load_facts() must read movies + credits_bridge, upsert all three fact tables, and write rejects."""
     date = dt.date(2026, 6, 26)
@@ -2296,7 +2067,6 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
     )
     id_sets = {
         "dim_movie": {1, 2, 3, 4}, "dim_date": {20200101, 20200102}, "dim_genre": {1},
-        "dim_actor": {10, 11, 30, 40}, "dim_director": {20},
         "dim_person": {10, 11, 20, 30, 40},
     }
     monkeypatch.setattr(
@@ -2306,13 +2076,10 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
 
     counts = load_facts(ingestion_date=date, bucket="theoria-datalake", rejected_dir=tmp_path)
 
-    assert counts == {
-        "fact_movie_metrics": 1, "fact_credit": 5, "fact_cast": 4, "fact_crew": 1,
-    }
+    assert counts == {"fact_movie_metrics": 1, "fact_credit": 5}
     rejected_files = sorted(p.name for p in tmp_path.iterdir())
     assert rejected_files == [
         "fact_credit_rejected_2026-06-26.parquet",
-        "fact_crew_rejected_2026-06-26.parquet",
         "fact_movie_metrics_rejected_2026-06-26.parquet",
     ]
 

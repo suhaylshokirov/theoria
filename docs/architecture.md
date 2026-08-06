@@ -90,29 +90,30 @@ gives:
 ## 3. Warehouse schema (star schema)
 
 ```
-                     ┌───────────┐
-                     │ dim_date  │
-                     └─────┬─────┘
-                           │
-┌───────────┐        ┌─────┴──────────────┐        ┌────────────┐
-│ dim_genre │───────▶│ fact_movie_metrics │◀───────│ dim_movie  │
-└───────────┘        └────────────────────┘        └─────┬──────┘
-                                                          │
-                          ┌────────────┐                  │
-┌────────────┐            │ fact_cast  │◀─────────────────┤
-│ dim_actor  │───────────▶│            │                  │
-└────────────┘            └────────────┘                  │
-                                                          │
-                          ┌────────────┐                  │
-┌────────────┐            │ fact_crew  │◀─────────────────┘
-│ dim_director│──────────▶│            │
-└────────────┘            └────────────┘
+                    ┌───────────┐                 ┌────────────────┐
+                    │ dim_date  │                 │ dim_collection │
+                    └─────┬─────┘                 └───────┬────────┘
+                          │                               │ (nullable)
+┌───────────┐       ┌─────┴──────────────┐        ┌───────┴────┐
+│ dim_genre │──────▶│ fact_movie_metrics │◀───────│ dim_movie  │
+└───────────┘       └────────────────────┘        └─────┬──────┘
+                                                        │
+                         ┌─────────────┐                │
+┌────────────┐           │ fact_credit │◀───────────────┘
+│ dim_person │──────────▶│             │
+└─────┬──────┘           └─────────────┘
+      │                  ┌────────────────────┐
+      └─────────────────▶│ fact_collaboration │  (both FKs -> dim_person)
+                         └────────────────────┘
 ```
 
-**Dimensions** (`warehouse/ddl/01_dimensions.sql`): `dim_movie`, `dim_actor`, `dim_director`,
+**Dimensions** (`warehouse/ddl/01_dimensions.sql`): `dim_movie`, `dim_person`, `dim_collection`,
 `dim_genre`, `dim_date`. All use a natural TMDB integer ID as primary key, except `dim_date`,
 which uses a generated `YYYYMMDD` surrogate key and is populated as a full calendar table
 (1900–2035 by default) independent of any Silver data.
+
+`dim_movie.collection_id` is a **nullable** FK: roughly half the catalog belongs to no franchise,
+which is a property of films rather than missing data.
 
 **Facts** (`warehouse/ddl/02_facts.sql`):
 - `fact_movie_metrics(movie_id, date_id, genre_id, rating, vote_count, revenue, budget,
@@ -122,10 +123,11 @@ which uses a generated `YYYYMMDD` surrogate key and is populated as a full calen
   aggregating `rating`/`revenue`/`popularity` directly would double-count multi-genre movies. Every
   query in `warehouse/queries/` that touches these columns first collapses to
   `SELECT DISTINCT movie_id, ...` in a CTE before aggregating.
-- `fact_cast(movie_id, actor_id, role, ordering, ingestion_date)` — one row per credited actor per
-  movie.
-- `fact_crew(movie_id, director_id, ingestion_date)` — one row per credited director per movie
-  (restricted to director credits, mirroring `dim_director`).
+- `fact_credit(movie_id, person_id, department, job, character_name, ordering, ingestion_date)` —
+  one row per credit, at the grain TMDB actually publishes. A director who also wrote and produced
+  a film is three rows, and the PK says so.
+- `fact_collaboration(person_a_id, person_b_id, films_together, first_year, last_year)` — derived
+  in Gold rather than loaded from Silver; see §3.1.
 
 All fact tables carry named foreign keys to every dimension they reference, and an index on each
 FK column (PostgreSQL does not auto-index FKs). All also carry an `ingestion_date` column purely
@@ -154,6 +156,52 @@ longer depends on whether it has a resolvable director, and vice versa. `fact_cr
 models director credits only (mirroring `dim_director`, which itself only contains people credited
 as director) — modeling other crew roles would need a new person-role dimension, out of scope for
 this fix.
+
+Both tables were themselves retired in Phase 10 by `fact_credit`, which models every credit
+regardless of department (§3.1). They are described here because the *reasoning* still applies:
+coupling two independent facts in one table makes one of them disappear whenever the other is
+missing.
+
+### 3.1 One person, every credit — and the two graphs
+
+`dim_actor` and `dim_director` split one human being across two tables according to whichever
+credit happened to introduce them, and `fact_cast`/`fact_crew` did the same to their work. The
+cost was not stylistic. `transform_people` decided who existed with a single line —
+`if member.get("job") == "Director"` — and that line excluded **79,523 people** whose credits were
+already ingested and sitting in Bronze. The loader then discarded **169,682 of 170,915 crew
+credits** (99.3%) to keep only directors. Every editor, composer, cinematographer, production
+designer and writer in the catalog was unrepresentable.
+
+`dim_person` + `fact_credit` replace all four tables. Identity belongs to the person; what they
+did on a given film is a *fact*, not an attribute of who they are. The warehouse went from 45,231
+people and 64,031 credits to **122,685 people and 237,454 credits across 13 departments and 858
+distinct job titles** — with no new API calls, because Bronze had held all of it since the first
+ingestion run.
+
+**The collaboration graph, and why there are two of them.** `fact_collaboration` counts how often
+each pair of people has worked together. The scoping decision matters more than the schema: pairing
+*every* credit on every film produces **33.1 million** edges on this corpus, and asserts that a
+caterer and a stunt double "collaborated". Restricting to **key credits** — top-10 billing plus
+nine principal craft jobs — gives **181,538**. That 180× reduction comes from deciding what a
+collaboration *is*, not from a `LIMIT`; the constants live in `build_gold_datasets.py` as a
+definition, the same way `config.DISCOVER_*` defines the corpus.
+
+The path finder at `/connect/` deliberately traverses a **different, wider** graph (all cast plus
+principal crew), because "is there any path between these two people" and "who works together
+repeatedly" are different questions. A 40th-billed extra is a real connection but not a working
+relationship. The two share no code.
+
+That graph is not queried in SQL. A recursive CTE over it times out (>60s measured): Postgres
+re-expands the same nodes at every depth because it cannot memoise the visited set across
+iterations, and the visited set *is* BFS. In-process bidirectional BFS answers the same question in
+~30 ms — Tom Hanks to Thelma Schoonmaker in 2 hops. Knowing when to pull data out of the database
+is as much a data-engineering decision as knowing how to push work into it.
+
+`fact_collaboration` is also the first thing in the project that **reads** the Gold layer. Gold had
+been written on every pipeline run since Task 14 and consumed by nothing. The honest test for
+whether a dataset belongs there is: expensive to compute, cheap to serve, and shaped for a read the
+star schema can't answer directly. A quadratic expansion over every film is all three; the other
+four Gold datasets fail that test, which is exactly why nothing reads them.
 
 ### Resolved: the credits-bridge dedup grain
 
@@ -235,7 +283,7 @@ Django never writes to the warehouse. This is enforced at three levels, not just
    tables; `warehouse` (Postgres) holds only the star schema. Views explicitly call
    `.using("warehouse")`.
 
-All three composite-PK fact tables (`fact_movie_metrics`, `fact_cast`, `fact_crew`) don't fit
+All three composite-PK fact tables (`fact_movie_metrics`, `fact_credit`, `fact_collaboration`) don't fit
 Django's one-primary-key-per-model assumption. Each model marks its `movie` FK as
 `primary_key=True` purely to satisfy that constraint — the real uniqueness lives only in the
 database's actual composite PK, and the resulting `fields.W342` warning is intentionally silenced
@@ -243,14 +291,14 @@ in `settings.py` with a comment explaining why, rather than worked around with a
 surrogate key that doesn't exist in the table.
 
 The **analytics dashboard** (`analytics/views.py`) takes a different approach from the `movies`
-app: instead of expressing the Task 22 SQL queries through the ORM, it reads the `.sql` files in
+app: instead of expressing its ten queries through the ORM, it reads the `.sql` files in
 `warehouse/queries/` directly and executes them via a raw cursor. This avoids maintaining the same
-logic twice (once in `.sql`, once as ORM query-building) for queries — like the self-join for actor
-collaboration frequency — that are naturally SQL-shaped.
+logic twice (once in `.sql`, once as ORM query-building) for queries — like the multi-CTE
+director/craft partnership join — that are naturally SQL-shaped.
 
 ## 7. Testing philosophy
 
-The full suite (192 tests, `pytest`) never touches a real network, S3 bucket, or Postgres
+The full suite (210 tests, `pytest`) never touches a real network, S3 bucket, or Postgres
 instance. Every ETL/loader test mocks the boundary (the `boto3` client, the `requests` session, the
 SQLAlchemy session) and asserts on the transformation logic itself. Django view tests construct
 real (unsaved) ORM model instances and patch each model's `.objects` manager, using

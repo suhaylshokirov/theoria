@@ -411,11 +411,13 @@ main.container {
   background: var(--lime);
 }
 
-/* --- Theme toggle -----------------------------------------------------------
-   A quiet icon button in the header. The two glyphs are stacked and swapped
-   by opacity so the control never changes size as the theme changes. */
+/* --- Theme toggle & nav toggle ----------------------------------------------
+   Two quiet icon buttons in the header, same shape. Each pair of glyphs is
+   stacked and swapped by opacity so neither control changes size when it's
+   pressed. */
 
-.theme-toggle {
+.theme-toggle,
+.nav-toggle {
   display: inline-grid;
   place-items: center;
   width: 34px;
@@ -430,13 +432,15 @@ main.container {
               border-color var(--dur-fast) var(--ease);
 }
 
-.theme-toggle:hover {
+.theme-toggle:hover,
+.nav-toggle:hover {
   color: var(--ink);
   border-color: var(--lime-mark);
   background: none;
 }
 
-.theme-toggle svg {
+.theme-toggle svg,
+.nav-toggle svg {
   grid-area: 1 / 1;
   width: 16px;
   height: 16px;
@@ -450,6 +454,19 @@ main.container {
 
 [data-theme="dark"] .theme-toggle .icon-dark { opacity: 0; }
 [data-theme="dark"] .theme-toggle .icon-light { opacity: 1; }
+
+/* Hamburger by default; hidden entirely above the breakpoint and, without
+   JS, hidden below it too — see the has-js gate further down, which is the
+   only place this button is ever made visible. */
+.nav-toggle {
+  display: none;
+}
+
+.nav-toggle .icon-menu { opacity: 1; }
+.nav-toggle .icon-close { opacity: 0; }
+
+.nav-toggle[aria-expanded="true"] .icon-menu { opacity: 0; }
+.nav-toggle[aria-expanded="true"] .icon-close { opacity: 1; }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) .theme-toggle .icon-dark { opacity: 0; }
@@ -1353,9 +1370,86 @@ button:hover,
   .container { padding-inline: var(--space-5); }
   main.container { padding-block: var(--space-7) var(--space-8); }
   .nav { gap: var(--space-4); }
-  .nav-links { gap: var(--space-4); width: 100%; margin-left: 0; }
   .sheet-title { font-size: var(--text-xl); }
   .stats { gap: var(--space-6); }
+
+  /* The 200px floor on a search field exists so it never shrinks to a
+     useless nub on a desktop toolbar; on a phone-width sheet it's the
+     opposite problem, since 200px alone can be most of the viewport. */
+  input[type="text"],
+  input[type="search"] {
+    min-width: 0;
+  }
+
+  .toolbar form { width: 100%; }
+  .toolbar .field { flex: 1 1 160px; }
+
+  /* Four fixed-width labels in one unwrapping row is the one place the
+     segmented control can genuinely overflow a narrow sheet — the buttons
+     have to keep working without JS, so this stays flex-wrap rather than a
+     <select>. */
+  .segmented {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .segmented label {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
+
+/* --- Mobile nav --------------------------------------------------------------
+   Gated on html.has-js (set by an inline, before-paint script in base.html —
+   see the comment there). Without it .nav-links keeps the plain wrapping row
+   it has always had: a working, if longer, list of links rather than a
+   hamburger button with nothing behind it. With it, the links collapse into
+   a panel that opens below the header, and the hamburger takes their place
+   in the row. */
+@media (max-width: 680px) {
+  html.has-js .nav-toggle {
+    display: inline-grid;
+    order: 2;
+    margin-left: auto;
+  }
+
+  html.has-js .theme-toggle {
+    order: 3;
+  }
+
+  html.has-js .nav-links {
+    display: none;
+    order: 10;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin-left: 0;
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: var(--hairline);
+  }
+
+  html.has-js .nav-links.is-open {
+    display: flex;
+  }
+
+  html.has-js .nav-links a {
+    padding-block: var(--space-4);
+    border-bottom: var(--hairline);
+  }
+
+  html.has-js .nav-links a:last-child {
+    border-bottom: none;
+  }
+
+  html.has-js .nav-links a[aria-current="page"]::after {
+    display: none;
+  }
+
+  html.has-js .nav-links a[aria-current="page"] {
+    color: var(--lime-text);
+  }
 }
 
 /* --- Quality floor ---------------------------------------------------------- */

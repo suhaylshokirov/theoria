@@ -1,20 +1,29 @@
--- Actor pairs who have appeared together most often, via a self-join on fact_cast.
--- fc1.actor_id < fc2.actor_id keeps each pair once (a,b) instead of twice (a,b)+(b,a)
--- and avoids pairing an actor with themself.
+-- Actor pairs who have appeared together most often.
+--
+-- Reads fact_collaboration rather than self-joining the credits: the pair counts
+-- are already derived in Gold, canonically ordered (person_a_id < person_b_id) so
+-- each pair appears once, and indexed on films_together. The self-join version
+-- computed the same numbers from scratch on every dashboard load.
+--
+-- Restricted to pairs who have both acted, so this stays a *casting* question —
+-- fact_collaboration itself spans every key credit, including crew.
 
+WITH actors AS (
+    SELECT DISTINCT person_id
+    FROM fact_credit
+    WHERE department = 'Acting'
+)
 SELECT
-    a1.actor_id  AS actor_1_id,
-    a1.name      AS actor_1_name,
-    a2.actor_id  AS actor_2_id,
-    a2.name      AS actor_2_name,
-    COUNT(DISTINCT fc1.movie_id) AS movies_together
-FROM fact_cast fc1
-JOIN fact_cast fc2
-    ON fc1.movie_id = fc2.movie_id
-   AND fc1.actor_id < fc2.actor_id
-JOIN dim_actor a1 ON a1.actor_id = fc1.actor_id
-JOIN dim_actor a2 ON a2.actor_id = fc2.actor_id
-GROUP BY a1.actor_id, a1.name, a2.actor_id, a2.name
-HAVING COUNT(DISTINCT fc1.movie_id) >= 2
-ORDER BY movies_together DESC, a1.name, a2.name
+    c.person_a_id  AS actor_1_id,
+    a.name         AS actor_1_name,
+    c.person_b_id  AS actor_2_id,
+    b.name         AS actor_2_name,
+    c.films_together AS movies_together
+FROM fact_collaboration c
+JOIN actors aa    ON aa.person_id = c.person_a_id
+JOIN actors bb    ON bb.person_id = c.person_b_id
+JOIN dim_person a ON a.person_id = c.person_a_id
+JOIN dim_person b ON b.person_id = c.person_b_id
+WHERE c.films_together >= 2
+ORDER BY c.films_together DESC, a.name, b.name
 LIMIT 50;

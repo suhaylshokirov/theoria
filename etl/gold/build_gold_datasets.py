@@ -19,8 +19,7 @@ keys with the same content.
 
 S3 sources (Silver layer for the given date):
     silver/movies/ingestion_date=.../movies.parquet
-    silver/actors/ingestion_date=.../actors.parquet
-    silver/directors/ingestion_date=.../directors.parquet
+    silver/people/ingestion_date=.../people.parquet
     silver/genres/ingestion_date=.../genres.parquet
     silver/credits_bridge/ingestion_date=.../credits_bridge.parquet
 
@@ -101,8 +100,7 @@ def _read_silver_parquet(bucket: str, entity: str, ingestion_date: dt.date) -> p
     """
     filename_map = {
         "movies": "movies.parquet",
-        "actors": "actors.parquet",
-        "directors": "directors.parquet",
+        "people": "people.parquet",
         "genres": "genres.parquet",
         "credits_bridge": "credits_bridge.parquet",
     }
@@ -339,16 +337,15 @@ def build_gold_datasets(
     logger.info("Starting Gold build for date=%s", ingestion_date)
 
     movies = _read_silver_parquet(bucket, "movies", ingestion_date)
-    actors = _read_silver_parquet(bucket, "actors", ingestion_date)
-    directors = _read_silver_parquet(bucket, "directors", ingestion_date)
+    people = _read_silver_parquet(bucket, "people", ingestion_date)
     genres = _read_silver_parquet(bucket, "genres", ingestion_date)
     bridge = _read_silver_parquet(bucket, "credits_bridge", ingestion_date)
 
     datasets = {
         "genre_metrics": _build_genre_metrics(movies, genres),
         "decade_stats": _build_decade_stats(movies),
-        "actor_filmography": _build_actor_filmography(movies, actors, bridge),
-        "director_ratings": _build_director_ratings(movies, directors, bridge),
+        "actor_filmography": _build_actor_filmography(movies, people, bridge),
+        "director_ratings": _build_director_ratings(movies, people, bridge),
         "collaboration_edges": _build_collaboration_edges(movies, bridge),
     }
 

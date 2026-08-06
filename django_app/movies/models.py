@@ -75,38 +75,6 @@ class Movie(models.Model):
         return self.title
 
 
-class Actor(models.Model):
-    actor_id = models.IntegerField(primary_key=True)
-    name = models.TextField()
-    gender = models.SmallIntegerField(null=True)
-    popularity = models.DecimalField(max_digits=10, decimal_places=4, null=True)
-    profile_path = models.TextField(null=True)
-    slug = models.SlugField(max_length=300, unique=True, null=True)
-
-    class Meta:
-        managed = False
-        db_table = "dim_actor"
-
-    def __str__(self):
-        return self.name
-
-
-class Director(models.Model):
-    director_id = models.IntegerField(primary_key=True)
-    name = models.TextField()
-    gender = models.SmallIntegerField(null=True)
-    popularity = models.DecimalField(max_digits=10, decimal_places=4, null=True)
-    profile_path = models.TextField(null=True)
-    slug = models.SlugField(max_length=300, unique=True, null=True)
-
-    class Meta:
-        managed = False
-        db_table = "dim_director"
-
-    def __str__(self):
-        return self.name
-
-
 class Date(models.Model):
     date_id = models.IntegerField(primary_key=True)  # surrogate key: YYYYMMDD
     full_date = models.DateField()
@@ -232,40 +200,3 @@ class MovieMetrics(models.Model):
         return f"{self.movie_id}/{self.date_id}/{self.genre_id}"
 
 
-class Cast(models.Model):
-    movie = models.ForeignKey(
-        Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True
-    )
-    actor = models.ForeignKey(
-        Actor, on_delete=models.DO_NOTHING, db_column="actor_id"
-    )
-    role = models.TextField(null=True)
-    ordering = models.SmallIntegerField(null=True)
-    ingestion_date = models.DateField()
-
-    class Meta:
-        managed = False
-        db_table = "fact_cast"
-
-    def __str__(self):
-        return f"{self.movie_id}/{self.actor_id}"
-
-
-class Crew(models.Model):
-    # fact_crew currently models director credits only, mirroring dim_director
-    # (which itself only contains people credited as director) — see
-    # warehouse/ddl/02_facts.sql.
-    movie = models.ForeignKey(
-        Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True
-    )
-    director = models.ForeignKey(
-        Director, on_delete=models.DO_NOTHING, db_column="director_id"
-    )
-    ingestion_date = models.DateField()
-
-    class Meta:
-        managed = False
-        db_table = "fact_crew"
-
-    def __str__(self):
-        return f"{self.movie_id}/{self.director_id}"

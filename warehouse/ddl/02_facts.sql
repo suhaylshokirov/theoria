@@ -44,41 +44,23 @@ CREATE INDEX IF NOT EXISTS idx_fcredit_department     ON fact_credit (department
 CREATE INDEX IF NOT EXISTS idx_fcredit_ingestion_date ON fact_credit (ingestion_date);
 CREATE INDEX IF NOT EXISTS idx_fcredit_person_dept    ON fact_credit (person_id, department);
 
--- fact_cast and fact_crew are independent facts (one row per credited actor /
--- per credited director) rather than a single actor x director cross-join --
--- see docs/architecture.md for why: TMDB's credits endpoint never pairs an
--- actor with "their" director, so a joint fact table loses a movie's entire
--- cast whenever it has no director credit.
---
--- fact_crew currently models director credits only, mirroring dim_director
--- (which itself only contains people credited with job == "Director").
--- Modeling other crew roles (writers, producers, ...) would need a new
--- person-role dimension and is out of scope here.
 
-CREATE TABLE IF NOT EXISTS fact_cast (
-    movie_id    INTEGER      NOT NULL,
-    actor_id    INTEGER      NOT NULL,
-    role        TEXT,
-    ordering    SMALLINT,
-    ingestion_date DATE NOT NULL,
-    CONSTRAINT pk_fact_cast PRIMARY KEY (movie_id, actor_id),
-    CONSTRAINT fk_fcast_movie FOREIGN KEY (movie_id) REFERENCES dim_movie (movie_id),
-    CONSTRAINT fk_fcast_actor FOREIGN KEY (actor_id) REFERENCES dim_actor (actor_id)
+-- fact_collaboration is derived in Gold rather than loaded from Silver — see
+-- 09_collaboration.sql and etl/warehouse_loader/load_gold.py for why it lives
+-- there and what "collaboration" is scoped to mean.
+CREATE TABLE IF NOT EXISTS fact_collaboration (
+    person_a_id    INTEGER  NOT NULL,
+    person_b_id    INTEGER  NOT NULL,
+    films_together INTEGER  NOT NULL,
+    first_year     SMALLINT,
+    last_year      SMALLINT,
+    CONSTRAINT pk_fact_collaboration PRIMARY KEY (person_a_id, person_b_id),
+    CONSTRAINT ck_fcollab_ordered CHECK (person_a_id < person_b_id),
+    CONSTRAINT fk_fcollab_person_a FOREIGN KEY (person_a_id) REFERENCES dim_person (person_id),
+    CONSTRAINT fk_fcollab_person_b FOREIGN KEY (person_b_id) REFERENCES dim_person (person_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_fcast_movie_id      ON fact_cast (movie_id);
-CREATE INDEX IF NOT EXISTS idx_fcast_actor_id      ON fact_cast (actor_id);
-CREATE INDEX IF NOT EXISTS idx_fcast_ingestion_date ON fact_cast (ingestion_date);
-
-CREATE TABLE IF NOT EXISTS fact_crew (
-    movie_id    INTEGER      NOT NULL,
-    director_id INTEGER      NOT NULL,
-    ingestion_date DATE NOT NULL,
-    CONSTRAINT pk_fact_crew PRIMARY KEY (movie_id, director_id),
-    CONSTRAINT fk_fcrew_movie    FOREIGN KEY (movie_id)    REFERENCES dim_movie    (movie_id),
-    CONSTRAINT fk_fcrew_director FOREIGN KEY (director_id) REFERENCES dim_director (director_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_fcrew_movie_id      ON fact_crew (movie_id);
-CREATE INDEX IF NOT EXISTS idx_fcrew_director_id   ON fact_crew (director_id);
-CREATE INDEX IF NOT EXISTS idx_fcrew_ingestion_date ON fact_crew (ingestion_date);
+CREATE INDEX IF NOT EXISTS idx_fcollab_person_a ON fact_collaboration (person_a_id);
+CREATE INDEX IF NOT EXISTS idx_fcollab_person_b ON fact_collaboration (person_b_id);
+CREATE INDEX IF NOT EXISTS idx_fcollab_a_rank ON fact_collaboration (person_a_id, films_together DESC);
+CREATE INDEX IF NOT EXISTS idx_fcollab_b_rank ON fact_collaboration (person_b_id, films_together DESC);

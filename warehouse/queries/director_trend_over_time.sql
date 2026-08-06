@@ -8,24 +8,29 @@ WITH movie_ratings AS (
     SELECT DISTINCT movie_id, rating
     FROM fact_movie_metrics
 ),
+directing AS (
+    SELECT person_id, movie_id
+    FROM fact_credit
+    WHERE job = 'Director'
+),
 prolific AS (
-    SELECT director_id
-    FROM fact_crew
-    GROUP BY director_id
+    SELECT person_id
+    FROM directing
+    GROUP BY person_id
     HAVING COUNT(DISTINCT movie_id) >= 3
 )
 SELECT
-    d.director_id,
-    d.name                          AS director_name,
+    p.person_id                     AS director_id,
+    p.name                          AS director_name,
     dd.year,
-    COUNT(DISTINCT fc.movie_id)     AS movie_count,
+    COUNT(DISTINCT d.movie_id)      AS movie_count,
     ROUND(AVG(mr.rating), 2)        AS avg_rating
-FROM fact_crew fc
-JOIN prolific p     ON p.director_id = fc.director_id
-JOIN dim_director d ON d.director_id = fc.director_id
-JOIN dim_movie dm   ON dm.movie_id = fc.movie_id
-JOIN dim_date dd    ON dd.full_date = dm.release_date
-JOIN movie_ratings mr ON mr.movie_id = fc.movie_id
-GROUP BY d.director_id, d.name, dd.year
-ORDER BY d.name, dd.year
+FROM directing d
+JOIN prolific pr      ON pr.person_id = d.person_id
+JOIN dim_person p     ON p.person_id = d.person_id
+JOIN dim_movie dm     ON dm.movie_id = d.movie_id
+JOIN dim_date dd      ON dd.full_date = dm.release_date
+JOIN movie_ratings mr ON mr.movie_id = d.movie_id
+GROUP BY p.person_id, p.name, dd.year
+ORDER BY p.name, dd.year
 LIMIT 300;

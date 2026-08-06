@@ -1,5 +1,9 @@
--- Dimension tables for the Theoria star schema.
+-- Dimension tables for the Theoria star schema — the current schema.
 -- Run once to bootstrap the warehouse; all tables use IF NOT EXISTS so re-runs are safe.
+--
+-- Files 04-11 are historical migrations that brought an already-live warehouse
+-- to this shape. A fresh database needs only 01-03; running the migrations on
+-- top is harmless but unnecessary, and 11 would drop tables 01 no longer creates.
 
 -- Declared before dim_movie because dim_movie carries an FK to it. Roughly half
 -- the catalog belongs to no collection, so that FK is nullable by design.
@@ -47,28 +51,6 @@ CREATE TABLE IF NOT EXISTS dim_person (
     CONSTRAINT pk_dim_person PRIMARY KEY (person_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_person_slug ON dim_person (slug);
-
-CREATE TABLE IF NOT EXISTS dim_actor (
-    actor_id    INTEGER      NOT NULL,
-    name        TEXT         NOT NULL,
-    gender      SMALLINT,
-    popularity  NUMERIC(10, 4),
-    profile_path TEXT,
-    slug        VARCHAR(300),
-    CONSTRAINT pk_dim_actor PRIMARY KEY (actor_id)
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_actor_slug ON dim_actor (slug);
-
-CREATE TABLE IF NOT EXISTS dim_director (
-    director_id INTEGER      NOT NULL,
-    name        TEXT         NOT NULL,
-    gender      SMALLINT,
-    popularity  NUMERIC(10, 4),
-    profile_path TEXT,
-    slug        VARCHAR(300),
-    CONSTRAINT pk_dim_director PRIMARY KEY (director_id)
-);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_director_slug ON dim_director (slug);
 
 CREATE TABLE IF NOT EXISTS dim_genre (
     genre_id    INTEGER  NOT NULL,

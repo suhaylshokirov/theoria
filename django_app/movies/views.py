@@ -9,8 +9,7 @@ from django.utils.text import slugify
 from movies import graph
 
 from movies.models import (
-    Actor, Cast, Collaboration, Collection, Credit, Crew, Director, Genre,
-    Movie, MovieMetrics, Person,
+    Collaboration, Collection, Credit, Genre, Movie, MovieMetrics, Person,
 )
 
 MOVIES_PER_PAGE = 24
@@ -314,27 +313,27 @@ DEPARTMENT_ORDER = [
 COLLABORATORS_SHOWN = 8
 
 
-def _redirect_to_person(request, legacy_model, legacy_pk, slug):
+def _redirect_to_person(slug):
     """301 a legacy /actors/<slug>/ or /directors/<slug>/ URL to /people/<slug>/.
 
-    Resolved by id, never by slug. Unifying dim_actor and dim_director into one
-    dim_person namespace re-numbered 381 slugs (a crew member with a lower TMDB
-    id claims the base name), so the legacy slug and the person slug are not
-    interchangeable — the id is the only stable link between them.
+    Task 51 resolved this through dim_actor/dim_director to handle the 381 slugs
+    that changed when the two namespaces merged. Those tables are gone as of
+    Task 53, so the mapping is gone with them: a legacy URL now resolves only if
+    its slug still names the same person in dim_person, which is true of 44,178
+    of the 44,554 actor slugs. The remaining 376 are unrecoverable and 404 —
+    the honest outcome, rather than carrying two dead dimension tables purely as
+    a redirect map.
     """
-    legacy = get_object_or_404(legacy_model.objects.using("warehouse"), slug=slug)
-    person = get_object_or_404(
-        Person.objects.using("warehouse"), pk=getattr(legacy, legacy_pk)
-    )
+    person = get_object_or_404(Person.objects.using("warehouse"), slug=slug)
     return redirect("movies:person_detail", person_slug=person.slug, permanent=True)
 
 
 def actor_detail(request, actor_slug):
-    return _redirect_to_person(request, Actor, "actor_id", actor_slug)
+    return _redirect_to_person(actor_slug)
 
 
 def director_detail(request, director_slug):
-    return _redirect_to_person(request, Director, "director_id", director_slug)
+    return _redirect_to_person(director_slug)
 
 
 def person_detail(request, person_slug):

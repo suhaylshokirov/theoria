@@ -29,8 +29,7 @@ from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 
 from movies.models import (  # noqa: E402
-    Actor, Cast, Collaboration, Collection, Credit, Crew, Director, Genre,
-    Movie, MovieMetrics, Person,
+    Collaboration, Collection, Credit, Genre, Movie, MovieMetrics, Person,
 )
 
 client = Client()
@@ -386,30 +385,39 @@ def test_career_period_ongoing_career_reads_start_dash_active():
 
 
 def test_actor_detail_redirects_permanently_to_person_page():
-    """Legacy /actors/<slug>/ 301s to /people/<slug>/, resolved by id.
+    """Legacy /actors/<slug>/ 301s to /people/<slug>/ when the slug still resolves."""
+    person = _person(person_id=7, name="Test Actor", slug="test-actor")
 
-    Unifying the two slug namespaces re-numbered 381 slugs, so the legacy slug
-    and the person slug are not interchangeable — only the id links them.
-    """
-    actor = Actor(actor_id=7, name="Test Actor", slug="test-actor")
-    person = _person(person_id=7, name="Test Actor", slug="test-actor-2")
-
-    with patch("movies.views.get_object_or_404", side_effect=[actor, person]):
+    with patch("movies.views.get_object_or_404", return_value=person):
         response = client.get("/actors/test-actor/")
 
     assert response.status_code == 301
-    assert response["Location"] == "/people/test-actor-2/"
+    assert response["Location"] == "/people/test-actor/"
 
 
 def test_director_detail_redirects_permanently_to_person_page():
-    director = Director(director_id=7, name="Test Director", slug="test-director")
     person = _person(person_id=7, name="Test Director", slug="test-director")
 
-    with patch("movies.views.get_object_or_404", side_effect=[director, person]):
+    with patch("movies.views.get_object_or_404", return_value=person):
         response = client.get("/directors/test-director/")
 
     assert response.status_code == 301
     assert response["Location"] == "/people/test-director/"
+
+
+def test_legacy_person_url_404s_when_its_slug_was_reassigned():
+    """The 376 slugs that moved when the namespaces merged are unrecoverable.
+
+    dim_actor/dim_director are gone (Task 53), and with them the id mapping
+    that Task 51 used — so a legacy slug now resolves only if it still names
+    the same person.
+    """
+    from django.http import Http404
+
+    with patch("movies.views.get_object_or_404", side_effect=Http404()):
+        response = client.get("/actors/tom-holland/")
+
+    assert response.status_code == 404
 
 
 def test_person_detail_groups_credits_by_department():
@@ -565,6 +573,17 @@ def test_analytics_dashboard_returns_200_with_expected_context():
             {"actor_a": "A", "actor_b": "B", "collaborations": 2}
         ],
         "genre_growth_over_time.sql": [{"year": 2020, "genre_name": "Action", "count": 3}],
+        "signature_partnerships.sql": [
+            {"director_name": "D", "collaborator_name": "C", "craft": "Editor",
+             "films_together": 11, "first_year": 1980, "last_year": 2023}
+        ],
+        "department_reach.sql": [
+            {"department": "Acting", "credits": 62713, "people": 43138, "films": 1215}
+        ],
+        "franchise_revenue.sql": [
+            {"franchise": "James Bond Collection", "entries": 17,
+             "total_revenue": Decimal("6082635670")}
+        ],
     }
 
     with patch("analytics.views._run_query", side_effect=lambda fname: fake_rows[fname]):
