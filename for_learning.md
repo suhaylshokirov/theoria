@@ -2361,3 +2361,140 @@ Read up on migration frameworks that track applied state in the database itself 
 SQLAlchemy-native one), **Flyway**, **dbt** — and specifically on how they handle the exact problem
 here: keeping a repeatable "build the current schema from scratch" path alongside an append-only
 migration history.
+
+---
+
+## Task 54 — Movie page legibility: crew merge, cast paging, billed-crew default
+
+### What Was Built
+Phase 10 gave every credited person a warehouse row and every credit its own fact row, which was
+the right data model and made the movie page unreadable. Two separate problems, from one root
+cause: a person holding several jobs on one film (Christopher Nolan: Director, Screenplay, Story,
+Producer) rendered once per job, scattered across as many department sections — that's
+duplication. And every credit, cast or crew, rendered as a headshot card with no ceiling — the
+median film has 47 cast and 100 distinct crew, the worst has hundreds — that's volume. This task
+fixed both, without touching a single row of data: no DDL, no ETL, no pipeline re-run, no new TMDB
+calls. It's a read-side fix, proof that not every "the page is wrong" problem is a data problem.
+
+The fix for duplication: collapse a person's several crew credits on one film into a single row,
+filed under whichever department they're most senior in, listing every job they hold. The fix for
+volume: page the cast grid server-side (24 at a time, with Previous/Next and a page counter), and
+show only a short "billed crew" list — the people holding one of nine key jobs — by default, with
+a `?crew=all` link that reveals everyone, grouped by department, only when asked for.
+
+### Concepts Used
+- **Group-by-and-pick-min as a deduplication pattern.** The general shape here — many rows share a
+  key (`person_id`), and you want one row per key, deciding which of several candidate values
+  "wins" — comes up constantly in data work (last-write-wins dedup, "pick the most recent record",
+  "pick the highest-priority ticket"). Here the winning value isn't a timestamp, it's a rank
+  (department seniority), and the losers aren't discarded — their *job titles* survive, joined onto
+  the winning row. That's the detail that makes this a merge, not a filter.
+- **Server-side pagination with clamping.** `django.core.paginator.Paginator` takes any plain
+  Python sequence (not just a queryset) and its `.get_page(n)` never raises on a bad `n` — too high
+  clamps to the last page, non-numeric or missing falls back to page 1. That's what lets
+  `?cast_page=99` on a film with only 6 pages return page 6, 200 OK, instead of a crash. The
+  alternative, `.page(n)`, raises `EmptyPage`/`PageNotAnInteger` and would need try/except at every
+  call site — `.get_page()` pushes that handling into the library once.
+- **The query-param toggle as a stateless UI control.** `?crew=all` is the entire mechanism for
+  "show me more" — no JavaScript, no session state, no database flag. The server reads one GET
+  param, decides what to compute, and renders a link that flips it. This is the same pattern movie
+  search and sort already used; the only new wrinkle is that the movie page now has *two*
+  independent query params (`cast_page`, `crew`) that both need to survive being carried across
+  each other's links, which is why `_pager.html` takes a `base_query` instead of assuming its own
+  fixed param set.
+- **"Same data, different question, no shared code."** `BILLED_CREW_JOBS` is now the *third* copy
+  of nearly the same nine job titles in this codebase — `movies/graph.py`'s `PATH_CREW_JOBS` (who
+  counts as a graph edge) and `etl/gold/build_gold_datasets.py`'s `KEY_CREW_JOBS` (who counts as a
+  "collaboration") are the other two. It would be easy to "clean this up" into one shared constant.
+  It's deliberately not: each list answers a different question and is free to diverge the moment
+  someone decides, say, that composers shouldn't count as a graph edge but should still show up in
+  billed crew. A shared constant would silently couple three unrelated decisions.
+- **Template partial extraction (DRY across templates, not just code).** The exact same pagination
+  markup existed in two files, each hardcoding `page=` as the query-string key — which is precisely
+  why it couldn't be reused for the movie page's `?cast_page=` without first generalizing it. The
+  fix is the template equivalent of extracting a function: give the repeated block parameters
+  (`param`, `base_query`) instead of literals, put it in one file, and `{% include ... with %}` it
+  everywhere. The `only` keyword on every include matters here: without it, the partial silently
+  inherits the parent template's whole context, and a same-named stray variable on one page but not
+  another becomes a bug that only shows up on some pages.
+
+### Key Code
+`django_app/movies/views.py` — `_merge_crew()`:
+> Takes a plain list of `Credit` rows (not a queryset — it needs to be re-grouped in Python, and a
+> `GROUP BY` in SQL can't hand back the individual rows), buckets them by `person_id`, and for each
+> bucket sorts by department seniority (`_department_rank`) before reading off the winner: `jobs =
+> [c.job for c in rows_sorted]` preserves all of them for display, but `department =
+> rows_sorted[0].department` keeps only the most senior one as the filing key. That asymmetry — keep
+> every job, keep only one department — is exactly what turns three section-scattered rows into one
+> row that still says everything the three used to.
+
+`django_app/movies/views.py` — the cast pager:
+> `cast_page = Paginator(cast, CAST_PER_PAGE).get_page(request.GET.get("cast_page"))`. One line
+> does three jobs: slices `cast` (already a plain Python list, materialized once for the whole
+> view) into pages of `CAST_PER_PAGE`, reads which page was asked for from the URL, and clamps that
+> request into range. The `list()` call earlier in the view — `credits = list(Credit.objects...)` —
+> is what makes this possible without a second database query: `Paginator` needs a concrete
+> sequence it can call `len()` and slice on, and a lazy queryset would otherwise be re-evaluated on
+> every access.
+
+`django_app/movies/templates/movies/_pager.html`:
+> `href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ ... }}"` — the whole
+> partial in one line. `base_query` arrives pre-encoded from the view (`django.utils.http.urlencode`),
+> so the template never has to know how many other params exist or escape any of them itself; it
+> just concatenates a prefix it doesn't have to understand with the one param (`param`) it does.
+
+### What to Study Next
+This task fixed the movie page but left `person_detail` with the identical, milder bug — a
+writer-director's own film is listed twice under Writing (once for Screenplay, once for Story).
+`_merge_crew()` was deliberately written to take a plain credit list so it can be dropped in there
+unchanged. Next time that page is touched, look at what changes when the same merge is applied to a
+person's *own* filmography instead of a film's crew list — does "most senior department" still make
+sense as the filing key when you're grouping by film instead of by person, or does the grouping key
+itself need to change?
+
+### Addendum — two fixes from reviewing the live page
+
+Reviewing the finished page turned up two things no test had thought to ask about.
+
+**1. A pager that loses your place.** The cast pager worked, but the cast section sits three
+screens down the movie page — so clicking "Next" reloaded the page at the *top* and you had to
+scroll back down to see what you'd asked for. The fix is a URL fragment: `?cast_page=2#cast`, with
+`id="cast"` on the section. The browser jumps to the element after loading. `_pager.html` gained an
+optional `anchor` param; the list pages pass none, because their grid already starts the page and
+an anchor there would do nothing.
+
+Worth noticing *why* the tests missed it: every assertion was about which 24 people came back,
+which was correct on every page. "Correct data, delivered somewhere you can't see" isn't a property
+a context-dictionary assertion can express.
+
+**2. Paging a grouped list.** The full crew (142 people on *The Dark Knight*) needed paging too.
+The tempting move is to page the *departments* — but a film has 2–5 people in Directing and eighty
+below the line, so that gives one page of 2 and another of 80. Instead the flat list is sorted by
+`(department_rank, name)`, **then** paged, and only the current page's rows are grouped into
+headings. Page size stays even, and the reading order is still the call-sheet order: Directing →
+Writing → Production → Camera → Editing → Sound. The trade is that a department spanning a page
+boundary reprints its heading on the next page — which reads as a continuation, so it was accepted
+rather than engineered around.
+
+### Concepts Used (addendum)
+- **URL fragment (`#anchor`)**: the part of a URL after `#`. Never sent to the server — the browser
+  alone uses it to scroll to a matching element id. That's why this is a pure template change.
+- **Sort-then-group vs group-then-sort**: grouping first locks in group sizes and makes even paging
+  impossible. Sorting a flat list first and grouping only what's on the page keeps both.
+- **Preserving orthogonal UI state in URLs**: two independent pagers on one page each have to carry
+  the *other's* state, or clicking one silently resets the other. Both `base_query` strings are
+  built from a single `active` dict, with page 1 omitted so the common URL stays clean.
+
+### Key Code (addendum)
+`django_app/movies/views.py` — `movie_detail()`:
+> `crew_sorted = sorted(merged_crew, key=lambda m: (_department_rank(m["department"]), m["person"].name))`
+> then `Paginator(crew_sorted, CREW_PER_PAGE).get_page(...)`, and only afterwards the
+> `by_department.setdefault(...)` loop over `crew_page` rather than over the whole list. The order of
+> those three steps *is* the design: sort, page, group.
+
+### What to Study Next (addendum)
+Both pagers are server-side, so each click is a full page load. Look up what the `#anchor` trick is
+actually compensating for, then compare it to `HTMX` or a small `fetch()` that swaps only the
+section's markup — and ask what you'd lose: the URL is currently a complete, shareable description
+of the page's state (`?crew=all&cast_page=3&crew_page=2`). Would a JS version keep that, and what
+does it take to keep it?

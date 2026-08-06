@@ -266,10 +266,14 @@ def test_movie_detail_returns_200_with_expected_context():
     assert response.status_code == 200
     assert response.context["movie"] == movie
     assert list(response.context["genres"]) == [genre]
-    assert list(response.context["cast"]) == [cast_credit]
+    assert list(response.context["cast_page"]) == [cast_credit]
     assert list(response.context["directors"]) == [director]
-    # Non-acting credits are grouped by department for the Crew sections.
-    assert [d["name"] for d in response.context["crew"]] == ["Directing"]
+    # Non-acting credits are merged per person and, by default (no
+    # ?crew=all), only billed crew is populated. "Director" is one of the
+    # nine billed jobs, so the crew_credit surfaces there.
+    assert response.context["crew"] == []
+    assert [m["department"] for m in response.context["billed_crew"]] == ["Directing"]
+    assert response.context["billed_crew"][0]["person"] == director
     assert response.context["metrics"]["rating"] == Decimal("8.50")
 
 
@@ -325,8 +329,219 @@ def test_movie_detail_cast_present_when_no_director_credited():
         response = client.get(f"/movies/{movie.movie_id}/")
 
     assert response.status_code == 200
-    assert list(response.context["cast"]) == [cast_credit]
+    assert list(response.context["cast_page"]) == [cast_credit]
     assert list(response.context["directors"]) == []
+
+
+def test_movie_detail_merges_multi_job_crew_person():
+    """A person holding several jobs on one film collapses to one row, filed
+    under their most senior department, instead of one card per job spread
+    across as many department sections (Task 54: 8,361 of 227,623 (movie,
+    person) pairs hold more than one job)."""
+    movie = _movie()
+    director = _person(person_id=2, name="Test Director", slug="test-director")
+    credits = [
+        Credit(movie=movie, person=director, department="Directing", job="Director"),
+        Credit(movie=movie, person=director, department="Writing", job="Screenplay"),
+        Credit(movie=movie, person=director, department="Production", job="Producer"),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    billed = response.context["billed_crew"]
+    assert len(billed) == 1
+    assert billed[0]["department"] == "Directing"
+    # Ordered by department seniority, not alphabetically — alphabetical
+    # would read "Director / Producer / Screenplay" and bury the job that
+    # matters.
+    assert billed[0]["job_display"] == "Director / Screenplay / Producer"
+    # The record's separate "Directed by" line still names them once too —
+    # this asserts the *crew section* itself renders the merged person only
+    # once, not that the whole page mentions their name only once.
+    assert response.content.decode().count("Director / Screenplay / Producer") == 1
+
+
+def test_movie_detail_person_appears_in_cast_and_crew():
+    """A person can legitimately hold both an Acting credit and a crew credit
+    on the same film — merging crew must not pull them out of the cast."""
+    movie = _movie()
+    person = _person(person_id=3, name="Double Credit", slug="double-credit")
+    credits = [
+        Credit(movie=movie, person=person, department="Acting", job="Actor",
+               character_name="Extra", ordering=5),
+        Credit(movie=movie, person=person, department="Directing", job="Director"),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    assert [c.person for c in response.context["cast_page"]] == [person]
+    assert [m["person"] for m in response.context["billed_crew"]] == [person]
+
+
+def test_movie_detail_cast_pagination_pages_and_clamps():
+    """?cast_page=N pages the already-materialized cast list server-side;
+    an out-of-range value clamps to the last page rather than erroring."""
+    movie = _movie()
+    cast_credits = [
+        Credit(
+            movie=movie,
+            person=_person(person_id=i, name=f"Actor {i}", slug=f"actor-{i}"),
+            department="Acting", job="Actor", ordering=i,
+        )
+        for i in range(1, 26)  # one more than CAST_PER_PAGE (24)
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = cast_credits
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        page_2 = client.get(f"/movies/{movie.movie_id}/", {"cast_page": "2"})
+        clamped = client.get(f"/movies/{movie.movie_id}/", {"cast_page": "99"})
+
+    assert len(page_2.context["cast_page"]) == 1
+    assert page_2.context["cast_page"].number == 2
+    assert clamped.context["cast_page"].number == 2
+
+
+def test_movie_detail_crew_all_toggle():
+    """crew=all populates the department-grouped full crew list; the default
+    request leaves it empty and only fills billed_crew."""
+    movie = _movie()
+    director = _person(person_id=2, name="Test Director", slug="test-director")
+    editor = _person(person_id=4, name="Test Editor", slug="test-editor")
+    credits = [
+        Credit(movie=movie, person=director, department="Directing", job="Director"),
+        Credit(movie=movie, person=editor, department="Editing", job="Editor"),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        default_response = client.get(f"/movies/{movie.movie_id}/")
+        all_response = client.get(f"/movies/{movie.movie_id}/", {"crew": "all"})
+
+    assert default_response.context["show_all_crew"] is False
+    assert default_response.context["crew"] == []
+
+    assert all_response.context["show_all_crew"] is True
+    assert [d["name"] for d in all_response.context["crew"]] == ["Directing", "Editing"]
+
+
+def test_movie_detail_crew_pagination_pages_in_department_order():
+    """?crew_page=N pages the full crew list, which is ordered by department
+    before it is grouped into headings — so page 1 is the directors and page 2
+    is further down the call sheet, not an alphabetical slice across the film.
+    """
+    movie = _movie()
+    # One director, then enough Editing crew to overflow CREW_PER_PAGE (40).
+    credits = [
+        Credit(movie=movie, person=_person(person_id=1, name="A Director",
+                                           slug="a-director"),
+               department="Directing", job="Director"),
+    ] + [
+        Credit(
+            movie=movie,
+            person=_person(person_id=100 + i, name=f"Editor {i:02d}",
+                           slug=f"editor-{i}"),
+            department="Editing", job="Assistant Editor",
+        )
+        for i in range(45)
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        page_1 = client.get(f"/movies/{movie.movie_id}/", {"crew": "all"})
+        page_2 = client.get(f"/movies/{movie.movie_id}/",
+                            {"crew": "all", "crew_page": "2"})
+        clamped = client.get(f"/movies/{movie.movie_id}/",
+                             {"crew": "all", "crew_page": "99"})
+        default = client.get(f"/movies/{movie.movie_id}/")
+
+    # 46 people over a page size of 40 → 2 pages, Directing leading page 1.
+    assert page_1.context["crew_page"].paginator.num_pages == 2
+    assert [d["name"] for d in page_1.context["crew"]] == ["Directing", "Editing"]
+    assert len(page_1.context["crew_page"]) == 40
+
+    # The department straddles the boundary, so its heading repeats — a
+    # continuation, and the only department left on page 2.
+    assert [d["name"] for d in page_2.context["crew"]] == ["Editing"]
+    assert len(page_2.context["crew_page"]) == 6
+    assert clamped.context["crew_page"].number == 2
+
+    # Crew is only paged when expanded; the default request has no pager.
+    assert default.context["crew_page"] is None
+
+
+def test_movie_detail_pagers_preserve_each_other_and_anchor():
+    """Paging the cast must not collapse an expanded crew list, and each pager
+    link carries the fragment for its own section so the reload doesn't dump
+    the reader back at the top of the page.
+    """
+    movie = _movie()
+    credits = [
+        Credit(movie=movie,
+               person=_person(person_id=i, name=f"Actor {i}", slug=f"actor-{i}"),
+               department="Acting", job="Actor", ordering=i)
+        for i in range(1, 26)
+    ] + [
+        Credit(movie=movie,
+               person=_person(person_id=90, name="A Director", slug="a-director"),
+               department="Directing", job="Director"),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        response = client.get(f"/movies/{movie.movie_id}/", {"crew": "all"})
+
+    body = response.content.decode()
+    # The cast pager keeps crew=all alive and returns to the cast section.
+    assert response.context["cast_base_query"] == "crew=all"
+    assert "cast_page=2#cast" in body
+    # Collapsing the crew drops crew_page but keeps the reader's cast page.
+    assert "#crew" in body
 
 
 def test_movie_detail_404_when_missing():

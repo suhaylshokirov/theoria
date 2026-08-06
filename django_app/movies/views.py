@@ -4,6 +4,7 @@ from django.core.paginator import Paginator
 from django.db.models import Avg, Count, F, Max, Min, Sum
 from django.db.models.functions import ExtractYear
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.http import urlencode
 from django.utils.text import slugify
 
 from movies import graph
@@ -14,6 +15,28 @@ from movies.models import (
 
 MOVIES_PER_PAGE = 24
 PEOPLE_PER_PAGE = 30
+
+# The median film carries 47 cast; the worst carries hundreds. Paging the
+# poster grid server-side is what keeps the page renderable at either end.
+CAST_PER_PAGE = 24
+
+# Crew rows are compact list rows rather than poster cards, so a page holds
+# more of them than the cast grid does. At the median 100 crew per film this
+# is three pages; the catalog's worst film (980 crew) is 25.
+CREW_PER_PAGE = 40
+
+# The crew a viewer wants to see first, without a click. Deliberately its own
+# copy, not imported from movies.graph.PATH_CREW_JOBS or
+# etl.gold.build_gold_datasets.KEY_CREW_JOBS — both hold the same nine job
+# titles today, and Task 52 already decided that "who works together
+# repeatedly" and "is there any path" must not share code because they answer
+# different questions. "What does a viewer want to see first on a film page"
+# is a third question and gets the same treatment. Importing the Gold builder
+# into a Django view would also drag pandas/boto3 into the request path.
+BILLED_CREW_JOBS = (
+    "Director", "Screenplay", "Writer", "Story", "Original Music Composer",
+    "Director of Photography", "Editor", "Production Design", "Producer",
+)
 
 # How many posters the home contact sheet draws. The mosaic is meant to read
 # as "the whole catalog at once", so this is a ceiling, not a page size. Since
@@ -81,7 +104,13 @@ def movie_list(request):
 
     page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
-    context = {"page_obj": page_obj, "q": q, "sort": sort}
+    # Built here, not in the template, so the shared _pager.html partial
+    # doesn't need to know which params any given page carries — see
+    # _pager.html's docstring.
+    context = {
+        "page_obj": page_obj, "q": q, "sort": sort,
+        "base_query": urlencode({"q": q, "sort": sort}),
+    }
     return render(request, "movies/movie_list.html", context)
 
 
@@ -106,6 +135,7 @@ def _person_list(request, people, list_title, scope):
         "list_title": list_title,
         "scope": scope,
         "detail_url_name": "movies:person_detail",
+        "base_query": urlencode({"q": q}),
     }
     return render(request, "movies/person_list.html", context)
 
@@ -230,9 +260,11 @@ def movie_detail(request, movie_slug):
     )
 
     # One query for every credit on the film, cast and crew alike, then split
-    # in Python. Cast leads by billing order; crew is grouped by department.
-    # Before fact_credit this page could only show the cast and the director —
-    # the ~150 other people who made the film had no warehouse row at all.
+    # in Python. Materialized with list() because both the cast Paginator and
+    # _merge_crew() below need a concrete sequence — a lazy queryset would
+    # otherwise re-hit the database for each. Before fact_credit this page
+    # could only show the cast and the director — the ~150 other people who
+    # made the film had no warehouse row at all.
     credits = list(
         Credit.objects.using("warehouse")
         .filter(movie_id=movie_id)
@@ -240,24 +272,88 @@ def movie_detail(request, movie_slug):
         .order_by(F("ordering").asc(nulls_last=True), "job")
     )
 
+    # Cast is already one row per person — fact_credit's job is the literal
+    # "Actor" for every Acting row, so there's nothing to merge here. Volume,
+    # not duplication, is cast's problem: the median film has 47, the worst
+    # 139+, so it's paginated server-side rather than dumped into one grid.
     cast = [c for c in credits if c.department == "Acting"]
+    cast_page = Paginator(cast, CAST_PER_PAGE).get_page(request.GET.get("cast_page"))
 
-    crew_by_department = {}
-    for credit in credits:
-        if credit.department != "Acting":
-            crew_by_department.setdefault(credit.department, []).append(credit)
-    crew = [
-        {"name": name, "credits": rows, "count": len(rows)}
-        for name, rows in sorted(
-            crew_by_department.items(),
-            key=lambda kv: (
-                DEPARTMENT_ORDER.index(kv[0]) if kv[0] in DEPARTMENT_ORDER
-                else len(DEPARTMENT_ORDER),
-                kv[0],
-            ),
+    # Crew is the opposite problem: duplication, not volume alone. A director
+    # who also wrote and produced is three fact_credit rows, rendered before
+    # this fix as three names in three department sections. _merge_crew()
+    # collapses each person to one row under their most senior department.
+    show_all_crew = request.GET.get("crew") == "all"
+
+    crew_credits = [c for c in credits if c.department != "Acting"]
+    merged_crew = _merge_crew(crew_credits)
+
+    billed_crew = sorted(
+        (m for m in merged_crew if m["is_billed"]),
+        key=lambda m: (_department_rank(m["department"]), m["person"].name),
+    )
+
+    # Full crew, department-grouped, is only computed under ?crew=all — most
+    # requests never render it, so there's no reason to build it every time.
+    #
+    # It's paged as one flat list ordered by (department, name) and only then
+    # grouped into headings, rather than paging the departments themselves.
+    # A film runs from a handful of directors to eighty below-the-line crew,
+    # so per-department paging would give one page of 2 and another of 80; a
+    # flat page size is even. The cost is that a department straddling a page
+    # boundary prints its heading again on the next page, which reads as a
+    # continuation rather than an error.
+    crew_page = None
+    crew = []
+    if show_all_crew:
+        crew_sorted = sorted(
+            merged_crew,
+            key=lambda m: (_department_rank(m["department"]), m["person"].name),
         )
-    ]
+        crew_page = Paginator(crew_sorted, CREW_PER_PAGE).get_page(
+            request.GET.get("crew_page")
+        )
+        by_department = {}
+        for m in crew_page:
+            by_department.setdefault(m["department"], []).append(m)
+        crew = [
+            {"name": name, "people": rows, "count": len(rows)}
+            for name, rows in sorted(
+                by_department.items(), key=lambda kv: _department_rank(kv[0])
+            )
+        ]
 
+    # Each pager has to carry the *other* section's state, or paging the cast
+    # would silently collapse an expanded crew list and vice versa — the same
+    # class of bug as the pre-fix list pagers, which hardcoded `page=` and
+    # dropped every other param. Page 1 is left out so the common URL stays
+    # clean; get_page() treats a missing value as page 1 anyway.
+    active = {}
+    if show_all_crew:
+        active["crew"] = "all"
+    if cast_page.number > 1:
+        active["cast_page"] = cast_page.number
+    if crew_page is not None and crew_page.number > 1:
+        active["crew_page"] = crew_page.number
+
+    cast_base_query = urlencode(
+        {k: v for k, v in active.items() if k != "cast_page"}
+    )
+    crew_base_query = urlencode(
+        {k: v for k, v in active.items() if k != "crew_page"}
+    )
+
+    # The expand/collapse link keeps the reader's cast page but always drops
+    # crew_page: page 7 of the old crew list means nothing once the list is
+    # collapsed, and re-expanding should start at the top.
+    toggle = {k: v for k, v in active.items() if k == "cast_page"}
+    if not show_all_crew:
+        toggle["crew"] = "all"
+    crew_toggle_query = urlencode(toggle)
+
+    # Unchanged: the "Directed by" record line reads raw credits, not the
+    # merged crew list — it only ever needs the Director job, never the full
+    # job_display string the merged rows carry.
     directors = [c.person for c in credits if c.job == "Director"]
 
     # fact_movie_metrics has one row per (movie, date, genre), and rating /
@@ -277,8 +373,16 @@ def movie_detail(request, movie_slug):
     context = {
         "movie": movie,
         "genres": genres,
-        "cast": cast,
+        "cast_page": cast_page,
+        "cast_count": len(cast),
+        "cast_base_query": cast_base_query,
+        "billed_crew": billed_crew,
         "crew": crew,
+        "crew_page": crew_page,
+        "crew_base_query": crew_base_query,
+        "crew_toggle_query": crew_toggle_query,
+        "show_all_crew": show_all_crew,
+        "crew_person_count": len(merged_crew),
         "credit_count": len(credits),
         "directors": directors,
         "metrics": metrics,
@@ -308,6 +412,57 @@ DEPARTMENT_ORDER = [
     "Acting", "Directing", "Writing", "Production", "Camera", "Editing",
     "Sound", "Art", "Costume & Make-Up", "Visual Effects", "Lighting", "Crew",
 ]
+
+
+def _department_rank(name):
+    """Sort key for a department name against DEPARTMENT_ORDER.
+
+    Extracted from the identical inline lambda that used to live separately in
+    both movie_detail and person_detail. Anything TMDB reports outside the
+    list (e.g. the "Actors" anomaly on movie 1372) sorts after every known
+    one, alphabetically among themselves.
+    """
+    return (
+        DEPARTMENT_ORDER.index(name) if name in DEPARTMENT_ORDER
+        else len(DEPARTMENT_ORDER),
+        name,
+    )
+
+
+def _merge_crew(credits):
+    """Collapse a person's several crew credits on one film into one record.
+
+    fact_credit's PK is (movie_id, person_id, department, job), so a director
+    who also wrote and produced is three separate rows — rendered before this
+    as three names in three department sections. This groups by person_id and
+    files each person under their single most senior department (min by
+    _department_rank), while listing every job they hold in the same order,
+    so "Director / Screenplay / Story / Producer" leads with the job that
+    matters instead of alphabetizing it away.
+
+    Cast is untouched by this — fact_credit's job is the literal "Actor" for
+    every one of the 62,713 Acting rows, so cast is already one row per
+    person; merging is purely a crew-department concern. Written to take a
+    plain list of Credit objects (not a queryset) so it can be reused on
+    person_detail's crew sections later without changing its signature.
+    """
+    by_person = {}
+    for credit in credits:
+        by_person.setdefault(credit.person_id, []).append(credit)
+
+    merged = []
+    for person_id, rows in by_person.items():
+        rows_sorted = sorted(rows, key=lambda c: _department_rank(c.department))
+        jobs = [c.job for c in rows_sorted]
+        merged.append({
+            "person": rows_sorted[0].person,
+            "department": rows_sorted[0].department,
+            "jobs": jobs,
+            "job_display": " / ".join(jobs),
+            "is_billed": any(job in BILLED_CREW_JOBS for job in jobs),
+        })
+    return merged
+
 
 # How many repeat collaborators the person page prints.
 COLLABORATORS_SHOWN = 8
@@ -355,14 +510,7 @@ def person_detail(request, person_slug):
     for credit in credits:
         by_department.setdefault(credit.department, []).append(credit)
 
-    ordered = sorted(
-        by_department.items(),
-        key=lambda kv: (
-            DEPARTMENT_ORDER.index(kv[0]) if kv[0] in DEPARTMENT_ORDER
-            else len(DEPARTMENT_ORDER),
-            kv[0],
-        ),
-    )
+    ordered = sorted(by_department.items(), key=lambda kv: _department_rank(kv[0]))
     departments = [
         {"name": name, "credits": rows, "count": len(rows)} for name, rows in ordered
     ]

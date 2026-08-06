@@ -1,0 +1,30 @@
+{% comment %} Shared pagination control. Params — always pass with `only`:
+   page_obj    : a Django Page/Paginator page object.
+   param       : query-string key to write the page number under, e.g. "page"
+                 or "cast_page" — lets one partial serve both the list pages
+                 (movie_list, person_list) and the movie page's cast pager.
+   base_query  : the other query params to preserve, already urlencoded and
+                 joined with `&`, no leading/trailing `&` — empty string if
+                 there are none. Built in the view with django.utils.http.
+                 urlencode rather than assembled here: a shared partial can't
+                 know which params any given page carries (movie_detail also
+                 has to preserve an active ?crew=all across a cast-page link),
+                 and building it in Python avoids a stray trailing `&` or a
+                 bare `?q=&sort=` when the other params are empty.
+   anchor      : optional fragment id to append, without the `#`. A paged
+                 section partway down a long page (the movie page's cast and
+                 crew) would otherwise reload at the top and lose the reader's
+                 place; the browser jumps back to the section instead. Omit on
+                 the list pages, where the paged grid already starts the
+                 page. {% endcomment %}
+{% if page_obj.has_other_pages %}
+<nav class="pagination" aria-label="Pagination">
+    {% if page_obj.has_previous %}
+    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.previous_page_number }}{% if anchor %}#{{ anchor }}{% endif %}">← Previous</a>
+    {% endif %}
+    <span class="page-state">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}
+    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.next_page_number }}{% if anchor %}#{{ anchor }}{% endif %}">Next →</a>
+    {% endif %}
+</nav>
+{% endif %}

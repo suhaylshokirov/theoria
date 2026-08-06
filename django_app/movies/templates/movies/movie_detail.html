@@ -83,31 +83,60 @@
 </figure>
 {% endif %}
 
-<section class="sheet-section">
+<section class="sheet-section" id="cast">
     <div class="section-head">
         <h2>Cast</h2>
-        <span class="section-note">{{ cast|length }} of {{ credit_count }} credit{{ credit_count|pluralize }}</span>
+        <span class="section-note">{{ cast_count }} cast · {{ credit_count }} credit{{ credit_count|pluralize }}</span>
     </div>
     <div class="poster-grid is-tight">
-        {% for credit in cast %}
+        {% for credit in cast_page %}
         {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
         {% empty %}
         <p class="empty">No cast recorded for this film.</p>
         {% endfor %}
     </div>
+    {% include "movies/_pager.html" with page_obj=cast_page param="cast_page" base_query=cast_base_query anchor="cast" only %}
 </section>
 
-{% for department in crew %}
-<section class="sheet-section">
+{% comment %} Crew: a person holding several jobs on this film (Director +
+   Screenplay + Producer) is merged into one row filed under their most
+   senior department — views._merge_crew() — rather than one card per job in
+   as many department sections. Billed crew (the nine principal jobs) shows
+   by default; the full, department-grouped list is one click away, since
+   below-the-line crew photo coverage (23.8%) makes a poster grid the wrong
+   form for it — this is a list, not a grid. {% endcomment %}
+<section class="sheet-section" id="crew">
     <div class="section-head">
-        <h2>{{ department.name }}</h2>
-        <span class="section-note">{{ department.count }} credit{{ department.count|pluralize }}</span>
+        <h2>Crew</h2>
+        <span class="section-note">
+            {% if show_all_crew %}{{ crew_person_count }} crew{% else %}{{ billed_crew|length }} of {{ crew_person_count }} crew{% endif %}
+            — <a href="?{{ crew_toggle_query }}#crew">{% if show_all_crew %}Show billed crew only{% else %}Show all {{ crew_person_count }} crew{% endif %}</a>
+        </span>
     </div>
-    <div class="poster-grid is-tight">
-        {% for credit in department.credits %}
-        {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.job only %}
+    {% if show_all_crew %}
+        {% for department in crew %}
+        <h3 class="credit-department">{{ department.name }}</h3>
+        <ul class="credit-list">
+            {% for m in department.people %}
+            <li class="credit-row">
+                <a class="credit-name" href="{% url 'movies:person_detail' m.person.slug %}">{{ m.person.name }}</a>
+                <span class="credit-jobs">{{ m.job_display }}</span>
+            </li>
+            {% endfor %}
+        </ul>
         {% endfor %}
-    </div>
+        {% include "movies/_pager.html" with page_obj=crew_page param="crew_page" base_query=crew_base_query anchor="crew" only %}
+    {% else %}
+        <ul class="credit-list">
+            {% for m in billed_crew %}
+            <li class="credit-row">
+                <a class="credit-name" href="{% url 'movies:person_detail' m.person.slug %}">{{ m.person.name }}</a>
+                <span class="credit-jobs">{{ m.job_display }}</span>
+            </li>
+            {% empty %}
+            <p class="empty">No crew recorded for this film.</p>
+            {% endfor %}
+        </ul>
+    {% endif %}
 </section>
-{% endfor %}
 {% endblock %}
