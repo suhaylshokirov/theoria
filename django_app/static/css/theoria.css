@@ -1001,6 +1001,46 @@ button:hover,
   text-decoration: none;
 }
 
+/* Client-side pager (movie page cast/crew). Buttons, not links: paging here
+   changes nothing about the document's address. Styled to match .pagination a
+   exactly — adding a variant to the component rather than restyling it, per
+   the stylesheet contract at the top of this file. */
+.pagination.is-client .page-btn {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-5);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              opacity var(--dur-fast) var(--ease);
+}
+
+.pagination.is-client .page-btn:hover:not(:disabled) {
+  background: var(--lime-wash);
+  border-color: var(--lime-mark);
+}
+
+/* Kept in the layout at the ends of the range so the row doesn't reflow and
+   the "3 / 8" readout doesn't jump sideways on the first and last page. */
+.pagination.is-client .page-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* The JS pager toggles the `hidden` attribute on grid and flex children,
+   whose own display rule would otherwise win over the UA sheet's [hidden]. */
+[hidden] {
+  display: none !important;
+}
+
 /* --- Specimen (movie detail) -----------------------------------------------
    A catalog record: framed plate + captioned facts. Deliberately NOT a
    full-bleed darkened backdrop with text on top — that's the streaming-app

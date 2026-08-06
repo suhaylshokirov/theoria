@@ -1,0 +1,16 @@
+{% comment %} Client-side pager. Params — always pass with `only`:
+   label : what's being paged, for the accessible name ("cast", "crew").
+
+   Ships hidden and stays hidden unless static/js/theoria.js finds more items
+   than one page holds — so with JS off, or on a film with fewer than ten
+   people, there are no dead buttons on the page. Buttons rather than links
+   because these change nothing about the document's address: there is no
+   request, and no URL that would restore this state on reload.
+
+   The counterpart to _pager.html, which is the server-side pager for result
+   sets too large to send whole. {% endcomment %}
+<nav class="pagination is-client" aria-label="{{ label }} pagination" data-page-nav hidden>
+    <button type="button" class="page-btn" data-page-prev>← Previous</button>
+    <span class="page-state" data-page-state aria-live="polite" aria-atomic="true"></span>
+    <button type="button" class="page-btn" data-page-next>Next →</button>
+</nav>

@@ -88,55 +88,53 @@
         <h2>Cast</h2>
         <span class="section-note">{{ cast_count }} cast · {{ credit_count }} credit{{ credit_count|pluralize }}</span>
     </div>
-    <div class="poster-grid is-tight">
-        {% for credit in cast_page %}
-        {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
-        {% empty %}
-        <p class="empty">No cast recorded for this film.</p>
-        {% endfor %}
+    {% comment %} Every actor is rendered here and paged in the browser, ten at
+       a time — see [data-paged] in static/js/theoria.js. Headshots carry
+       loading="lazy", and a lazy image inside a hidden container is never
+       fetched, so shipping the full list costs markup but not bandwidth.
+       With JS off the nav stays hidden and the whole cast is simply on the
+       page, which is a worse layout but not a broken one. {% endcomment %}
+    <div data-paged data-page-size="10" data-page-items=".poster-card">
+        <div class="poster-grid is-tight">
+            {% for credit in cast %}
+            {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
+            {% empty %}
+            <p class="empty">No cast recorded for this film.</p>
+            {% endfor %}
+        </div>
+        {% include "movies/_pager_client.html" with label="cast" only %}
     </div>
-    {% include "movies/_pager.html" with page_obj=cast_page param="cast_page" base_query=cast_base_query anchor="cast" only %}
 </section>
 
 {% comment %} Crew: a person holding several jobs on this film (Director +
    Screenplay + Producer) is merged into one row filed under their most
    senior department — views._merge_crew() — rather than one card per job in
-   as many department sections. Billed crew (the nine principal jobs) shows
-   by default; the full, department-grouped list is one click away, since
-   below-the-line crew photo coverage (23.8%) makes a poster grid the wrong
-   form for it — this is a list, not a grid. {% endcomment %}
+   as many department sections. Rendered as a list, not a poster grid, because
+   below-the-line crew photo coverage is 23.8% against cast's 70.1%: three of
+   four cards would be a placeholder silhouette. A department heading hides
+   itself when the current page holds none of its people. {% endcomment %}
 <section class="sheet-section" id="crew">
     <div class="section-head">
         <h2>Crew</h2>
-        <span class="section-note">
-            {% if show_all_crew %}{{ crew_person_count }} crew{% else %}{{ billed_crew|length }} of {{ crew_person_count }} crew{% endif %}
-            — <a href="?{{ crew_toggle_query }}#crew">{% if show_all_crew %}Show billed crew only{% else %}Show all {{ crew_person_count }} crew{% endif %}</a>
-        </span>
+        <span class="section-note">{{ crew_person_count }} crew</span>
     </div>
-    {% if show_all_crew %}
+    <div data-paged data-page-size="10" data-page-items=".credit-row">
         {% for department in crew %}
-        <h3 class="credit-department">{{ department.name }}</h3>
-        <ul class="credit-list">
-            {% for m in department.people %}
-            <li class="credit-row">
-                <a class="credit-name" href="{% url 'movies:person_detail' m.person.slug %}">{{ m.person.name }}</a>
-                <span class="credit-jobs">{{ m.job_display }}</span>
-            </li>
-            {% endfor %}
-        </ul>
+        <div data-page-group>
+            <h3 class="credit-department">{{ department.name }}</h3>
+            <ul class="credit-list">
+                {% for m in department.people %}
+                <li class="credit-row">
+                    <a class="credit-name" href="{% url 'movies:person_detail' m.person.slug %}">{{ m.person.name }}</a>
+                    <span class="credit-jobs">{{ m.job_display }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% empty %}
+        <p class="empty">No crew recorded for this film.</p>
         {% endfor %}
-        {% include "movies/_pager.html" with page_obj=crew_page param="crew_page" base_query=crew_base_query anchor="crew" only %}
-    {% else %}
-        <ul class="credit-list">
-            {% for m in billed_crew %}
-            <li class="credit-row">
-                <a class="credit-name" href="{% url 'movies:person_detail' m.person.slug %}">{{ m.person.name }}</a>
-                <span class="credit-jobs">{{ m.job_display }}</span>
-            </li>
-            {% empty %}
-            <p class="empty">No crew recorded for this film.</p>
-            {% endfor %}
-        </ul>
-    {% endif %}
+        {% include "movies/_pager_client.html" with label="crew" only %}
+    </div>
 </section>
 {% endblock %}

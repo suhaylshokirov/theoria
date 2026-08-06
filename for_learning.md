@@ -2498,3 +2498,64 @@ actually compensating for, then compare it to `HTMX` or a small `fetch()` that s
 section's markup — and ask what you'd lose: the URL is currently a complete, shareable description
 of the page's state (`?crew=all&cast_page=3&crew_page=2`). Would a JS version keep that, and what
 does it take to keep it?
+
+### Addendum 2 — moving the pager into the browser
+
+The `#anchor` fix above was treating a symptom. The real complaint was that paging cost a
+**round-trip**: click Next, wait for Django to re-query, re-render and re-send the whole page, just
+to see ten different actors. So cast and crew both moved to client-side paging, and the anchors,
+the `?cast_page=`/`?crew_page=` params, the `?crew=all` toggle and the `BILLED_CREW_JOBS` subset
+were all deleted with it.
+
+**The decision worth understanding is where the boundary sits.** Client-side paging is not simply
+better — it means shipping every row to the browser. That's fine for one film (max ~1,200 credits,
+and the view had already loaded them all into memory to merge the crew). It would be absurd for
+`/movies/` (1,215 films) and catastrophic for `/people/` (122,685). So the project now has *two*
+pagers on purpose, and each partial's comment says which problem it solves:
+
+- `_pager.html` — server-side, for result sets too large to send whole.
+- `_pager_client.html` + `initPagedSection()` — browser-side, for a set already in the document.
+
+Picking one and using it everywhere is the mistake this avoids.
+
+Two smaller things that make it hold together:
+
+- **Progressive enhancement.** The pager ships with the `hidden` attribute and JS removes it only
+  when there's more than one page. With JS off you get the entire cast — a worse layout, not a
+  broken one. If the buttons had shipped visible, JS-off users would get controls that do nothing.
+- **`loading="lazy"` does real work here.** 139 headshots are in the markup, but a lazy image
+  inside a `display:none` container is never fetched. Shipping the full list costs markup, not
+  bandwidth.
+
+### Concepts Used (addendum 2)
+- **Round-trip vs repaint**: the actual cost being optimized. The old version re-ran SQL and
+  re-rendered a template to change which ten of an already-known list were visible.
+- **Progressive enhancement**: build the working no-JS version, then let JS improve it — rather
+  than shipping something that only works once a script runs.
+- **Choosing where to paginate**: a function of result-set size, not taste. Ask "can the client
+  hold all of it?" before asking which pager is nicer.
+- **Semantic elements**: the client pager uses `<button>`, not `<a>`. A link navigates to a URL;
+  these change nothing about the document's address, and there's no URL that would restore the
+  state on reload. Using `<a href="#">` would be lying to assistive tech.
+
+### Key Code (addendum 2)
+`django_app/static/js/theoria.js` — `initPagedSection()`:
+> `items.forEach(function (el, i) { el.hidden = i < start || i >= end; })` — the whole pager is one
+> line of "hide everything outside the window". The subtlety is the next block: a crew department
+> whose people all live on another page would otherwise leave a heading above an empty ruled list,
+> so each `[data-page-group]` hides itself when `group.querySelector(selector + ":not([hidden])")`
+> finds nothing.
+
+`django_app/static/css/theoria.css`:
+> `[hidden] { display: none !important; }` — needed because the UA stylesheet's `[hidden]` rule is
+> weaker than any author rule that sets `display`. Poster cards live in a `display: grid` parent,
+> and without this the JS would set `hidden` and nothing would happen. A one-line rule that is
+> invisible until it's missing.
+
+### What to Study Next
+The paging algorithm was verified by extracting the function and running it under Node against a
+hand-written stub DOM — page 1 showed 10 items across 3 departments, page 2 showed 2 and collapsed
+to 1 heading. That worked, but writing a fake DOM by hand doesn't scale past one function. Look at
+`jsdom` (a real DOM implementation in Node) and at Playwright (a real browser, driven from Python),
+and work out which one this project would want: what can a real browser catch that a fake DOM
+can't, and is that class of bug one this codebase actually has?

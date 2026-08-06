@@ -206,11 +206,99 @@
     });
   }
 
+  /* --- Client-side paging ----------------------------------------------------
+     Used by the movie page for cast and crew. Everything is already in the
+     document; this only shows a window of it, so "Next" is a repaint rather
+     than a round-trip.
+
+     Why here and not on the server: one film's credits max out around 1,200
+     rows, which is a payload a browser can hold. The /movies/ and /people/
+     list pages stay server-paged because their result sets are 1,215 and
+     122,685 rows — see _pager.html.
+
+     Progressive enhancement: the nav ships with `hidden` and is only revealed
+     when there's more than one page of items, so with JS off the reader gets
+     the whole list and no dead buttons.
+
+     Contract on the container:
+       [data-paged]      the root
+       data-page-size    items per page (default 10)
+       data-page-items   CSS selector for the items themselves
+       [data-page-group] optional wrapper (a crew department) that hides
+                         itself when none of its items are on this page
+       [data-page-nav]   the pager, holding [data-page-prev/next/state] */
+
+  function initPagedSection(root) {
+    var size = parseInt(root.getAttribute("data-page-size") || "10", 10);
+    var selector = root.getAttribute("data-page-items") || "[data-page-item]";
+    var nav = root.querySelector("[data-page-nav]");
+    if (!nav || size < 1) return;
+
+    var items = Array.prototype.slice.call(root.querySelectorAll(selector));
+    var pages = Math.ceil(items.length / size);
+    if (pages <= 1) return; // Nav stays hidden; nothing to page.
+
+    var groups = Array.prototype.slice.call(
+      root.querySelectorAll("[data-page-group]")
+    );
+    var prev = nav.querySelector("[data-page-prev]");
+    var next = nav.querySelector("[data-page-next]");
+    var state = nav.querySelector("[data-page-state]");
+    var current = 1;
+
+    function render() {
+      var start = (current - 1) * size;
+      var end = start + size;
+      items.forEach(function (el, i) {
+        el.hidden = i < start || i >= end;
+      });
+      // A department whose people are all on another page shouldn't leave its
+      // heading and an empty ruled list behind.
+      groups.forEach(function (group) {
+        group.hidden = !group.querySelector(selector + ":not([hidden])");
+      });
+      state.textContent = current + " / " + pages;
+      prev.disabled = current === 1;
+      next.disabled = current === pages;
+    }
+
+    function go(delta) {
+      var target = Math.min(Math.max(current + delta, 1), pages);
+      if (target === current) return;
+      current = target;
+      render();
+      // Keep the reader at the top of the section they're paging rather than
+      // wherever the shorter/taller new page happens to leave the scroll.
+      var section = root.closest("section");
+      if (section) {
+        section.scrollIntoView({
+          behavior: reduce ? "auto" : "smooth",
+          block: "start",
+        });
+      }
+    }
+
+    prev.addEventListener("click", function () {
+      go(-1);
+    });
+    next.addEventListener("click", function () {
+      go(1);
+    });
+
+    nav.hidden = false;
+    render();
+  }
+
+  function initPagedSections() {
+    document.querySelectorAll("[data-paged]").forEach(initPagedSection);
+  }
+
   function init() {
     initMeters();
     initCounters();
     initThemeToggle();
     initNavToggle();
+    initPagedSections();
   }
 
   if (document.readyState === "loading") {

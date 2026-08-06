@@ -16,27 +16,14 @@ from movies.models import (
 MOVIES_PER_PAGE = 24
 PEOPLE_PER_PAGE = 30
 
-# The median film carries 47 cast; the worst carries hundreds. Paging the
-# poster grid server-side is what keeps the page renderable at either end.
-CAST_PER_PAGE = 24
-
-# Crew rows are compact list rows rather than poster cards, so a page holds
-# more of them than the cast grid does. At the median 100 crew per film this
-# is three pages; the catalog's worst film (980 crew) is 25.
-CREW_PER_PAGE = 40
-
-# The crew a viewer wants to see first, without a click. Deliberately its own
-# copy, not imported from movies.graph.PATH_CREW_JOBS or
-# etl.gold.build_gold_datasets.KEY_CREW_JOBS — both hold the same nine job
-# titles today, and Task 52 already decided that "who works together
-# repeatedly" and "is there any path" must not share code because they answer
-# different questions. "What does a viewer want to see first on a film page"
-# is a third question and gets the same treatment. Importing the Gold builder
-# into a Django view would also drag pandas/boto3 into the request path.
-BILLED_CREW_JOBS = (
-    "Director", "Screenplay", "Writer", "Story", "Original Music Composer",
-    "Director of Photography", "Editor", "Production Design", "Producer",
-)
+# The movie page's cast and crew are paged in the browser, not here — see
+# static/js/theoria.js. The page size lives in the template's data-page-size
+# attribute, since it's a property of the rendered widget rather than of the
+# query: this view sends every credit either way.
+#
+# The list pages (/movies/, /people/) stay server-side paged: those queries
+# can return 1,215 and 122,685 rows, which is not a payload to hand a browser.
+# One film's ~1,200 credits is.
 
 # How many posters the home contact sheet draws. The mosaic is meant to read
 # as "the whole catalog at once", so this is a ceiling, not a page size. Since
@@ -273,83 +260,38 @@ def movie_detail(request, movie_slug):
     )
 
     # Cast is already one row per person — fact_credit's job is the literal
-    # "Actor" for every Acting row, so there's nothing to merge here. Volume,
-    # not duplication, is cast's problem: the median film has 47, the worst
-    # 139+, so it's paginated server-side rather than dumped into one grid.
+    # "Actor" for every Acting row, so there's nothing to merge here. Its
+    # problem is volume alone: the median film has 47, the worst 210. Every
+    # one is sent to the page and paged client-side (static/js/theoria.js) —
+    # a server round-trip per ten actors was the smoothness cost the reader
+    # actually felt, and the whole list is already in memory here anyway.
     cast = [c for c in credits if c.department == "Acting"]
-    cast_page = Paginator(cast, CAST_PER_PAGE).get_page(request.GET.get("cast_page"))
 
     # Crew is the opposite problem: duplication, not volume alone. A director
     # who also wrote and produced is three fact_credit rows, rendered before
     # this fix as three names in three department sections. _merge_crew()
     # collapses each person to one row under their most senior department.
-    show_all_crew = request.GET.get("crew") == "all"
-
+    #
+    # Grouped by department and sent in full, paged client-side the same way.
+    # There is no billed-crew subset and no expand toggle any more: paging ten
+    # at a time makes the first page short whatever it contains, so a second
+    # definition of "important crew" stopped earning its keep.
     crew_credits = [c for c in credits if c.department != "Acting"]
     merged_crew = _merge_crew(crew_credits)
 
-    billed_crew = sorted(
-        (m for m in merged_crew if m["is_billed"]),
-        key=lambda m: (_department_rank(m["department"]), m["person"].name),
-    )
-
-    # Full crew, department-grouped, is only computed under ?crew=all — most
-    # requests never render it, so there's no reason to build it every time.
-    #
-    # It's paged as one flat list ordered by (department, name) and only then
-    # grouped into headings, rather than paging the departments themselves.
-    # A film runs from a handful of directors to eighty below-the-line crew,
-    # so per-department paging would give one page of 2 and another of 80; a
-    # flat page size is even. The cost is that a department straddling a page
-    # boundary prints its heading again on the next page, which reads as a
-    # continuation rather than an error.
-    crew_page = None
-    crew = []
-    if show_all_crew:
-        crew_sorted = sorted(
-            merged_crew,
-            key=lambda m: (_department_rank(m["department"]), m["person"].name),
+    by_department = {}
+    for m in merged_crew:
+        by_department.setdefault(m["department"], []).append(m)
+    crew = [
+        {
+            "name": name,
+            "people": sorted(rows, key=lambda m: m["person"].name),
+            "count": len(rows),
+        }
+        for name, rows in sorted(
+            by_department.items(), key=lambda kv: _department_rank(kv[0])
         )
-        crew_page = Paginator(crew_sorted, CREW_PER_PAGE).get_page(
-            request.GET.get("crew_page")
-        )
-        by_department = {}
-        for m in crew_page:
-            by_department.setdefault(m["department"], []).append(m)
-        crew = [
-            {"name": name, "people": rows, "count": len(rows)}
-            for name, rows in sorted(
-                by_department.items(), key=lambda kv: _department_rank(kv[0])
-            )
-        ]
-
-    # Each pager has to carry the *other* section's state, or paging the cast
-    # would silently collapse an expanded crew list and vice versa — the same
-    # class of bug as the pre-fix list pagers, which hardcoded `page=` and
-    # dropped every other param. Page 1 is left out so the common URL stays
-    # clean; get_page() treats a missing value as page 1 anyway.
-    active = {}
-    if show_all_crew:
-        active["crew"] = "all"
-    if cast_page.number > 1:
-        active["cast_page"] = cast_page.number
-    if crew_page is not None and crew_page.number > 1:
-        active["crew_page"] = crew_page.number
-
-    cast_base_query = urlencode(
-        {k: v for k, v in active.items() if k != "cast_page"}
-    )
-    crew_base_query = urlencode(
-        {k: v for k, v in active.items() if k != "crew_page"}
-    )
-
-    # The expand/collapse link keeps the reader's cast page but always drops
-    # crew_page: page 7 of the old crew list means nothing once the list is
-    # collapsed, and re-expanding should start at the top.
-    toggle = {k: v for k, v in active.items() if k == "cast_page"}
-    if not show_all_crew:
-        toggle["crew"] = "all"
-    crew_toggle_query = urlencode(toggle)
+    ]
 
     # Unchanged: the "Directed by" record line reads raw credits, not the
     # merged crew list — it only ever needs the Director job, never the full
@@ -373,15 +315,9 @@ def movie_detail(request, movie_slug):
     context = {
         "movie": movie,
         "genres": genres,
-        "cast_page": cast_page,
+        "cast": cast,
         "cast_count": len(cast),
-        "cast_base_query": cast_base_query,
-        "billed_crew": billed_crew,
         "crew": crew,
-        "crew_page": crew_page,
-        "crew_base_query": crew_base_query,
-        "crew_toggle_query": crew_toggle_query,
-        "show_all_crew": show_all_crew,
         "crew_person_count": len(merged_crew),
         "credit_count": len(credits),
         "directors": directors,
@@ -459,7 +395,6 @@ def _merge_crew(credits):
             "department": rows_sorted[0].department,
             "jobs": jobs,
             "job_display": " / ".join(jobs),
-            "is_billed": any(job in BILLED_CREW_JOBS for job in jobs),
         })
     return merged
 
