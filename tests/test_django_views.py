@@ -618,8 +618,8 @@ def test_legacy_person_url_404s_when_its_slug_was_reassigned():
     assert response.status_code == 404
 
 
-def test_person_detail_groups_credits_by_department():
-    """Every credit shows, grouped by craft, with Acting first."""
+def test_person_detail_merges_multi_job_credits_into_one_filmography_row():
+    """A person who acted in and also directed one film gets one poster, not two."""
     person = _person()
     movie = _movie()
     credits = [
@@ -645,9 +645,12 @@ def test_person_detail_groups_credits_by_department():
         response = client.get("/people/test-person/")
 
     assert response.status_code == 200
-    assert [d["name"] for d in response.context["departments"]] == [
-        "Acting", "Directing", "Editing",
-    ]
+    filmography = response.context["filmography"]
+    # One film, one row — not three, despite three underlying credits.
+    assert len(filmography) == 1
+    # Department order (Acting, Directing, Editing), and Acting shows the
+    # character name rather than the literal job title "Actor".
+    assert filmography[0]["job_display"] == "Hero / Director / Editor"
     # Three credits, one film — a person holding several jobs on one title.
     assert response.context["credit_count"] == 3
     assert response.context["film_count"] == 1

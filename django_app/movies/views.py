@@ -378,9 +378,7 @@ def _merge_crew(credits):
 
     Cast is untouched by this — fact_credit's job is the literal "Actor" for
     every one of the 62,713 Acting rows, so cast is already one row per
-    person; merging is purely a crew-department concern. Written to take a
-    plain list of Credit objects (not a queryset) so it can be reused on
-    person_detail's crew sections later without changing its signature.
+    person; merging is purely a crew-department concern.
     """
     by_person = {}
     for credit in credits:
@@ -395,6 +393,34 @@ def _merge_crew(credits):
             "department": rows_sorted[0].department,
             "jobs": jobs,
             "job_display": " / ".join(jobs),
+        })
+    return merged
+
+
+def _merge_person_credits(credits):
+    """Collapse a person's several credits on one film into one filmography row.
+
+    Same shape of problem as _merge_crew, keyed by movie instead of person: an
+    actor who also directed or wrote the same film would otherwise appear as
+    duplicate entries in separate department sections (Acting, Directing, ...).
+    One row per movie, with every job on it joined in department order, so a
+    director who also wrote the script reads "Director / Screenplay" once,
+    under one poster, rather than twice under two.
+    """
+    by_movie = {}
+    for credit in credits:
+        by_movie.setdefault(credit.movie_id, []).append(credit)
+
+    merged = []
+    for movie_id, rows in by_movie.items():
+        rows_sorted = sorted(rows, key=lambda c: _department_rank(c.department))
+        labels = [
+            c.character_name if c.department == "Acting" and c.character_name else c.job
+            for c in rows_sorted
+        ]
+        merged.append({
+            "movie": rows_sorted[0].movie,
+            "job_display": " / ".join(labels),
         })
     return merged
 
@@ -423,28 +449,20 @@ def director_detail(request, director_slug):
 
 
 def person_detail(request, person_slug):
-    """One person, every credit they hold, and who they keep working with."""
+    """One person, every film they worked on, and what they did there."""
     person = get_object_or_404(Person.objects.using("warehouse"), slug=person_slug)
     person_id = person.person_id
 
-    # One query for every credit, joined to its film. Grouping happens in
-    # Python below: a GROUP BY can't return the rows themselves, and one query
-    # per department would be an N+1 in the number of crafts a person works in.
-    credits = (
+    # One query for every credit, joined to its film. Merging happens in
+    # Python below, since a GROUP BY can't return the rows themselves.
+    credits = list(
         Credit.objects.using("warehouse")
         .filter(person_id=person_id)
         .select_related("movie")
         .order_by(F("movie__release_date").desc(nulls_last=True))
     )
 
-    by_department = {}
-    for credit in credits:
-        by_department.setdefault(credit.department, []).append(credit)
-
-    ordered = sorted(by_department.items(), key=lambda kv: _department_rank(kv[0]))
-    departments = [
-        {"name": name, "credits": rows, "count": len(rows)} for name, rows in ordered
-    ]
+    filmography = _merge_person_credits(credits)
 
     movie_ids = {c.movie_id for c in credits}
 
@@ -464,7 +482,7 @@ def person_detail(request, person_slug):
 
     context = {
         "person": person,
-        "departments": departments,
+        "filmography": filmography,
         "film_count": len(movie_ids),
         "credit_count": len(credits),
         "avg_rating": avg_rating,
