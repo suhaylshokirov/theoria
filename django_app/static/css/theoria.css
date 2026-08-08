@@ -879,6 +879,23 @@ input[type="search"]:focus {
   outline: none;
 }
 
+/* A <select> lives inside the same .field wrapper as the search input, so it
+   needs to shed its own border and pick up the shared font/colour instead —
+   otherwise it renders as unstyled system chrome next to a designed one. */
+.field select {
+  border: none;
+  background: none;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+
+.field select:focus {
+  outline: none;
+}
+
 /* Lime is the action colour. Ink text on lime is 13:1, so the label stays
    sharp; hover deepens the fill rather than changing hue. */
 button,

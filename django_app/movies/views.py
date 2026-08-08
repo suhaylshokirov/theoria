@@ -101,28 +101,66 @@ def movie_list(request):
     return render(request, "movies/movie_list.html", context)
 
 
+# ?sort= values accepted by person_list, mapped to an order_by expression.
+PERSON_SORTS = {
+    "popularity": F("popularity").desc(nulls_last=True),
+    "name": F("name").asc(),
+}
+
+# TMDB's gender codes. 0 ("not specified") is deliberately not a filter option
+# below — it isn't a fact about the person, it's TMDB having no answer, and
+# offering it as a choice would imply otherwise.
+GENDER_LABELS = {"1": "Female", "2": "Male", "3": "Non-binary"}
+
+# Filter options for "known for" — the person's own TMDB craft, independent of
+# which credits they hold in *this* catalog (that's what the Acting/Directing
+# scope switch already does). Reuses DEPARTMENT_ORDER's names rather than a
+# fresh DISTINCT query every request; "Creator" (25 people, a TMDB rarity
+# outside this list) is the one department it doesn't offer as a choice.
+
+
 def _person_list(request, people, list_title, scope):
-    """Shared list view for every people index: name search + pagination.
+    """Shared list view for every people index: search, filter, sort, pagination.
 
     Takes a queryset rather than a model, because the three indexes now differ
     by which credits a person holds, not by which table they live in. Every
     person page lives at /people/<slug>/, so there is no per-list URL name.
     """
     q = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "popularity")
+    if sort not in PERSON_SORTS:
+        sort = "popularity"
+    gender = request.GET.get("gender", "")
+    if gender not in GENDER_LABELS:
+        gender = ""
+    known_for = request.GET.get("known_for", "")
+    if known_for not in DEPARTMENT_ORDER:
+        known_for = ""
 
     if q:
         people = people.filter(name__icontains=q)
-    people = people.order_by(F("popularity").desc(nulls_last=True))
+    if gender:
+        people = people.filter(gender=int(gender))
+    if known_for:
+        people = people.filter(known_for_department=known_for)
+    people = people.order_by(PERSON_SORTS[sort])
 
     page_obj = Paginator(people, PEOPLE_PER_PAGE).get_page(request.GET.get("page"))
 
     context = {
         "page_obj": page_obj,
         "q": q,
+        "sort": sort,
+        "gender": gender,
+        "known_for": known_for,
+        "gender_choices": GENDER_LABELS,
+        "known_for_choices": DEPARTMENT_ORDER,
         "list_title": list_title,
         "scope": scope,
         "detail_url_name": "movies:person_detail",
-        "base_query": urlencode({"q": q}),
+        "base_query": urlencode(
+            {"q": q, "sort": sort, "gender": gender, "known_for": known_for}
+        ),
     }
     return render(request, "movies/person_list.html", context)
 

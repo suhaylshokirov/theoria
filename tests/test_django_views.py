@@ -208,6 +208,53 @@ def test_director_list_filters_people_by_directing_credit():
     assert response.context["scope"] == "directing"
 
 
+def test_person_list_filters_by_gender_and_known_for_department():
+    person = _person()
+
+    with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
+        qs = person_mgr.using.return_value
+        qs.filter.return_value = qs
+        qs.order_by.return_value = [person]
+
+        response = client.get("/people/", {"gender": "1", "known_for": "Directing"})
+
+    assert response.status_code == 200
+    qs.filter.assert_any_call(gender=1)
+    qs.filter.assert_any_call(known_for_department="Directing")
+    assert response.context["gender"] == "1"
+    assert response.context["known_for"] == "Directing"
+
+
+def test_person_list_rejects_unknown_gender_and_known_for_values():
+    """An unrecognised value falls back to no filter, rather than a bad query."""
+    person = _person()
+
+    with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
+        qs = person_mgr.using.return_value
+        qs.order_by.return_value = [person]
+
+        response = client.get("/people/", {"gender": "9", "known_for": "Not A Craft"})
+
+    assert response.status_code == 200
+    qs.filter.assert_not_called()
+    assert response.context["gender"] == ""
+    assert response.context["known_for"] == ""
+
+
+def test_person_list_sorts_by_name_when_requested():
+    person = _person()
+
+    with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
+        qs = person_mgr.using.return_value
+        qs.order_by.return_value = [person]
+
+        response = client.get("/people/", {"sort": "name"})
+
+    assert response.status_code == 200
+    assert response.context["sort"] == "name"
+    qs.order_by.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # genre_list
 # ---------------------------------------------------------------------------

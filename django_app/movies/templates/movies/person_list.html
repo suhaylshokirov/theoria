@@ -3,13 +3,41 @@
 {% block title %}Theoria — {{ list_title }}{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title=list_title sub="Ordered by popularity as recorded in the warehouse." only %}
+{% include "movies/_sheet_header.html" with title=list_title sub="Search by name, filter by gender or craft, and reorder by what was measured." only %}
 
 <section class="sheet-section">
     <div class="toolbar">
         <form method="get" action="">
             <div class="field">
                 <input type="search" name="q" value="{{ q }}" placeholder="Search names" aria-label="Search {{ list_title|lower }} by name">
+            </div>
+            {% comment %} Radio segments rather than a <select>: few, fixed options, so
+               showing them is more useful than hiding them (matches movie_list's
+               sort control). Still a plain form control — works without JS. {% endcomment %}
+            <fieldset class="segmented">
+                <legend class="visually-hidden">Order by</legend>
+                <input type="radio" name="sort" id="sort-popularity" value="popularity" {% if sort == "popularity" %}checked{% endif %}>
+                <label for="sort-popularity">Most popular</label>
+                <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
+                <label for="sort-name">A–Z</label>
+            </fieldset>
+            <fieldset class="segmented">
+                <legend class="visually-hidden">Filter by gender</legend>
+                <input type="radio" name="gender" id="gender-all" value="" {% if not gender %}checked{% endif %}>
+                <label for="gender-all">Any gender</label>
+                {% for value, label in gender_choices.items %}
+                <input type="radio" name="gender" id="gender-{{ value }}" value="{{ value }}" {% if gender == value %}checked{% endif %}>
+                <label for="gender-{{ value }}">{{ label }}</label>
+                {% endfor %}
+            </fieldset>
+            <div class="field">
+                <label for="known-for" class="visually-hidden">Filter by craft</label>
+                <select name="known_for" id="known-for">
+                    <option value="">Any craft</option>
+                    {% for choice in known_for_choices %}
+                    <option value="{{ choice }}" {% if known_for == choice %}selected{% endif %}>{{ choice }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <button type="submit">Apply</button>
         </form>
@@ -19,9 +47,9 @@
            rather than the radio `.segmented` control because each scope is
            its own URL. {% endcomment %}
         <nav class="scope" aria-label="Filter people by credit">
-            <a href="{% url 'movies:person_list' %}"{% if scope == "all" %} aria-current="true"{% endif %}>All</a>
-            <a href="{% url 'movies:actor_list' %}"{% if scope == "acting" %} aria-current="true"{% endif %}>Acting</a>
-            <a href="{% url 'movies:director_list' %}"{% if scope == "directing" %} aria-current="true"{% endif %}>Directing</a>
+            <a href="{% url 'movies:person_list' %}?{{ base_query }}"{% if scope == "all" %} aria-current="true"{% endif %}>All</a>
+            <a href="{% url 'movies:actor_list' %}?{{ base_query }}"{% if scope == "acting" %} aria-current="true"{% endif %}>Acting</a>
+            <a href="{% url 'movies:director_list' %}?{{ base_query }}"{% if scope == "directing" %} aria-current="true"{% endif %}>Directing</a>
         </nav>
         <span class="result-count">{{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}</span>
     </div>
@@ -32,6 +60,7 @@
         {% empty %}
         <p class="empty">
             {% if q %}No names match “{{ q }}”.
+            {% elif gender or known_for %}No one matches this filter.
             {% else %}Nothing loaded yet. Run the pipeline to fill the index.{% endif %}
         </p>
         {% endfor %}
