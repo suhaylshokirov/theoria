@@ -14,7 +14,7 @@
         {% else %}
         <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}
-        <p class="plate-caption mono">dim_movie · {{ movie.movie_id }}</p>
+        {% if movie.release_date %}<p class="plate-caption mono">{{ movie.release_date|date:"Y" }}</p>{% endif %}
     </div>
 
     <div class="specimen-record">
