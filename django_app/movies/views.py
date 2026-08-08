@@ -10,7 +10,7 @@ from django.utils.text import slugify
 from movies import graph
 
 from movies.models import (
-    Collaboration, Collection, Credit, Genre, Movie, MovieMetrics, Person,
+    Collection, Credit, Genre, Movie, MovieMetrics, Person,
 )
 
 MOVIES_PER_PAGE = 24
@@ -399,10 +399,6 @@ def _merge_crew(credits):
     return merged
 
 
-# How many repeat collaborators the person page prints.
-COLLABORATORS_SHOWN = 8
-
-
 def _redirect_to_person(slug):
     """301 a legacy /actors/<slug>/ or /directors/<slug>/ URL to /people/<slug>/.
 
@@ -473,41 +469,8 @@ def person_detail(request, person_slug):
         "credit_count": len(credits),
         "avg_rating": avg_rating,
         "career_period": _career_period(span["earliest"], span["latest"]),
-        "collaborators": _top_collaborators(person_id),
     }
     return render(request, "movies/person_detail.html", context)
-
-
-def _top_collaborators(person_id):
-    """The people this person has worked with most, from fact_collaboration.
-
-    Pairs are stored canonically (person_a_id < person_b_id), so a person can
-    be on either side and both columns have to be searched. That's the cost of
-    halving the table — paid here, on read, once per page.
-    """
-    as_a = (
-        Collaboration.objects.using("warehouse")
-        .filter(person_a_id=person_id)
-        .select_related("person_b")
-    )
-    as_b = (
-        Collaboration.objects.using("warehouse")
-        .filter(person_b_id=person_id)
-        .select_related("person_a")
-    )
-
-    rows = [
-        {"person": c.person_b, "films_together": c.films_together,
-         "first_year": c.first_year, "last_year": c.last_year}
-        for c in as_a
-    ] + [
-        {"person": c.person_a, "films_together": c.films_together,
-         "first_year": c.first_year, "last_year": c.last_year}
-        for c in as_b
-    ]
-
-    rows.sort(key=lambda r: (-r["films_together"], r["person"].name))
-    return rows[:COLLABORATORS_SHOWN]
 
 
 def connect(request):

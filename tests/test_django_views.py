@@ -29,7 +29,7 @@ from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 
 from movies.models import (  # noqa: E402
-    Collaboration, Collection, Credit, Genre, Movie, MovieMetrics, Person,
+    Collection, Credit, Genre, Movie, MovieMetrics, Person,
 )
 
 client = Client()
@@ -633,9 +633,7 @@ def test_person_detail_groups_credits_by_department():
         Credit, "objects", new=MagicMock()
     ) as credit_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
-        Collaboration, "objects", new=MagicMock()
-    ) as collab_mgr:
+    ) as metrics_mgr:
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
             "avg_rating": Decimal("7.50")
@@ -643,7 +641,6 @@ def test_person_detail_groups_credits_by_department():
         movie_mgr.using.return_value.filter.return_value.aggregate.return_value = {
             "earliest": date(2020, 1, 1), "latest": date(2020, 1, 1),
         }
-        collab_mgr.using.return_value.filter.return_value.select_related.return_value = []
 
         response = client.get("/people/test-person/")
 
@@ -655,46 +652,6 @@ def test_person_detail_groups_credits_by_department():
     assert response.context["credit_count"] == 3
     assert response.context["film_count"] == 1
     assert response.context["career_period"] == "2020"
-
-
-def test_person_detail_lists_repeat_collaborators_from_both_pair_sides():
-    """Pairs are stored canonically, so a person can be person_a or person_b."""
-    person = _person(person_id=5, name="Director", slug="director")
-    editor = _person(person_id=9, name="Editor", slug="editor")
-    composer = _person(person_id=2, name="Composer", slug="composer")
-
-    with patch("movies.views.get_object_or_404", return_value=person), patch.object(
-        Credit, "objects", new=MagicMock()
-    ) as credit_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
-        Collaboration, "objects", new=MagicMock()
-    ) as collab_mgr:
-        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
-            "avg_rating": None
-        }
-        movie_mgr.using.return_value.filter.return_value.aggregate.return_value = {
-            "earliest": None, "latest": None,
-        }
-        # person 5 is the lower id here, so this pair stores them as person_a...
-        as_a = Collaboration(person_a=person, person_b=editor, films_together=11,
-                             first_year=1980, last_year=2023)
-        # ...and the higher id here, so this one stores them as person_b.
-        as_b = Collaboration(person_a=composer, person_b=person, films_together=19,
-                             first_year=1975, last_year=2026)
-        collab_mgr.using.return_value.filter.return_value.select_related.side_effect = [
-            [as_a], [as_b],
-        ]
-
-        response = client.get("/people/director/")
-
-    assert response.status_code == 200
-    rows = response.context["collaborators"]
-    # Sorted by shared films, and the person on the *other* side is the one named.
-    assert [(r["person"].name, r["films_together"]) for r in rows] == [
-        ("Composer", 19), ("Editor", 11),
-    ]
 
 
 def test_person_detail_404_when_missing():

@@ -1332,75 +1332,12 @@ button:hover,
   border-bottom-color: var(--lime);
 }
 
-/* --- Collaborator list -----------------------------------------------------
-   "Works with" on a person page. A readout, not a recommendation strip: each
-   row is a measured count with the span it was measured over, so the figure
-   carries the lime and everything else stays ink. Deliberately a list rather
-   than poster cards — the quantity is the point, not the faces. */
-
-.collab-list {
-  list-style: none;
-  display: grid;
-  gap: 1px;
-  background: var(--rule);
-  border-block: var(--hairline);
-  /* Same UA default-padding fix as .credit-list above — this component had
-     the identical defect from the day it was written. */
-  padding: 0;
-  margin: 0;
-}
-
-.collab-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  padding: var(--space-4) 0;
-  background: var(--paper);
-}
-
-.collab-name {
-  font-weight: 500;
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-}
-
-.collab-row:hover .collab-name,
-.collab-name:focus-visible {
-  border-bottom-color: var(--lime-mark);
-}
-
-.collab-count {
-  margin-left: auto;
-  font-size: var(--text-md);
-  color: var(--lime-text);
-}
-
-.collab-unit {
-  color: var(--ink-faint);
-  font-size: var(--text-2xs);
-  min-width: 3.25rem;
-}
-
-.collab-span {
-  color: var(--ink-faint);
-  font-size: var(--text-2xs);
-  min-width: 5.5rem;
-  text-align: right;
-}
-
-@media (max-width: 620px) {
-  .collab-span {
-    display: none;
-  }
-}
-
 /* --- Credit list (movie detail, crew) ---------------------------------------
-   Billed/full crew on the movie page. Modelled on .collab-list directly
-   above: 1px gap on a --rule background with --paper rows draws hairline
-   dividers with no border-bottom rules to fight in dark mode. A list, not
-   poster cards, because crew profile-photo coverage (23.8%) is a fraction of
-   cast's (70.1%) — three of four crew cards would be placeholder
-   silhouettes. */
+   Billed/full crew on the movie page. 1px gap on a --rule background with
+   --paper rows draws hairline dividers with no border-bottom rules to fight
+   in dark mode. A list, not poster cards, because crew profile-photo
+   coverage (23.8%) is a fraction of cast's (70.1%) — three of four crew
+   cards would be placeholder silhouettes. */
 
 .credit-department {
   font-family: var(--font-label);
