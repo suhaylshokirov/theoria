@@ -297,12 +297,101 @@
     document.querySelectorAll("[data-paged]").forEach(initPagedSection);
   }
 
+  /* --- Live filtering (People index) -----------------------------------------
+     Progressive enhancement over a plain GET form: as any field in it
+     changes, re-fetch just the results and swap them in, so tweaking a
+     filter shows the new results without an Apply click or a full page
+     reload. Falls straight through to a normal submit if fetch/AbortController
+     aren't available, or if the request itself fails.
+
+     The server tells the two paths apart by the X-Requested-With header this
+     sets (see _is_ajax() in views.py) — a plain browser submit never sends
+     it, so a no-JS visitor gets the exact same full page either way.
+
+     Contract on the form:
+       [data-live-filter]   the form itself; a plain GET form underneath.
+       data-live-targets    comma-separated CSS selectors, each an id also
+                             present in the AJAX response, swapped by
+                             innerHTML. Two rather than one because the
+                             People page's scope nav and result count sit
+                             inside .toolbar while the grid and pager sit
+                             below it — see movies/_person_results.html. */
+
+  function initLiveFilter() {
+    var form = document.querySelector("[data-live-filter]");
+    if (!form || !window.fetch || !window.AbortController) return;
+
+    var targets = (form.getAttribute("data-live-targets") || "")
+      .split(",")
+      .map(function (s) {
+        return s.trim();
+      })
+      .filter(Boolean);
+    if (!targets.length) return;
+
+    var controller = null;
+    var debounceTimer = null;
+
+    function apply() {
+      if (controller) controller.abort();
+      controller = new AbortController();
+
+      var params = new URLSearchParams(new FormData(form));
+      params.delete("page"); // a filter change always starts back at page 1
+      var qs = params.toString();
+      var url = (form.getAttribute("action") || location.pathname) +
+        (qs ? "?" + qs : "");
+
+      fetch(url, {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        signal: controller.signal,
+      })
+        .then(function (r) {
+          return r.text();
+        })
+        .then(function (html) {
+          var doc = new DOMParser().parseFromString(html, "text/html");
+          targets.forEach(function (sel) {
+            var next = doc.querySelector(sel);
+            var current = document.querySelector(sel);
+            if (next && current) current.innerHTML = next.innerHTML;
+          });
+          history.replaceState(null, "", url);
+        })
+        .catch(function (err) {
+          if (err.name !== "AbortError") form.submit(); // fetch itself failed
+        });
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      clearTimeout(debounceTimer);
+      apply();
+    });
+
+    // Radios and the craft <select> fire immediately; the search box (type
+    // search/text) debounces so it doesn't re-fetch on every keystroke.
+    form.addEventListener("change", function (e) {
+      var type = e.target.type;
+      if (type === "search" || type === "text") return;
+      apply();
+    });
+
+    form.addEventListener("input", function (e) {
+      var type = e.target.type;
+      if (type !== "search" && type !== "text") return;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(apply, 300);
+    });
+  }
+
   function init() {
     initMeters();
     initCounters();
     initThemeToggle();
     initNavToggle();
     initPagedSections();
+    initLiveFilter();
   }
 
   if (document.readyState === "loading") {

@@ -1,0 +1,20 @@
+{% comment %} The poster grid + pager, below .toolbar. See _person_toolbar_meta.html
+   for why this is a separate partial from person_list.html: it's the other
+   half of the pair static/js/theoria.js's initLiveFilter() swaps as the
+   filter form changes. aria-live so the swap is announced to screen
+   readers. {% endcomment %}
+<div id="people-grid" aria-live="polite">
+    <div class="poster-grid">
+        {% for person in page_obj %}
+        {% include "movies/_person_card.html" with person=person detail_url_name=detail_url_name only %}
+        {% empty %}
+        <p class="empty">
+            {% if q %}No names match “{{ q }}”.
+            {% elif gender or known_for %}No one matches this filter.
+            {% else %}Nothing loaded yet. Run the pipeline to fill the index.{% endif %}
+        </p>
+        {% endfor %}
+    </div>
+
+    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query=base_query only %}
+</div>

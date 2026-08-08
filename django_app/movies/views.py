@@ -16,6 +16,13 @@ from movies.models import (
 MOVIES_PER_PAGE = 24
 PEOPLE_PER_PAGE = 30
 
+
+def _is_ajax(request):
+    """True for the fetch() requests static/js/theoria.js's initLiveFilter()
+    makes as a filter form changes — set explicitly in the JS, never sent by
+    a plain browser navigation or a no-JS form submit."""
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
 # The movie page's cast and crew are paged in the browser, not here — see
 # static/js/theoria.js. The page size lives in the template's data-page-size
 # attribute, since it's a property of the rendered widget rather than of the
@@ -162,6 +169,12 @@ def _person_list(request, people, list_title, scope):
             {"q": q, "sort": sort, "gender": gender, "known_for": known_for}
         ),
     }
+    # static/js/theoria.js's initLiveFilter() re-requests this same URL with
+    # this header on every filter change, and only wants the results back —
+    # not the page around them. Without JS, this header is never sent and the
+    # form's plain GET submit renders the full page as always.
+    if _is_ajax(request):
+        return render(request, "movies/_person_results.html", context)
     return render(request, "movies/person_list.html", context)
 
 

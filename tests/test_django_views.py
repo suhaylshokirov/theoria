@@ -255,6 +255,28 @@ def test_person_list_sorts_by_name_when_requested():
     qs.order_by.assert_called_once()
 
 
+def test_person_list_ajax_request_renders_results_fragment_only():
+    """initLiveFilter()'s fetch() sets this header and wants just the results,
+    not the full page — see _is_ajax() in views.py."""
+    person = _person()
+
+    with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
+        qs = person_mgr.using.return_value
+        qs.order_by.return_value = [person]
+
+        response = client.get(
+            "/people/", HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+        )
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "people-toolbar-meta" in content
+    assert "people-grid" in content
+    # No page shell — this is a fragment, not the full document.
+    assert "<html" not in content
+    assert "<!DOCTYPE" not in content
+
+
 # ---------------------------------------------------------------------------
 # genre_list
 # ---------------------------------------------------------------------------

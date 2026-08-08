@@ -7,7 +7,12 @@
 
 <section class="sheet-section">
     <div class="toolbar">
-        <form method="get" action="">
+        {% comment %} data-live-filter + data-live-targets: static/js/theoria.js's
+           initLiveFilter() re-fetches and swaps just these two regions as the
+           fields below change, so results update without an Apply click or a
+           full page reload. Plain GET form underneath, so it still works with
+           no JS — see _person_results.html's docstring. {% endcomment %}
+        <form method="get" action="" data-live-filter data-live-targets="#people-toolbar-meta, #people-grid">
             <div class="field">
                 <input type="search" name="q" value="{{ q }}" placeholder="Search names" aria-label="Search {{ list_title|lower }} by name">
             </div>
@@ -46,26 +51,9 @@
            switch over one index, not three different indexes. Plain links
            rather than the radio `.segmented` control because each scope is
            its own URL. {% endcomment %}
-        <nav class="scope" aria-label="Filter people by credit">
-            <a href="{% url 'movies:person_list' %}?{{ base_query }}"{% if scope == "all" %} aria-current="true"{% endif %}>All</a>
-            <a href="{% url 'movies:actor_list' %}?{{ base_query }}"{% if scope == "acting" %} aria-current="true"{% endif %}>Acting</a>
-            <a href="{% url 'movies:director_list' %}?{{ base_query }}"{% if scope == "directing" %} aria-current="true"{% endif %}>Directing</a>
-        </nav>
-        <span class="result-count">{{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}</span>
+        {% include "movies/_person_toolbar_meta.html" %}
     </div>
 
-    <div class="poster-grid">
-        {% for person in page_obj %}
-        {% include "movies/_person_card.html" with person=person detail_url_name=detail_url_name only %}
-        {% empty %}
-        <p class="empty">
-            {% if q %}No names match “{{ q }}”.
-            {% elif gender or known_for %}No one matches this filter.
-            {% else %}Nothing loaded yet. Run the pipeline to fill the index.{% endif %}
-        </p>
-        {% endfor %}
-    </div>
-
-    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query=base_query only %}
+    {% include "movies/_person_grid.html" %}
 </section>
 {% endblock %}
