@@ -916,6 +916,14 @@ button,
               border-color var(--dur-fast) var(--ease);
 }
 
+/* The People filter form's Apply button — redundant once JS is live-filtering
+   on every change (see initLiveFilter() in theoria.js). Gated on html.has-js
+   the same way as the mobile nav toggle above: without it, a radio or select
+   change has no auto-submit, so the button is the only way to apply one. */
+html.has-js .apply-btn {
+  display: none;
+}
+
 button:hover,
 .btn:hover {
   background: var(--lime-hover);

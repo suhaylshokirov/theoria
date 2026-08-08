@@ -44,7 +44,11 @@
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit">Apply</button>
+            {% comment %} Redundant once JS is live-filtering on every change — hidden
+               via the html.has-js CSS gate (see base.html) rather than removed, so a
+               no-JS visitor, who gets no auto-submit on a radio/select change, still
+               has a way to apply anything but the search box. {% endcomment %}
+            <button type="submit" class="apply-btn">Apply</button>
         </form>
         {% comment %} Actors and directors are no longer separate tables — they're the
            people holding an Acting or Directing credit. So this is a scope
