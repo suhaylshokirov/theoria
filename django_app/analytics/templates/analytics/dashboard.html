@@ -172,7 +172,7 @@
                     {% for row in director_trend_over_time %}
                     <tr>
                         <th scope="row">{{ row.director_name }}</th>
-                        <td class="num">{{ row.year }}</td>
+                        <td class="num" data-no-comma>{{ row.year }}</td>
                         <td class="num">{{ row.movie_count }}</td>
                         <td class="num">{{ row.avg_rating|floatformat:2|default:"—" }}</td>
                     </tr>
@@ -200,7 +200,7 @@
                     {% for row in genre_growth_over_time %}
                     <tr>
                         <th scope="row">{{ row.genre_name }}</th>
-                        <td class="num">{{ row.year }}</td>
+                        <td class="num" data-no-comma>{{ row.year }}</td>
                         <td class="num">{{ row.movie_count }}</td>
                     </tr>
                     {% endfor %}
@@ -236,7 +236,7 @@
                         <td>{{ row.collaborator_name }}</td>
                         <td class="muted">{{ row.craft }}</td>
                         <td class="num" data-meter>{{ row.films_together }}</td>
-                        <td class="num mono">{{ row.first_year }}–{{ row.last_year }}</td>
+                        <td class="num mono" data-no-comma>{{ row.first_year }}–{{ row.last_year }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

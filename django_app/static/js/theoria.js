@@ -68,13 +68,17 @@
       });
     });
 
-    // Plain numeric cells still get readable separators.
-    document.querySelectorAll("td.num:not([data-meter])").forEach(function (td) {
-      var v = parseCell(td);
-      if (v !== null && Number.isInteger(v) && Math.abs(v) > 999) {
-        td.textContent = v.toLocaleString("en-US");
-      }
-    });
+    // Plain numeric cells still get readable separators — except cells
+    // marked data-no-comma, e.g. years, where "2,026" is not a real
+    // thousands quantity and just reads as wrong.
+    document
+      .querySelectorAll("td.num:not([data-meter]):not([data-no-comma])")
+      .forEach(function (td) {
+        var v = parseCell(td);
+        if (v !== null && Number.isInteger(v) && Math.abs(v) > 999) {
+          td.textContent = v.toLocaleString("en-US");
+        }
+      });
   }
 
   /* --- Count-up ------------------------------------------------------------- */
