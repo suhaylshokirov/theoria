@@ -33,7 +33,25 @@ Rules:
 Last completed task   : Task 54 — Movie page legibility: crew merge + client-side cast/crew paging
 Currently on          : Task 55 — not started. Phases 12–14 (Tasks 55–63) planned 2026-08-10, not begun.
 Current phase         : Phase 12 — Movie Provenance (Tasks 55–56) — NOT STARTED
-Blockers / open issues: **No blockers.** **Phases 12–14 come from an unused-data audit run on
+Blockers / open issues: **No blockers.** **The Franchises feature was removed from the
+application layer on 2026-08-10** by user decision — the `/franchises/` and `/franchises/<slug>/`
+routes, both views and templates, the nav link, the "Part of" row on the movie page, the
+franchise-revenue dashboard panel and its query, the `Collection` model and `Movie.collection`
+FK, and their view tests are all gone. **The data layer was deliberately kept:** `dim_collection`
+(358 rows) and `dim_movie.collection_id` are still in the warehouse, `10_collections.sql` is
+untouched, and `transform_movies` / `load_dim_collection()` / the Silver DQ config still populate
+them every run. Nothing renders any of it. That is a knowingly-accepted write-only path — the
+same shape as the four unread Gold datasets below — chosen so the removal stays reversible in one
+commit and so Task 58 keeps `load_dim_collection()` as the worked example `load_dim_company()`
+copies. Task 59's page-shape reference was repointed from `/franchises/` to `genre_list.html`
+accordingly. Live-verified after removal: `/`, `/movies/`, `/people/`, `/genres/`, `/analytics/`
+and `/movies/the-godfather/` all 200; `/franchises/` and `/franchises/<slug>/` both **404**; nav
+is Films · People · Genres · Analytics; the dashboard is **9 panels** with no franchise text; the
+movie page has no "Part of" row. **Tests 210 → 207** (the 3 deleted collection view tests).
+**Note the drift in the recorded test counts:** Task 54 below records 214, but the suite was
+already at 210 before this removal — the Connect-feature removal (`0d99520`) and the
+movie-page vote-count change landed as direct commits without going through the task flow, so
+their test deltas were never written down. 207 is the verified current figure. **Phases 12–14 come from an unused-data audit run on
 2026-08-10** — every field in the Bronze payloads checked against every reader in the app. Result:
 seven fields with 58–100% coverage have been ingested since Task 42 and dropped at
 `_flatten_movie()`, never existing at any layer past Bronze — `production_companies` (1,243
@@ -670,8 +688,8 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Files:** `django_app/movies/{models,views,urls}.py`, new `movies/templates/movies/{studio_list,studio_detail}.html`, `movie_detail.html`, `templates/base.html`, `tests/test_django_views.py`
 - **Steps:**
   1. `Company` + `MovieCompany` models (`managed = False`; the bridge gets the same fake-single-PK treatment as the other composite-PK facts, with the comment explaining why).
-  2. `/studios/` — a ranked sheet reusing `table-2col` + `data-meter` share bars from `/franchises/`, plus the shared `_pager.html`. **No new CSS or JS** — Task 50 established this exact page shape. `.annotate(Count).filter(film_count__gt=0)` so the filter compiles to `HAVING`.
-  3. `/studios/<slug>/` — films in release order (reuse `_movie_card.html`), film count, span, avg rating, total revenue. Avg rating **must** collapse `fact_movie_metrics` with `.values().distinct()` first; revenue sums straight off `dim_movie`. Two aggregates, only one needing the genre-fanout guard — same split as `collection_detail`.
+  2. `/studios/` — a ranked sheet reusing `table-2col` + `data-meter` share bars from **`genre_list.html`**, plus the shared `_pager.html`. **No new CSS or JS** — Task 38 established this page shape. `.annotate(Count).filter(film_count__gt=0)` so the filter compiles to `HAVING`. (The `/franchises/` pages copied this same shape and would have been the closer model, but they were **removed on 2026-08-10** — see the status block. `genre_list.html` is the surviving original.)
+  3. `/studios/<slug>/` — films in release order (reuse `_movie_card.html`), film count, span, avg rating, total revenue. Avg rating **must** collapse `fact_movie_metrics` with `.values().distinct()` first; revenue sums straight off `dim_movie` (one row per film). Two aggregates on one page, only one needing the genre-fanout guard — get this wrong and the revenue figure silently multiplies by the film's genre count.
   4. Studios on the movie page, linked, in the existing record list.
   5. Nav entry. **Check the nav isn't getting crowded** — Task 51 already collapsed Actors+Directors into People for this reason.
 - **Verify:** all routes 200, bad slug 404s, a known studio page renders the expected film count.

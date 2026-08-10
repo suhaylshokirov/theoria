@@ -277,37 +277,6 @@
         <p class="empty">No credits loaded yet. Run the pipeline to fill the warehouse.</p>
         {% endif %}
     </section>
-
-    <section class="panel" aria-labelledby="franchise-h">
-        <div class="section-head">
-            <h2 id="franchise-h">Franchise box office</h2>
-            <span class="section-note">series with 2+ entries</span>
-        </div>
-        {% if franchise_revenue %}
-        <div class="table-wrap is-scroll">
-            <table>
-                <thead>
-                    <tr>
-                        <th scope="col">Franchise</th>
-                        <th scope="col" class="num">Entries</th>
-                        <th scope="col" class="num">Total revenue</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in franchise_revenue %}
-                    <tr>
-                        <th scope="row">{{ row.franchise }}</th>
-                        <td class="num">{{ row.entries }}</td>
-                        <td class="num" data-meter>{{ row.total_revenue }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="empty">No franchises loaded yet. Run the pipeline to fill the warehouse.</p>
-        {% endif %}
-    </section>
 </div>
 {% endblock %}
 

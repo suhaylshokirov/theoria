@@ -31,22 +31,6 @@ class Genre(models.Model):
         return self.genre_name
 
 
-class Collection(models.Model):
-    """A film franchise (TMDB `belongs_to_collection`)."""
-
-    collection_id = models.IntegerField(primary_key=True)
-    name = models.TextField()
-    poster_path = models.TextField(null=True)
-    slug = models.SlugField(max_length=300, unique=True, null=True)
-
-    class Meta:
-        managed = False
-        db_table = "dim_collection"
-
-    def __str__(self):
-        return self.name
-
-
 class Movie(models.Model):
     movie_id = models.IntegerField(primary_key=True)
     title = models.TextField()
@@ -61,11 +45,6 @@ class Movie(models.Model):
     poster_path = models.TextField(null=True)
     backdrop_path = models.TextField(null=True)
     slug = models.SlugField(max_length=300, unique=True, null=True)
-    # Nullable by design: roughly half the catalog belongs to no franchise.
-    collection = models.ForeignKey(
-        Collection, on_delete=models.DO_NOTHING, db_column="collection_id",
-        null=True, related_name="movies",
-    )
 
     class Meta:
         managed = False

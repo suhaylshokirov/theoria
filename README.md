@@ -117,17 +117,16 @@ cd django_app
 python manage.py runserver
 ```
 
-Pages: `/` (home stats), `/movies/<slug>/`, `/people/<slug>/`, `/franchises/<slug>/`,
-`/genres/<id>/`, and `/analytics/` (10-panel dashboard built on the SQL in
-`warehouse/queries/`).
+Pages: `/` (home stats), `/movies/<slug>/`, `/people/<slug>/`, `/genres/<id>/`, and `/analytics/`
+(9-panel dashboard built on the SQL in `warehouse/queries/`).
 
 `/people/` is the single index of everyone holding any credit; `/actors/` and `/directors/` are
 scopes of it (people with an Acting or a Directing credit) rather than separate tables. Legacy
 `/actors/<slug>/` and `/directors/<slug>/` URLs 301 to `/people/<slug>/` where the slug still
 resolves.
 
-Movies, people and franchises are addressed by a URL slug (e.g. `/people/tom-hanks/`) rather than
-their warehouse surrogate key — see `dim_*.slug` and `assign_slugs()` in `load_dimensions.py`.
+Movies and people are addressed by a URL slug (e.g. `/people/tom-hanks/`) rather than their
+warehouse surrogate key — see `dim_*.slug` and `assign_slugs()` in `load_dimensions.py`.
 Genres are few enough (~19) that collisions aren't a concern, so they're still addressed by id.
 
 Django never writes to the warehouse — models are `managed = False` and a custom router

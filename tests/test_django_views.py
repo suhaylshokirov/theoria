@@ -29,7 +29,7 @@ from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 
 from movies.models import (  # noqa: E402
-    Collection, Credit, Genre, Movie, MovieMetrics, Person,
+    Credit, Genre, Movie, MovieMetrics, Person,
 )
 
 client = Client()
@@ -826,10 +826,6 @@ def test_analytics_dashboard_returns_200_with_expected_context():
         "department_reach.sql": [
             {"department": "Acting", "credits": 62713, "people": 43138, "films": 1215}
         ],
-        "franchise_revenue.sql": [
-            {"franchise": "James Bond Collection", "entries": 17,
-             "total_revenue": Decimal("6082635670")}
-        ],
     }
 
     with patch("analytics.views._run_query", side_effect=lambda fname: fake_rows[fname]):
@@ -868,65 +864,4 @@ def test_tmdb_image_filter_builds_url_and_handles_empty():
     assert tmdb_image("/abc.jpg", "w342").endswith("/w342/abc.jpg")
     assert tmdb_image("", "w342") == ""
     assert tmdb_image(None) == ""
-
-
-# ---------------------------------------------------------------------------
-# collection_list / collection_detail
-# ---------------------------------------------------------------------------
-
-def test_collection_list_returns_200():
-    collection = Collection(collection_id=1, name="James Bond Collection",
-                            slug="james-bond-collection")
-
-    with patch.object(Collection, "objects", new=MagicMock()) as coll_mgr:
-        # The view annotates a film count, drops empty franchises, then orders.
-        coll_mgr.using.return_value.annotate.return_value.filter.return_value.order_by.return_value = [
-            collection
-        ]
-
-        response = client.get("/franchises/")
-
-    assert response.status_code == 200
-    assert list(response.context["collections"]) == [collection]
-
-
-def test_collection_detail_returns_200_with_series_totals():
-    collection = Collection(collection_id=1, name="James Bond Collection",
-                            slug="james-bond-collection")
-    film = _movie(movie_id=1, title="Dr. No")
-    film.slug = "dr-no"
-
-    films = MagicMock()
-    films.__iter__.return_value = iter([film])
-    films.count.return_value = 1
-    films.aggregate.side_effect = [
-        {"total_revenue": 100, "total_budget": 10},
-        {"first": date(1962, 10, 5), "last": date(1971, 12, 14)},
-    ]
-
-    with patch("movies.views.get_object_or_404", return_value=collection), \
-            patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, \
-            patch.object(MovieMetrics, "objects", new=MagicMock()) as metrics_mgr:
-        movie_mgr.using.return_value.filter.return_value.order_by.return_value = films
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value = [
-            {"movie_id": 1, "rating": Decimal("7.00")}
-        ]
-
-        response = client.get("/franchises/james-bond-collection/")
-
-    assert response.status_code == 200
-    assert response.context["collection"] is collection
-    assert response.context["film_count"] == 1
-    assert response.context["total_revenue"] == 100
-    assert response.context["avg_rating"] == Decimal("7.00")
-    assert response.context["span"] == "1962–1971"
-
-
-def test_collection_detail_404_for_unknown_slug():
-    from django.http import Http404
-
-    with patch("movies.views.get_object_or_404", side_effect=Http404()):
-        response = client.get("/franchises/nope/")
-
-    assert response.status_code == 404
 

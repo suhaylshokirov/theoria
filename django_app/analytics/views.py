@@ -37,7 +37,6 @@ def dashboard(request):
         "genre_growth_over_time": _run_query("genre_growth_over_time.sql"),
         "signature_partnerships": _run_query("signature_partnerships.sql"),
         "department_reach": _run_query("department_reach.sql"),
-        "franchise_revenue": _run_query("franchise_revenue.sql"),
         # Pre-shaped as flat label/value lists (with Decimal -> float) for the
         # two Chart.js trend panels — the tables above reuse the raw rows.
         "decade_labels": [row["decade"] for row in movies_by_decade],

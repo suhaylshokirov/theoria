@@ -43,7 +43,7 @@ PostgreSQL warehouse (star schema)
    │  dimensions + facts, upserted, watermark-tracked
    ▼
 Django UI (read-only)
-   movie/person/genre/franchise pages + analytics dashboard
+   movie/person/genre pages + analytics dashboard
 ```
 
 Each arrow is a separate, independently testable stage with its own module
@@ -132,7 +132,7 @@ which uses a generated `YYYYMMDD` surrogate key and is populated as a full calen
   query in `warehouse/queries/` that touches these columns first collapses to
   `SELECT DISTINCT movie_id, ...` in a CTE before aggregating, and every Django view that reads a
   movie-level measure off this table (`movie_detail`'s rating, `actor_detail`/`director_detail`'s
-  avg rating, `collection_detail`'s avg rating) applies the same `.values(...).distinct()` guard.
+  avg rating) applies the same `.values(...).distinct()` guard.
 - `fact_credit(movie_id, person_id, department, job, character_name, ordering, ingestion_date)` —
   one row per credit, at the grain TMDB actually publishes. A director who also wrote and produced
   a film is three rows, and the PK says so.
@@ -212,9 +212,8 @@ four Gold datasets fail that test, which is exactly why nothing reads them.
 `belongs_to_collection` was present in every Bronze movie-detail payload from the first ingestion
 run and read at no layer until Task 50. It was promoted to its own dimension rather than left as
 three denormalized columns on `dim_movie` (`collection_id`/`name`/`poster_path`) because a
-franchise has its own identity, artwork, slug, and page — 17 Bond films would otherwise repeat the
-same name, poster path, and slug computation 17 times with no row to hang a single canonical page
-off.
+franchise has its own identity, artwork, and slug — 17 Bond films would otherwise repeat the same
+name, poster path, and slug computation 17 times with no single row to canonicalize it.
 
 `dim_movie.collection_id` is a **nullable** FK: roughly half the catalog belongs to no franchise,
 which is a property of films rather than missing data, so the schema doesn't force a sentinel
@@ -354,7 +353,7 @@ returned 1,304 rows into a fixed-height panel once the catalog reached 1,215).
 
 ### 7.1 Slugs instead of surrogate keys
 
-Movie, person, and (later) collection detail routes are addressed by a URL slug
+Movie and person detail routes are addressed by a URL slug
 (`/people/tom-holland/`) rather than the warehouse's numeric primary key
 (`/actors/880/` — Task 46). This is a UI decision with a real technical constraint behind it: a
 slug column has to stay stable across reruns of a table that grows (44,554 → 122,685 people across

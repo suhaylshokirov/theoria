@@ -8,7 +8,7 @@ from django.utils.http import urlencode
 
 
 from movies.models import (
-    Collection, Credit, Genre, Movie, MovieMetrics, Person,
+    Credit, Genre, Movie, MovieMetrics, Person,
 )
 
 MOVIES_PER_PAGE = 24
@@ -229,68 +229,10 @@ def genre_list(request):
     return render(request, "movies/genre_list.html", context)
 
 
-def collection_list(request):
-    """Every franchise, ranked by how many of its films the catalog holds.
-
-    Roughly half the catalog belongs to no franchise, so this is deliberately a
-    view of a minority of the corpus — a `Count` over the reverse FK, which
-    excludes collections with no loaded films rather than showing empty rows.
-    """
-    collections = (
-        Collection.objects.using("warehouse")
-        .annotate(movie_count=Count("movies"))
-        .filter(movie_count__gt=0)
-        .order_by("-movie_count", "name")
-    )
-
-    context = {"collections": collections}
-    return render(request, "movies/collection_list.html", context)
-
-
-def collection_detail(request, collection_slug):
-    """Single franchise: its films in release order, plus series totals."""
-    collection = get_object_or_404(
-        Collection.objects.using("warehouse"), slug=collection_slug
-    )
-
-    films = (
-        Movie.objects.using("warehouse")
-        .filter(collection_id=collection.collection_id)
-        .order_by(F("release_date").asc(nulls_last=True))
-    )
-
-    # Revenue and film count come straight off dim_movie — one row per film, so
-    # no fan-out to guard against. avg_rating does need the guard: it lives in
-    # fact_movie_metrics at (movie, date, genre) grain, so it is collapsed to
-    # one row per movie before averaging, the same shape actor_detail uses.
-    totals = films.aggregate(total_revenue=Sum("revenue"), total_budget=Sum("budget"))
-    ratings = (
-        MovieMetrics.objects.using("warehouse")
-        .filter(movie_id__in=films.values("movie_id"))
-        .values("movie_id", "rating")
-        .distinct()
-    )
-    rating_values = [r["rating"] for r in ratings if r["rating"] is not None]
-    avg_rating = sum(rating_values) / len(rating_values) if rating_values else None
-
-    years = films.aggregate(first=Min("release_date"), last=Max("release_date"))
-    span = _career_period(years["first"], years["last"])
-
-    context = {
-        "collection": collection,
-        "films": films,
-        "film_count": films.count(),
-        "total_revenue": totals["total_revenue"],
-        "avg_rating": avg_rating,
-        "span": span,
-    }
-    return render(request, "movies/collection_detail.html", context)
-
-
 def movie_detail(request, movie_slug):
     """Single movie: core facts, genres, directors, and cast."""
     movie = get_object_or_404(
-        Movie.objects.using("warehouse").select_related("collection"), slug=movie_slug
+        Movie.objects.using("warehouse"), slug=movie_slug
     )
     movie_id = movie.movie_id
 
