@@ -31,9 +31,24 @@ Rules:
 
 ```
 Last completed task   : Task 54 — Movie page legibility: crew merge + client-side cast/crew paging
-Currently on          : Nothing — Phase 11 is complete. Awaiting the next phase.
-Current phase         : Phase 11 — Movie Page Legibility (Task 54) — COMPLETE
-Blockers / open issues: **No blockers.** Task 54 is a read-side-only fix (no DDL, no ETL, no pipeline re-run, no new TMDB calls) for a movie page that `fact_credit` (Task 48) had made unreadable at scale: a person holding several jobs on one film rendered once per job across several department sections (Christopher Nolan on *The Dark Knight* was 4 rows in 3 sections), and every credit — 47–139 cast, up to ~980 crew on the worst film — rendered as a headshot card with no limit. Two complaints, two fixes, and the measurement that separates them: merging collapses 143.8 crew rows/film to 138.1 distinct people (~4%), so **merging fixes duplication, not volume**. `_merge_crew()` in `movies/views.py` groups a person's non-Acting credits by `person_id`, files them under their single most senior department via `_department_rank()` (extracted from the sort key that was duplicated in `movie_detail` and `person_detail`), and joins the jobs in department order — Nolan now reads "Director / Screenplay / Story / Producer", once. Volume is fixed by **paging cast and crew in the browser**, ten at a time: the view sends every credit and `initPagedSection()` in `static/js/theoria.js` shows a window of them, so Next is a repaint rather than a round-trip. This replaced a first, server-side implementation (`?cast_page=`/`?crew_page=`/`?crew=all` + `#cast`/`#crew` anchors) that the user judged not smooth enough; `BILLED_CREW_JOBS` went with it, since paging ten at a time makes the first page short whatever it holds. `[data-page-group]` wrappers (one per crew department) hide themselves when none of their people are on the current page; the pager is `<button>`s that ship `hidden` and are revealed only when there's more than one page, so with JS off the reader gets the whole list and no dead controls. **The two pagers are a deliberate split, documented in both partials:** `_pager.html` stays server-side for `/movies/` and `/people/` (1,215 and 122,685 rows — not a payload to hand a browser), `_pager_client.html` serves one film's ~1,200-credit maximum, which is. Crew renders as a list rather than a poster grid because crew photo coverage measured 23.8% against cast's 70.1%. **Crew rows carry faces too, after user review:** a headshot where one exists, and the same `.placeholder-person` silhouette the cast cards use where it doesn't (55 photos / 87 silhouettes on The Dark Knight) — an initials monogram was tried first and rejected, since two placeholder vocabularies on one page is one more than a reader should have to learn. That review also surfaced a **real CSS bug**: `.credit-list` never zeroed the `<ul>`'s UA-default 40px `padding-inline-start`, and because these lists paint their own background to draw the 1px gaps as hairlines, that padding rendered as an unexplained grey column down the left of every crew list — invisible on white, obvious on the dark surface. `.collab-list` (person pages) had the identical defect since Task 51; both fixed. Live-verified: `/movies/the-dark-knight/` ships **139 cast cards and 142 crew rows across 11 department groups** in one response, no server-paging params in the markup, Nolan merged and once; the paging algorithm was **executed under Node against a stub DOM** (page 1: 10 items/3 departments; page 2: 2 items collapsing to 1 heading; buttons disable at both ends). Tests 210 → 214. Prior phase's notes: Full test suite is 210/210 passing (down from 225 because Task 53 deleted the legacy actor/director tests, not because anything regressed); Silver DQ 16/16 on all three partitions, warehouse checks 20/20 — both counts dropped for the same reason (the `actors`/`directors` Silver entities and the `fact_cast`/`fact_crew` FK + load-sanity checks no longer exist). **Phase 10 is done: Tasks 47–53 all complete.** The warehouse is now exactly **9 tables** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`, `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `etl_watermarks` — and `dim_actor`/`dim_director`/`fact_cast`/`fact_crew` are **dropped** (`warehouse/ddl/11_drop_legacy_person_tables.sql`, facts before dimensions). `/people/<slug>/` is the single person page; `/actors/<slug>/` and `/directors/<slug>/` now 301 to it via a single `dim_person` slug lookup with no legacy table involved (the 381 slugs that moved during the Task 48 namespace unification are consequently **404 rather than redirected** — accepted, the site isn't public). 16 routes, 10 analytics panels, **zero empty panels**. **Gold is no longer a write-only dead end** (Task 49) — `load_gold.py` reads `gold/collaboration_edges` into `fact_collaboration`; the other four Gold datasets are still unread, and deliberately so (they're cheap enough to recompute in SQL, which the Django views already do). Caveat that remains open: `fact_collaboration` is a *derived* table, so nothing outside the pipeline can tell it's stale, and re-running Gold for an older partition overwrites counts computed from a newer one — worth revisiting as a materialized view. **Two bugs only the live runs could find, both fixed:** `assign_slugs()`'s batched `executemany` hit a `UniqueViolation` on a slug *permutation* because Postgres checks a unique index per row, not per statement (latent since Task 46; fixed by clearing the column first, in the same transaction); and `/connect/` returned a different — equally short, equally valid — path after every reload, because the adjacency query had no `ORDER BY` while Python dicts preserve insertion order (fixed; verified stable, so **Task 52's outcome line below cites a path that is no longer the one returned** — the current answer for Tom Hanks → Thelma Schoonmaker is *Philadelphia* → Tony Devon → *The King of Comedy*). **Every one of the 122,685 `dim_person` rows has at least one credit**, since the dimension is built from the credits themselves — which retires the long-standing "orphan dimension members" gap outright, now that the legacy tables it applied to are gone. **Fresh-install verification is now empirical, not assumed:** a throwaway database built from DDL `01`–`03` produces exactly the 9 live tables. Note that once `11` *drops* things, "run every DDL file in order" no longer equals "build the current schema" — README documents `01`–`03` (bootstrap) and `04`–`11` (migrations for an existing DB) as two separate paths. Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds, and unifying to `dim_person` made it *more* expensive (122,685 people, not 45k). Remaining known gaps, still open: `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`; the Silver transforms read Bronze one S3 object at a time (~16 min per full rebuild pass). Older notes: Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows), as are collections' underlying ids behind their slugs.
+Currently on          : Task 55 — not started. Phases 12–14 (Tasks 55–63) planned 2026-08-10, not begun.
+Current phase         : Phase 12 — Movie Provenance (Tasks 55–56) — NOT STARTED
+Blockers / open issues: **No blockers.** **Phases 12–14 come from an unused-data audit run on
+2026-08-10** — every field in the Bronze payloads checked against every reader in the app. Result:
+seven fields with 58–100% coverage have been ingested since Task 42 and dropped at
+`_flatten_movie()`, never existing at any layer past Bronze — `production_companies` (1,243
+studios, 3,200 film links), `production_countries` (40), `spoken_languages` (70),
+`origin_country`, `imdb_id`, `original_title` (differs from `title` on 78 films),
+`homepage`. `adult`/`video`/`softcore` are always null and are explicitly out of scope. The
+audit also found, and Phases 12–14 deliberately do **not** address: 4 of the 5 Gold datasets are
+still written every run and read by nothing but an existence check; `dim_movie.status`,
+`dim_date.month` and `dim_date.day` have zero readers; `dim_date` holds 49,673 rows of which
+1,147 are referenced; `fact_movie_metrics.budget`/`revenue` duplicate `dim_movie` (0 and 3
+mismatches respectively, the 3 from an older partition); `silver/actors/` and `silver/directors/`
+still sit in S3 though Task 53 stopped writing them; 2 films have no `fact_movie_metrics` row.
+All cleanup rather than capability — recorded so they aren't rediscovered as if new. The **stale
+Warehouse Schema section in this file was also fixed** (it still listed `dim_actor`,
+`dim_director` and `fact_casting`, all dropped in Tasks 35/53). Prior-phase notes follow. Task 54 is a read-side-only fix (no DDL, no ETL, no pipeline re-run, no new TMDB calls) for a movie page that `fact_credit` (Task 48) had made unreadable at scale: a person holding several jobs on one film rendered once per job across several department sections (Christopher Nolan on *The Dark Knight* was 4 rows in 3 sections), and every credit — 47–139 cast, up to ~980 crew on the worst film — rendered as a headshot card with no limit. Two complaints, two fixes, and the measurement that separates them: merging collapses 143.8 crew rows/film to 138.1 distinct people (~4%), so **merging fixes duplication, not volume**. `_merge_crew()` in `movies/views.py` groups a person's non-Acting credits by `person_id`, files them under their single most senior department via `_department_rank()` (extracted from the sort key that was duplicated in `movie_detail` and `person_detail`), and joins the jobs in department order — Nolan now reads "Director / Screenplay / Story / Producer", once. Volume is fixed by **paging cast and crew in the browser**, ten at a time: the view sends every credit and `initPagedSection()` in `static/js/theoria.js` shows a window of them, so Next is a repaint rather than a round-trip. This replaced a first, server-side implementation (`?cast_page=`/`?crew_page=`/`?crew=all` + `#cast`/`#crew` anchors) that the user judged not smooth enough; `BILLED_CREW_JOBS` went with it, since paging ten at a time makes the first page short whatever it holds. `[data-page-group]` wrappers (one per crew department) hide themselves when none of their people are on the current page; the pager is `<button>`s that ship `hidden` and are revealed only when there's more than one page, so with JS off the reader gets the whole list and no dead controls. **The two pagers are a deliberate split, documented in both partials:** `_pager.html` stays server-side for `/movies/` and `/people/` (1,215 and 122,685 rows — not a payload to hand a browser), `_pager_client.html` serves one film's ~1,200-credit maximum, which is. Crew renders as a list rather than a poster grid because crew photo coverage measured 23.8% against cast's 70.1%. **Crew rows carry faces too, after user review:** a headshot where one exists, and the same `.placeholder-person` silhouette the cast cards use where it doesn't (55 photos / 87 silhouettes on The Dark Knight) — an initials monogram was tried first and rejected, since two placeholder vocabularies on one page is one more than a reader should have to learn. That review also surfaced a **real CSS bug**: `.credit-list` never zeroed the `<ul>`'s UA-default 40px `padding-inline-start`, and because these lists paint their own background to draw the 1px gaps as hairlines, that padding rendered as an unexplained grey column down the left of every crew list — invisible on white, obvious on the dark surface. `.collab-list` (person pages) had the identical defect since Task 51; both fixed. Live-verified: `/movies/the-dark-knight/` ships **139 cast cards and 142 crew rows across 11 department groups** in one response, no server-paging params in the markup, Nolan merged and once; the paging algorithm was **executed under Node against a stub DOM** (page 1: 10 items/3 departments; page 2: 2 items collapsing to 1 heading; buttons disable at both ends). Tests 210 → 214. Prior phase's notes: Full test suite is 210/210 passing (down from 225 because Task 53 deleted the legacy actor/director tests, not because anything regressed); Silver DQ 16/16 on all three partitions, warehouse checks 20/20 — both counts dropped for the same reason (the `actors`/`directors` Silver entities and the `fact_cast`/`fact_crew` FK + load-sanity checks no longer exist). **Phase 10 is done: Tasks 47–53 all complete.** The warehouse is now exactly **9 tables** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`, `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `etl_watermarks` — and `dim_actor`/`dim_director`/`fact_cast`/`fact_crew` are **dropped** (`warehouse/ddl/11_drop_legacy_person_tables.sql`, facts before dimensions). `/people/<slug>/` is the single person page; `/actors/<slug>/` and `/directors/<slug>/` now 301 to it via a single `dim_person` slug lookup with no legacy table involved (the 381 slugs that moved during the Task 48 namespace unification are consequently **404 rather than redirected** — accepted, the site isn't public). 16 routes, 10 analytics panels, **zero empty panels**. **Gold is no longer a write-only dead end** (Task 49) — `load_gold.py` reads `gold/collaboration_edges` into `fact_collaboration`; the other four Gold datasets are still unread, and deliberately so (they're cheap enough to recompute in SQL, which the Django views already do). Caveat that remains open: `fact_collaboration` is a *derived* table, so nothing outside the pipeline can tell it's stale, and re-running Gold for an older partition overwrites counts computed from a newer one — worth revisiting as a materialized view. **Two bugs only the live runs could find, both fixed:** `assign_slugs()`'s batched `executemany` hit a `UniqueViolation` on a slug *permutation* because Postgres checks a unique index per row, not per statement (latent since Task 46; fixed by clearing the column first, in the same transaction); and `/connect/` returned a different — equally short, equally valid — path after every reload, because the adjacency query had no `ORDER BY` while Python dicts preserve insertion order (fixed; verified stable, so **Task 52's outcome line below cites a path that is no longer the one returned** — the current answer for Tom Hanks → Thelma Schoonmaker is *Philadelphia* → Tony Devon → *The King of Comedy*). **Every one of the 122,685 `dim_person` rows has at least one credit**, since the dimension is built from the credits themselves — which retires the long-standing "orphan dimension members" gap outright, now that the legacy tables it applied to are gone. **Fresh-install verification is now empirical, not assumed:** a throwaway database built from DDL `01`–`03` produces exactly the 9 live tables. Note that once `11` *drops* things, "run every DDL file in order" no longer equals "build the current schema" — README documents `01`–`03` (bootstrap) and `04`–`11` (migrations for an existing DB) as two separate paths. Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds, and unifying to `dim_person` made it *more* expensive (122,685 people, not 45k). Remaining known gaps, still open: `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`; the Silver transforms read Bronze one S3 object at a time (~16 min per full rebuild pass). Older notes: Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows), as are collections' underlying ids behind their slugs.
 Last updated          : 2026-08-06
 ```
 
@@ -157,16 +172,23 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
+> The live shape as of Task 54 — 9 tables. `dim_actor`, `dim_director`, `fact_cast` and
+> `fact_crew` were **dropped** in Task 53 and are gone; `fact_casting` was replaced in Task 35.
+> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`11` are migrations for an existing DB.
+
 **Dimensions:**
-- `dim_movie(movie_id PK, title, release_date, runtime, budget, revenue, original_language, status)`
-- `dim_actor(actor_id PK, name, gender, popularity)`
-- `dim_director(director_id PK, name, gender, popularity)`
+- `dim_movie(movie_id PK, title, release_date, runtime, budget, revenue, original_language, status, overview, tagline, poster_path, backdrop_path, slug, collection_id FK)`
+- `dim_person(person_id PK, name, gender, popularity, profile_path, known_for_department, slug)`
 - `dim_genre(genre_id PK, genre_name)`
+- `dim_collection(collection_id PK, name, poster_path, slug)`
 - `dim_date(date_id PK, full_date, year, month, day, decade)`
 
 **Facts:**
-- `fact_movie_metrics(movie_id FK, date_id FK, genre_id FK, rating, vote_count, revenue, budget, popularity)`
-- `fact_casting(movie_id FK, actor_id FK, director_id FK, role, ordering)`
+- `fact_movie_metrics(movie_id FK, date_id FK, genre_id FK, rating, vote_count, revenue, budget, popularity, ingestion_date)` — PK `(movie_id, date_id, genre_id)`, so a multi-genre film repeats its movie-level measures once per genre. Every query aggregating one must collapse it with `SELECT DISTINCT movie_id, …` first.
+- `fact_credit(movie_id FK, person_id FK, department, job, character_name, ordering, ingestion_date)` — PK `(movie_id, person_id, department, job)`, the grain TMDB publishes.
+- `fact_collaboration(person_a_id FK, person_b_id FK, films_together, first_year, last_year)` — derived in Gold, `CHECK (person_a_id < person_b_id)`.
+
+**Operational:** `etl_watermarks(loader_name PK, last_ingestion_date, updated_at)`
 
 ---
 
@@ -202,6 +224,9 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 9     | Frontend Polish & URL Design | 45–46 | Complete |
 | 10    | People, Partnerships & Franchises | 47–53 | Complete |
 | 11    | Movie Page Legibility  | 54     | Complete |
+| 12    | Movie Provenance — the scalar fields | 55–56 | Not started |
+| 13    | Studios — `dim_company` + the first bridge table | 57–60 | Not started |
+| 14    | Where and in What Language | 61–63 | Not started |
 
 ---
 
@@ -548,6 +573,158 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Goal:** Every credit still renders (no data hidden), but nobody's name appears twice and the page stays readable at 47–139 cast plus up to ~980 crew: merge a person's several crew jobs on one film into a single row filed under their most senior department, and page both cast and crew ten at a time in the browser, so moving through them costs no request.
 - **Files:** `django_app/movies/views.py`, new `movies/templates/movies/_pager.html`, `movies/templates/movies/{movie_list,person_list,movie_detail}.html`, `static/css/theoria.css`, `tests/test_django_views.py`
 - **Outcome:** New `_merge_crew(credits)` in `views.py` groups a film's non-Acting credits by `person_id` and returns one record per person: jobs joined in department order via a new `_department_rank(name)` helper (extracted from the identical inline sort-key lambda that used to live separately in both `movie_detail` and `person_detail` — a pure refactor, no behaviour change to `person_detail`), filed under the single most senior department (`min` by `_department_rank`). Christopher Nolan on *The Dark Knight* — previously 4 rows across Directing/Writing/Writing/Production — is now one row reading "Director / Screenplay / Story / Producer". Cast needed no merging: `fact_credit.job` is the literal `"Actor"` for all 62,713 Acting rows, verified before writing any code, so cast was already one row per person — its problem is purely volume, fixed with `Paginator(cast, CAST_PER_PAGE).get_page(request.GET.get("cast_page"))` (`CAST_PER_PAGE = 24`), clamping on out-of-range pages exactly like `movie_list`'s existing pager. Crew defaults to a short "billed crew" list — merged people holding at least one of nine principal jobs in a new `BILLED_CREW_JOBS` constant, deliberately its own copy rather than imported from `movies.graph.PATH_CREW_JOBS` or `etl.gold.build_gold_datasets.KEY_CREW_JOBS` (same nine job titles, but Task 52 already decided "who works together repeatedly" vs "is there any path" must not share code, and "what does a viewer want to see first" is a third question; importing the Gold builder into a view would also drag pandas/boto3 into the request path) — with `?crew=all` revealing the full department-grouped list, built only when requested. A person can legitimately be both cast and crew on one film (e.g. an actor who also produced); merging never removes them from the cast grid. New `_pager.html` partial extracts the pagination markup duplicated (and hardcoded to `page=`) in `movie_list.html`/`person_list.html`, parameterized by `param` and a `base_query` string built in the view with `django.utils.http.urlencode` (not assembled in the template, since a shared partial can't know which params a given page carries, and `movie_detail`'s cast pager has to preserve an active `?crew=all`). New `.credit-list`/`.credit-row`/`.credit-name`/`.credit-jobs` CSS component, modelled on the existing `.collab-list`'s 1px-gap-on-`--rule` hairline-divider trick, renders crew as a list rather than a poster grid — deliberate, since crew profile-photo coverage measured at 23.8% against cast's 70.1% would otherwise put a placeholder silhouette on three of every four crew cards. Read-side only: no DDL, no ETL, no pipeline re-run, no new TMDB calls, no DB writes. **Live-verified on `/movies/the-dark-knight/`:** cast shows 24 of 139 with a working pager (`?cast_page=2` returns a different 24; `?cast_page=99` clamps to page 6/6 rather than erroring); billed crew shows 10 of 142; "Christopher Nolan" appears exactly once inside the crew block, reading "Director / Screenplay / Story / Producer" (a second, expected occurrence is the pre-existing, unrelated "Directed by" record line); `?crew=all` renders all 11 department sections (Directing, Writing, Production, Camera, Editing, Sound, Art, Costume & Make-Up, Visual Effects, Lighting, Crew). `/movies/the-godfather/` mirrors this: 9 of 100 billed crew, Coppola once, reading "Director / Screenplay / Producer". A bad slug still 404s. `movie_list`/`person_list` pagination hrefs verified byte-for-byte unchanged against the old hardcoded markup, including with a search query needing URL-encoding. **Superseded within the same task by user decision:** the cast/crew pagers were first built server-side (`?cast_page=`/`?crew_page=`, plus `#cast`/`#crew` anchors to stop the reload landing at the top of the page). The user judged the round-trip per ten people not smooth enough, so **both are now paged in the browser**: the view sends every credit, and `initPagedSection()` in `static/js/theoria.js` shows a window of ten. The `?crew=all` toggle and the `BILLED_CREW_JOBS` subset are **gone** — paging ten at a time makes the first page short whatever it holds, so a second definition of "important crew" stopped earning its keep. A `[data-paged]` container declares `data-page-size` and a `data-page-items` selector; `[data-page-group]` wrappers (one per crew department) hide themselves when none of their people are on the current page, so a heading never sits above an empty ruled list. The pager is `<button>`s, not links — paging changes nothing about the document's address — and ships with `hidden`, revealed only when there is more than one page, so with JS off the reader gets the whole list rather than dead controls. **The split is deliberate and documented in both partials:** `_pager.html` (server-side) still serves `/movies/` and `/people/`, whose result sets are 1,215 and 122,685 rows; `_pager_client.html` serves one film's ~1,200-credit maximum, which is a payload a browser can hold. Cast headshots already carried `loading="lazy"`, and a lazy image inside a hidden container is never fetched, so shipping all 139 cards costs markup but not bandwidth (93 lazy images on The Dark Knight). Live-verified: `/movies/the-dark-knight/` ships **139 cast cards and 142 crew rows across 11 department groups** in one response, both navs `hidden`, and no `cast_page`/`crew_page`/`crew=all` anywhere in the markup. The paging algorithm itself was executed under Node against a stub DOM rather than eyeballed: page 1 shows 10 items across 3 departments, page 2 shows the remaining 2 and collapses to 1 heading, both buttons disable at their ends, and the state readout clamps. Tests 210 → **214** (4 new: multi-job merge, cast/crew overlap for one person, every-credit-is-sent (guarding against a server-side limit creeping back in and silently truncating a film), and department-order grouping; 3 existing tests updated to read `cast_page`/`billed_crew` instead of the now-gone `cast` context key). `person_detail` has a milder version of the same duplication (a writer-director's film listed twice under Writing) and is explicitly left alone per the approved plan — `_merge_crew()` takes a plain credit list rather than a queryset specifically so it can be reused there unchanged later, without being applied now.
+
+---
+
+### Phase 12 — Movie Provenance: the scalar fields
+
+> **Origin of Phases 12–14:** an audit on 2026-08-10 of every field in the Bronze payloads
+> against every reader in the app. The pipeline has been ingesting these fields since Task 42
+> and dropping them at `_flatten_movie()` — they have never existed at any layer past Bronze.
+> **Zero new TMDB calls for any task in Phases 12–14**; everything rebuilds from immutable Bronze.
+> Measured on the 1,140-file `2026-07-29` partition:
+>
+> | Bronze field | Coverage | Shape |
+> |---|---|---|
+> | `production_companies` | 99.8% | 1,243 studios, 3,200 links (2.81/film), 45% have a logo |
+> | `production_countries` | 99.9% | 40 countries, 1,506 links, 295 films multi-country |
+> | `spoken_languages` | 99.6% | 70 languages, 2,013 links |
+> | `origin_country` | 99.9% | list; >1 entry on 63 films; **differs from `production_countries` on 259 films (22.7%)** |
+> | `imdb_id` | 100% | `tt0119654` |
+> | `original_title` | 100% | **differs from `title` on 78 films (6.8%)** |
+> | `homepage` | 58.2% | official site URL |
+> | `adult`, `video`, `softcore` | 0% | always null/false — **deliberately out of scope, they carry nothing** |
+>
+> Deliberately **not** in scope: retiring the 4 write-only Gold datasets, trimming `dim_date`'s
+> 48,526 unreferenced rows, deleting the stale `silver/actors/` + `silver/directors/` S3
+> prefixes, and the 3 `fact_movie_metrics` ↔ `dim_movie` revenue mismatches from an older
+> partition. All real, all cleanup rather than capability; logged here so they aren't re-discovered.
+
+#### [ ] Task 55 — Carry `imdb_id`, `original_title` and `homepage` into `dim_movie`
+- **Goal:** Three scalar fields present in 100%/100%/58.2% of Bronze payloads that stop at `_flatten_movie()`. The cheapest item in the whole audit: no new table, no bridge, no grain question.
+- **Files:** `etl/silver/transform_movies.py`, `warehouse/ddl/01_dimensions.sql` + new `12_add_movie_identifiers.sql`, `etl/warehouse_loader/load_dimensions.py`, `data_quality/silver_checks.py`, `tests/{test_etl,test_data_quality}.py`
+- **Steps:**
+  1. `_flatten_movie()` keeps `imdb_id`, `original_title`, `homepage`. TMDB returns `""` for a missing homepage and imdb_id — normalise to `None` with `or None`, same as the Task 36 image fields.
+  2. `12_add_movie_identifiers.sql`: idempotent `ADD COLUMN IF NOT EXISTS imdb_id VARCHAR(20)`, `original_title TEXT`, `homepage TEXT` on `dim_movie`; add the same three to `01_dimensions.sql` for a fresh bootstrap. Add a **non-unique** index on `imdb_id` — it's an external lookup key, but nothing guarantees TMDB never repeats one.
+  3. Extend `load_dim_movie()`'s explicit column list. **This is the whole reason the column has to be added in two places** — per the Task 41 lesson, a column the loader doesn't name is indistinguishable from a column that doesn't exist, and fails silently either way.
+  4. Add the three to `silver_checks.ENTITY_CONFIGS["movies"]["expected_cols"]`. `original_title` is `required` (100% coverage); the other two are not.
+  5. Backfill by **re-running `load_dimensions()`** for all three partitions after rebuilding Silver — never an ad-hoc `UPDATE`.
+- **Verify:** `imdb_id` non-null on ~1,215/1,215; `original_title` differs from `title` on ~78; `homepage` populated on ~58%.
+- **Outcome:**
+
+#### [ ] Task 56 — Surface identifiers and the original title on the movie page
+- **Goal:** Make the three new columns visible without cluttering a page Task 54 just finished making legible.
+- **Files:** `django_app/movies/models.py`, `movies/templates/movies/movie_detail.html`, `static/css/theoria.css`, `tests/test_django_views.py`
+- **Steps:**
+  1. Three `TextField(null=True)` on the `Movie` model (unmanaged, as always).
+  2. **`original_title` renders only when it differs from `title`** — on 93% of films it's the same string, and printing it twice is noise, not data. Guard in the template, not the view.
+  3. IMDb and homepage as outbound links in the existing record list. External links need `rel="noopener noreferrer"` and a visible marker that they leave the site.
+  4. **Do not print the raw `imdb_id` string as a label** — per the UI rule, link it as "IMDb" and let the href carry the id.
+- **Outcome:**
+
+---
+
+### Phase 13 — Studios: `dim_company` and the project's first bridge table
+
+> The standout finding of the audit. Unlike everything else in Phase 12, a production company
+> is a genuinely new **entity** with its own identity, artwork and page — and unlike
+> `dim_collection` (one collection per film, so it flattens to a column on `dim_movie`), a film
+> has 2.81 companies on average. That's a true many-to-many, which this warehouse has never
+> modelled: genres are currently handled by fanning `fact_movie_metrics` out to one row per
+> genre, the wart every analytics query has to `SELECT DISTINCT` around. **Phase 13 is where
+> the project learns the bridge-table pattern properly**, and Phase 14 applies it twice more.
+
+#### [ ] Task 57 — Silver: `transform_movie_links.py` — companies, countries and languages
+- **Goal:** One new Silver module emitting all three nested arrays as tidy long tables. Companies are only *used* in Phase 13; countries and languages are extracted here too because they come from the same Bronze pass and re-reading 1,140 S3 objects a second time to fetch them later would be wasted work.
+- **Files:** new `etl/silver/transform_movie_links.py`, `data_quality/silver_checks.py`, `scripts/run_pipeline.py`, `tests/{test_etl,test_data_quality}.py`
+- **Steps:**
+  1. New module mirroring `transform_credits_bridge.py`'s relationship to `transform_people.py` — a bridge module doing its own Bronze pass, rather than widening `transform_movies` to return four URIs. Consistent with the existing pattern; the cost is one extra pass over `bronze/movie_details`, and the alternative breaks the one-module-one-responsibility rule.
+  2. Three outputs, all **denormalised long tables** (the link plus the entity's attributes on every row) so each dimension can be derived with `drop_duplicates` at load time — exactly the `load_dim_collection()` pattern:
+     - `silver/movie_companies/movie_companies.parquet` — `(movie_id, company_id, company_name, logo_path, origin_country)`
+     - `silver/movie_countries/movie_countries.parquet` — `(movie_id, country_code, country_name, relation)`
+     - `silver/movie_languages/movie_languages.parquet` — `(movie_id, language_code, language_name, english_name)`
+  3. **`relation` on the country table is the grain decision of this phase.** `origin_country` and `production_countries` are two different relationships that disagree on 259 of 1,140 films, so they cannot be merged into one row set without losing which is which; `relation ∈ {"origin", "production"}` records the relationship instead of asserting the two are the same fact. Note in the docstring that the alternative — one row per `(movie_id, country_code)` with `is_origin`/`is_production` booleans — was rejected as it makes the row mean two things at once.
+  4. Dedup keys, each matching its true grain: `(movie_id, company_id)`, `(movie_id, country_code, relation)`, `(movie_id, language_code)`. Per Task 40, do not widen a key past the grain to "be safe".
+  5. Drop null-id rows with a warning; never crash.
+  6. Three new `ENTITY_CONFIGS` entries in `silver_checks.py`, **written from the TMDB payload shape** rather than by mirroring the transform — a check that copies the transform's assumptions confirms bugs instead of catching them (the Task 40 lesson).
+  7. Wire into `run_pipeline.py` after `transform_movies`.
+- **Verify:** on `2026-07-29` — ~3,200 company links / 1,243 distinct companies; ~1,506 production + ~1,200 origin country links; ~2,013 language links.
+- **Outcome:**
+
+#### [ ] Task 58 — Warehouse: `dim_company` + `bridge_movie_company`
+- **Goal:** The dimension and the bridge, loaded, indexed, checked and backfilled.
+- **Files:** new `warehouse/ddl/13_companies.sql`, `warehouse/ddl/01_dimensions.sql`, `etl/warehouse_loader/load_dimensions.py`, `etl/warehouse_loader/load_facts.py`, `data_quality/warehouse_checks.py`, `tests/{test_etl,test_warehouse_checks}.py`
+- **Steps:**
+  1. `dim_company(company_id PK, name, logo_path, origin_country, slug)` + unique index on `slug`. `origin_country` is populated for 1,070/1,243 companies (86%) — nullable.
+  2. `bridge_movie_company(movie_id FK, company_id FK, ingestion_date)`, PK `(movie_id, company_id)`, index on **both** FKs (the join runs in both directions: a film's studios, and a studio's films). Carries `ingestion_date` for audit/traceability like the other facts.
+  3. **Naming:** `bridge_` rather than `fact_` is deliberate and should be written down — this is a *factless* fact table, recording that a relationship exists with no measure attached. Reserving `fact_` for tables with measures keeps the schema self-describing.
+  4. `load_dim_company()` in `load_dimensions.py`, deriving the dimension from the Silver bridge via `drop_duplicates(company_id)`, filtering on id **and** name (`name NOT NULL`), then `assign_slugs(session, "dim_company", "company_id", "name")` — reusing Task 46's whole-table recompute, which already handles collisions and permutations (the Task 48 `UniqueViolation` fix).
+  5. `load_bridge_movie_company()` in `load_facts.py`, resolving both FKs against the live dimensions and **quarantining** unresolvable rows to `data_quality/rejected/`, never dropping them. Must run after `load_dim_company()` and `load_dim_movie()`.
+  6. Two new `_FK_CHECKS` entries in `warehouse_checks.py`, plus a load-sanity check for the bridge.
+  7. Backfill all three partitions.
+- **Verify:** ~1,243 companies, 0 null slugs, ~3,200 bridge rows, 0 rejects; Warner Bros. ≈ 128 films.
+- **Outcome:**
+
+#### [ ] Task 59 — Django: `/studios/` and the studio page
+- **Goal:** Give the new entity its pages, and put a film's studios on the movie page.
+- **Files:** `django_app/movies/{models,views,urls}.py`, new `movies/templates/movies/{studio_list,studio_detail}.html`, `movie_detail.html`, `templates/base.html`, `tests/test_django_views.py`
+- **Steps:**
+  1. `Company` + `MovieCompany` models (`managed = False`; the bridge gets the same fake-single-PK treatment as the other composite-PK facts, with the comment explaining why).
+  2. `/studios/` — a ranked sheet reusing `table-2col` + `data-meter` share bars from `/franchises/`, plus the shared `_pager.html`. **No new CSS or JS** — Task 50 established this exact page shape. `.annotate(Count).filter(film_count__gt=0)` so the filter compiles to `HAVING`.
+  3. `/studios/<slug>/` — films in release order (reuse `_movie_card.html`), film count, span, avg rating, total revenue. Avg rating **must** collapse `fact_movie_metrics` with `.values().distinct()` first; revenue sums straight off `dim_movie`. Two aggregates, only one needing the genre-fanout guard — same split as `collection_detail`.
+  4. Studios on the movie page, linked, in the existing record list.
+  5. Nav entry. **Check the nav isn't getting crowded** — Task 51 already collapsed Actors+Directors into People for this reason.
+- **Verify:** all routes 200, bad slug 404s, a known studio page renders the expected film count.
+- **Outcome:**
+
+#### [ ] Task 60 — Analytics: studio panels
+- **Goal:** Spend the new dimension on the dashboard.
+- **Files:** new `warehouse/queries/{studio_output_by_decade,top_studios_by_revenue}.sql`, `django_app/analytics/{views.py,templates/analytics/dashboard.html}`
+- **Steps:**
+  1. Two panels: studio output by decade, and top studios by revenue + avg rating (with a minimum film count so a studio with one hit doesn't top the table — the same shape as `top_rated_directors.sql`'s ≥3-film floor).
+  2. **Every query carries an explicit `LIMIT`** (Task 42's lesson — two unbounded queries once returned 1,304 rows into a fixed-height panel) and the `SELECT DISTINCT movie_id` CTE wherever it touches `fact_movie_metrics`.
+  3. Time each query; the current dashboard's slowest panel is under 0.5s and these join one more table than any existing panel.
+- **Outcome:**
+
+---
+
+### Phase 14 — Where and in What Language
+
+> Phase 13's bridge pattern, applied twice to Silver data that Task 57 already wrote. Cheap by
+> design: if Phase 13 was built well, this phase is mostly configuration. If it turns out
+> expensive, that's a signal Task 58 hardcoded something that should have been shared.
+
+#### [ ] Task 61 — Warehouse: `dim_country`, `dim_language` and their bridges
+- **Files:** new `warehouse/ddl/14_countries_languages.sql`, `warehouse/ddl/01_dimensions.sql`, `etl/warehouse_loader/{load_dimensions,load_facts}.py`, `data_quality/warehouse_checks.py`, `tests/{test_etl,test_warehouse_checks}.py`
+- **Steps:**
+  1. `dim_country(country_code PK, name)` and `dim_language(language_code PK, name, english_name)` — **the ISO code is the natural key**, so unlike every other dimension here there is no surrogate id and no slug; the code is already short, stable and URL-safe.
+  2. `bridge_movie_country(movie_id, country_code, relation, ingestion_date)` PK `(movie_id, country_code, relation)`, and `bridge_movie_language(movie_id, language_code, ingestion_date)` PK `(movie_id, language_code)`. Index both FKs on each.
+  3. Loaders and FK checks following Task 58 exactly. **If a helper wants to be extracted from `load_bridge_movie_company()` at this point, extract it** — three near-identical loaders is the moment the pattern is proven, not the moment to copy it a third time.
+  4. Backfill all three partitions.
+- **Verify:** ~40 countries, ~70 languages, ~1,506 production + ~1,200 origin links, ~2,013 language links, 0 rejects.
+- **Outcome:**
+
+#### [ ] Task 62 — Django: provenance on the movie page, and browse by country/language
+- **Goal:** Surface both without inventing two more entity pages nobody asked for.
+- **Files:** `django_app/movies/{models,views}.py`, `movies/templates/movies/{movie_detail,movie_list}.html`, `tests/test_django_views.py`
+- **Steps:**
+  1. Countries and languages on the movie page, in the record list. **Render the origin/production distinction only when they disagree** (22.7% of films) — on the other 77% two identical country lists is noise. This is the same judgment as Task 56's `original_title`.
+  2. `/movies/?country=` and `?language=` filters on the existing list page, alongside `?q=` and `?sort=`. **Filters, not detail pages** — a country is a facet of a film, not a thing with a biography, and `/movies/?country=JP` answers the real question ("what Japanese films are here") with no new template.
+  3. The filter must survive pagination: `_pager.html` already takes a `base_query`, and `movie_list` already builds one with `urlencode` — extend it, don't rebuild it.
+  4. `dim_movie.original_language` already exists and is already shown on the movie page (16 distinct values). **Reconcile it with `spoken_languages` rather than shipping two language facts side by side** with no explanation of how they differ.
+- **Outcome:**
+
+#### [ ] Task 63 — Analytics, live re-run, verification, doc truth-up
+- **Goal:** The phase-closing task, following Tasks 44 and 53.
+- **Files:** new `warehouse/queries/*.sql`, `analytics/{views.py,dashboard.html}`, `README.md`, `docs/architecture.md`, `CLAUDE.md`, `for_learning.md`
+- **Steps:**
+  1. Panels for films by country of production and non-English cinema over time.
+  2. **Full live pipeline re-run across all three partitions** — the first end-to-end run since the new Silver entities existed, so it's the first proof `run_pipeline.py` sequences them correctly.
+  3. Silver DQ and warehouse checks: both counts **rise** this phase (new entities, new FK checks). Record the new numbers so a future reader doesn't misread the change.
+  4. Walk all routes live, including the new studio pages and both new filters.
+  5. **Verify a fresh install empirically, not by reading the README** — a throwaway DB built from DDL `01`–`03` must produce exactly the live table list, per the Task 53 lesson that "run every DDL file in order" stopped being the same instruction as "build the current schema" once migration `11` dropped tables.
+  6. Update `docs/architecture.md` with the bridge-table decision (why `bridge_` not `fact_`, and why a bridge is right for companies where a column was right for collections), and this file's Warehouse Schema section with the final table list.
+- **Outcome:**
 
 ---
 
