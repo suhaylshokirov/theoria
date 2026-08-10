@@ -151,6 +151,26 @@ def test_movie_list_invalid_sort_falls_back_to_release():
     assert response.context["sort"] == "release"
 
 
+def test_movie_list_ajax_request_renders_results_fragment_only():
+    """initLiveFilter()'s fetch() sets this header and wants just the results,
+    not the full page — see _is_ajax() in views.py."""
+    movie = _movie()
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr:
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [movie]
+
+        response = client.get("/movies/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "movies-toolbar-meta" in content
+    assert "movies-grid" in content
+    assert "<html" not in content
+    assert "<!DOCTYPE" not in content
+
+
 # ---------------------------------------------------------------------------
 # actor_list / director_list
 # ---------------------------------------------------------------------------

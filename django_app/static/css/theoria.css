@@ -1366,6 +1366,13 @@ button:hover,
   display: contents;
 }
 
+/* Same purpose as #people-toolbar-meta above, for the Films page's
+   .result-count — its only child, so contents vs a real box makes no visual
+   difference here, but keeping the same pattern means one rule to read. */
+#movies-toolbar-meta {
+  display: contents;
+}
+
 /* --- Credit list (movie detail, crew) ---------------------------------------
    Billed/full crew on the movie page. 1px gap on a --rule background with
    --paper rows draws hairline dividers with no border-bottom rules to fight

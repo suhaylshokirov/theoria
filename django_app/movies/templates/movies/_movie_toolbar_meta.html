@@ -1,0 +1,11 @@
+{% comment %} The result count, sitting inside .toolbar as a flex sibling of the
+   filter form. Its own partial (rather than folded into movie_list.html
+   directly) because static/js/theoria.js's initLiveFilter() swaps it
+   independently of #movies-grid below — see _movie_results.html, the
+   AJAX-only template that concatenates this with _movie_grid.html.
+   #movies-toolbar-meta is `display: contents` in theoria.css so this wrapper
+   doesn't disturb .toolbar's flex layout; it exists purely so the live-filter
+   swap has an element to target. {% endcomment %}
+<div id="movies-toolbar-meta">
+    <span class="result-count">{{ page_obj.paginator.count }} film{{ page_obj.paginator.count|pluralize }}</span>
+</div>

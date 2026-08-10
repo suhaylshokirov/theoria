@@ -105,6 +105,11 @@ def movie_list(request):
         "page_obj": page_obj, "q": q, "sort": sort,
         "base_query": urlencode({"q": q, "sort": sort}),
     }
+    # See _person_list()'s identical branch: static/js/theoria.js's
+    # initLiveFilter() re-requests this URL with this header on every filter
+    # change and only wants the results fragment back, not the page around it.
+    if _is_ajax(request):
+        return render(request, "movies/_movie_results.html", context)
     return render(request, "movies/movie_list.html", context)
 
 

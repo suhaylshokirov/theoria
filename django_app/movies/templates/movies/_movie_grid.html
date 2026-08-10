@@ -1,0 +1,19 @@
+{% comment %} The poster grid + pager, below .toolbar. See _movie_toolbar_meta.html
+   for why this is a separate partial from movie_list.html: it's the other
+   half of the pair static/js/theoria.js's initLiveFilter() swaps as the
+   filter form changes. aria-live so the swap is announced to screen
+   readers. {% endcomment %}
+<div id="movies-grid" aria-live="polite">
+    <div class="poster-grid">
+        {% for movie in page_obj %}
+        {% include "movies/_movie_card.html" with movie=movie only %}
+        {% empty %}
+        <p class="empty">
+            {% if q %}No films match “{{ q }}”. Try a shorter title.
+            {% else %}No films loaded yet. Run the pipeline to fill the catalog.{% endif %}
+        </p>
+        {% endfor %}
+    </div>
+
+    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query=base_query only %}
+</div>
