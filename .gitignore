@@ -39,3 +39,6 @@ graphify-out/
 
 # Others
 .claude/
+
+# Learning log (kept locally, not tracked)
+for_learning.md
