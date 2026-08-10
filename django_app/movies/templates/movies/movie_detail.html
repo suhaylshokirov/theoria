@@ -26,7 +26,7 @@
             {% if metrics.rating %}
             <div class="record-row">
                 <dt class="label">Rating</dt>
-                <dd class="mono">{{ metrics.rating|floatformat:1 }} / 10{% if metrics.vote_count %} <span class="faint">({{ metrics.vote_count|floatformat:"0g" }} votes)</span>{% endif %}</dd>
+                <dd class="mono">{{ metrics.rating|floatformat:1 }} / 10</dd>
             </div>
             {% endif %}
             <div class="record-row">

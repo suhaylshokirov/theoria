@@ -352,16 +352,16 @@ def movie_detail(request, movie_slug):
     # job_display string the merged rows carry.
     directors = [c.person for c in credits if c.job == "Director"]
 
-    # fact_movie_metrics has one row per (movie, date, genre), and rating /
-    # vote_count are movie-level measures repeated identically across those
-    # rows. So take one row rather than averaging: .values(...).distinct()
-    # collapses the genre fan-out to a single tuple, and .first() reads it.
-    # Averaging here would be a silent trap — it happens to give the right
-    # answer only because the duplicated values are equal.
+    # fact_movie_metrics has one row per (movie, date, genre), and rating is
+    # a movie-level measure repeated identically across those rows. So take
+    # one row rather than averaging: .values(...).distinct() collapses the
+    # genre fan-out to a single tuple, and .first() reads it. Averaging here
+    # would be a silent trap — it happens to give the right answer only
+    # because the duplicated values are equal.
     metrics = (
         MovieMetrics.objects.using("warehouse")
         .filter(movie_id=movie_id)
-        .values("rating", "vote_count")
+        .values("rating")
         .distinct()
         .first()
     )

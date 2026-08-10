@@ -346,7 +346,6 @@ def test_movie_detail_returns_200_with_expected_context():
         ]
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = {
             "rating": Decimal("8.50"),
-            "vote_count": 1200,
         }
 
         response = client.get(f"/movies/{movie.movie_id}/")
@@ -364,10 +363,11 @@ def test_movie_detail_returns_200_with_expected_context():
 
 
 def test_movie_detail_renders_rating_and_synopsis():
-    """Rating, vote count and overview must reach the rendered page.
+    """Rating and overview must reach the rendered page, with no vote count.
 
     The rating lives in fact_movie_metrics and the synopsis in dim_movie.overview
-    — both existed in the pipeline long before any page displayed them.
+    — both existed in the pipeline long before any page displayed them. The vote
+    count is deliberately not shown to readers.
     """
     movie = _movie()
     movie.overview = "A test synopsis describing the film."
@@ -381,7 +381,6 @@ def test_movie_detail_renders_rating_and_synopsis():
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = {
             "rating": Decimal("8.50"),
-            "vote_count": 1200,
         }
 
         response = client.get(f"/movies/{movie.movie_id}/")
@@ -390,6 +389,7 @@ def test_movie_detail_renders_rating_and_synopsis():
     assert response.status_code == 200
     assert "8.5" in body
     assert "A test synopsis describing the film." in body
+    assert "vote" not in body.lower()
 
 
 def test_movie_detail_cast_present_when_no_director_credited():
