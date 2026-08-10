@@ -1,8 +1,19 @@
-# Theoria — Architecture
+# Theoria — Architecture & Decision Log
 
-This document explains *why* Theoria is built the way it is, written for someone evaluating the
-design (e.g. an interviewer) rather than someone modifying the code line-by-line. For the
-task-by-task build log, see `CLAUDE.md`; for line-level teaching notes, see `for_learning.md`.
+This is the canonical record of *why* Theoria is built the way it is — every non-obvious
+architectural or technical decision, the alternative it replaced, and the evidence that drove the
+change. It's written for someone evaluating the design (e.g. an interviewer) rather than someone
+modifying the code line-by-line.
+
+It is deliberately not the only document that touches history, but it is the one meant to answer
+"why does it work this way" on its own, without cross-referencing the others:
+
+- **`CLAUDE.md`** is the task-by-task build log — what was done, in what order, with live
+  verification numbers. Useful for "when did X happen" or "what was task 46." Decisions narrated
+  there get folded into this file rather than left to live only in a task's outcome paragraph.
+- **`for_learning.md`** (local only, not tracked in git) is a teaching log — plain-language
+  explanations of the DE/Python/SQL concepts each task used, aimed at re-explaining the work in an
+  interview, not at justifying the choices made.
 
 ## 1. Goal
 
@@ -26,13 +37,13 @@ Silver (S3, cleaned & typed Parquet)
    │  flatten, dedupe, cast types, quarantine bad rows
    ▼
 Gold (S3, pre-aggregated Parquet)
-   │  genre metrics, decade stats, filmography, director ratings
+   │  genre metrics, decade stats, filmography, director ratings, collaboration edges
    ▼
 PostgreSQL warehouse (star schema)
    │  dimensions + facts, upserted, watermark-tracked
    ▼
 Django UI (read-only)
-   movie/actor/director/genre pages + analytics dashboard
+   movie/person/genre/franchise pages + analytics dashboard
 ```
 
 Each arrow is a separate, independently testable stage with its own module
@@ -41,7 +52,7 @@ sequences all of them in-process for one `ingestion_date` — but every stage fu
 imported and run on its own, which is what the unit tests do (mocking S3/TMDB/Postgres at the
 boundary rather than mocking business logic).
 
-### Choosing the corpus: `movie/popular` vs `discover/movie`
+### 2.1 Choosing the corpus: `movie/popular` vs `discover/movie`
 
 Ingestion has two selectable sources (`scripts/run_pipeline.py --source`), and the choice is a
 modelling decision rather than a tuning one.
@@ -63,7 +74,7 @@ The four `DISCOVER_*` values in `config.py` therefore define the dataset, not th
 lowering `DISCOVER_MIN_VOTES` doesn't make the pipeline slower, it makes the warehouse describe a
 different population.
 
-### Why S3, and why three layers instead of loading straight into Postgres
+### 2.2 Why S3, and why three layers instead of loading straight into Postgres
 
 - **Bronze is the immutable source of truth.** Raw API responses are never edited in place. If a
   transform bug is discovered later, Silver/Gold can be rebuilt from Bronze without re-hitting the
@@ -72,12 +83,12 @@ different population.
   the data-quality gate (`data_quality/silver_checks.py`) all happen here — once, in one place —
   rather than being re-implemented ad hoc by every downstream consumer.
 - **Gold exists for read patterns that don't map cleanly onto the star schema**, or that are
-  expensive to recompute per-request (e.g. actor filmography counts). In this project the
-  warehouse ends up being the primary read path for Django (Gold's Parquet output isn't currently
-  loaded into Postgres — see §5), so Gold mainly demonstrates the aggregation step you'd wire into
-  a warehouse load in a larger system.
+  expensive to recompute per-request (e.g. the collaboration graph, §3.3). The warehouse is the
+  primary read path for Django; most of Gold's output isn't loaded into Postgres (only
+  `collaboration_edges` is, as of Task 49) — the rest mainly demonstrates the aggregation step
+  you'd wire into a warehouse load in a larger system.
 
-### Why partitioning by `ingestion_date`
+### 2.3 Why partitioning by `ingestion_date`
 
 Every layer's S3 key is `s3://<bucket>/<layer>/<entity>/ingestion_date=YYYY-MM-DD/<file>`. This
 gives:
@@ -112,9 +123,6 @@ gives:
 which uses a generated `YYYYMMDD` surrogate key and is populated as a full calendar table
 (1900–2035 by default) independent of any Silver data.
 
-`dim_movie.collection_id` is a **nullable** FK: roughly half the catalog belongs to no franchise,
-which is a property of films rather than missing data.
-
 **Facts** (`warehouse/ddl/02_facts.sql`):
 - `fact_movie_metrics(movie_id, date_id, genre_id, rating, vote_count, revenue, budget,
   popularity, ingestion_date)` — one row per `(movie, genre)` pair, because a movie can belong to
@@ -122,21 +130,23 @@ which is a property of films rather than missing data.
   repeated once per genre. **This has one consequence every analytics query must account for**:
   aggregating `rating`/`revenue`/`popularity` directly would double-count multi-genre movies. Every
   query in `warehouse/queries/` that touches these columns first collapses to
-  `SELECT DISTINCT movie_id, ...` in a CTE before aggregating.
+  `SELECT DISTINCT movie_id, ...` in a CTE before aggregating, and every Django view that reads a
+  movie-level measure off this table (`movie_detail`'s rating, `actor_detail`/`director_detail`'s
+  avg rating, `collection_detail`'s avg rating) applies the same `.values(...).distinct()` guard.
 - `fact_credit(movie_id, person_id, department, job, character_name, ordering, ingestion_date)` —
   one row per credit, at the grain TMDB actually publishes. A director who also wrote and produced
   a film is three rows, and the PK says so.
 - `fact_collaboration(person_a_id, person_b_id, films_together, first_year, last_year)` — derived
-  in Gold rather than loaded from Silver; see §3.1.
+  in Gold rather than loaded from Silver; see §3.3.
 
 All fact tables carry named foreign keys to every dimension they reference, and an index on each
 FK column (PostgreSQL does not auto-index FKs). All also carry an `ingestion_date` column purely
 for audit/traceability — it is *not* part of a uniqueness constraint, because legitimate data has
-multiple rows per `(movie_id, ingestion_date)` (one per genre, one per actor, or one per director).
-Duplicate-guarding instead comes from the composite primary key plus `ON CONFLICT DO UPDATE`
-upserts in the loaders — idempotent by construction, not by an extra constraint.
+multiple rows per `(movie_id, ingestion_date)` (one per genre, one per credit). Duplicate-guarding
+instead comes from the composite primary key plus `ON CONFLICT DO UPDATE` upserts in the loaders —
+idempotent by construction, not by an extra constraint.
 
-### Resolved: `fact_cast`/`fact_crew` replace the earlier `fact_casting` cross-join
+### 3.1 Resolved: `fact_cast`/`fact_crew` replace the earlier `fact_casting` cross-join
 
 TMDB's credits endpoint returns cast and crew as two separate flat lists per movie — it never
 pairs a given actor with "their" director. An earlier version of this schema modeled casting as a
@@ -158,11 +168,11 @@ as director) — modeling other crew roles would need a new person-role dimensio
 this fix.
 
 Both tables were themselves retired in Phase 10 by `fact_credit`, which models every credit
-regardless of department (§3.1). They are described here because the *reasoning* still applies:
+regardless of department (§3.2). They are described here because the *reasoning* still applies:
 coupling two independent facts in one table makes one of them disappear whenever the other is
 missing.
 
-### 3.1 One person, every credit — and the two graphs
+### 3.2 One person, every credit
 
 `dim_actor` and `dim_director` split one human being across two tables according to whichever
 credit happened to introduce them, and `fact_cast`/`fact_crew` did the same to their work. The
@@ -178,14 +188,18 @@ people and 64,031 credits to **122,685 people and 237,454 credits across 13 depa
 distinct job titles** — with no new API calls, because Bronze had held all of it since the first
 ingestion run.
 
-**The collaboration graph, and why there are two of them.** `fact_collaboration` counts how often
-each pair of people has worked together. The scoping decision matters more than the schema: pairing
-*every* credit on every film produces **33.1 million** edges on this corpus, and asserts that a
-caterer and a stunt double "collaborated". Restricting to **key credits** — top-10 billing plus
-nine principal craft jobs — gives **181,538**. That 180× reduction comes from deciding what a
-collaboration *is*, not from a `LIMIT`; the constants live in `build_gold_datasets.py` as a
-definition, the same way `config.DISCOVER_*` defines the corpus.
+Unifying the identity also meant unifying the *namespace* Django addresses people by — see §7.2
+for the URL consequence and the redirect design it forced.
 
+### 3.3 The collaboration graph, and why the reduction matters more than the schema
+
+`fact_collaboration` counts how often each pair of people has worked together. The scoping
+decision matters more than the schema: pairing *every* credit on every film produces **33.1
+million** edges on this corpus, and asserts that a caterer and a stunt double "collaborated".
+Restricting to **key credits** — top-10 billing plus nine principal craft jobs — gives **181,538**.
+That 180× reduction comes from deciding what a collaboration *is*, not from a `LIMIT`; the
+constants live in `build_gold_datasets.py` as a definition, the same way `config.DISCOVER_*`
+defines the corpus.
 
 `fact_collaboration` is also the first thing in the project that **reads** the Gold layer. Gold had
 been written on every pipeline run since Task 14 and consumed by nothing. The honest test for
@@ -193,7 +207,42 @@ whether a dataset belongs there is: expensive to compute, cheap to serve, and sh
 star schema can't answer directly. A quadratic expansion over every film is all three; the other
 four Gold datasets fail that test, which is exactly why nothing reads them.
 
-### Resolved: the credits-bridge dedup grain
+### 3.4 Franchises: `dim_collection`
+
+`belongs_to_collection` was present in every Bronze movie-detail payload from the first ingestion
+run and read at no layer until Task 50. It was promoted to its own dimension rather than left as
+three denormalized columns on `dim_movie` (`collection_id`/`name`/`poster_path`) because a
+franchise has its own identity, artwork, slug, and page — 17 Bond films would otherwise repeat the
+same name, poster path, and slug computation 17 times with no row to hang a single canonical page
+off.
+
+`dim_movie.collection_id` is a **nullable** FK: roughly half the catalog belongs to no franchise,
+which is a property of films rather than missing data, so the schema doesn't force a sentinel
+"no collection" row to avoid a null. `load_dim_collection()` runs before `load_dim_movie()` (the FK
+points that way) and derives the dimension by de-duplicating Silver's already-denormalized
+`collection_id`/`collection_name` columns — filtered on both id *and* name, since an id without a
+name would violate `name NOT NULL` on rows where TMDB's payload was partially populated.
+
+### 3.5 Fields that were already in Bronze and never reached the page
+
+Two smaller gaps followed the same shape as §3.2 and §3.6: data TMDB had always returned, sitting
+in Bronze, that no Silver column or warehouse column ever carried forward.
+
+- **Images and taglines** (Task 36): `poster_path`, `backdrop_path`, `tagline` (movies) and
+  `profile_path` (people) were being computed by nothing — the Silver transforms simply didn't
+  extract them. Added to `_flatten_movie()`/the people transform and to `dim_movie`/`dim_person`
+  with an idempotent `ADD COLUMN IF NOT EXISTS` migration, then backfilled by re-running Silver and
+  the dimension load from immutable Bronze — no new TMDB calls.
+- **Synopsis and score** (Task 41): `overview` was extracted by `transform_movies`, wrote
+  successfully to Silver, and was even listed in `silver_checks`' expected schema — but `dim_movie`
+  had no `overview` column, so the loader's explicit column list (a deliberate discipline: never
+  `SELECT *`, never insert an implicit column list either) silently had nowhere to put it. This is
+  the failure mode that discipline trades for: not selecting a column reads identically to not
+  having one, so a schema gap here fails silently rather than loudly. Fixed by adding the column
+  and re-running the existing loader — the rating (`fact_movie_metrics.rating`) had a column all
+  along; it simply had never been read into a movie-page context.
+
+### 3.6 Resolved: the credits-bridge dedup grain
 
 A second, subtler bug lived in `etl/silver/transform_credits_bridge.py`, which deduplicated crew
 rows on `(movie_id, person_id, credit_type)`. `credit_type` is only ever the literal `"crew"` — it
@@ -240,6 +289,19 @@ re-processing them would be unsafe:
   mid-run leaves the watermark at the last fully-completed partition rather than losing all
   progress in the run.
 
+### 4.1 Resolved: a batched slug rewrite that failed on a permutation, not a collision
+
+`assign_slugs()` (§7.1) recomputes and rewrites an entire table's slugs in one batched
+`executemany`. Postgres checks a unique index **after every row**, not after the statement, so
+when a live run swapped which of two rows held a given slug (row A giving up `dee-wallace`, row B
+taking it, in one batch), the intermediate state — both wanting it briefly ordered wrong — raised
+a `UniqueViolation` even though the *final* table was perfectly unique. This had been latent since
+Task 46; it never fired earlier because those tables had only ever been loaded in ways where
+recomputed slugs happened to be identical. The fix is to clear the column for the affected rows
+before rewriting it, inside the same transaction, so no batch ever asks Postgres to hold two
+half-written unique values at once. Found by a live run, not a test — the bug only exists under
+real concurrent-looking writes, which a mocked-session unit test can't reproduce.
+
 ## 5. Data quality: quarantine, never drop
 
 Two quality gates run at different layers, both following the same pattern: check → tag failing
@@ -273,8 +335,8 @@ Django never writes to the warehouse. This is enforced at three levels, not just
    tables; `warehouse` (Postgres) holds only the star schema. Views explicitly call
    `.using("warehouse")`.
 
-All three composite-PK fact tables (`fact_movie_metrics`, `fact_credit`, `fact_collaboration`) don't fit
-Django's one-primary-key-per-model assumption. Each model marks its `movie` FK as
+All three composite-PK fact tables (`fact_movie_metrics`, `fact_credit`, `fact_collaboration`) don't
+fit Django's one-primary-key-per-model assumption. Each model marks its `movie` FK as
 `primary_key=True` purely to satisfy that constraint — the real uniqueness lives only in the
 database's actual composite PK, and the resulting `fields.W342` warning is intentionally silenced
 in `settings.py` with a comment explaining why, rather than worked around with a fake single-column
@@ -284,9 +346,96 @@ The **analytics dashboard** (`analytics/views.py`) takes a different approach fr
 app: instead of expressing its ten queries through the ORM, it reads the `.sql` files in
 `warehouse/queries/` directly and executes them via a raw cursor. This avoids maintaining the same
 logic twice (once in `.sql`, once as ORM query-building) for queries — like the multi-CTE
-director/craft partnership join — that are naturally SQL-shaped.
+director/craft partnership join — that are naturally SQL-shaped. Every dashboard query carries an
+explicit `LIMIT` (§2.1's corpus-growth lesson: an unbounded query that was harmless at 112 films
+returned 1,304 rows into a fixed-height panel once the catalog reached 1,215).
 
-## 7. Testing philosophy
+## 7. URL and page design
+
+### 7.1 Slugs instead of surrogate keys
+
+Movie, person, and (later) collection detail routes are addressed by a URL slug
+(`/people/tom-holland/`) rather than the warehouse's numeric primary key
+(`/actors/880/` — Task 46). This is a UI decision with a real technical constraint behind it: a
+slug column has to stay stable across reruns of a table that grows (44,554 → 122,685 people across
+this project's own history), or every previously-shared link breaks the next time the loader runs.
+
+`assign_slugs(session, table, id_col, name_col)` therefore **recomputes every row's slug from the
+whole table** on each load, not just the newly-loaded partition — checking collisions against only
+the current batch would let a same-named person introduced in a later partition silently collide
+with an existing slug, and the database's unique index would reject the load outright rather than
+resolve it. Collisions are broken by walking the table in ascending id order and numbering repeats
+(`john-smith`, `john-smith-2`, …), which is what makes the scheme idempotent: since only a strictly
+larger id can ever be appended after the existing numbering (never inserted ahead of it), a given
+row's slug never changes once assigned, unless a same-named row with a *smaller* id is later
+discovered. `_slugify()` NFKD-folds accented characters to their ASCII base ("Zoë Kravitz" →
+`zoe-kravitz`) rather than dropping them, so a franchise's foreign-language cast doesn't collapse
+to a run of hyphens.
+
+See §4.1 for the batched-rewrite bug this scheme surfaced under a live run.
+
+### 7.2 Unifying `dim_actor`/`dim_director` into `dim_person` renumbered slugs — legacy routes redirect by id, not by slug
+
+Merging the actor/director tables into `dim_person` (§3.2) reused the same `assign_slugs()`
+machinery over a much larger, merged population, which **changed which id claims a given base
+slug** for 381 people (a crew member with a lower TMDB id now claims the slug an actor or director
+used to hold alone). `/actors/` and `/directors/` survive as **scopes** of `/people/` —
+`Person.objects.filter(credits__department=...).distinct()` — rather than separate tables, and
+their legacy detail URLs **301 redirect by the row's stable integer id**, never by re-mapping old
+slug to new slug: a slug-to-slug redirect table built before the rename would have sent some of
+those 381 URLs to the wrong person, silently. Redirecting by id sidesteps the whole problem, at the
+cost of the redirect needing one `dim_person` lookup rather than being a static rewrite rule.
+
+## 8. Frontend: one design system, not one stylesheet per page
+
+Through Task 37 the app had two disjoint visual languages — a dark themed Home/Analytics and
+unstyled system-ui everywhere else — because every new page had shipped with its own ad hoc CSS.
+Task 38 replaced that with a single token system (`static/css/theoria.css`: colour, type, space,
+motion) under one explicit contract: a page-specific stylesheet may *add* a new component, but may
+never restyle a shared one. Every `body.page-*` override that had accumulated was deleted, because
+that pattern is exactly how the two-theme split happened in the first place — a page overriding a
+shared class only for itself is a fork nobody remembers making.
+
+Two consequences worth naming as decisions rather than aesthetics:
+
+- **Colour is a signal, not a palette.** Lime is reserved specifically as the "this value was
+  measured" mark — meter bars, keyed posters, active nav — so reaching for lime anywhere else
+  would have diluted the one place it was meant to mean something.
+- **Shared behaviour moved into shared JS.** `initMeters()`, number formatting, and (later) the
+  paged-section behaviour in §9 all live in `static/js/theoria.js` so any page can opt in via a
+  `data-*` attribute rather than a per-page `<script>` reimplementing the same loop.
+
+## 9. Movie page legibility: merging duplicate credits, paging in the browser
+
+`fact_credit` (§3.2) was the right data model and immediately made the movie page unreadable at
+scale: a person holding several jobs on one film rendered once per job across several department
+sections (Christopher Nolan on *The Dark Knight* was 4 rows spread across 3 sections), and every
+credit — up to 139 cast, up to ~980 crew on the worst film — rendered as a headshot card with no
+ceiling. These are two different problems with two different fixes, and conflating them would have
+hidden which fix did what:
+
+- **Duplication is fixed by merging, not by hiding rows.** `_merge_crew()` groups a film's
+  non-Acting credits by `person_id` and joins their jobs in department order under that person's
+  single most senior department (`_department_rank()`) — Nolan now reads "Director / Screenplay /
+  Story / Producer," once. Measured before committing to this as the actual problem: merging
+  collapses 143.8 crew rows/film to 138.1 distinct people (~4%) — **merging fixes duplication, not
+  volume.**
+- **Volume is fixed by paging in the browser, not by truncating the response.** No credit is
+  hidden from the payload; `initPagedSection()` (§8) shows a window of ten at a time and repaints
+  on Next rather than issuing a request. This directly replaced a first, server-side implementation
+  (`?cast_page=`/`?crew_page=`/`?crew=all` query params, `#cast`/`#crew` anchors) that was judged
+  not smooth enough once built — a round trip per ten people read as sluggish even though it
+  worked correctly.
+
+**The pager is intentionally not one shared component.** `_pager.html` (server-side, page-number
+query params) still serves `/movies/` and `/people/` — 1,215 and 122,685 rows, not a payload a
+browser should ever be handed in one response. `_pager_client.html` serves one film's ~1,200-credit
+maximum, which is small enough to send whole and page client-side. Sending the same total row count
+through both mechanisms would be wrong in both directions: server-paging a single film adds a
+round trip an in-browser page doesn't need, and client-paging the full movie or person index would
+ship five- and six-figure payloads to render ten rows.
+
+## 10. Testing philosophy
 
 The full suite (210 tests, `pytest`) never touches a real network, S3 bucket, or Postgres
 instance. Every ETL/loader test mocks the boundary (the `boto3` client, the `requests` session, the
@@ -298,12 +447,21 @@ zero external dependencies, at the cost of not catching integration issues betwe
 boundary and the real service — those are instead caught by the periodic live pipeline run
 (`scripts/run_pipeline.py`, see its Task 30.5 outcome in `CLAUDE.md` for the first such run).
 
-## 8. Explicit non-goals
+Two bugs in this project were found only by a live run, never by the mocked suite, and are recorded
+here rather than only in `CLAUDE.md` because the pattern generalizes: §4.1's batched-slug
+permutation (Postgres enforces uniqueness per row, not per statement) and an earlier `/connect/`
+adjacency build that returned a different — equally short, equally valid — shortest path on every
+reload, because an unordered SQL read combined with Python's insertion-order-preserving dicts made
+iteration order accidentally significant. Both are the same lesson from two different angles: a
+mocked session can't reproduce behaviour that only exists under a real database's actual execution
+order.
+
+## 11. Explicit non-goals
 
 No Spark, Kafka, Snowflake, Redshift, Lambda, Terraform, or Kubernetes. This project intentionally
-stays single-machine: the pipeline processes a few hundred movies per run, values in the
-hundreds-of-megabytes-to-low-gigabytes range that fit comfortably in pandas DataFrames. The
-architecture patterns (layered lake, star schema, idempotent upserts, watermark-based incremental
-loads, quarantine-based data quality) are the same ones a distributed version would use — swapping
-pandas for Spark and a single Postgres instance for Redshift/Snowflake would be a scaling exercise,
-not a redesign.
+stays single-machine: the pipeline processes a few hundred to a couple thousand movies per run,
+values in the hundreds-of-megabytes-to-low-gigabytes range that fit comfortably in pandas
+DataFrames. The architecture patterns (layered lake, star schema, idempotent upserts,
+watermark-based incremental loads, quarantine-based data quality) are the same ones a distributed
+version would use — swapping pandas for Spark and a single Postgres instance for
+Redshift/Snowflake would be a scaling exercise, not a redesign.
