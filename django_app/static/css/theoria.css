@@ -838,7 +838,7 @@ td[data-meter] .meter-fill {
   display: flex;
   gap: var(--space-5);
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   flex-wrap: wrap;
   margin-bottom: var(--space-6);
 }
