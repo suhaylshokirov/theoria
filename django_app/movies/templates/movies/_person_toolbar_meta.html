@@ -1,8 +1,8 @@
-{% comment %} The scope nav + result count, sitting inside .toolbar as a flex
-   sibling of the filter form. Its own partial (rather than folded into
-   person_list.html directly) because static/js/theoria.js's initLiveFilter()
-   swaps it independently of #people-grid below — see _person_results.html,
-   the AJAX-only template that concatenates this with _person_grid.html.
+{% comment %} The scope nav, sitting inside .toolbar as a flex sibling of the
+   filter form. Its own partial (rather than folded into person_list.html
+   directly) because static/js/theoria.js's initLiveFilter() swaps it
+   independently of #people-grid below — see _person_results.html, the
+   AJAX-only template that concatenates this with _person_grid.html.
    #people-toolbar-meta is `display: contents` in theoria.css so this wrapper
    doesn't disturb .toolbar's flex layout; it exists purely so the live-filter
    swap has an element to target. {% endcomment %}
@@ -12,5 +12,4 @@
         <a href="{% url 'movies:actor_list' %}?{{ base_query }}"{% if scope == "acting" %} aria-current="true"{% endif %}>Acting</a>
         <a href="{% url 'movies:director_list' %}?{{ base_query }}"{% if scope == "directing" %} aria-current="true"{% endif %}>Directing</a>
     </nav>
-    <span class="result-count">{{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}</span>
 </div>

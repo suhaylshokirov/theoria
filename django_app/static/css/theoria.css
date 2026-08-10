@@ -981,13 +981,6 @@ button:hover,
   outline-offset: -2px;
 }
 
-.result-count {
-  font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  color: var(--ink-faint);
-  white-space: nowrap;
-}
-
 /* --- Pagination ------------------------------------------------------------- */
 
 .pagination {
@@ -1357,19 +1350,12 @@ button:hover,
   border-bottom-color: var(--lime);
 }
 
-/* Wraps .scope + .result-count so the People page's live filtering
-   (static/js/theoria.js) has a single element to target and swap — but the
-   wrapper itself must not become a flex item of .toolbar in its own right,
-   or .scope and .result-count stop lining up the way they did as direct
-   siblings of the form. display: contents keeps it purely addressable. */
+/* Wraps .scope so the People page's live filtering (static/js/theoria.js)
+   has a single element to target and swap — but the wrapper itself must not
+   become a flex item of .toolbar in its own right, or .scope stops lining up
+   the way it did as a direct sibling of the form. display: contents keeps it
+   purely addressable. */
 #people-toolbar-meta {
-  display: contents;
-}
-
-/* Same purpose as #people-toolbar-meta above, for the Films page's
-   .result-count — its only child, so contents vs a real box makes no visual
-   difference here, but keeping the same pattern means one rule to read. */
-#movies-toolbar-meta {
   display: contents;
 }
 

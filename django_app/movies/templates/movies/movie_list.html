@@ -8,11 +8,11 @@
 <section class="sheet-section">
     <div class="toolbar">
         {% comment %} data-live-filter + data-live-targets: static/js/theoria.js's
-           initLiveFilter() re-fetches and swaps just these two regions as the
-           fields below change, so results update without an Apply click or a
-           full page reload. Plain GET form underneath, so it still works with
-           no JS — see _movie_results.html's docstring. {% endcomment %}
-        <form method="get" action="{% url 'movies:movie_list' %}" data-live-filter data-live-targets="#movies-toolbar-meta, #movies-grid">
+           initLiveFilter() re-fetches and swaps this region as the fields
+           below change, so results update without an Apply click or a full
+           page reload. Plain GET form underneath, so it still works with no
+           JS — see _movie_results.html's docstring. {% endcomment %}
+        <form method="get" action="{% url 'movies:movie_list' %}" data-live-filter data-live-targets="#movies-grid">
             <div class="field">
                 <input type="search" name="q" value="{{ q }}" placeholder="Search titles" aria-label="Search films by title">
             </div>
@@ -36,7 +36,6 @@
                way to apply anything but the search box. {% endcomment %}
             <button type="submit" class="apply-btn">Apply</button>
         </form>
-        {% include "movies/_movie_toolbar_meta.html" %}
     </div>
 
     {% include "movies/_movie_grid.html" %}

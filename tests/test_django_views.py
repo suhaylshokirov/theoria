@@ -165,7 +165,6 @@ def test_movie_list_ajax_request_renders_results_fragment_only():
 
     assert response.status_code == 200
     content = response.content.decode()
-    assert "movies-toolbar-meta" in content
     assert "movies-grid" in content
     assert "<html" not in content
     assert "<!DOCTYPE" not in content
