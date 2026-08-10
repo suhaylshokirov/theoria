@@ -48,6 +48,10 @@
   --lime-mark: #65a30d;
   --lime-deep: #365314;
   --lime-hover: #93d128;
+  /* Lime's fill is equally bright in both themes, so text printed on it must
+     stay fixed rather than swap with --ink — in dark mode --ink turns near-
+     white, which is illegible on lime. Never redefined under [data-theme]. */
+  --ink-on-lime: #0b0b0b;
   /* Chart area fill, read by analytics.js. */
   --chart-wash: rgba(163, 230, 53, 0.18);
 
@@ -91,7 +95,7 @@
 
   /* --- Form ---------------------------------------------------------------- */
   --radius: 2px;          /* sheets and plates, not pills */
-  --radius-pill: 999px;   /* chips only */
+  --radius-pill: 999px;   /* chips, buttons, and pagination controls */
   --hairline: 1px solid var(--rule);
   --frame: 260px;         /* max content width of the page shell gutter calc */
   --measure: 1240px;
@@ -854,7 +858,7 @@ td[data-meter] .meter-fill {
   display: flex;
   align-items: center;
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   background: var(--paper);
   transition: border-color var(--dur-fast) var(--ease);
 }
@@ -870,7 +874,7 @@ input[type="search"] {
   color: var(--ink);
   font-family: inherit;
   font-size: var(--text-sm);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-5);
   min-width: 200px;
 }
 
@@ -897,7 +901,9 @@ input[type="search"]:focus {
 }
 
 /* Lime is the action colour. Ink text on lime is 13:1, so the label stays
-   sharp; hover deepens the fill rather than changing hue. */
+   sharp; hover deepens the fill rather than changing hue. Text uses the fixed
+   --ink-on-lime rather than --ink: --ink flips to near-white in dark mode,
+   which the lime fill does not, so the themed token would go illegible. */
 button,
 .btn {
   font-family: var(--font-label);
@@ -907,9 +913,9 @@ button,
   text-transform: uppercase;
   letter-spacing: 0.1em;
   background: var(--lime);
-  color: var(--ink);
+  color: var(--ink-on-lime);
   border: 1px solid var(--lime);
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   padding: var(--space-3) var(--space-5);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease),
@@ -928,7 +934,7 @@ button:hover,
 .btn:hover {
   background: var(--lime-hover);
   border-color: var(--lime-hover);
-  color: var(--ink);
+  color: var(--ink-on-lime);
   text-decoration: none;
 }
 
@@ -938,7 +944,7 @@ button:hover,
 .segmented {
   display: flex;
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   overflow: hidden;
   margin: 0;
   padding: 0;
@@ -973,7 +979,7 @@ button:hover,
 
 .segmented input:checked + label {
   background: var(--lime);
-  color: var(--ink);
+  color: var(--ink-on-lime);
 }
 
 .segmented input:focus-visible + label {
@@ -1008,7 +1014,7 @@ button:hover,
   letter-spacing: 0.1em;
   color: var(--ink);
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   padding: var(--space-3) var(--space-5);
   transition: background var(--dur-fast) var(--ease),
               border-color var(--dur-fast) var(--ease);
@@ -1034,7 +1040,7 @@ button:hover,
   color: var(--ink);
   background: none;
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-pill);
   padding: var(--space-3) var(--space-5);
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease),
