@@ -118,8 +118,8 @@ python manage.py runserver
 ```
 
 Pages: `/` (home stats), `/movies/<slug>/`, `/people/<slug>/`, `/franchises/<slug>/`,
-`/genres/<id>/`, `/connect/` (shortest chain of shared films between two people), and
-`/analytics/` (10-panel dashboard built on the SQL in `warehouse/queries/`).
+`/genres/<id>/`, and `/analytics/` (10-panel dashboard built on the SQL in
+`warehouse/queries/`).
 
 `/people/` is the single index of everyone holding any credit; `/actors/` and `/directors/` are
 scopes of it (people with an Acting or a Directing credit) rather than separate tables. Legacy

@@ -186,16 +186,6 @@ nine principal craft jobs — gives **181,538**. That 180× reduction comes from
 collaboration *is*, not from a `LIMIT`; the constants live in `build_gold_datasets.py` as a
 definition, the same way `config.DISCOVER_*` defines the corpus.
 
-The path finder at `/connect/` deliberately traverses a **different, wider** graph (all cast plus
-principal crew), because "is there any path between these two people" and "who works together
-repeatedly" are different questions. A 40th-billed extra is a real connection but not a working
-relationship. The two share no code.
-
-That graph is not queried in SQL. A recursive CTE over it times out (>60s measured): Postgres
-re-expands the same nodes at every depth because it cannot memoise the visited set across
-iterations, and the visited set *is* BFS. In-process bidirectional BFS answers the same question in
-~30 ms — Tom Hanks to Thelma Schoonmaker in 2 hops. Knowing when to pull data out of the database
-is as much a data-engineering decision as knowing how to push work into it.
 
 `fact_collaboration` is also the first thing in the project that **reads** the Gold layer. Gold had
 been written on every pipeline run since Task 14 and consumed by nothing. The honest test for

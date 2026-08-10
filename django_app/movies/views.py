@@ -5,9 +5,7 @@ from django.db.models import Avg, Count, F, Max, Min, Sum
 from django.db.models.functions import ExtractYear
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
-from django.utils.text import slugify
 
-from movies import graph
 
 from movies.models import (
     Collection, Credit, Genre, Movie, MovieMetrics, Person,
@@ -545,90 +543,6 @@ def person_detail(request, person_slug):
         "career_period": _career_period(span["earliest"], span["latest"]),
     }
     return render(request, "movies/person_detail.html", context)
-
-
-def connect(request):
-    """Shortest chain of shared films between two people.
-
-    The site describing its own graph: two names in, a measured distance out.
-    Every failure mode here is a real state of the data rather than an error —
-    an unconnected pair, a person with no credits, a name that matches nobody —
-    so each gets a designed answer instead of an exception.
-    """
-    from_q = request.GET.get("from", "").strip()
-    to_q = request.GET.get("to", "").strip()
-
-    context = {"from_q": from_q, "to_q": to_q}
-    if not (from_q and to_q):
-        context["stats"] = graph.component_stats()
-        return render(request, "movies/connect.html", context)
-
-    source = _find_person(from_q)
-    target = _find_person(to_q)
-    context.update(source=source, target=target)
-
-    if source is None or target is None:
-        context["result"] = "not_found"
-        context["missing"] = from_q if source is None else to_q
-        return render(request, "movies/connect.html", context)
-
-    steps = graph.find_path(source.person_id, target.person_id)
-
-    if steps is None:
-        context["result"] = "unconnected"
-    elif not steps:
-        context["result"] = "same_person"
-    else:
-        context["result"] = "path"
-        context["chain"] = _describe_path(steps)
-        context["degrees"] = len(steps)
-
-    return render(request, "movies/connect.html", context)
-
-
-def _find_person(query):
-    """Resolve a typed name to one person: exact slug, then exact name, then prefix.
-
-    Ordered by popularity so "Tom Hanks" resolves to the actor rather than to a
-    lesser-known namesake — an ordinary consequence of dim_person holding
-    122,000 people, many of whom share a name.
-    """
-    people = Person.objects.using("warehouse")
-    slugged = people.filter(slug=slugify(query)).first()
-    if slugged:
-        return slugged
-    return (
-        people.filter(name__iexact=query)
-        .order_by(F("popularity").desc(nulls_last=True))
-        .first()
-        or people.filter(name__istartswith=query)
-        .order_by(F("popularity").desc(nulls_last=True))
-        .first()
-    )
-
-
-def _describe_path(steps):
-    """Turn (person_id, movie_id, person_id) steps into renderable objects.
-
-    Two queries regardless of path length — the ids are known up front, so
-    there's no reason to walk the chain hitting the database per hop.
-    """
-    person_ids = {pid for step in steps for pid in (step[0], step[2])}
-    movie_ids = {step[1] for step in steps}
-
-    people = {
-        p.person_id: p
-        for p in Person.objects.using("warehouse").filter(person_id__in=person_ids)
-    }
-    movies = {
-        m.movie_id: m
-        for m in Movie.objects.using("warehouse").filter(movie_id__in=movie_ids)
-    }
-
-    return [
-        {"person": people.get(a), "movie": movies.get(m), "next_person": people.get(b)}
-        for a, m, b in steps
-    ]
 
 
 def genre_detail(request, genre_id):
