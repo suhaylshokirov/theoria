@@ -28,15 +28,8 @@ def dashboard(request):
     revenue_by_genre = _run_query("revenue_by_genre.sql")
 
     context = {
-        "top_rated_directors": _run_query("top_rated_directors.sql"),
-        "most_productive_actors": _run_query("most_productive_actors.sql"),
         "revenue_by_genre": revenue_by_genre,
         "movies_by_decade": movies_by_decade,
-        "director_trend_over_time": _run_query("director_trend_over_time.sql"),
-        "actor_collaboration_frequency": _run_query("actor_collaboration_frequency.sql"),
-        "genre_growth_over_time": _run_query("genre_growth_over_time.sql"),
-        "signature_partnerships": _run_query("signature_partnerships.sql"),
-        "department_reach": _run_query("department_reach.sql"),
         # Pre-shaped as flat label/value lists (with Decimal -> float) for the
         # two Chart.js trend panels — the tables above reuse the raw rows.
         "decade_labels": [row["decade"] for row in movies_by_decade],

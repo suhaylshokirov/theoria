@@ -297,30 +297,6 @@ def test_person_list_ajax_request_renders_results_fragment_only():
 
 
 # ---------------------------------------------------------------------------
-# genre_list
-# ---------------------------------------------------------------------------
-
-
-def test_genre_list_returns_200():
-    genre = Genre(genre_id=1, genre_name="Action")
-
-    with patch.object(Genre, "objects", new=MagicMock()) as genre_mgr:
-        # The view annotates a per-genre film count before ordering, so the
-        # mock has to mirror .using().annotate().order_by().
-        genre_mgr.using.return_value.annotate.return_value.order_by.return_value = [
-            genre
-        ]
-
-        response = client.get("/genres/")
-
-    assert response.status_code == 200
-    assert list(response.context["genres"]) == [genre]
-    # A Genre built by hand has no movie_count annotation; the view's getattr
-    # guard means max_count still resolves rather than raising.
-    assert response.context["max_count"] == 0
-
-
-# ---------------------------------------------------------------------------
 # movie_detail
 # ---------------------------------------------------------------------------
 
@@ -755,77 +731,16 @@ def test_person_detail_404_when_missing():
 
 
 # ---------------------------------------------------------------------------
-# genre_detail
-# ---------------------------------------------------------------------------
-
-
-def test_genre_detail_returns_200_with_expected_context():
-    genre = Genre(genre_id=1, genre_name="Action")
-    movie = _movie()
-    # A real (unsaved) fact row rather than a MagicMock: the poster-card
-    # include reverses a URL from m.movie.movie_id, and Django's template
-    # variable resolution tries dict-style lookup first, which a MagicMock
-    # happily (and wrongly) answers via __getitem__.
-    top_row = MovieMetrics(movie=movie, rating=Decimal("9.00"))
-    revenue_row = {"year": 2020, "total_revenue": Decimal("5000")}
-
-    metrics = MagicMock()
-    metrics.order_by.return_value.__getitem__.return_value = [top_row]
-    metrics.filter.return_value.annotate.return_value.values.return_value.annotate.return_value.order_by.return_value = [
-        revenue_row
-    ]
-    metrics.values.return_value.distinct.return_value.count.return_value = 1
-    metrics.aggregate.return_value = {"avg_rating": Decimal("9.00")}
-
-    with patch("movies.views.get_object_or_404", return_value=genre), patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
-        metrics_mgr.using.return_value.filter.return_value.select_related.return_value = metrics
-
-        response = client.get(f"/genres/{genre.genre_id}/")
-
-    assert response.status_code == 200
-    assert response.context["genre"] == genre
-    assert list(response.context["top_movies"]) == [top_row]
-    assert list(response.context["revenue_by_year"]) == [revenue_row]
-    assert response.context["movie_count"] == 1
-    assert response.context["avg_rating"] == Decimal("9.00")
-
-
-def test_genre_detail_404_when_missing():
-    from django.http import Http404
-
-    with patch("movies.views.get_object_or_404", side_effect=Http404()):
-        response = client.get("/genres/999999/")
-
-    assert response.status_code == 404
-
-
-# ---------------------------------------------------------------------------
 # analytics dashboard
 # ---------------------------------------------------------------------------
 
 
 def test_analytics_dashboard_returns_200_with_expected_context():
     fake_rows = {
-        "top_rated_directors.sql": [{"name": "Test Director", "avg_rating": Decimal("9.0")}],
-        "most_productive_actors.sql": [{"name": "Test Actor", "film_count": 5}],
         "revenue_by_genre.sql": [
-            {"genre_name": "Action", "total_revenue": Decimal("1000")}
+            {"genre_name": "Action", "movie_count": 3, "total_revenue": Decimal("1000")}
         ],
         "movies_by_decade.sql": [{"decade": 2020, "avg_rating": Decimal("7.5")}],
-        "director_trend_over_time.sql": [{"year": 2020, "avg_rating": Decimal("7.5")}],
-        "actor_collaboration_frequency.sql": [
-            {"actor_a": "A", "actor_b": "B", "collaborations": 2}
-        ],
-        "genre_growth_over_time.sql": [{"year": 2020, "genre_name": "Action", "count": 3}],
-        "signature_partnerships.sql": [
-            {"director_name": "D", "collaborator_name": "C", "craft": "Editor",
-             "films_together": 11, "first_year": 1980, "last_year": 2023}
-        ],
-        "department_reach.sql": [
-            {"department": "Acting", "credits": 62713, "people": 43138, "films": 1215}
-        ],
     }
 
     with patch("analytics.views._run_query", side_effect=lambda fname: fake_rows[fname]):
@@ -833,13 +748,8 @@ def test_analytics_dashboard_returns_200_with_expected_context():
 
     assert response.status_code == 200
     for key in (
-        "top_rated_directors",
-        "most_productive_actors",
         "revenue_by_genre",
         "movies_by_decade",
-        "director_trend_over_time",
-        "actor_collaboration_frequency",
-        "genre_growth_over_time",
         "decade_labels",
         "decade_avg_ratings",
         "genre_labels",

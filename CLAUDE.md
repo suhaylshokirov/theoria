@@ -33,7 +33,20 @@ Rules:
 Last completed task   : Task 54 — Movie page legibility: crew merge + client-side cast/crew paging
 Currently on          : Task 55 — not started. Phases 12–14 (Tasks 55–63) planned 2026-08-10, not begun.
 Current phase         : Phase 12 — Movie Provenance (Tasks 55–56) — NOT STARTED
-Blockers / open issues: **No blockers.** **The Franchises feature was removed from the
+Blockers / open issues: **No blockers.** **The Analytics dashboard was cut from 9 panels to 2
+on 2026-08-14** by user decision — Top Rated Directors, Most Productive Actors, Director Trend,
+Actor Collaborations, Genre Growth, Signature Partnerships, and Department Reach were all removed
+(view calls, context keys, and template sections deleted from `analytics/views.py` and
+`dashboard.html`); only Rating by Decade and Revenue by Genre remain. The separate `/genres/` index
+and `/genres/<id>/` detail page were removed at the same time — Genre browsing is now just the
+ranked table inside the Revenue by Genre panel, which already showed film count per genre. The nav
+lost its Genres link; the genre chips on a movie page are now plain (unlinked) text since there's
+nowhere left for them to point. This is a read-side-only change: none of the seven dropped `.sql`
+files in `warehouse/queries/` were touched or deleted, same posture as the Franchises removal below
+— the query layer is untouched, only the app layer stopped reading most of it. Tests 214 → 204 (10
+removed: the genre_list/genre_detail view tests, and the analytics dashboard test collapsed to
+match its two surviving context keys). Live-verified: `/analytics/` renders exactly 2 panels;
+`/genres/` and `/genres/1/` both 404; nav is Films · People · Analytics. **The Franchises feature was removed from the
 application layer on 2026-08-10** by user decision — the `/franchises/` and `/franchises/<slug>/`
 routes, both views and templates, the nav link, the "Part of" row on the movie page, the
 franchise-revenue dashboard panel and its query, the `Collection` model and `Movie.collection`

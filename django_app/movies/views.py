@@ -1,8 +1,7 @@
 from datetime import date
 
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, F, Max, Min, Sum
-from django.db.models.functions import ExtractYear
+from django.db.models import Avg, F, Max, Min
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 
@@ -204,29 +203,6 @@ def actor_list(request):
 
 def director_list(request):
     return _person_list(request, _person_queryset("Directing"), "Directing", "directing")
-
-
-def genre_list(request):
-    """All genres, with how much of the catalog each one accounts for.
-
-    fact_movie_metrics holds one row per (movie, date, genre), so counting
-    movie_id needs distinct=True or a movie appearing under several date_ids
-    would inflate its genre's total.
-    """
-    genres = (
-        Genre.objects.using("warehouse")
-        .annotate(movie_count=Count("moviemetrics__movie_id", distinct=True))
-        .order_by("-movie_count", "genre_name")
-    )
-
-    # The share bars scale against the biggest genre, so the widest bar is
-    # always full — computed here rather than in the template, which can't.
-    # getattr guards the annotation: a Genre built outside this queryset has
-    # no movie_count, and an empty warehouse has no rows at all.
-    max_count = max((getattr(g, "movie_count", 0) or 0 for g in genres), default=0)
-
-    context = {"genres": genres, "max_count": max_count}
-    return render(request, "movies/genre_list.html", context)
 
 
 def movie_detail(request, movie_slug):
@@ -487,43 +463,3 @@ def person_detail(request, person_slug):
     return render(request, "movies/person_detail.html", context)
 
 
-def genre_detail(request, genre_id):
-    """Single genre: top-rated movies and revenue trend by year.
-
-    Mirrors etl.gold.build_gold_datasets._build_genre_metrics, but computed
-    live via the ORM against fact_movie_metrics rather than read from the
-    Gold Parquet in S3 — Django's warehouse connection is Postgres-only.
-    """
-    genre = get_object_or_404(Genre.objects.using("warehouse"), pk=genre_id)
-
-    metrics = (
-        MovieMetrics.objects.using("warehouse")
-        .filter(genre_id=genre_id)
-        .select_related("movie")
-    )
-
-    top_movies = metrics.order_by("-rating")[:10]
-
-    # Group by release year to build a revenue trend. fact_movie_metrics has
-    # one row per (movie_id, date_id, genre_id), but a movie only ever has
-    # one date_id/release_date, so grouping directly on the filtered metrics
-    # (rather than re-querying Movie) doesn't double-count revenue.
-    revenue_by_year = (
-        metrics.filter(movie__release_date__isnull=False)
-        .annotate(year=ExtractYear("movie__release_date"))
-        .values("year")
-        .annotate(total_revenue=Sum("movie__revenue"))
-        .order_by("year")
-    )
-
-    movie_count = metrics.values("movie_id").distinct().count()
-    avg_rating = metrics.aggregate(avg_rating=Avg("rating"))["avg_rating"]
-
-    context = {
-        "genre": genre,
-        "top_movies": top_movies,
-        "revenue_by_year": revenue_by_year,
-        "movie_count": movie_count,
-        "avg_rating": avg_rating,
-    }
-    return render(request, "movies/genre_detail.html", context)

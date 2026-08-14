@@ -78,7 +78,6 @@
             <div class="nav-links" id="nav-links">
                 <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>Films</a>
                 <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>People</a>
-                <a href="{% url 'movies:genre_list' %}"{% if vn in "genre_list,genre_detail" %} aria-current="page"{% endif %}>Genres</a>
                 <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>
             </div>
             {% endwith %}

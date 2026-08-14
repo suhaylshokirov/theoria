@@ -3,8 +3,7 @@
      card_sub : optional sub-line replacing the release year. The person page
                 uses it for the character played or the job held, which is the
                 more useful fact when the same film appears under several
-                departments. Named to match _person_card.html's param.
-   Note genre_detail passes `movie=m.movie`, since its rows are MovieMetrics. {% endcomment %}
+                departments. Named to match _person_card.html's param. {% endcomment %}
 {% load tmdb_images %}
 <div class="poster-card">
     <a href="{% url 'movies:movie_detail' movie.slug %}">
