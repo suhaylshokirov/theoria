@@ -31,11 +31,15 @@ CREATE TABLE IF NOT EXISTS dim_movie (
     backdrop_path    TEXT,
     slug             VARCHAR(300),
     collection_id    INTEGER,
+    imdb_id          VARCHAR(20),
+    original_title   TEXT,
+    homepage         TEXT,
     CONSTRAINT pk_dim_movie PRIMARY KEY (movie_id),
     CONSTRAINT fk_dim_movie_collection FOREIGN KEY (collection_id) REFERENCES dim_collection (collection_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_movie_slug ON dim_movie (slug);
 CREATE INDEX IF NOT EXISTS idx_dim_movie_collection_id ON dim_movie (collection_id);
+CREATE INDEX IF NOT EXISTS idx_dim_movie_imdb_id ON dim_movie (imdb_id);
 
 -- Every person holding any credit, in any department. What they did on a given
 -- film lives in fact_credit, not in which table they land in. See

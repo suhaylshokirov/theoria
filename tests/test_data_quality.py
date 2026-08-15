@@ -53,6 +53,9 @@ def _movies_df(**overrides) -> pd.DataFrame:
         "collection_id": None,
         "collection_name": None,
         "collection_poster_path": None,
+        "imdb_id": "tt0137523",
+        "original_title": "Fight Club",
+        "homepage": None,
         "genre_ids": [18, 53],
     }
     row.update(overrides)

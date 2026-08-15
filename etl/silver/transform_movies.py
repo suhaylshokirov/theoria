@@ -77,6 +77,12 @@ def _flatten_movie(raw: dict[str, Any]) -> dict[str, Any]:
         "tagline": raw.get("tagline") or None,
         "poster_path": raw.get("poster_path") or None,
         "backdrop_path": raw.get("backdrop_path") or None,
+        # Identifier/provenance fields (Phase 12 audit): 100%/100%/58.2% Bronze
+        # coverage, dropped here since Task 42 despite never needing a new API call.
+        # TMDB returns "" for a missing imdb_id/homepage; normalise to None.
+        "imdb_id": raw.get("imdb_id") or None,
+        "original_title": raw.get("original_title"),
+        "homepage": raw.get("homepage") or None,
         "collection_id": collection.get("id"),
         "collection_name": collection.get("name"),
         "collection_poster_path": collection.get("poster_path") or None,

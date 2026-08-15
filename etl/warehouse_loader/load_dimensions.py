@@ -85,7 +85,7 @@ def load_dim_movie(session: Session, df: pd.DataFrame) -> int:
     """Upsert Silver movies into dim_movie."""
     columns = ["movie_id", "title", "release_date", "runtime", "budget", "revenue",
                "original_language", "status", "overview", "tagline", "poster_path",
-               "backdrop_path", "collection_id"]
+               "backdrop_path", "collection_id", "imdb_id", "original_title", "homepage"]
     records = _records(df, columns)
     count = _upsert(session, "dim_movie", ["movie_id"], columns, records)
     logger.info("dim_movie: upserted %d row(s)", count)

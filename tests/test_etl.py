@@ -553,6 +553,9 @@ def _raw_movie(movie_id: int, **overrides) -> dict:
         "tagline": "A test tagline.",
         "poster_path": "/poster.jpg",
         "backdrop_path": "/backdrop.jpg",
+        "imdb_id": "tt0000550",
+        "original_title": f"Movie {movie_id}",
+        "homepage": "https://example.com/movie",
         "genres": [{"id": 28, "name": "Action"}, {"id": 12, "name": "Adventure"}],
     }
     base.update(overrides)
@@ -604,6 +607,17 @@ def test_flatten_movie_carries_image_fields():
     empty = _flatten_movie(_raw_movie(1, poster_path="", tagline=""))
     assert empty["poster_path"] is None
     assert empty["tagline"] is None
+
+
+def test_flatten_movie_carries_identifier_fields():
+    """Task 55: imdb_id/original_title/homepage flow through, empty strings become None."""
+    row = _flatten_movie(_raw_movie(550))
+    assert row["imdb_id"] == "tt0000550"
+    assert row["original_title"] == "Movie 550"
+    assert row["homepage"] == "https://example.com/movie"
+    empty = _flatten_movie(_raw_movie(1, imdb_id="", homepage=""))
+    assert empty["imdb_id"] is None
+    assert empty["homepage"] is None
 
 
 def test_flatten_movie_handles_missing_release_date():
@@ -1546,6 +1560,9 @@ def _dim_movies_df():
         "tagline": ["Tag A", None],
         "poster_path": ["/a.jpg", None],
         "backdrop_path": ["/a_bd.jpg", None],
+        "imdb_id": ["tt0000001", None],
+        "original_title": ["Alpha", "Beta"],
+        "homepage": ["https://example.com/alpha", None],
         "genre_ids": [[1], [2]],
     })
 
@@ -1611,7 +1628,7 @@ def test_load_dim_movie_upserts_expected_columns():
     assert set(params[0].keys()) == {
         "movie_id", "title", "release_date", "runtime", "budget", "revenue",
         "original_language", "status", "overview", "tagline", "poster_path",
-        "backdrop_path", "collection_id",
+        "backdrop_path", "collection_id", "imdb_id", "original_title", "homepage",
     }
 
 

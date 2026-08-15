@@ -50,13 +50,13 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
     "movies": {
         "parquet": "movies.parquet",
         "pk_cols": ["movie_id"],
-        "required_cols": ["movie_id", "title"],
+        "required_cols": ["movie_id", "title", "original_title"],
         "expected_cols": [
             "movie_id", "title", "release_date", "runtime", "budget", "revenue",
             "original_language", "status", "vote_average", "vote_count",
             "popularity", "overview", "tagline", "poster_path", "backdrop_path",
             "collection_id", "collection_name", "collection_poster_path",
-            "genre_ids",
+            "genre_ids", "imdb_id", "original_title", "homepage",
         ],
         "ranges": {
             "vote_average": (0.0, 10.0),
