@@ -97,6 +97,36 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "ordering": (0, None),
         },
     },
+    # Written from the shape of TMDB's `production_companies` array, not from
+    # what transform_movie_links happens to emit (Task 40's lesson).
+    "movie_companies": {
+        "parquet": "movie_companies.parquet",
+        "pk_cols": ["movie_id", "company_id"],
+        "required_cols": ["movie_id", "company_id", "company_name"],
+        "expected_cols": [
+            "movie_id", "company_id", "company_name", "logo_path", "origin_country",
+        ],
+        "ranges": {},
+    },
+    # relation is part of the PK: origin_country and production_countries are
+    # two different relationships (disagreeing on ~23% of films), not two
+    # observations of the same fact.
+    "movie_countries": {
+        "parquet": "movie_countries.parquet",
+        "pk_cols": ["movie_id", "country_code", "relation"],
+        "required_cols": ["movie_id", "country_code", "relation"],
+        "expected_cols": ["movie_id", "country_code", "country_name", "relation"],
+        "ranges": {},
+    },
+    "movie_languages": {
+        "parquet": "movie_languages.parquet",
+        "pk_cols": ["movie_id", "language_code"],
+        "required_cols": ["movie_id", "language_code"],
+        "expected_cols": [
+            "movie_id", "language_code", "language_name", "english_name",
+        ],
+        "ranges": {},
+    },
 }
 
 

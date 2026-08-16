@@ -30,10 +30,33 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 56 — Surface identifiers and the original title on the movie page
-Currently on          : Task 57 — not started (Silver: transform_movie_links.py — companies, countries, languages).
-Current phase         : Phase 12 — Movie Provenance (Tasks 55–56) — complete. Phase 13 (Tasks 57–60) not started.
-Blockers / open issues: **No blockers.** **Task 56 (2026-08-16) surfaced `imdb_id`/`original_title`/
+Last completed task   : Task 57 — Silver: transform_movie_links.py — companies, countries and languages
+Currently on          : Task 58 — not started (Warehouse: dim_company + bridge_movie_company).
+Current phase         : Phase 12 — Movie Provenance — complete. Phase 13 (Tasks 57–60) — Task 57 done, 58–60 remaining.
+Blockers / open issues: **No blockers.** **Task 57 (2026-08-16) added a new Silver module,
+`etl/silver/transform_movie_links.py`**, extracting the three nested arrays `_flatten_movie()`
+has always dropped: `production_companies`, `production_countries`/`origin_country`, and
+`spoken_languages`. It does its own Bronze pass over `bronze/movie_details` (mirroring
+`transform_credits_bridge.py`'s relationship to `transform_movies.py`) and writes three
+denormalised long tables — `silver/movie_companies/`, `silver/movie_countries/`,
+`silver/movie_languages/` — each ready to derive a dimension from via `drop_duplicates`, the
+`load_dim_collection()` pattern. **The grain decision of this task is `relation` on the country
+table**: `origin_country` and `production_countries` are different relationships that disagree on
+~23% of films, so they're kept as separate rows tagged `relation ∈ {"origin", "production"}`
+rather than merged into one row meaning two things at once — the inverse of the Task 40 mistake
+(a key claiming a finer grain than the data), guarded against here by folding `relation` into the
+dedup key itself. An origin row's `country_name` is backfilled from a `production_countries` row
+for the same code in the same payload when one exists, else left null rather than guessed. Three
+new `ENTITY_CONFIGS` entries added to `silver_checks.py`, written from the TMDB payload shape
+(the Task 40 lesson: a check that mirrors the transform only confirms the transform agrees with
+itself). Wired into `run_pipeline.py` after `transform_credits_bridge`. **Live-verified on
+`2026-07-29`**: 3,200 company links across 1,243 distinct companies, 1,506 production + 1,211
+origin country links (17 origin rows have no name-match, left null), 2,013 language links across
+70 distinct codes — all matching the Phase 12 audit's figures. Silver DQ 16/16 → **28/28** (3 new
+entities × 4 checks). No warehouse/Django change yet — that's Task 58. Tests 207 → 217 (9 new in
+`test_etl.py`, 1 new in `test_data_quality.py`; `_all_entity_dfs()` extended with the three new
+fixtures so the existing all-clean/missing-file suite tests still cover every configured entity).
+Prior task's notes: **Task 56 (2026-08-16) surfaced `imdb_id`/`original_title`/
 `homepage` on the movie page** — three `TextField(null=True)` added to the unmanaged `Movie` model
 (`django_app/movies/models.py`), read-side only, no DDL/ETL/pipeline changes. `original_title`
 renders only when it differs from `title` (guarded in the template, not the view), since it's
@@ -705,7 +728,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > genre, the wart every analytics query has to `SELECT DISTINCT` around. **Phase 13 is where
 > the project learns the bridge-table pattern properly**, and Phase 14 applies it twice more.
 
-#### [ ] Task 57 — Silver: `transform_movie_links.py` — companies, countries and languages
+#### [x] Task 57 — Silver: `transform_movie_links.py` — companies, countries and languages
 - **Goal:** One new Silver module emitting all three nested arrays as tidy long tables. Companies are only *used* in Phase 13; countries and languages are extracted here too because they come from the same Bronze pass and re-reading 1,140 S3 objects a second time to fetch them later would be wasted work.
 - **Files:** new `etl/silver/transform_movie_links.py`, `data_quality/silver_checks.py`, `scripts/run_pipeline.py`, `tests/{test_etl,test_data_quality}.py`
 - **Steps:**
@@ -720,7 +743,25 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   6. Three new `ENTITY_CONFIGS` entries in `silver_checks.py`, **written from the TMDB payload shape** rather than by mirroring the transform — a check that copies the transform's assumptions confirms bugs instead of catching them (the Task 40 lesson).
   7. Wire into `run_pipeline.py` after `transform_movies`.
 - **Verify:** on `2026-07-29` — ~3,200 company links / 1,243 distinct companies; ~1,506 production + ~1,200 origin country links; ~2,013 language links.
-- **Outcome:**
+- **Outcome:** New `etl/silver/transform_movie_links.py` does its own pass over `bronze/movie_details`
+  (same source `transform_movies.py` reads, per the docstring's stated tradeoff — one extra Bronze
+  pass rather than widening `transform_movies` to return four URIs) and writes the three
+  denormalised long tables exactly as scoped. A shared `_write_link_table()` helper runs the
+  cast→dedupe→drop-null-ids→write pipeline once for all three, parameterised by dedup subset and
+  required id columns — the three tables are similar enough that three copies of that logic would
+  have been the premature-duplication smell, not the premature-abstraction one. `relation` folded
+  into `movie_countries`' dedup key and PK as scoped; an origin row's `country_name` is backfilled
+  from a same-payload `production_countries` row when the code matches, else left null (never
+  guessed across movies). `ENTITY_CONFIGS` gained `movie_companies`/`movie_countries`/`movie_languages`,
+  written from the raw TMDB array shapes. Wired into `run_pipeline.py` right after
+  `transform_credits_bridge`. **Live-verified on `2026-07-29`**: 3,200 company rows / **1,243**
+  distinct `company_id`s, country rows split **1,506 production + 1,211 origin** (17 origin rows
+  left with a null name, no false match forced), **2,013** language rows across **70** distinct
+  codes — every figure matches the Phase 12 audit table. Silver DQ 16/16 → **28/28**. No warehouse
+  or Django change — this task is Silver-only by design; Task 58 reads these three files. Tests
+  207 → 217 (9 new in `test_etl.py` covering extraction, backfill-or-null, true-grain dedup, and
+  null-id dropping; 1 new in `test_data_quality.py` regression-testing that a null `relation`
+  fails the nulls check; `_all_entity_dfs()` extended with fixtures for the three new entities).
 
 #### [ ] Task 58 — Warehouse: `dim_company` + `bridge_movie_company`
 - **Goal:** The dimension and the bridge, loaded, indexed, checked and backfilled.

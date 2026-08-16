@@ -1071,6 +1071,171 @@ def test_transform_credits_bridge_raises_when_no_bronze_files():
             )
 
 
+# --- transform_movie_links -----------------------------------------------------
+
+from etl.silver.transform_movie_links import (
+    _extract_company_rows,
+    _extract_country_rows,
+    _extract_language_rows,
+    transform_movie_links,
+)
+
+
+def _raw_movie_with_links(movie_id: int, **overrides) -> dict:
+    """A movie-detail payload carrying production_companies/countries and languages."""
+    raw = _raw_movie(
+        movie_id,
+        production_companies=[
+            {"id": 711, "name": "Fox 2000 Pictures", "logo_path": "/logo.png", "origin_country": "US"},
+            {"id": 508, "name": "Regency Enterprises", "logo_path": None, "origin_country": "US"},
+        ],
+        production_countries=[
+            {"iso_3166_1": "US", "name": "United States of America"},
+        ],
+        origin_country=["US"],
+        spoken_languages=[
+            {"iso_639_1": "en", "name": "English", "english_name": "English"},
+        ],
+    )
+    raw.update(overrides)
+    return raw
+
+
+def test_extract_company_rows_one_row_per_company():
+    raw = _raw_movie_with_links(550)
+    rows = _extract_company_rows(raw)
+    assert len(rows) == 2
+    assert {r["company_id"] for r in rows} == {711, 508}
+    assert all(r["movie_id"] == 550 for r in rows)
+    assert rows[1]["logo_path"] is None  # TMDB null passes through as None
+
+
+def test_extract_company_rows_empty_when_absent():
+    raw = _raw_movie(550)  # no production_companies key
+    assert _extract_company_rows(raw) == []
+
+
+def test_extract_country_rows_tags_relation_and_fills_origin_name_from_production():
+    raw = _raw_movie_with_links(550)
+    rows = _extract_country_rows(raw)
+    assert len(rows) == 2
+    production = next(r for r in rows if r["relation"] == "production")
+    origin = next(r for r in rows if r["relation"] == "origin")
+    assert production["country_name"] == "United States of America"
+    # origin_country only carries a code; the name is backfilled from the
+    # production_countries row for the same code in the same payload.
+    assert origin["country_name"] == "United States of America"
+
+
+def test_extract_country_rows_leaves_origin_name_null_when_no_match():
+    """An origin country with no matching production_countries entry keeps a
+    null name rather than guessing — Bond films et al. disagree on this ~23%
+    of the time, so no name is safer than a wrong one."""
+    raw = _raw_movie_with_links(
+        550,
+        production_countries=[{"iso_3166_1": "GB", "name": "United Kingdom"}],
+        origin_country=["US"],
+    )
+    rows = _extract_country_rows(raw)
+    origin = next(r for r in rows if r["relation"] == "origin")
+    assert origin["country_code"] == "US"
+    assert origin["country_name"] is None
+
+
+def test_extract_language_rows_one_row_per_language():
+    raw = _raw_movie_with_links(
+        550,
+        spoken_languages=[
+            {"iso_639_1": "en", "name": "English", "english_name": "English"},
+            {"iso_639_1": "fr", "name": "Français", "english_name": "French"},
+        ],
+    )
+    rows = _extract_language_rows(raw)
+    assert len(rows) == 2
+    assert {r["language_code"] for r in rows} == {"en", "fr"}
+
+
+def test_transform_movie_links_writes_three_silver_files():
+    key = "bronze/movie_details/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_movie_with_links(550)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        companies_uri, countries_uri, languages_uri = transform_movie_links(
+            ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
+        )
+
+    assert companies_uri == "s3://theoria-datalake/silver/movie_companies/ingestion_date=2026-06-22/movie_companies.parquet"
+    assert countries_uri == "s3://theoria-datalake/silver/movie_countries/ingestion_date=2026-06-22/movie_countries.parquet"
+    assert languages_uri == "s3://theoria-datalake/silver/movie_languages/ingestion_date=2026-06-22/movie_languages.parquet"
+    assert mock_s3.put_object.call_count == 3
+
+    written = {}
+    for call in mock_s3.put_object.call_args_list:
+        _, kwargs = call
+        written[kwargs["Key"]] = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+
+    companies_df = written["silver/movie_companies/ingestion_date=2026-06-22/movie_companies.parquet"]
+    countries_df = written["silver/movie_countries/ingestion_date=2026-06-22/movie_countries.parquet"]
+    languages_df = written["silver/movie_languages/ingestion_date=2026-06-22/movie_languages.parquet"]
+
+    assert len(companies_df) == 2
+    assert len(countries_df) == 2  # one production + one origin row
+    assert set(countries_df["relation"]) == {"production", "origin"}
+    assert len(languages_df) == 1
+
+
+def test_transform_movie_links_deduplicates_on_true_grain():
+    """Same company/country-relation/language across two files -> one row each."""
+    key1 = "bronze/movie_details/ingestion_date=2026-06-22/550.json"
+    key2 = "bronze/movie_details/ingestion_date=2026-06-22/550_dup.json"
+    payload = _raw_movie_with_links(550)
+    mock_s3 = _make_s3_mock_with_files({key1: payload, key2: dict(payload)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_movie_links(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    written = {}
+    for call in mock_s3.put_object.call_args_list:
+        _, kwargs = call
+        written[kwargs["Key"]] = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+
+    companies_df = written["silver/movie_companies/ingestion_date=2026-06-22/movie_companies.parquet"]
+    countries_df = written["silver/movie_countries/ingestion_date=2026-06-22/movie_countries.parquet"]
+    assert len(companies_df) == 2  # still 2, not 4
+    assert len(countries_df) == 2  # still 2 (production + origin), not 4
+
+
+def test_transform_movie_links_drops_null_id_rows_with_warning(caplog):
+    import logging
+    raw = _raw_movie_with_links(
+        550,
+        production_companies=[
+            {"id": None, "name": "No ID Studio", "logo_path": None, "origin_country": None},
+        ],
+    )
+    key = "bronze/movie_details/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: raw})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.WARNING):
+            transform_movie_links(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    assert any("null company_id" in record.message for record in caplog.records)
+
+
+def test_transform_movie_links_raises_when_no_bronze_files():
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            transform_movie_links(
+                ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
+            )
+
+
 # ---------------------------------------------------------------------------
 # Gold layer: build_gold_datasets
 # ---------------------------------------------------------------------------

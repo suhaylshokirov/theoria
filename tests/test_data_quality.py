@@ -293,6 +293,17 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
     actors_df = pd.DataFrame([{"person_id": 10, "name": "Alice", "gender": 1, "popularity": 20.0, "profile_path": "/a.jpg"}])
     directors_df = pd.DataFrame([{"person_id": 20, "name": "Carol", "gender": 1, "popularity": 30.0, "profile_path": "/c.jpg"}])
     genres_df = pd.DataFrame([{"genre_id": 28, "genre_name": "Action"}])
+    companies_df = pd.DataFrame([{
+        "movie_id": 550, "company_id": 711, "company_name": "Fox 2000 Pictures",
+        "logo_path": "/logo.png", "origin_country": "US",
+    }])
+    countries_df = pd.DataFrame([
+        {"movie_id": 550, "country_code": "US", "country_name": "United States of America", "relation": "production"},
+        {"movie_id": 550, "country_code": "US", "country_name": "United States of America", "relation": "origin"},
+    ])
+    languages_df = pd.DataFrame([{
+        "movie_id": 550, "language_code": "en", "language_name": "English", "english_name": "English",
+    }])
     return {
         "movies": _movies_df(),
         "people": people_df,
@@ -300,6 +311,9 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
         "directors": directors_df,
         "genres": genres_df,
         "credits_bridge": _bridge_df(),
+        "movie_companies": companies_df,
+        "movie_countries": countries_df,
+        "movie_languages": languages_df,
     }
 
 
@@ -347,3 +361,24 @@ def test_run_silver_checks_missing_file_records_load_failure(tmp_path):
 
     load_failures = [r for r in results if r.check == "load" and not r.passed]
     assert len(load_failures) == len(ENTITY_CONFIGS)
+
+
+def test_run_silver_checks_movie_countries_requires_relation(tmp_path):
+    """relation is part of the PK/required set: an origin and a production row
+    for the same country must both survive as distinct rows, and a null
+    relation must fail nulls — it's the field that keeps the two meanings apart."""
+    dfs = _all_entity_dfs()
+    dfs["movie_countries"] = pd.DataFrame([
+        {"movie_id": 550, "country_code": "US", "country_name": "United States of America", "relation": None},
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    countries_nulls = next(r for r in results if r.entity == "movie_countries" and r.check == "nulls")
+    assert not countries_nulls.passed

@@ -34,6 +34,7 @@ from etl.bronze.ingest_movies import ingest_movies
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.silver.transform_credits_bridge import transform_credits_bridge
 from etl.silver.transform_genres import transform_genres
+from etl.silver.transform_movie_links import transform_movie_links
 from etl.silver.transform_movies import transform_movies
 from etl.silver.transform_people import transform_people
 from etl.warehouse_loader.load_dimensions import load_dimensions
@@ -96,6 +97,7 @@ def run_pipeline(
     transform_people(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date)
     transform_credits_bridge(ingestion_date=ingestion_date)
+    transform_movie_links(ingestion_date=ingestion_date)
 
     silver_results = run_silver_checks(ingestion_date=ingestion_date)
     silver_failed = [r for r in silver_results if not r.passed]
