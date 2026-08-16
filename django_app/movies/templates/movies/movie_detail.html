@@ -80,13 +80,13 @@
         <h2>Cast</h2>
         <span class="section-note">{{ cast_count }} cast · {{ credit_count }} credit{{ credit_count|pluralize }}</span>
     </div>
-    {% comment %} Every actor is rendered here and paged in the browser, ten at
-       a time — see [data-paged] in static/js/theoria.js. Headshots carry
-       loading="lazy", and a lazy image inside a hidden container is never
-       fetched, so shipping the full list costs markup but not bandwidth.
-       With JS off the nav stays hidden and the whole cast is simply on the
-       page, which is a worse layout but not a broken one. {% endcomment %}
-    <div data-paged data-page-size="10" data-page-items=".poster-card">
+    {% comment %} Every actor is rendered here and paged in the browser,
+       eighteen at a time — see [data-paged] in static/js/theoria.js. Headshots
+       carry loading="lazy", and a lazy image inside a hidden container is
+       never fetched, so shipping the full list costs markup but not
+       bandwidth. With JS off the nav stays hidden and the whole cast is
+       simply on the page, which is a worse layout but not a broken one. {% endcomment %}
+    <div data-paged data-page-size="18" data-page-items=".poster-card">
         <div class="poster-grid is-tight">
             {% for credit in cast %}
             {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
