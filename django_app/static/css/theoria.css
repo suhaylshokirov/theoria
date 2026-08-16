@@ -1120,9 +1120,21 @@ button:hover,
   max-width: 62ch;
 }
 
+.specimen-original-title {
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
 .record-list {
   margin: var(--space-6) 0 0;
   border-top: var(--hairline);
+}
+
+/* An outbound link leaves the site — a small arrow marks that visibly,
+   rather than relying on target="_blank" alone (invisible to a reader). */
+.ext-link::after {
+  content: " ↗";
 }
 
 .record-row {

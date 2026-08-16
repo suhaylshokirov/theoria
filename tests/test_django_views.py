@@ -368,6 +368,57 @@ def test_movie_detail_renders_rating_and_synopsis():
     assert "vote" not in body.lower()
 
 
+def test_movie_detail_renders_identifiers_and_original_title_when_differs():
+    """imdb_id/homepage render as outbound links; original_title only shows
+    when it differs from title — printing the same string twice is noise."""
+    movie = _movie(title="Seven Samurai")
+    movie.original_title = "Shichinin no Samurai"
+    movie.imdb_id = "tt0047478"
+    movie.homepage = "https://example.com/seven-samurai"
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "Shichinin no Samurai" in body
+    assert 'href="https://www.imdb.com/title/tt0047478/"' in body
+    assert 'href="https://example.com/seven-samurai"' in body
+    assert "tt0047478" not in body.replace('href="https://www.imdb.com/title/tt0047478/"', "")
+    assert 'rel="noopener noreferrer"' in body
+
+
+def test_movie_detail_hides_original_title_when_same_as_title():
+    movie = _movie(title="Inception")
+    movie.original_title = "Inception"
+    movie.imdb_id = None
+    movie.homepage = None
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "originally" not in body.lower()
+    assert "Elsewhere" not in body
+
+
 def test_movie_detail_cast_present_when_no_director_credited():
     """Regression test for the fact_casting cross-join bug (Task 35): a movie
     with zero fact_crew rows must still render its cast, since fact_cast has

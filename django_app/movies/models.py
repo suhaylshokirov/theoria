@@ -45,6 +45,9 @@ class Movie(models.Model):
     poster_path = models.TextField(null=True)
     backdrop_path = models.TextField(null=True)
     slug = models.SlugField(max_length=300, unique=True, null=True)
+    imdb_id = models.CharField(max_length=20, null=True)
+    original_title = models.TextField(null=True)
+    homepage = models.TextField(null=True)
 
     class Meta:
         managed = False

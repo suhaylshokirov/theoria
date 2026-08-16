@@ -19,6 +19,9 @@
 
     <div class="specimen-record">
         <h1 class="sheet-title">{{ movie.title }}</h1>
+        {% if movie.original_title and movie.original_title != movie.title %}
+        <p class="specimen-original-title mono">originally &ldquo;{{ movie.original_title }}&rdquo;</p>
+        {% endif %}
         {% if movie.tagline %}<p class="specimen-tagline">{{ movie.tagline }}</p>{% endif %}
         {% if movie.overview %}<p class="specimen-synopsis">{{ movie.overview }}</p>{% endif %}
 
@@ -49,6 +52,16 @@
                 <dt class="label">Revenue</dt>
                 <dd class="mono">{% if movie.revenue %}${{ movie.revenue|floatformat:"0g" }}{% else %}—{% endif %}</dd>
             </div>
+            {% if movie.imdb_id or movie.homepage %}
+            <div class="record-row">
+                <dt class="label">Elsewhere</dt>
+                <dd>
+                    {% if movie.imdb_id %}<a class="ext-link" href="https://www.imdb.com/title/{{ movie.imdb_id }}/" target="_blank" rel="noopener noreferrer">IMDb</a>{% endif %}
+                    {% if movie.imdb_id and movie.homepage %}&nbsp;&middot;&nbsp;{% endif %}
+                    {% if movie.homepage %}<a class="ext-link" href="{{ movie.homepage }}" target="_blank" rel="noopener noreferrer">Official site</a>{% endif %}
+                </dd>
+            </div>
+            {% endif %}
             {% if directors %}
             <div class="record-row">
                 <dt class="label">Directed by</dt>

@@ -30,10 +30,22 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 55 — Carry imdb_id, original_title, homepage into dim_movie
-Currently on          : Task 56 — not started (surface the three new fields on the movie page).
-Current phase         : Phase 12 — Movie Provenance (Tasks 55–56) — Task 55 done, Task 56 remaining
-Blockers / open issues: **No blockers.** **Task 55 (2026-08-15) carried `imdb_id`/`original_title`/
+Last completed task   : Task 56 — Surface identifiers and the original title on the movie page
+Currently on          : Task 57 — not started (Silver: transform_movie_links.py — companies, countries, languages).
+Current phase         : Phase 12 — Movie Provenance (Tasks 55–56) — complete. Phase 13 (Tasks 57–60) not started.
+Blockers / open issues: **No blockers.** **Task 56 (2026-08-16) surfaced `imdb_id`/`original_title`/
+`homepage` on the movie page** — three `TextField(null=True)` added to the unmanaged `Movie` model
+(`django_app/movies/models.py`), read-side only, no DDL/ETL/pipeline changes. `original_title`
+renders only when it differs from `title` (guarded in the template, not the view), since it's
+identical on ~93% of films and printing it twice is noise. IMDb and the official homepage render
+as an "Elsewhere" record row with outbound links (`target="_blank" rel="noopener noreferrer"`, a
+visible `↗` marker via a new `.ext-link` CSS rule) — the raw `imdb_id` string never appears as a
+label, only inside the href, per the UI rule against surfacing internal-looking identifiers.
+Live-verified: `/movies/the-godfather/` shows an "Elsewhere" row linking to `imdb.com/title/tt0068646/`
+and `thegodfather.com`; `/movies/warriors-of-the-wind/` shows `originally "風の谷のナウシカ"` above the
+tagline; films where original_title equals title (e.g. Inception) show neither the original-title
+line nor an empty Elsewhere row. Tests 205 → 207 (2 new: renders-when-differs, hidden-when-same).
+Prior phase's notes: **Task 55 (2026-08-15) carried `imdb_id`/`original_title`/
 `homepage` from Bronze into `dim_movie`** — three scalar fields with 100%/100%/58.2% Bronze coverage
 that had been ingested since Task 42 and dropped at `_flatten_movie()`, never existing past Bronze.
 New `warehouse/ddl/12_add_movie_identifiers.sql` (idempotent `ALTER TABLE` + non-unique index on
@@ -91,7 +103,7 @@ still sit in S3 though Task 53 stopped writing them; 2 films have no `fact_movie
 All cleanup rather than capability — recorded so they aren't rediscovered as if new. The **stale
 Warehouse Schema section in this file was also fixed** (it still listed `dim_actor`,
 `dim_director` and `fact_casting`, all dropped in Tasks 35/53). Prior-phase notes follow. Task 54 is a read-side-only fix (no DDL, no ETL, no pipeline re-run, no new TMDB calls) for a movie page that `fact_credit` (Task 48) had made unreadable at scale: a person holding several jobs on one film rendered once per job across several department sections (Christopher Nolan on *The Dark Knight* was 4 rows in 3 sections), and every credit — 47–139 cast, up to ~980 crew on the worst film — rendered as a headshot card with no limit. Two complaints, two fixes, and the measurement that separates them: merging collapses 143.8 crew rows/film to 138.1 distinct people (~4%), so **merging fixes duplication, not volume**. `_merge_crew()` in `movies/views.py` groups a person's non-Acting credits by `person_id`, files them under their single most senior department via `_department_rank()` (extracted from the sort key that was duplicated in `movie_detail` and `person_detail`), and joins the jobs in department order — Nolan now reads "Director / Screenplay / Story / Producer", once. Volume is fixed by **paging cast and crew in the browser**, ten at a time: the view sends every credit and `initPagedSection()` in `static/js/theoria.js` shows a window of them, so Next is a repaint rather than a round-trip. This replaced a first, server-side implementation (`?cast_page=`/`?crew_page=`/`?crew=all` + `#cast`/`#crew` anchors) that the user judged not smooth enough; `BILLED_CREW_JOBS` went with it, since paging ten at a time makes the first page short whatever it holds. `[data-page-group]` wrappers (one per crew department) hide themselves when none of their people are on the current page; the pager is `<button>`s that ship `hidden` and are revealed only when there's more than one page, so with JS off the reader gets the whole list and no dead controls. **The two pagers are a deliberate split, documented in both partials:** `_pager.html` stays server-side for `/movies/` and `/people/` (1,215 and 122,685 rows — not a payload to hand a browser), `_pager_client.html` serves one film's ~1,200-credit maximum, which is. Crew renders as a list rather than a poster grid because crew photo coverage measured 23.8% against cast's 70.1%. **Crew rows carry faces too, after user review:** a headshot where one exists, and the same `.placeholder-person` silhouette the cast cards use where it doesn't (55 photos / 87 silhouettes on The Dark Knight) — an initials monogram was tried first and rejected, since two placeholder vocabularies on one page is one more than a reader should have to learn. That review also surfaced a **real CSS bug**: `.credit-list` never zeroed the `<ul>`'s UA-default 40px `padding-inline-start`, and because these lists paint their own background to draw the 1px gaps as hairlines, that padding rendered as an unexplained grey column down the left of every crew list — invisible on white, obvious on the dark surface. `.collab-list` (person pages) had the identical defect since Task 51; both fixed. Live-verified: `/movies/the-dark-knight/` ships **139 cast cards and 142 crew rows across 11 department groups** in one response, no server-paging params in the markup, Nolan merged and once; the paging algorithm was **executed under Node against a stub DOM** (page 1: 10 items/3 departments; page 2: 2 items collapsing to 1 heading; buttons disable at both ends). Tests 210 → 214. Prior phase's notes: Full test suite is 210/210 passing (down from 225 because Task 53 deleted the legacy actor/director tests, not because anything regressed); Silver DQ 16/16 on all three partitions, warehouse checks 20/20 — both counts dropped for the same reason (the `actors`/`directors` Silver entities and the `fact_cast`/`fact_crew` FK + load-sanity checks no longer exist). **Phase 10 is done: Tasks 47–53 all complete.** The warehouse is now exactly **9 tables** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`, `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `etl_watermarks` — and `dim_actor`/`dim_director`/`fact_cast`/`fact_crew` are **dropped** (`warehouse/ddl/11_drop_legacy_person_tables.sql`, facts before dimensions). `/people/<slug>/` is the single person page; `/actors/<slug>/` and `/directors/<slug>/` now 301 to it via a single `dim_person` slug lookup with no legacy table involved (the 381 slugs that moved during the Task 48 namespace unification are consequently **404 rather than redirected** — accepted, the site isn't public). 16 routes, 10 analytics panels, **zero empty panels**. **Gold is no longer a write-only dead end** (Task 49) — `load_gold.py` reads `gold/collaboration_edges` into `fact_collaboration`; the other four Gold datasets are still unread, and deliberately so (they're cheap enough to recompute in SQL, which the Django views already do). Caveat that remains open: `fact_collaboration` is a *derived* table, so nothing outside the pipeline can tell it's stale, and re-running Gold for an older partition overwrites counts computed from a newer one — worth revisiting as a materialized view. **Two bugs only the live runs could find, both fixed:** `assign_slugs()`'s batched `executemany` hit a `UniqueViolation` on a slug *permutation* because Postgres checks a unique index per row, not per statement (latent since Task 46; fixed by clearing the column first, in the same transaction); and `/connect/` returned a different — equally short, equally valid — path after every reload, because the adjacency query had no `ORDER BY` while Python dicts preserve insertion order (fixed; verified stable, so **Task 52's outcome line below cites a path that is no longer the one returned** — the current answer for Tom Hanks → Thelma Schoonmaker is *Philadelphia* → Tony Devon → *The King of Comedy*). **Every one of the 122,685 `dim_person` rows has at least one credit**, since the dimension is built from the credits themselves — which retires the long-standing "orphan dimension members" gap outright, now that the legacy tables it applied to are gone. **Fresh-install verification is now empirical, not assumed:** a throwaway database built from DDL `01`–`03` produces exactly the 9 live tables. Note that once `11` *drops* things, "run every DDL file in order" no longer equals "build the current schema" — README documents `01`–`03` (bootstrap) and `04`–`11` (migrations for an existing DB) as two separate paths. Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds, and unifying to `dim_person` made it *more* expensive (122,685 people, not 45k). Remaining known gaps, still open: `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`; the Silver transforms read Bronze one S3 object at a time (~16 min per full rebuild pass). Older notes: Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows), as are collections' underlying ids behind their slugs.
-Last updated          : 2026-08-15
+Last updated          : 2026-08-16
 ```
 
 **After finishing any task, in this order:**
@@ -266,7 +278,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 9     | Frontend Polish & URL Design | 45–46 | Complete |
 | 10    | People, Partnerships & Franchises | 47–53 | Complete |
 | 11    | Movie Page Legibility  | 54     | Complete |
-| 12    | Movie Provenance — the scalar fields | 55–56 | Not started |
+| 12    | Movie Provenance — the scalar fields | 55–56 | Complete |
 | 13    | Studios — `dim_company` + the first bridge table | 57–60 | Not started |
 | 14    | Where and in What Language | 61–63 | Not started |
 
@@ -654,7 +666,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Verify:** `imdb_id` non-null on ~1,215/1,215; `original_title` differs from `title` on ~78; `homepage` populated on ~58%.
 - **Outcome:** `_flatten_movie()` now keeps `imdb_id`, `original_title`, `homepage`, normalising TMDB's `""` to `None` for the two nullable fields (`original_title` is always populated). New `12_add_movie_identifiers.sql` (idempotent `ADD COLUMN IF NOT EXISTS` + a **non-unique** index on `imdb_id`, since nothing guarantees TMDB never repeats one) applied to the live DB; the same three columns added to `01_dimensions.sql` for a fresh bootstrap. `load_dim_movie()`'s explicit column list extended — the Task 41 lesson (an unnamed column is silently indistinguishable from a missing one) held again by construction this time, not discovered after the fact. `silver_checks.ENTITY_CONFIGS["movies"]` gained all three in `expected_cols`, with `original_title` also added to `required_cols` (100% Bronze coverage; `imdb_id`/`homepage` are not, so they stay optional). Backfilled by **rebuilding Silver from immutable Bronze** for all three partitions (`2026-07-06`, `2026-07-09`, `2026-07-29` — Silver DQ 4/4 on each) and then re-running `load_dimensions()` for each, never an ad-hoc `UPDATE`. **Live-verified:** `dim_movie` 1,215 rows, `imdb_id` non-null on 1,213/1,215 (2 genuinely absent in Bronze), `original_title` differs from `title` on 101 films (the 3-partition total superset of the audit's ~78-on-1,140 figure), `homepage` populated on 699/1,215 (57.5%, matching the audit's 58.2%); *The Godfather* shows `imdb_id=tt0068646`, `homepage=http://www.thegodfather.com/`. Warehouse checks 20/20 on the `2026-07-29` partition. No DDL for any other table, no fact reload, no new TMDB calls. Tests 204 → 205 (1 new: `test_flatten_movie_carries_identifier_fields`; existing fixtures/assertions in `test_etl.py`/`test_data_quality.py` extended to include the three new columns rather than left stale).
 
-#### [ ] Task 56 — Surface identifiers and the original title on the movie page
+#### [x] Task 56 — Surface identifiers and the original title on the movie page
 - **Goal:** Make the three new columns visible without cluttering a page Task 54 just finished making legible.
 - **Files:** `django_app/movies/models.py`, `movies/templates/movies/movie_detail.html`, `static/css/theoria.css`, `tests/test_django_views.py`
 - **Steps:**
@@ -662,7 +674,24 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   2. **`original_title` renders only when it differs from `title`** — on 93% of films it's the same string, and printing it twice is noise, not data. Guard in the template, not the view.
   3. IMDb and homepage as outbound links in the existing record list. External links need `rel="noopener noreferrer"` and a visible marker that they leave the site.
   4. **Do not print the raw `imdb_id` string as a label** — per the UI rule, link it as "IMDb" and let the href carry the id.
-- **Outcome:**
+- **Outcome:** Three `TextField(null=True)` added to the unmanaged `Movie` model. `original_title`
+  renders in a new `.specimen-original-title` line directly under the page title, guarded by
+  `{% if movie.original_title and movie.original_title != movie.title %}` in the template — a
+  view-level guard was rejected since "is this noise" is a rendering decision, not a data-shape
+  one. IMDb and homepage render as a single "Elsewhere" record row (both links, `·`-separated,
+  either optional) rather than two near-empty rows, since ~42% of films have no homepage and a
+  row with one dash and one link reads worse than one combined row that just omits the missing
+  half. Both links carry `target="_blank" rel="noopener noreferrer"` and a new `.ext-link::after`
+  CSS rule appends a visible `↗` — `target="_blank"` alone gives no visual cue a link leaves the
+  site. The `imdb_id` value only ever appears inside an `href`, never as page text, per the
+  no-raw-internals-in-the-UI rule (loosely applied here too, even though `imdb_id` is an external
+  TMDB/IMDb identifier rather than a warehouse internal — printing the bare `tt0068646` string
+  next to a link is redundant with the link text). Read-side only: no DDL, no ETL, no pipeline
+  re-run. Live-verified: `/movies/the-godfather/` renders `Elsewhere → IMDb ↗ · Official site ↗`
+  linking to `imdb.com/title/tt0068646/` and `thegodfather.com`; `/movies/warriors-of-the-wind/`
+  renders `originally "風の谷のナウシカ"` (non-Latin original titles round-trip through the
+  template correctly); a film where `original_title == title` (e.g. Inception) shows neither line.
+  Tests 205 → 207 (2 new: renders-when-differs-with-both-links, hidden-when-same-and-both-null).
 
 ---
 
