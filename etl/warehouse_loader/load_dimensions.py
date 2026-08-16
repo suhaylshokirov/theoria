@@ -116,6 +116,30 @@ def load_dim_genre(session: Session, df: pd.DataFrame) -> int:
     return count
 
 
+def load_dim_company(session: Session, df: pd.DataFrame) -> int:
+    """Upsert the distinct companies referenced by Silver movie_companies into dim_company.
+
+    Mirrors load_dim_collection(): the dimension is the *distinct* set of
+    companies named across every movie_companies link row, derived with
+    drop_duplicates rather than read from its own dedicated dimension source.
+    Filtering on id AND name matters here for the same reason it does for
+    dim_collection — an id with a null name would violate dim_company's
+    `name NOT NULL`, and the two nullability failures shouldn't be conflated.
+    Must run before load_bridge_movie_company(), which has an FK to this table.
+    """
+    named = df[df["company_id"].notna() & df["company_name"].notna()]
+    companies = (
+        named[["company_id", "company_name", "logo_path", "origin_country"]]
+        .drop_duplicates(subset=["company_id"], keep="last")
+        .rename(columns={"company_name": "name"})
+    )
+    columns = ["company_id", "name", "logo_path", "origin_country"]
+    records = _records(companies, columns)
+    count = _upsert(session, "dim_company", ["company_id"], columns, records)
+    logger.info("dim_company: upserted %d row(s)", count)
+    return count
+
+
 def _slugify(name: str) -> str:
     """Lowercase, ASCII, hyphenated form of a name/title for use in a URL.
 
@@ -216,6 +240,9 @@ def load_dimensions(
     movies_df = _read_silver_parquet(bucket, "movies", ingestion_date, "movies.parquet")
     people_df = _read_silver_parquet(bucket, "people", ingestion_date, "people.parquet")
     genres_df = _read_silver_parquet(bucket, "genres", ingestion_date, "genres.parquet")
+    companies_df = _read_silver_parquet(
+        bucket, "movie_companies", ingestion_date, "movie_companies.parquet"
+    )
 
     counts: dict[str, int] = {}
     with get_session() as session:
@@ -224,10 +251,13 @@ def load_dimensions(
         counts["dim_movie"] = load_dim_movie(session, movies_df)
         counts["dim_person"] = load_dim_person(session, people_df)
         counts["dim_genre"] = load_dim_genre(session, genres_df)
+        # Before load_facts.load_bridge_movie_company(), which has an FK here.
+        counts["dim_company"] = load_dim_company(session, companies_df)
         counts["dim_date"] = load_dim_date(session, calendar_start, calendar_end)
         counts["dim_movie_slugs"] = assign_slugs(session, "dim_movie", "movie_id", "title")
         counts["dim_person_slugs"] = assign_slugs(session, "dim_person", "person_id", "name")
         counts["dim_collection_slugs"] = assign_slugs(session, "dim_collection", "collection_id", "name")
+        counts["dim_company_slugs"] = assign_slugs(session, "dim_company", "company_id", "name")
 
     elapsed = time.monotonic() - t0
     logger.info(

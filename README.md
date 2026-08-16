@@ -22,8 +22,8 @@ TMDB API  →  Bronze (raw JSON)  →  Silver (typed Parquet)  →  Gold (aggreg
 | Credits | **237,454** across 13 departments and 858 distinct job titles |
 | Collaboration edges | **193,064** repeat working relationships, derived in Gold |
 | Film series | **358** |
-| Warehouse tables | **9** — 5 dimensions, 3 facts, 1 operational |
-| Test suite | **217** tests, no network or live database required |
+| Warehouse tables | **11** — 6 dimensions, 3 facts, 1 bridge, 1 operational |
+| Test suite | **225** tests, no network or live database required |
 
 The corpus is deliberate rather than incidental. TMDB's `movie/popular` endpoint returns whatever
 is trending at call time, which produced a catalog that was 69% films from the 2020s. Switching
@@ -60,18 +60,23 @@ reprocessed in isolation without touching anything else.
 ### The star schema
 
 ```
-                  dim_genre        dim_date        dim_collection
-                      │               │                  │
-                      └───────┬───────┘                  │
-                              ▼                          ▼
-   dim_person ──► fact_credit ──► dim_movie ◄── fact_movie_metrics
-        │                                              (rating, revenue,
-        └──────► fact_collaboration                     budget, popularity)
+                  dim_genre        dim_date        dim_collection      dim_company
+                      │               │                  │                  │
+                      └───────┬───────┘                  │                  ▼
+                              ▼                          ▼         bridge_movie_company
+   dim_person ──► fact_credit ──► dim_movie ◄── fact_movie_metrics          │
+        │                                              (rating, revenue,   │
+        └──────► fact_collaboration                     budget, popularity)◄┘
                  (derived in Gold)
 ```
 
-**Dimensions** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`
+**Dimensions** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`, `dim_company`
 **Facts** — `fact_movie_metrics`, `fact_credit`, `fact_collaboration`
+**Bridge** — `bridge_movie_company` (Phase 13) — a factless fact table (no measure, just the
+existence of a movie/company relationship), named `bridge_` rather than `fact_` to keep that
+distinction visible in the schema itself. It's the warehouse's first genuine many-to-many: a film
+has 2.81 companies on average, unlike `dim_collection` (one collection per film, so that
+relationship fits as a plain column on `dim_movie`).
 **Operational** — `etl_watermarks`
 
 Two grain decisions carry most of the weight:
@@ -143,11 +148,11 @@ psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/02_facts.sql
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/03_watermark.sql
 ```
 
-> **Do not run `04`–`12` on a fresh database.** Those are the historical migrations that brought an
+> **Do not run `04`–`13` on a fresh database.** Those are the historical migrations that brought an
 > already-live warehouse to this shape, and they are only correct applied in order to a database
 > that predates them — `11_drop_legacy_person_tables.sql` drops tables `01` no longer creates. Once
 > a migration drops something, "run every DDL file in order" stops being the same instruction as
-> "build the current schema". Use `04`–`12` only to migrate an existing Theoria warehouse.
+> "build the current schema". Use `04`–`13` only to migrate an existing Theoria warehouse.
 
 `slug` columns are declared empty by the DDL and populated by `load_dimensions()`.
 
@@ -213,7 +218,7 @@ order — which is what makes them stable across re-runs rather than reassigned.
 pytest
 ```
 
-217 tests covering the ETL transforms, data quality checks, warehouse loaders and Django views.
+225 tests covering the ETL transforms, data quality checks, warehouse loaders and Django views.
 The suite mocks S3, TMDB and PostgreSQL **at the boundary** — no live infrastructure, no fixtures
 loaded into a real database, no network. Django views are driven through their real URLs with the
 managers patched, so routing and template rendering are genuinely exercised.
@@ -230,7 +235,7 @@ etl/
 data_quality/             Silver and warehouse check suites; rejected/ holds quarantined rows
 warehouse/
   db.py                   engine and session management
-  ddl/                    01–03 bootstrap, 04–12 migrations
+  ddl/                    01–03 bootstrap, 04–13 migrations
   queries/                analytics SQL — never inline in application code
 django_app/               core (settings, router) · movies · analytics
 scripts/run_pipeline.py   end-to-end orchestration

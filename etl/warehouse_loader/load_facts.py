@@ -26,8 +26,14 @@ credit lost its entire cast, not just its director. Splitting the two
 removes that coupling: a movie's cast rows no longer depend on whether it
 has a resolvable director.
 
+bridge_movie_company (Task 58) is a factless fact table — no measure, just the
+existence of a movie/company relationship — built from Silver's
+movie_companies link table the same way, resolving both FKs and quarantining
+unresolvable rows rather than dropping them.
+
 S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
+    silver/movie_companies/ingestion_date=YYYY-MM-DD/movie_companies.parquet
     silver/credits_bridge/ingestion_date=YYYY-MM-DD/credits_bridge.parquet
 
 All fact tables carry an ingestion_date column recording which Silver
@@ -224,6 +230,64 @@ def _build_credit_rows(
     return rows, rejects
 
 
+def _build_bridge_company_rows(
+    companies_df: pd.DataFrame,
+    valid_movie_ids: set[int],
+    valid_company_ids: set[int],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Resolve every Silver movie_companies row into a bridge_movie_company row.
+
+    Returns (rows, rejects). Unlike load_gold's collaboration edges, a bridge
+    row's ids come from the same Silver partition dim_company/dim_movie were
+    just loaded from — so a miss here is a real, quarantinable data problem,
+    not a staleness signal, and follows the same reject-don't-drop convention
+    as every other fact/bridge loader in this module.
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+
+    for link in companies_df.to_dict("records"):
+        movie_id = link["movie_id"]
+        company_id = link["company_id"]
+
+        if pd.isna(movie_id) or int(movie_id) not in valid_movie_ids:
+            rejects.append({**link, "rejection_reason": "unknown movie_id"})
+            continue
+        if pd.isna(company_id) or int(company_id) not in valid_company_ids:
+            rejects.append({**link, "rejection_reason": "unknown company_id"})
+            continue
+
+        rows.append({
+            "movie_id": int(movie_id),
+            "company_id": int(company_id),
+            "ingestion_date": ingestion_date,
+        })
+
+    return rows, rejects
+
+
+def load_bridge_movie_company(
+    session: Session, companies_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert Silver movie_companies into bridge_movie_company.
+
+    Must run after both load_dim_movie() and load_dim_company() have
+    committed, since both FKs are resolved against the live dimensions.
+    Returns (count, rejects).
+    """
+    valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
+    valid_company_ids = _existing_ids(session, "dim_company", "company_id")
+
+    rows, rejects = _build_bridge_company_rows(
+        companies_df, valid_movie_ids, valid_company_ids, ingestion_date
+    )
+    columns = ["movie_id", "company_id", "ingestion_date"]
+    count = _upsert(session, "bridge_movie_company", ["movie_id", "company_id"], columns, _records(rows))
+    logger.info("bridge_movie_company: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
 def load_fact_movie_metrics(
     session: Session, movies_df: pd.DataFrame, ingestion_date: dt.date,
 ) -> tuple[int, list[dict[str, Any]]]:
@@ -288,14 +352,21 @@ def load_facts(
 
     movies_df = _read_silver_parquet(bucket, "movies", ingestion_date, "movies.parquet")
     bridge_df = _read_silver_parquet(bucket, "credits_bridge", ingestion_date, "credits_bridge.parquet")
+    companies_df = _read_silver_parquet(
+        bucket, "movie_companies", ingestion_date, "movie_companies.parquet"
+    )
 
     counts: dict[str, int] = {}
     with get_session() as session:
         counts["fact_movie_metrics"], metrics_rejects = load_fact_movie_metrics(session, movies_df, ingestion_date)
         counts["fact_credit"], credit_rejects = load_fact_credit(session, bridge_df, ingestion_date)
+        counts["bridge_movie_company"], company_rejects = load_bridge_movie_company(
+            session, companies_df, ingestion_date
+        )
 
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)
     _write_rejects(credit_rejects, "fact_credit", ingestion_date, rejected_dir)
+    _write_rejects(company_rejects, "bridge_movie_company", ingestion_date, rejected_dir)
 
     elapsed = time.monotonic() - t0
     logger.info(

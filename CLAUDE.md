@@ -30,10 +30,35 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 57 — Silver: transform_movie_links.py — companies, countries and languages
-Currently on          : Task 58 — not started (Warehouse: dim_company + bridge_movie_company).
-Current phase         : Phase 12 — Movie Provenance — complete. Phase 13 (Tasks 57–60) — Task 57 done, 58–60 remaining.
-Blockers / open issues: **No blockers.** **Task 57 (2026-08-16) added a new Silver module,
+Last completed task   : Task 58 — Warehouse: dim_company + bridge_movie_company
+Currently on          : Task 59 — not started (Django: /studios/ and the studio page).
+Current phase         : Phase 13 (Tasks 57–60) — Tasks 57–58 done, 59–60 remaining.
+Blockers / open issues: **No blockers.** **Task 58 (2026-08-16) added `dim_company` and
+`bridge_movie_company`**, the warehouse's first genuine bridge table — new `warehouse/ddl/13_companies.sql`
+(also folded into `01_dimensions.sql` for fresh bootstraps), applied live. Named `bridge_` rather
+than `fact_` on purpose: it carries no measure, only the existence of a movie/company relationship
+(a "factless fact table"), and reserving `fact_` for tables that actually sum something keeps the
+schema self-describing. `load_dim_company()` in `load_dimensions.py` mirrors `load_dim_collection()`
+exactly — the dimension is the *distinct* set of companies in Silver's `movie_companies` link
+table, derived via `drop_duplicates`, filtered on id **and** name — then gets the same
+`assign_slugs()` whole-table recompute as every other slugged dimension (the Task 48
+`UniqueViolation` fix already covers it, no new code needed). `load_bridge_movie_company()` in
+`load_facts.py` resolves both FKs against the live dimensions and quarantines unresolvable rows to
+`data_quality/rejected/`, run after `load_dim_movie()`/`load_dim_company()` and using the same
+reject-don't-drop convention as every other loader here. Two new `_FK_CHECKS` entries plus a
+dedicated row-count sanity check in `warehouse_checks.py` — the bridge's Silver source is a
+*link* table (one row per movie/company pair, not per company), so its silver-to-warehouse
+comparison had to use `nunique(company_id)` rather than a plain row count, or a studio backing 128
+films would look like the warehouse had silently dropped 127 rows. **Live-verified across all
+three backfilled partitions**: `dim_company` **1,383** rows, **0** null slugs; `bridge_movie_company`
+**3,409** rows, 0 rejects; Warner Bros. Pictures → **128 films**, matching the task's estimate
+exactly. Warehouse checks 20/20 → **25/25** (2 new FK checks + 2 new row-count checks + 1 new
+fact-load-sanity check, net +5). No Django/UI change yet — nothing renders `dim_company` or
+`bridge_movie_company` until Task 59. Tests 217 → 225 (8 new: `load_dim_company`'s dedup/null-filter
+behavior, `_build_bridge_company_rows`/`load_bridge_movie_company`'s FK resolution and rejects,
+`load_dimensions()`/`load_facts()` integration updated for the new tables, and the companies
+row-count-sanity distinct-vs-row-count regression in `test_warehouse_checks.py`).
+Prior task's notes: **Task 57 (2026-08-16) added a new Silver module,
 `etl/silver/transform_movie_links.py`**, extracting the three nested arrays `_flatten_movie()`
 has always dropped: `production_companies`, `production_countries`/`origin_country`, and
 `spoken_languages`. It does its own Bronze pass over `bronze/movie_details` (mirroring
@@ -763,7 +788,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   null-id dropping; 1 new in `test_data_quality.py` regression-testing that a null `relation`
   fails the nulls check; `_all_entity_dfs()` extended with fixtures for the three new entities).
 
-#### [ ] Task 58 — Warehouse: `dim_company` + `bridge_movie_company`
+#### [x] Task 58 — Warehouse: `dim_company` + `bridge_movie_company`
 - **Goal:** The dimension and the bridge, loaded, indexed, checked and backfilled.
 - **Files:** new `warehouse/ddl/13_companies.sql`, `warehouse/ddl/01_dimensions.sql`, `etl/warehouse_loader/load_dimensions.py`, `etl/warehouse_loader/load_facts.py`, `data_quality/warehouse_checks.py`, `tests/{test_etl,test_warehouse_checks}.py`
 - **Steps:**
@@ -775,7 +800,22 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   6. Two new `_FK_CHECKS` entries in `warehouse_checks.py`, plus a load-sanity check for the bridge.
   7. Backfill all three partitions.
 - **Verify:** ~1,243 companies, 0 null slugs, ~3,200 bridge rows, 0 rejects; Warner Bros. ≈ 128 films.
-- **Outcome:**
+- **Outcome:** Built exactly as scoped. `13_companies.sql` (also folded into `01_dimensions.sql`)
+  creates both tables with the FK/index shape specified; applied live before any loader ran.
+  `load_dim_company()` is a near-literal copy of `load_dim_collection()`'s shape — distinct-by-id,
+  filter on id and name, then `assign_slugs()` — which is the point: the pattern from Task 50 held
+  up unchanged for a second dimension derived from a link table. `load_bridge_movie_company()`
+  resolves FKs against `dim_movie`/`dim_company` and quarantines misses, wired into `load_facts()`
+  after both dimension loads complete. The row-count-sanity check needed one real deviation from
+  the existing per-entity pattern: `movie_companies` is a link table, so comparing its raw Silver
+  row count against `dim_company`'s cumulative row count would fail for every popular studio (128
+  Silver rows for Warner Bros. alone vs. 1 warehouse row) — fixed by comparing against
+  `nunique(company_id)` instead, caught by writing the check before assuming the existing
+  `_check_entity_counts` helper would just work. **Backfilled and live-verified across all three
+  partitions**: `dim_company` **1,383** rows total, **0** null slugs; `bridge_movie_company`
+  **3,409** rows, **0** rejects; Warner Bros. Pictures → **128 films**, exactly matching the
+  estimate. Warehouse checks 20/20 → **25/25**. Tests 217 → 225 (8 new, incl. a regression test
+  naming the distinct-vs-row-count fix so it can't silently regress).
 
 #### [ ] Task 59 — Django: `/studios/` and the studio page
 - **Goal:** Give the new entity its pages, and put a film's studios on the movie page.

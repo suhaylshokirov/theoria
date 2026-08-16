@@ -52,14 +52,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 7
+    assert len(results) == 9
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5, 0, 0, 0, 0, 0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [5, 0, 0, 0, 0, 0, 0, 0, 0]
 
     results = check_fk_integrity(mock_session)
 
@@ -235,6 +235,95 @@ def test_check_row_count_sanity_fails_when_warehouse_shrinks(monkeypatch):
     assert "fewer than" in s2w.detail
 
 
+def test_check_row_count_sanity_companies_compares_distinct_ids_not_row_count(monkeypatch):
+    """movie_companies is a link table — a studio backing 100 films is 100
+    Silver rows but 1 warehouse row, so the silver_to_warehouse comparison
+    must use nunique(company_id), not len(df)."""
+    companies_df = pd.DataFrame([
+        {"movie_id": 1, "company_id": 900, "company_name": "Studio", "logo_path": None, "origin_country": "US"},
+        {"movie_id": 2, "company_id": 900, "company_name": "Studio", "logo_path": None, "origin_country": "US"},
+        {"movie_id": 3, "company_id": 900, "company_name": "Studio", "logo_path": None, "origin_country": "US"},
+    ])
+    movies_df = _silver_movies_df(0)
+    buf = io.BytesIO()
+    companies_df.to_parquet(buf, engine="pyarrow", index=False)
+    companies_bytes = buf.getvalue()
+    buf2 = io.BytesIO()
+    movies_df.to_parquet(buf2, engine="pyarrow", index=False)
+    movies_bytes = buf2.getvalue()
+    genre_bytes = json.dumps({"genres": []}).encode()
+
+    mock_s3 = MagicMock()
+    mock_s3.exceptions.NoSuchKey = KeyError
+
+    def fake_get_object(Bucket, Key):
+        body = MagicMock()
+        if "genres.json" in Key:
+            body.read.return_value = genre_bytes
+        elif "movie_companies" in Key:
+            body.read.return_value = companies_bytes
+        else:
+            body.read.return_value = movies_bytes
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = fake_get_object
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 1  # dim_company has 1 row (>= 1 distinct)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 6, 22))
+
+    s2w = next(r for r in results if r.check == "rowcount:companies:silver_to_warehouse")
+    assert s2w.passed is True
+    assert "Silver distinct=1" in s2w.detail
+
+
+def test_check_row_count_sanity_companies_fails_when_warehouse_shrinks(monkeypatch):
+    companies_df = pd.DataFrame([
+        {"movie_id": 1, "company_id": 900, "company_name": "Studio", "logo_path": None, "origin_country": "US"},
+        {"movie_id": 2, "company_id": 901, "company_name": "Other", "logo_path": None, "origin_country": "US"},
+    ])
+    movies_df = _silver_movies_df(0)
+    buf = io.BytesIO()
+    companies_df.to_parquet(buf, engine="pyarrow", index=False)
+    companies_bytes = buf.getvalue()
+    buf2 = io.BytesIO()
+    movies_df.to_parquet(buf2, engine="pyarrow", index=False)
+    movies_bytes = buf2.getvalue()
+    genre_bytes = json.dumps({"genres": []}).encode()
+
+    mock_s3 = MagicMock()
+    mock_s3.exceptions.NoSuchKey = KeyError
+
+    def fake_get_object(Bucket, Key):
+        body = MagicMock()
+        if "genres.json" in Key:
+            body.read.return_value = genre_bytes
+        elif "movie_companies" in Key:
+            body.read.return_value = companies_bytes
+        else:
+            body.read.return_value = movies_bytes
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = fake_get_object
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 1  # fewer than the 2 distinct companies
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 6, 22))
+
+    s2w = next(r for r in results if r.check == "rowcount:companies:silver_to_warehouse")
+    assert s2w.passed is False
+
+
 # ---------------------------------------------------------------------------
 # Gold sanity
 # ---------------------------------------------------------------------------
@@ -289,11 +378,11 @@ def test_check_gold_sanity_passes_when_no_data_expected():
 
 def test_check_fact_load_sanity_passes_when_facts_loaded():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [10, 300]
+    mock_session.execute.return_value.scalar.side_effect = [10, 300, 25]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
-        silver_movies_count=5, silver_credit_count=280,
+        silver_movies_count=5, silver_credit_count=280, silver_company_count=20,
     )
 
     assert all(r.passed for r in results)
@@ -301,11 +390,11 @@ def test_check_fact_load_sanity_passes_when_facts_loaded():
 
 def test_check_fact_load_sanity_fails_when_zero_rows_loaded_despite_silver_data():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
-        silver_movies_count=5, silver_credit_count=280,
+        silver_movies_count=5, silver_credit_count=280, silver_company_count=20,
     )
 
     assert all(r.passed is False for r in results)
@@ -314,25 +403,41 @@ def test_check_fact_load_sanity_fails_when_zero_rows_loaded_despite_silver_data(
 def test_check_fact_load_sanity_fails_only_the_fact_table_with_no_data():
     """Each fact table is judged on its own Silver input, never on another's."""
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [10, 0]
+    mock_session.execute.return_value.scalar.side_effect = [10, 0, 25]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
-        silver_movies_count=5, silver_credit_count=280,
+        silver_movies_count=5, silver_credit_count=280, silver_company_count=20,
     )
 
     by_check = {r.check: r.passed for r in results}
     assert by_check["facts:fact_movie_metrics"] is True
     assert by_check["facts:fact_credit"] is False
+    assert by_check["facts:bridge_movie_company"] is True
+
+
+def test_check_fact_load_sanity_fails_when_bridge_movie_company_empty():
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.side_effect = [10, 300, 0]
+
+    results = check_fact_load_sanity(
+        mock_session, dt.date(2026, 6, 22),
+        silver_movies_count=5, silver_credit_count=280, silver_company_count=20,
+    )
+
+    by_check = {r.check: r.passed for r in results}
+    assert by_check["facts:fact_movie_metrics"] is True
+    assert by_check["facts:fact_credit"] is True
+    assert by_check["facts:bridge_movie_company"] is False
 
 
 def test_check_fact_load_sanity_passes_when_zero_rows_and_zero_silver():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
-        silver_movies_count=0, silver_credit_count=0,
+        silver_movies_count=0, silver_credit_count=0, silver_company_count=0,
     )
 
     assert all(r.passed for r in results)
@@ -356,8 +461,12 @@ def test_run_warehouse_checks_combines_all_check_groups(monkeypatch):
                          lambda session, bucket, date: [CheckResult("rowcount:a", True, "ok")])
     monkeypatch.setattr(warehouse_checks_module, "check_gold_sanity",
                          lambda bucket, date, silver_movies_count: [CheckResult("gold:a", True, "ok")])
-    monkeypatch.setattr(warehouse_checks_module, "check_fact_load_sanity",
-                         lambda session, date, silver_movies_count, silver_credit_count: [CheckResult("facts:a", True, "ok")])
+    monkeypatch.setattr(
+        warehouse_checks_module, "check_fact_load_sanity",
+        lambda session, date, silver_movies_count, silver_credit_count, silver_company_count: [
+            CheckResult("facts:a", True, "ok")
+        ],
+    )
     monkeypatch.setattr(warehouse_checks_module, "_read_silver_parquet",
                          lambda bucket, entity, date, filename: pd.DataFrame([{"x": 1}]))
 

@@ -1698,6 +1698,7 @@ from etl.warehouse_loader.load_dimensions import (
     _upsert,
     assign_slugs,
     load_dim_collection,
+    load_dim_company,
     load_dim_date,
     load_dim_genre,
     load_dim_movie,
@@ -1747,6 +1748,18 @@ def _dim_genres_df():
     return pd.DataFrame({
         "genre_id": pd.array([1, 2], dtype="Int64"),
         "genre_name": ["Action", "Comedy"],
+    })
+
+
+def _dim_companies_df():
+    """Two link rows, one distinct company — mirrors movie_companies' shape:
+    one row per (movie_id, company_id), not one row per company."""
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 2], dtype="Int64"),
+        "company_id": pd.array([900, 900], dtype="Int64"),
+        "company_name": ["Warner Bros.", "Warner Bros."],
+        "logo_path": ["/wb.png", "/wb.png"],
+        "origin_country": ["US", "US"],
     })
 
 
@@ -1821,6 +1834,37 @@ def test_load_dim_collection_deduplicates_a_franchise_shared_by_several_films():
     count = load_dim_collection(mock_session, df)
 
     assert count == 1
+
+
+def test_load_dim_company_deduplicates_a_studio_shared_by_several_films():
+    """movie_companies is a link table — one row per (movie_id, company_id) —
+    so the dimension must take the distinct set of company_id, same pattern
+    as load_dim_collection()."""
+    mock_session = MagicMock()
+    count = load_dim_company(mock_session, _dim_companies_df())
+
+    assert count == 1
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_company" in str(stmt)
+    assert params == [
+        {"company_id": 900, "name": "Warner Bros.", "logo_path": "/wb.png", "origin_country": "US"},
+    ]
+
+
+def test_load_dim_company_excludes_rows_with_null_id_or_name():
+    extra = pd.DataFrame({
+        "movie_id": pd.array([3, 4], dtype="Int64"),
+        "company_id": pd.array([pd.NA, 901], dtype="Int64"),
+        "company_name": [None, None],  # null name on both, null id on the first
+        "logo_path": [None, "/x.png"],
+        "origin_country": [None, "GB"],
+    })
+    df = pd.concat([_dim_companies_df(), extra], ignore_index=True)
+    mock_session = MagicMock()
+
+    count = load_dim_company(mock_session, df)
+
+    assert count == 1  # still just the one named, id'd company
 
 
 def test_load_dim_genre_upserts_expected_columns():
@@ -1939,6 +1983,8 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
             return _dim_people_df()
         if entity == "genres":
             return _dim_genres_df()
+        if entity == "movie_companies":
+            return _dim_companies_df()
         raise AssertionError(f"unexpected entity {entity}")
 
     mock_session = MagicMock()
@@ -1958,23 +2004,26 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
 
     assert counts == {
         "dim_collection": 1, "dim_movie": 2, "dim_person": 2,
-        "dim_genre": 2, "dim_date": 2,
+        "dim_genre": 2, "dim_company": 1, "dim_date": 2,
         "dim_movie_slugs": 0, "dim_person_slugs": 0, "dim_collection_slugs": 0,
+        "dim_company_slugs": 0,
     }
-    # 5 upserts + 3 slug SELECTs (the mocked session's empty fetchall() means
-    # no matching UPDATE is issued for any of the three slugged tables).
-    assert mock_session.execute.call_count == 8
+    # 6 upserts + 4 slug SELECTs (the mocked session's empty fetchall() means
+    # no matching UPDATE is issued for any of the four slugged tables).
+    assert mock_session.execute.call_count == 10
 
 
 # ---------------------------------------------------------------------------
 # Task 19 / Task 35 — etl/warehouse_loader/load_facts.py
 # ---------------------------------------------------------------------------
 from etl.warehouse_loader.load_facts import (
+    _build_bridge_company_rows,
     _build_credit_rows,
     _build_movie_metrics_rows,
     _existing_ids,
     _records,
     _write_rejects,
+    load_bridge_movie_company,
     load_fact_movie_metrics,
     load_facts,
 )
@@ -2003,6 +2052,16 @@ def _fact_bridge_df():
         "department": ["Acting", "Acting", "Directing", "Acting", "Acting", "Directing"],
         "role": ["Hero", "Villain", "Director", "Lead", "Lead", "Director"],
         "ordering": pd.array([0, 1, None, 0, 0, None], dtype="Int64"),
+    })
+
+
+def _fact_companies_df():
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 999], dtype="Int64"),
+        "company_id": pd.array([1, 2], dtype="Int64"),
+        "company_name": ["Studio One", "Unknown Studio"],
+        "logo_path": [None, None],
+        "origin_country": ["US", "US"],
     })
 
 
@@ -2187,6 +2246,53 @@ def test_build_credit_rows_rejects_unknown_person_id():
     assert {r["rejection_reason"] for r in rejects} == {"unknown person_id"}
 
 
+def test_build_bridge_company_rows_resolves_known_links():
+    rows, rejects = _build_bridge_company_rows(
+        _fact_companies_df(), valid_movie_ids={1}, valid_company_ids={1},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == [{"movie_id": 1, "company_id": 1, "ingestion_date": dt.date(2026, 6, 26)}]
+    assert len(rejects) == 1
+    assert rejects[0]["rejection_reason"] in {"unknown movie_id", "unknown company_id"}
+
+
+def test_build_bridge_company_rows_rejects_unknown_company_id():
+    df = pd.DataFrame({
+        "movie_id": pd.array([1], dtype="Int64"),
+        "company_id": pd.array([999], dtype="Int64"),
+        "company_name": ["Ghost Studio"],
+        "logo_path": [None],
+        "origin_country": [None],
+    })
+    rows, rejects = _build_bridge_company_rows(
+        df, valid_movie_ids={1}, valid_company_ids=set(), ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == []
+    assert rejects[0]["rejection_reason"] == "unknown company_id"
+
+
+def test_load_bridge_movie_company_upserts_and_returns_rejects(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids",
+        lambda session, table, pk_col: {1} if table == "dim_movie" else {1},
+    )
+
+    count, rejects = load_bridge_movie_company(
+        mock_session, _fact_companies_df(), dt.date(2026, 6, 26)
+    )
+
+    assert count == 1
+    assert len(rejects) == 1
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO bridge_movie_company" in str(stmt)
+    assert params == [{"movie_id": 1, "company_id": 1, "ingestion_date": dt.date(2026, 6, 26)}]
+
+
 def test_write_rejects_writes_parquet_file(tmp_path):
     """_write_rejects() must write a Parquet file named <entity>_rejected_<date>.parquet."""
     path = _write_rejects(
@@ -2238,6 +2344,8 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
             return _fact_movies_df()
         if entity == "credits_bridge":
             return _fact_bridge_df()
+        if entity == "movie_companies":
+            return _fact_companies_df()
         raise AssertionError(f"unexpected entity {entity}")
 
     import etl.warehouse_loader.load_facts as load_facts_module
@@ -2249,7 +2357,7 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
     )
     id_sets = {
         "dim_movie": {1, 2, 3, 4}, "dim_date": {20200101, 20200102}, "dim_genre": {1},
-        "dim_person": {10, 11, 20, 30, 40},
+        "dim_person": {10, 11, 20, 30, 40}, "dim_company": {1},
     }
     monkeypatch.setattr(
         load_facts_module, "_existing_ids",
@@ -2258,9 +2366,10 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
 
     counts = load_facts(ingestion_date=date, bucket="theoria-datalake", rejected_dir=tmp_path)
 
-    assert counts == {"fact_movie_metrics": 1, "fact_credit": 5}
+    assert counts == {"fact_movie_metrics": 1, "fact_credit": 5, "bridge_movie_company": 1}
     rejected_files = sorted(p.name for p in tmp_path.iterdir())
     assert rejected_files == [
+        "bridge_movie_company_rejected_2026-06-26.parquet",
         "fact_credit_rejected_2026-06-26.parquet",
         "fact_movie_metrics_rejected_2026-06-26.parquet",
     ]
