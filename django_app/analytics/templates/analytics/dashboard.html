@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with eyebrow="Readouts" accession="2 queries" title="Analytics" sub="Revenue by decade and by genre, run straight against the star schema. Every number here is measured, not estimated." only %}
+{% include "movies/_sheet_header.html" with title="Analytics" sub="Revenue and output by decade, genre, and studio, run straight against the star schema. Every number here is measured, not estimated." only %}
 
 <div class="panel-grid">
     <section class="panel is-wide" aria-labelledby="decade-h">
@@ -72,6 +72,61 @@
         </div>
         {% else %}
         <p class="empty">No films loaded yet. Run the pipeline to fill the warehouse.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel is-wide" aria-labelledby="studio-decade-h">
+        <div class="section-head">
+            <h2 id="studio-decade-h">Studio output by decade</h2>
+            <span class="section-note">leading studio, by decade</span>
+        </div>
+        {% if studio_output_by_decade %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col">Decade</th><th scope="col">Leading studio</th><th scope="col" class="num">Films</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in studio_output_by_decade %}
+                    <tr>
+                        <th scope="row" class="mono">{{ row.decade }}</th>
+                        <td>{{ row.studio_name }}</td>
+                        <td class="num" data-meter>{{ row.movie_count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No studios loaded yet. Run the pipeline to fill the warehouse.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel is-wide" aria-labelledby="studio-revenue-h">
+        <div class="section-head">
+            <h2 id="studio-revenue-h">Top studios by revenue</h2>
+            <span class="section-note">3+ films</span>
+        </div>
+        {% if top_studios_by_revenue %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col">Studio</th><th scope="col" class="num">Films</th><th scope="col" class="num">Total revenue</th><th scope="col" class="num">Avg rating</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in top_studios_by_revenue %}
+                    <tr>
+                        <th scope="row"><a href="{% url 'movies:studio_detail' row.studio_slug %}">{{ row.studio_name }}</a></th>
+                        <td class="num">{{ row.movie_count }}</td>
+                        <td class="num" data-meter>{{ row.total_revenue|default:"—" }}</td>
+                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:2 }}{% else %}—{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No studios loaded yet. Run the pipeline to fill the warehouse.</p>
         {% endif %}
     </section>
 </div>

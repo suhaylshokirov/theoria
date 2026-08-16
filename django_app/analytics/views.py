@@ -26,10 +26,14 @@ def _run_query(filename):
 def dashboard(request):
     movies_by_decade = _run_query("movies_by_decade.sql")
     revenue_by_genre = _run_query("revenue_by_genre.sql")
+    studio_output_by_decade = _run_query("studio_output_by_decade.sql")
+    top_studios_by_revenue = _run_query("top_studios_by_revenue.sql")
 
     context = {
         "revenue_by_genre": revenue_by_genre,
         "movies_by_decade": movies_by_decade,
+        "studio_output_by_decade": studio_output_by_decade,
+        "top_studios_by_revenue": top_studios_by_revenue,
         # Pre-shaped as flat label/value lists (with Decimal -> float) for the
         # two Chart.js trend panels — the tables above reuse the raw rows.
         "decade_labels": [row["decade"] for row in movies_by_decade],

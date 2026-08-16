@@ -30,10 +30,41 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 59 — Django: /studios/ and the studio page
-Currently on          : Task 60 — not started (Analytics: studio panels).
-Current phase         : Phase 13 (Tasks 57–60) — Tasks 57–59 done, 60 remaining.
-Blockers / open issues: **No blockers.** **Task 59 (2026-08-16) gave `dim_company` its pages** —
+Last completed task   : Task 60 — Analytics: studio panels
+Currently on          : Task 61 — not started (Warehouse: dim_country, dim_language and their bridges — Phase 14).
+Current phase         : Phase 13 (Tasks 57–60) — complete. Phase 14 (Tasks 61–63) not started.
+Blockers / open issues: **No blockers.** **Task 60 (2026-08-16) closes Phase 13** — two new panels
+spend `dim_company`/`bridge_movie_company` on the dashboard: `studio_output_by_decade.sql` (the
+leading studio, by film count, for each decade) and `top_studios_by_revenue.sql` (revenue +
+avg rating, ≥3-film floor mirroring `top_rated_directors.sql`'s). **`studio_output_by_decade`
+required a real interpretation call**: the plan's literal name suggested a full (studio × decade)
+crosstab, but that's either 1,383 columns or thousands of rows — neither fits the flat
+ranked-table shape every other panel uses, and neither is skimmable. Interpreted instead as
+"who led each decade", which stays one row per decade (~10 rows) while still exercising the
+studio/decade join; the query's own comment records this as a deliberate scope narrowing, not
+an oversight. `top_studios_by_revenue` got the genre-fanout guard right on both sides at once,
+the way `studio_detail`'s view already had to in Task 59: `SUM(dm.revenue)` is a plain sum off
+`dim_movie` (one row per film, no de-dup needed), while `rating` is de-duplicated to one row per
+movie via a `movie_ratings` CTE before `AVG()` — the query's comment names the Task 59 fork
+explicitly so a future reader doesn't have to rediscover why the two aggregates are asymmetric.
+**A real linking bug caught before it shipped**: the first draft of the dashboard template built
+each studio's link from `row.company_id`, which is syntactically slug-shaped enough to match the
+`<slug:...>` URL converter but resolves to nothing (`get_object_or_404(..., slug=company_id)`
+against a numeric string never matches a real text slug) — silently 404ing every link. Fixed by
+adding `c.slug AS studio_slug` to the query and linking on that instead; caught by actually
+clicking through a live-rendered row rather than trusting the template compiled. Both queries
+timed live against the full warehouse: **8.7ms and 11.4ms** respectively, the full `/analytics/`
+response **116ms** — both carry an explicit `LIMIT`/bounded-row-count by construction (Task 42's
+lesson), so neither is a candidate for the kind of unbounded-query bug found there. Dashboard is
+now **4 panels** (2 tables added to the existing decade/genre pair); the sheet-header sub-copy
+was updated to mention studios, and the header's unused `eyebrow`/`accession` params — dead since
+Task 45 removed that kicker line but never dropped from this one call site — were finally deleted
+rather than left silently ignored. Live-verified: all 4 panels render with real data,
+`studio_output_by_decade` shows United Artists→Paramount→Universal leading successive decades,
+`top_studios_by_revenue` ranks Warner Bros. Pictures first (128 films, $45.3B, ★7.24) and every
+studio link resolves 200. Tests unchanged in count (229) — the existing dashboard context test
+was extended with the two new panels' fixtures and assertions rather than duplicated.
+Prior task's notes: **Task 59 (2026-08-16) gave `dim_company` its pages** —
 `/studios/` (ranked table, most films first) and `/studios/<slug>/` (filmography + stats), plus a
 "Studios" record row on the movie page. The plan's own page-shape reference (`genre_list.html`,
 reused per the Task 50 note) had gone stale by the time this task ran: the entire genre browsing
@@ -358,7 +389,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 10    | People, Partnerships & Franchises | 47–53 | Complete |
 | 11    | Movie Page Legibility  | 54     | Complete |
 | 12    | Movie Provenance — the scalar fields | 55–56 | Complete |
-| 13    | Studios — `dim_company` + the first bridge table | 57–60 | Not started |
+| 13    | Studios — `dim_company` + the first bridge table | 57–60 | Complete |
 | 14    | Where and in What Language | 61–63 | Not started |
 
 ---
@@ -878,14 +909,37 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   studios. Tests 225 → 229 (4 new, plus the 10 existing `movie_detail` tests updated to mock the
   view's new `MovieCompany` query).
 
-#### [ ] Task 60 — Analytics: studio panels
+#### [x] Task 60 — Analytics: studio panels
 - **Goal:** Spend the new dimension on the dashboard.
 - **Files:** new `warehouse/queries/{studio_output_by_decade,top_studios_by_revenue}.sql`, `django_app/analytics/{views.py,templates/analytics/dashboard.html}`
 - **Steps:**
   1. Two panels: studio output by decade, and top studios by revenue + avg rating (with a minimum film count so a studio with one hit doesn't top the table — the same shape as `top_rated_directors.sql`'s ≥3-film floor).
   2. **Every query carries an explicit `LIMIT`** (Task 42's lesson — two unbounded queries once returned 1,304 rows into a fixed-height panel) and the `SELECT DISTINCT movie_id` CTE wherever it touches `fact_movie_metrics`.
   3. Time each query; the current dashboard's slowest panel is under 0.5s and these join one more table than any existing panel.
-- **Outcome:**
+- **Outcome:** Both queries added exactly as scoped, with a real narrowing decision on the first:
+  a literal (studio × decade) crosstab would be either 1,383 columns or thousands of rows, so
+  `studio_output_by_decade.sql` instead surfaces the leading studio per decade via `RANK() OVER
+  (PARTITION BY decade ...)`, staying one row per decade — the query's own comment records this as
+  a deliberate scope choice, not a shortcut taken silently. Both queries carry an explicit `LIMIT`
+  (20, added to the decade query even though it's naturally bounded to ~10 rows — cheap insurance
+  matching the literal rule rather than relying on "this one happens to be safe"). `top_studios_by_revenue`
+  applies the genre-fanout guard on only one of its two aggregates and says so in a comment: `SUM(revenue)`
+  is a plain sum off `dim_movie` (one row per film), while `rating` is de-duplicated to one row per
+  movie via a `movie_ratings` CTE before `AVG()` — the same fork Task 59's `studio_detail` view had
+  to get right, now named explicitly so a future reader doesn't have to re-derive why the two
+  aggregates look asymmetric. **A real bug caught before shipping**: the first draft linked each
+  studio by `row.company_id`, which matches the `<slug:...>` URL converter syntactically but
+  resolves to nothing (a numeric string never equals a text slug), silently 404ing every link —
+  found by actually clicking a live-rendered row, not by reading the template. Fixed by adding
+  `c.slug AS studio_slug` to the query. Also dropped the dashboard's `eyebrow`/`accession` params
+  to `_sheet_header.html`, dead since Task 45 removed that kicker line from the template itself
+  but never cleaned out of this call site. **Live-verified**: both queries run in **8.7ms and
+  11.4ms** against the full warehouse, full `/analytics/` response **116ms**; dashboard is now
+  4 panels; `studio_output_by_decade` shows United Artists → Paramount → Universal leading
+  successive decades; `top_studios_by_revenue` ranks Warner Bros. Pictures first (128 films,
+  $45.3B, ★7.24) and every studio link resolves 200. Tests: the existing dashboard context test
+  extended with the two new panels' fixtures rather than duplicated (229 → 229, no net new test
+  needed since one assertion-rich test already covers the whole view).
 
 ---
 

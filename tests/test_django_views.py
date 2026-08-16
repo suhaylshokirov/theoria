@@ -917,6 +917,13 @@ def test_analytics_dashboard_returns_200_with_expected_context():
             {"genre_name": "Action", "movie_count": 3, "total_revenue": Decimal("1000")}
         ],
         "movies_by_decade.sql": [{"decade": 2020, "avg_rating": Decimal("7.5")}],
+        "studio_output_by_decade.sql": [
+            {"decade": 2020, "studio_name": "Test Studio", "movie_count": 5}
+        ],
+        "top_studios_by_revenue.sql": [
+            {"studio_slug": "test-studio", "studio_name": "Test Studio",
+             "movie_count": 5, "total_revenue": Decimal("500"), "avg_rating": Decimal("7.1")}
+        ],
     }
 
     with patch("analytics.views._run_query", side_effect=lambda fname: fake_rows[fname]):
@@ -930,6 +937,8 @@ def test_analytics_dashboard_returns_200_with_expected_context():
         "decade_avg_ratings",
         "genre_labels",
         "genre_revenue",
+        "studio_output_by_decade",
+        "top_studios_by_revenue",
     ):
         assert key in response.context
 
@@ -937,6 +946,13 @@ def test_analytics_dashboard_returns_200_with_expected_context():
     assert response.context["decade_avg_ratings"] == [7.5]
     assert response.context["genre_labels"] == ["Action"]
     assert response.context["genre_revenue"] == [1000.0]
+    assert response.context["studio_output_by_decade"][0]["studio_name"] == "Test Studio"
+    assert response.context["top_studios_by_revenue"][0]["studio_slug"] == "test-studio"
+
+    body = response.content.decode()
+    assert "Studio output by decade" in body
+    assert "Top studios by revenue" in body
+    assert 'href="/studios/test-studio/"' in body
 
 
 # ---------------------------------------------------------------------------
