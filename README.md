@@ -35,11 +35,11 @@ extraction step never collected it.
 
 | Home | Analytics |
 |---|---|
-| ![Home — the catalog as a contact sheet, top-rated films keyed in lime](docs/screenshots/home.png) | ![Analytics — average rating by decade](docs/screenshots/analytics.png) |
+| ![Home — catalog totals over a poster wall of the collection](docs/screenshots/homepage.png) | ![Analytics — total revenue by genre, charted and ranked](docs/screenshots/analytics.png) |
 
 | Film catalog | Film detail |
 |---|---|
-| ![Film list — search, sort and a poster grid](docs/screenshots/movies.png) | ![Film detail — poster plate, record list and cast](docs/screenshots/movie-detail.png) |
+| ![Film list — search and sort by newest, rating, revenue or title](docs/screenshots/movies.png) | ![Film detail — poster plate and the record list of measures and links](docs/screenshots/movie_detail.png) |
 
 ---
 
