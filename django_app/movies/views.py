@@ -1,17 +1,18 @@
 from datetime import date
 
 from django.core.paginator import Paginator
-from django.db.models import Avg, F, Max, Min
+from django.db.models import Avg, Count, F, Max, Min, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 
 
 from movies.models import (
-    Credit, Genre, Movie, MovieMetrics, Person,
+    Company, Credit, Genre, Movie, MovieCompany, MovieMetrics, Person,
 )
 
 MOVIES_PER_PAGE = 24
 PEOPLE_PER_PAGE = 30
+STUDIOS_PER_PAGE = 30
 
 
 def _is_ajax(request):
@@ -270,6 +271,14 @@ def movie_detail(request, movie_slug):
     # job_display string the merged rows carry.
     directors = [c.person for c in credits if c.job == "Director"]
 
+    studios = [
+        mc.company for mc in
+        MovieCompany.objects.using("warehouse")
+        .filter(movie_id=movie_id)
+        .select_related("company")
+        .order_by("company__name")
+    ]
+
     # fact_movie_metrics has one row per (movie, date, genre), and rating is
     # a movie-level measure repeated identically across those rows. So take
     # one row rather than averaging: .values(...).distinct() collapses the
@@ -293,9 +302,69 @@ def movie_detail(request, movie_slug):
         "crew_person_count": len(merged_crew),
         "credit_count": len(credits),
         "directors": directors,
+        "studios": studios,
         "metrics": metrics,
     }
     return render(request, "movies/movie_detail.html", context)
+
+
+def studio_list(request):
+    """Ranked sheet of production companies by film count — the /genres/ page
+    shape (table-2col + data-meter share bars, Task 38), reused rather than
+    reinvented now that a second dimension needs the same "one measured
+    column, ranked" layout. .annotate(Count).filter(...__gt=0) compiles to a
+    HAVING clause, mirroring collection_list's now-removed pattern.
+    """
+    companies = (
+        Company.objects.using("warehouse")
+        .annotate(film_count=Count("movie_companies"))
+        .filter(film_count__gt=0)
+        .order_by("-film_count", "name")
+    )
+    page_obj = Paginator(companies, STUDIOS_PER_PAGE).get_page(request.GET.get("page"))
+    context = {"page_obj": page_obj}
+    return render(request, "movies/studio_list.html", context)
+
+
+def studio_detail(request, company_slug):
+    """One studio: its filmography in release order, span, avg rating, total revenue."""
+    company = get_object_or_404(Company.objects.using("warehouse"), slug=company_slug)
+
+    movie_ids = list(
+        MovieCompany.objects.using("warehouse")
+        .filter(company_id=company.company_id)
+        .values_list("movie_id", flat=True)
+    )
+    movies = (
+        Movie.objects.using("warehouse")
+        .filter(movie_id__in=movie_ids)
+        .order_by(F("release_date").asc(nulls_last=True))
+    )
+
+    # Two aggregates, only one needing the fact_movie_metrics genre-fanout
+    # guard: revenue sums straight off dim_movie (one row per film), but
+    # rating must collapse the (movie, date, genre) grain first via
+    # .values().distinct() — skipping that would silently multiply revenue
+    # by each film's genre count instead (the Task 59 plan's own warning).
+    stats = movies.aggregate(film_count=Count("movie_id"), total_revenue=Sum("revenue"))
+    avg_rating = (
+        MovieMetrics.objects.using("warehouse")
+        .filter(movie_id__in=movie_ids)
+        .values("movie_id", "rating")
+        .distinct()
+        .aggregate(avg_rating=Avg("rating"))["avg_rating"]
+    )
+    span = movies.aggregate(start=Min("release_date"), end=Max("release_date"))
+
+    context = {
+        "company": company,
+        "movies": movies,
+        "film_count": stats["film_count"],
+        "total_revenue": stats["total_revenue"],
+        "avg_rating": avg_rating,
+        "period": _career_period(span["start"], span["end"]),
+    }
+    return render(request, "movies/studio_detail.html", context)
 
 
 def _career_period(start, end):

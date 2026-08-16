@@ -29,7 +29,7 @@ from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 
 from movies.models import (  # noqa: E402
-    Credit, Genre, Movie, MovieMetrics, Person,
+    Company, Credit, Genre, Movie, MovieCompany, MovieMetrics, Person,
 )
 
 client = Client()
@@ -315,7 +315,10 @@ def test_movie_detail_returns_200_with_expected_context():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = [genre]
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
             cast_credit, crew_credit
@@ -338,6 +341,33 @@ def test_movie_detail_returns_200_with_expected_context():
     assert response.context["metrics"]["rating"] == Decimal("8.50")
 
 
+def test_movie_detail_renders_studios_as_links():
+    """A film's studios (bridge_movie_company, Task 58) render as links to
+    their /studios/<slug>/ pages in the movie's record list."""
+    movie = _movie()
+    studio = Company(company_id=900, name="Warner Bros. Pictures", slug="warner-bros-pictures")
+    link = MovieCompany(movie=movie, company=studio)
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [link]
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    assert list(response.context["studios"]) == [studio]
+    body = response.content.decode()
+    assert 'href="/studios/warner-bros-pictures/"' in body
+    assert "Warner Bros. Pictures" in body
+
+
 def test_movie_detail_renders_rating_and_synopsis():
     """Rating and overview must reach the rendered page, with no vote count.
 
@@ -352,7 +382,10 @@ def test_movie_detail_renders_rating_and_synopsis():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = {
@@ -380,7 +413,10 @@ def test_movie_detail_renders_identifiers_and_original_title_when_differs():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
@@ -406,7 +442,10 @@ def test_movie_detail_hides_original_title_when_same_as_title():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
@@ -432,7 +471,10 @@ def test_movie_detail_cast_present_when_no_director_credited():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
             cast_credit
@@ -463,7 +505,10 @@ def test_movie_detail_merges_multi_job_crew_person():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
@@ -499,7 +544,10 @@ def test_movie_detail_person_appears_in_cast_and_crew():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
@@ -540,7 +588,10 @@ def test_movie_detail_sends_every_credit_for_client_side_paging():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = (
             cast_credits + crew_credits
@@ -589,7 +640,10 @@ def test_movie_detail_crew_grouped_in_department_order():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
@@ -626,7 +680,10 @@ def test_movie_detail_crew_rows_carry_a_face_or_silhouette():
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
         MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+    ) as metrics_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
@@ -777,6 +834,74 @@ def test_person_detail_404_when_missing():
 
     with patch("movies.views.get_object_or_404", side_effect=Http404()):
         response = client.get("/people/nobody/")
+
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# studio_list, studio_detail
+# ---------------------------------------------------------------------------
+
+
+def _company(company_id=1, name="Test Studio", slug="test-studio"):
+    return Company(company_id=company_id, name=name, slug=slug)
+
+
+def test_studio_list_returns_200_ranked_by_film_count():
+    studio = _company()
+
+    with patch.object(Company, "objects", new=MagicMock()) as company_mgr:
+        qs = company_mgr.using.return_value
+        qs.annotate.return_value = qs
+        qs.filter.return_value = qs
+        qs.order_by.return_value = [studio]
+
+        response = client.get("/studios/")
+
+    assert response.status_code == 200
+    assert list(response.context["page_obj"]) == [studio]
+    qs.filter.assert_called_once_with(film_count__gt=0)
+
+
+def test_studio_detail_returns_200_with_expected_stats():
+    studio = _company(name="Warner Bros. Pictures", slug="warner-bros-pictures")
+    movie = _movie()
+
+    with patch("movies.views.get_object_or_404", return_value=studio), patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        company_mgr.using.return_value.filter.return_value.values_list.return_value = [movie.movie_id]
+
+        movies_qs = movie_mgr.using.return_value.filter.return_value.order_by.return_value
+        movies_qs.__iter__.return_value = iter([movie])
+        movies_qs.aggregate.side_effect = [
+            {"film_count": 1, "total_revenue": 5000},
+            {"start": date(2020, 1, 1), "end": date(2020, 1, 1)},
+        ]
+
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
+            "avg_rating": Decimal("7.24")
+        }
+
+        response = client.get("/studios/warner-bros-pictures/")
+
+    assert response.status_code == 200
+    assert response.context["company"] == studio
+    assert response.context["film_count"] == 1
+    assert response.context["total_revenue"] == 5000
+    assert response.context["avg_rating"] == Decimal("7.24")
+    assert response.context["period"] == "2020"
+    body = response.content.decode()
+    assert "Warner Bros. Pictures" in body
+
+
+def test_studio_detail_404_when_missing():
+    from django.http import Http404
+
+    with patch("movies.views.get_object_or_404", side_effect=Http404()):
+        response = client.get("/studios/nobody/")
 
     assert response.status_code == 404
 

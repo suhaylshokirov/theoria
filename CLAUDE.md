@@ -30,10 +30,41 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 58 — Warehouse: dim_company + bridge_movie_company
-Currently on          : Task 59 — not started (Django: /studios/ and the studio page).
-Current phase         : Phase 13 (Tasks 57–60) — Tasks 57–58 done, 59–60 remaining.
-Blockers / open issues: **No blockers.** **Task 58 (2026-08-16) added `dim_company` and
+Last completed task   : Task 59 — Django: /studios/ and the studio page
+Currently on          : Task 60 — not started (Analytics: studio panels).
+Current phase         : Phase 13 (Tasks 57–60) — Tasks 57–59 done, 60 remaining.
+Blockers / open issues: **No blockers.** **Task 59 (2026-08-16) gave `dim_company` its pages** —
+`/studios/` (ranked table, most films first) and `/studios/<slug>/` (filmography + stats), plus a
+"Studios" record row on the movie page. The plan's own page-shape reference (`genre_list.html`,
+reused per the Task 50 note) had gone stale by the time this task ran: the entire genre browsing
+UI — `genre_list.html`, `genre_detail.html`, `/genres/`, and the Genres nav link — was removed on
+2026-08-14 (see the Phase 11 status entry below) when the Analytics dashboard was cut to 2 panels.
+Only the underlying CSS/JS (`.table-2col`, `[data-meter]`, `initMeters()`) survived that removal,
+so **the "no new CSS or JS" instruction was honoured by reusing the surviving primitives directly**
+rather than the now-deleted template file — `studio_list.html` is a fresh `<table class="table-2col">`
+built from those same classes, not a copy of a file that no longer exists. `studio_detail.html`
+reuses `.stats`/`.stat` (already standalone, not scoped under `.person-head`) for its Films/Avg
+rating/Active/Revenue row and `_movie_card.html` for its filmography grid — no image plate for the
+studio itself, since only ~45% of companies have a logo and no existing CSS component covers a
+non-person image plate; adding one would have violated the same "no new CSS" instruction. New
+`Company`/`MovieCompany` models (`managed = False`, `MovieCompany` explicit rather than a Django
+`ManyToManyField(through=...)` — that field expects Django to own and generate the join table,
+whereas `bridge_movie_company` already exists and is fully managed by `13_companies.sql`). Nav
+gained a "Studios" link between People and Analytics (Films · People · Studios · Analytics — still
+4 items, no crowding at the level Task 51's Actors+Directors collapse was worried about). One real
+grain bug caught while writing `studio_detail`'s two aggregates: `.values("movie_id","rating").distinct()`
+before averaging rating (the `fact_movie_metrics` genre-fanout guard used everywhere else in this
+project) but a **plain** `Sum("revenue")` off `dim_movie` — getting that backwards (averaging off
+the fanned-out fact table, or guarding the already-one-row-per-film revenue sum) was the exact
+mistake the plan warned about. Live-verified: all 10 routes 200 (incl. `/studios/?page=2`), a bad
+studio slug 404s; `/studios/` ranks Warner Bros. Pictures first (**128 films**, matching Task 58's
+verified count exactly); `/studios/warner-bros-pictures/` shows **128 / ★7.24 / 1971–2025 /
+$45,341,167,063**; `/movies/the-godfather/` links all three of its studios (Albert S. Ruddy
+Productions, Alfran Productions, Paramount Pictures). Tests 225 → 229 (4 new: studios render as
+links on the movie page, `studio_list` ranking/filter, `studio_detail`'s two-aggregate stats
+including the grain-guard regression, and a 404 case; the 10 existing `movie_detail` tests were
+also updated to mock the new `MovieCompany` query the view now makes).
+Prior task's notes: **Task 58 (2026-08-16) added `dim_company` and
 `bridge_movie_company`**, the warehouse's first genuine bridge table — new `warehouse/ddl/13_companies.sql`
 (also folded into `01_dimensions.sql` for fresh bootstraps), applied live. Named `bridge_` rather
 than `fact_` on purpose: it carries no measure, only the existence of a movie/company relationship
@@ -817,7 +848,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   estimate. Warehouse checks 20/20 → **25/25**. Tests 217 → 225 (8 new, incl. a regression test
   naming the distinct-vs-row-count fix so it can't silently regress).
 
-#### [ ] Task 59 — Django: `/studios/` and the studio page
+#### [x] Task 59 — Django: `/studios/` and the studio page
 - **Goal:** Give the new entity its pages, and put a film's studios on the movie page.
 - **Files:** `django_app/movies/{models,views,urls}.py`, new `movies/templates/movies/{studio_list,studio_detail}.html`, `movie_detail.html`, `templates/base.html`, `tests/test_django_views.py`
 - **Steps:**
@@ -827,7 +858,25 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   4. Studios on the movie page, linked, in the existing record list.
   5. Nav entry. **Check the nav isn't getting crowded** — Task 51 already collapsed Actors+Directors into People for this reason.
 - **Verify:** all routes 200, bad slug 404s, a known studio page renders the expected film count.
-- **Outcome:**
+- **Outcome:** Built as scoped, with one necessary deviation: `genre_list.html`, the plan's named
+  page-shape reference, had been deleted four days before this task ran (the genre-browsing UI was
+  removed on 2026-08-14 when the Analytics dashboard was cut to 2 panels — see the Phase 11 status
+  entry). The underlying CSS/JS it was built from (`.table-2col`, `[data-meter]`, `initMeters()`)
+  was untouched by that removal, so `studio_list.html` reuses those primitives directly in a fresh
+  template rather than copying a file that no longer exists — same shape, same "no new CSS or JS"
+  guarantee, different starting point. `Company`/`MovieCompany` added as scoped; `MovieCompany` is
+  an explicit model rather than a `ManyToManyField(through=...)`, since that Django field expects
+  to own and generate its own join table and `bridge_movie_company` already exists, fully owned by
+  `13_companies.sql`. `studio_detail`'s two aggregates follow the genre-fanout rule exactly:
+  `.values("movie_id","rating").distinct()` before `Avg()`, plain `Sum("revenue")` off `dim_movie` —
+  getting either backwards was the concrete failure mode the plan warned about, and writing the
+  view surfaced it as a real thing to get right, not just a warning to read past. Nav gained
+  "Studios" between People and Analytics (4 items, not crowded). **Live-verified**: all 10 routes
+  200 incl. `/studios/?page=2`, bad slug 404s; `/studios/` ranks Warner Bros. Pictures first at
+  **128 films** (exactly matching Task 58's warehouse figure); `/studios/warner-bros-pictures/`
+  shows **128 / ★7.24 / 1971–2025 / $45,341,167,063**; *The Godfather* links all three of its
+  studios. Tests 225 → 229 (4 new, plus the 10 existing `movie_detail` tests updated to mock the
+  view's new `MovieCompany` query).
 
 #### [ ] Task 60 — Analytics: studio panels
 - **Goal:** Spend the new dimension on the dashboard.

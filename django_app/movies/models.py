@@ -182,3 +182,50 @@ class MovieMetrics(models.Model):
         return f"{self.movie_id}/{self.date_id}/{self.genre_id}"
 
 
+class Company(models.Model):
+    """A production company (Task 58). Films have 2.81 companies on average."""
+
+    company_id = models.IntegerField(primary_key=True)
+    name = models.TextField()
+    logo_path = models.TextField(null=True)
+    origin_country = models.CharField(max_length=10, null=True)
+    slug = models.SlugField(max_length=300, unique=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_company"
+
+    def __str__(self):
+        return self.name
+
+
+class MovieCompany(models.Model):
+    """bridge_movie_company: which studios worked on which films.
+
+    Same fake-single-PK workaround as the other composite-PK tables above —
+    `movie` carries primary_key=True purely to satisfy Django's one-pk-per-
+    model rule; the real PK is the composite (movie_id, company_id) in
+    Postgres. Declared explicitly rather than as a ManyToManyField(through=...)
+    on Movie/Company: a ManyToManyField expects Django to own and generate the
+    join table, but bridge_movie_company already exists and is managed
+    entirely by warehouse/ddl/13_companies.sql — this model just describes it.
+    """
+
+    movie = models.ForeignKey(
+        Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True,
+        related_name="movie_companies",
+    )
+    company = models.ForeignKey(
+        Company, on_delete=models.DO_NOTHING, db_column="company_id",
+        related_name="movie_companies",
+    )
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "bridge_movie_company"
+
+    def __str__(self):
+        return f"{self.movie_id}/{self.company_id}"
+
+

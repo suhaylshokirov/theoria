@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — {{ company.name }}{% endblock %}
+{% block description %}{{ company.name }}: {{ film_count }} film{{ film_count|pluralize }} in the Theoria catalog.{% endblock %}
+
+{% block content %}
+{% include "movies/_sheet_header.html" with title=company.name sub="Films this studio is credited on, in release order." only %}
+
+<div class="stats">
+    <div class="stat">
+        <span class="stat-value" data-count="{{ film_count }}">{{ film_count }}</span>
+        <span class="stat-label">Films</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{% if avg_rating %}★ {{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
+        <span class="stat-label">Avg rating</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{{ period }}</span>
+        <span class="stat-label">Active</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">{% if total_revenue %}${{ total_revenue|floatformat:"0g" }}{% else %}—{% endif %}</span>
+        <span class="stat-label">Revenue</span>
+    </div>
+</div>
+
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>Filmography</h2>
+        <span class="section-note">{{ film_count }} film{{ film_count|pluralize }}</span>
+    </div>
+    {% if movies %}
+    <div class="poster-grid is-tight">
+        {% for movie in movies %}
+        {% include "movies/_movie_card.html" with movie=movie only %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">No films recorded for this studio yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

@@ -70,6 +70,14 @@
                 </dd>
             </div>
             {% endif %}
+            {% if studios %}
+            <div class="record-row">
+                <dt class="label">Studios</dt>
+                <dd>
+                    {% for studio in studios %}<a href="{% url 'movies:studio_detail' studio.slug %}">{{ studio.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                </dd>
+            </div>
+            {% endif %}
         </dl>
 
         {% if genres %}

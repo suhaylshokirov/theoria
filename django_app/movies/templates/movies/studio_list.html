@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — Studios{% endblock %}
+
+{% block content %}
+{% include "movies/_sheet_header.html" with title="Studios" sub="Every production company credited on a film in the catalog, ranked by how many." only %}
+
+<section class="sheet-section">
+    {% if page_obj %}
+    <div class="table-wrap">
+        <table class="table-2col">
+            <thead>
+                <tr><th scope="col">Studio</th><th scope="col" class="num">Films</th></tr>
+            </thead>
+            <tbody>
+                {% for company in page_obj %}
+                <tr>
+                    <th scope="row"><a href="{% url 'movies:studio_detail' company.slug %}">{{ company.name }}</a></th>
+                    <td class="num" data-meter>{{ company.film_count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query="" only %}
+    {% else %}
+    <p class="empty">No studios loaded yet. Run the pipeline to fill the catalog.</p>
+    {% endif %}
+</section>
+{% endblock %}
