@@ -1,0 +1,7 @@
+{% comment %} AJAX-only response for the Studios index's live filtering (see
+   _is_ajax() and studio_list() in views.py). static/js/theoria.js's
+   initLiveFilter() locates #studios-grid in this response and copies its
+   innerHTML onto the live element. Also included directly by studio_list.html
+   for a normal page load, so the live and no-JS paths render from the same
+   source and can't drift apart. {% endcomment %}
+{% include "movies/_studio_grid.html" %}

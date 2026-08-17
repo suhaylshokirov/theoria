@@ -4,7 +4,7 @@
 {% block description %}{{ company.name }}: {{ film_count }} film{{ film_count|pluralize }} in the Theoria catalog.{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title=company.name sub="Films this studio is credited on, in release order." only %}
+{% include "movies/_sheet_header.html" with title=company.name sub="Search this studio's filmography, or reorder by what was measured." only %}
 
 <div class="stats">
     <div class="stat">
@@ -30,14 +30,31 @@
         <h2>Filmography</h2>
         <span class="section-note">{{ film_count }} film{{ film_count|pluralize }}</span>
     </div>
-    {% if movies %}
-    <div class="poster-grid is-tight">
-        {% for movie in movies %}
-        {% include "movies/_movie_card.html" with movie=movie only %}
-        {% endfor %}
+
+    <div class="toolbar">
+        {% comment %} Same live-filter contract as movie_list.html, scoped to this
+           studio's films. data-live-targets only names the grid below — the
+           stats block above is this studio's whole output and never changes
+           as the filmography is filtered. {% endcomment %}
+        <form method="get" action="" data-live-filter data-live-targets="#studio-movies-grid">
+            <div class="field">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search this filmography" aria-label="Search {{ company.name }}'s films by title">
+            </div>
+            <fieldset class="segmented">
+                <legend class="visually-hidden">Order by</legend>
+                <input type="radio" name="sort" id="sort-release" value="release" {% if sort == "release" %}checked{% endif %}>
+                <label for="sort-release">Newest</label>
+                <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
+                <label for="sort-rating">Rated</label>
+                <input type="radio" name="sort" id="sort-revenue" value="revenue" {% if sort == "revenue" %}checked{% endif %}>
+                <label for="sort-revenue">Revenue</label>
+                <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
+                <label for="sort-title">A–Z</label>
+            </fieldset>
+            <button type="submit" class="apply-btn">Apply</button>
+        </form>
     </div>
-    {% else %}
-    <p class="empty">No films recorded for this studio yet.</p>
-    {% endif %}
+
+    {% include "movies/_studio_movies_grid.html" %}
 </section>
 {% endblock %}

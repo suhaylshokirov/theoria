@@ -33,7 +33,31 @@ Rules:
 Last completed task   : Task 61 — Warehouse: dim_country, dim_language and their bridges
 Currently on          : Task 62 — not started (Django: provenance on the movie page, and browse by country/language — Phase 14).
 Current phase         : Phase 13 (Tasks 57–60) — complete. Phase 14 (Tasks 61–63): Task 61 complete, 62–63 not started.
-Blockers / open issues: **No blockers.** **Task 61 (2026-08-17) applies Phase 13's bridge pattern
+Blockers / open issues: **No blockers.** **The Studios pages were redesigned by user
+request on 2026-08-17, ad hoc and outside the numbered task flow** (same posture as the Franchise
+removal and Analytics-panel cuts logged further below) — `/studios/` was a ranked `table-2col` of
+studio name + film count, the same shape Task 59 deliberately reused from the old `/genres/` page.
+The user found it boring and wanted studios browsed the way people are: a logo grid with
+search/sort, each studio's own page filterable the same way `/movies/` is. Rebuilt `studio_list`
+and `studio_detail` on the `_person_list()`/`movie_list()` pattern (live-filter AJAX via
+`data-live-filter`, `_is_ajax()` branch returning a results-only fragment) rather than inventing a
+third filtering mechanism. Logo cards are a genuinely new card type — TMDB logos are landscape,
+often-transparent wordmarks, so `.poster-card .logo` uses `object-fit: contain` + padding on a
+3:2 frame instead of the person/movie cards' cropped 2:3 `cover`; the ~46% of studios with no logo
+(Task 59's measured figure) fall back to an initial-letter monogram (`.placeholder-studio` +
+`.studio-initial`) rather than a hand-drawn building/camera icon, on the reasoning that a wrong
+freehand SVG is a worse failure mode than a plain letter. `studio_detail`'s header stats (Films /
+Avg rating / Active / Revenue) are now computed once over the studio's *whole* filmography and
+never move as the grid below is filtered or paged — the same separation `person_detail`'s stat row
+already has from its own credit list. Live-verified: `/studios/` renders a 30-per-page logo grid,
+search-by-name and Most-films/A–Z sort both work over AJAX and plain GET;
+`/studios/warner-bros-pictures/?q=batman&sort=rating` returns exactly its 7 Batman films ranked by
+rating with the header stats (128 films total) unchanged; a studio with no logo shows its initial
+in the monogram tile; bad slug still 404s. Tests 238 → 243 (5 new: search/sort/invalid-sort/
+AJAX-fragment coverage for `studio_list`, plus filtered-filmography and AJAX-fragment coverage for
+`studio_detail`, mirroring `movie_list`'s and `person_list`'s existing test shape). No warehouse or
+ETL change — this is markup/view/CSS only, reading the same `dim_company`/`bridge_movie_company`
+Task 58 already populated. **Task 61 (2026-08-17) applies Phase 13's bridge pattern
 a second and third time** — `dim_country`/`dim_language` (natural ISO-code primary keys, no
 surrogate id, no slug) and `bridge_movie_country`/`bridge_movie_language`, loaded from the Silver
 link tables Task 57 already wrote. `bridge_movie_country` carries `relation` (`origin`/

@@ -1,0 +1,8 @@
+{% comment %} AJAX-only response for a studio page's live filmography filtering
+   (see _is_ajax() and studio_detail() in views.py). static/js/theoria.js's
+   initLiveFilter() locates #studio-movies-grid in this response and copies
+   its innerHTML onto the live element — the header stats block above it is
+   never part of the swap, since it describes the studio's whole output and
+   doesn't change as the grid is filtered. Also included directly by
+   studio_detail.html for a normal page load. {% endcomment %}
+{% include "movies/_studio_movies_grid.html" %}

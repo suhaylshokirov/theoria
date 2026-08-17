@@ -633,6 +633,7 @@ main.container {
 
 .poster-card .poster,
 .poster-card .headshot,
+.poster-card .logo,
 .poster-card .placeholder {
   aspect-ratio: 2 / 3;
   width: 100%;
@@ -666,11 +667,40 @@ main.container {
   color: var(--rule-strong);
 }
 
+/* Studio logos are landscape/transparent wordmarks, not portrait photos —
+   cropping one with object-fit: cover (the default above) would cut letters
+   off, so both the real logo and its fallback get a shorter, padded, contain
+   frame instead. Coverage is ~46% (Task 59's measured figure), so the
+   fallback is an initial-letter monogram rather than a hand-drawn icon. */
+.poster-card .logo,
+.poster-card .placeholder-studio {
+  aspect-ratio: 3 / 2;
+}
+
+.poster-card .logo {
+  object-fit: contain;
+  padding: var(--space-4);
+  background: var(--paper);
+}
+
+.poster-card .placeholder-studio {
+  background: linear-gradient(160deg, var(--sheet) 0%, var(--sheet-2) 100%);
+}
+
+.placeholder-studio .studio-initial {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-xl);
+  color: var(--rule-strong);
+}
+
 .poster-card a:hover .poster,
 .poster-card a:hover .headshot,
+.poster-card a:hover .logo,
 .poster-card a:hover .placeholder,
 .poster-card a:focus-visible .poster,
-.poster-card a:focus-visible .headshot {
+.poster-card a:focus-visible .headshot,
+.poster-card a:focus-visible .logo {
   border-color: var(--lime-mark);
   transform: translateY(-3px);
 }

@@ -1,0 +1,18 @@
+{% comment %} The logo grid + pager, below .toolbar. Mirrors _person_grid.html:
+   the other half of the pair static/js/theoria.js's initLiveFilter() swaps
+   as the filter form changes. aria-live so the swap is announced to screen
+   readers. {% endcomment %}
+<div id="studios-grid" aria-live="polite">
+    <div class="poster-grid">
+        {% for company in page_obj %}
+        {% include "movies/_studio_card.html" with company=company only %}
+        {% empty %}
+        <p class="empty">
+            {% if q %}No studios match “{{ q }}”.
+            {% else %}No studios loaded yet. Run the pipeline to fill the catalog.{% endif %}
+        </p>
+        {% endfor %}
+    </div>
+
+    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query=base_query only %}
+</div>

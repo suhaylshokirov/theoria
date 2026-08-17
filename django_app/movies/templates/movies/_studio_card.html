@@ -1,0 +1,28 @@
+{% comment %} A studio as a frame on the sheet, mirroring _person_card.html.
+   Params (pass with `only`):
+     company : a Company
+
+   Logos are landscape/transparent PNGs, unlike a poster or a headshot, so
+   they get their own .logo treatment (object-fit: contain, padded) rather
+   than reusing .poster/.headshot's cover-cropped 2:3 frame — cropping a
+   wordmark would just cut letters off. Coverage is ~46% (Task 59's measured
+   figure), so the fallback is an initial-letter monogram rather than a
+   generic icon: safer to draw correctly than a hand-built building/camera
+   glyph, and still reads immediately as "this studio has no logo on file"
+   rather than a broken image. {% endcomment %}
+{% load tmdb_images %}
+<div class="poster-card">
+    <a href="{% url 'movies:studio_detail' company.slug %}">
+        {% if company.logo_path %}
+        <img class="logo" src="{{ company.logo_path|tmdb_image:'w185' }}" alt="{{ company.name }} logo" loading="lazy">
+        {% else %}
+        <div class="placeholder placeholder-studio" aria-hidden="true">
+            <span class="studio-initial">{{ company.name|first|upper }}</span>
+        </div>
+        {% endif %}
+        <div class="card-body">
+            <span class="card-title">{{ company.name }}</span>
+            <span class="card-sub">{{ company.film_count }} film{{ company.film_count|pluralize }}</span>
+        </div>
+    </a>
+</div>

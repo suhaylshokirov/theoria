@@ -861,6 +861,60 @@ def test_studio_list_returns_200_ranked_by_film_count():
     assert response.status_code == 200
     assert list(response.context["page_obj"]) == [studio]
     qs.filter.assert_called_once_with(film_count__gt=0)
+    assert response.context["q"] == ""
+    assert response.context["sort"] == "film_count"
+
+
+def test_studio_list_search_and_sort():
+    studio = _company()
+
+    with patch.object(Company, "objects", new=MagicMock()) as company_mgr:
+        qs = company_mgr.using.return_value
+        qs.annotate.return_value = qs
+        qs.filter.return_value = qs
+        qs.order_by.return_value = [studio]
+
+        response = client.get("/studios/", {"q": "warner", "sort": "name"})
+
+    assert response.status_code == 200
+    # First filter() is the HAVING film_count__gt=0, second is the name search.
+    qs.filter.assert_any_call(film_count__gt=0)
+    qs.filter.assert_any_call(name__icontains="warner")
+    assert response.context["q"] == "warner"
+    assert response.context["sort"] == "name"
+
+
+def test_studio_list_invalid_sort_falls_back_to_film_count():
+    with patch.object(Company, "objects", new=MagicMock()) as company_mgr:
+        qs = company_mgr.using.return_value
+        qs.annotate.return_value = qs
+        qs.filter.return_value = qs
+        qs.order_by.return_value = []
+
+        response = client.get("/studios/", {"sort": "bogus"})
+
+    assert response.status_code == 200
+    assert response.context["sort"] == "film_count"
+
+
+def test_studio_list_ajax_request_renders_results_fragment_only():
+    """initLiveFilter()'s fetch() sets this header and wants just the results,
+    not the full page — see _is_ajax() in views.py."""
+    studio = _company()
+
+    with patch.object(Company, "objects", new=MagicMock()) as company_mgr:
+        qs = company_mgr.using.return_value
+        qs.annotate.return_value = qs
+        qs.filter.return_value = qs
+        qs.order_by.return_value = [studio]
+
+        response = client.get("/studios/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "studios-grid" in content
+    assert "<html" not in content
+    assert "<!DOCTYPE" not in content
 
 
 def test_studio_detail_returns_200_with_expected_stats():
@@ -874,12 +928,12 @@ def test_studio_detail_returns_200_with_expected_stats():
     ) as metrics_mgr:
         company_mgr.using.return_value.filter.return_value.values_list.return_value = [movie.movie_id]
 
-        movies_qs = movie_mgr.using.return_value.filter.return_value.order_by.return_value
-        movies_qs.__iter__.return_value = iter([movie])
-        movies_qs.aggregate.side_effect = [
+        all_movies_qs = movie_mgr.using.return_value.filter.return_value
+        all_movies_qs.aggregate.side_effect = [
             {"film_count": 1, "total_revenue": 5000},
             {"start": date(2020, 1, 1), "end": date(2020, 1, 1)},
         ]
+        all_movies_qs.order_by.return_value = [movie]
 
         metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
             "avg_rating": Decimal("7.24")
@@ -893,8 +947,82 @@ def test_studio_detail_returns_200_with_expected_stats():
     assert response.context["total_revenue"] == 5000
     assert response.context["avg_rating"] == Decimal("7.24")
     assert response.context["period"] == "2020"
+    assert response.context["q"] == ""
+    assert response.context["sort"] == "release"
+    assert list(response.context["page_obj"]) == [movie]
     body = response.content.decode()
     assert "Warner Bros. Pictures" in body
+
+
+def test_studio_detail_filters_filmography_by_search(monkeypatch):
+    """The header stats always reflect the whole filmography; the grid below
+    is the part that narrows when a search is applied."""
+    studio = _company(name="Warner Bros. Pictures", slug="warner-bros-pictures")
+    movie = _movie()
+
+    with patch("movies.views.get_object_or_404", return_value=studio), patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        company_mgr.using.return_value.filter.return_value.values_list.return_value = [movie.movie_id]
+
+        all_movies_qs = movie_mgr.using.return_value.filter.return_value
+        all_movies_qs.aggregate.side_effect = [
+            {"film_count": 1, "total_revenue": 5000},
+            {"start": date(2020, 1, 1), "end": date(2020, 1, 1)},
+        ]
+        filtered_qs = all_movies_qs.filter.return_value
+        filtered_qs.order_by.return_value = [movie]
+
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
+            "avg_rating": Decimal("7.24")
+        }
+
+        response = client.get("/studios/warner-bros-pictures/", {"q": "test", "sort": "title"})
+
+    assert response.status_code == 200
+    all_movies_qs.filter.assert_called_once_with(title__icontains="test")
+    # Stats are computed off the unfiltered aggregate calls above, unaffected
+    # by the search term.
+    assert response.context["film_count"] == 1
+    assert response.context["q"] == "test"
+    assert response.context["sort"] == "title"
+
+
+def test_studio_detail_ajax_request_renders_results_fragment_only():
+    studio = _company(name="Warner Bros. Pictures", slug="warner-bros-pictures")
+    movie = _movie()
+
+    with patch("movies.views.get_object_or_404", return_value=studio), patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        MovieMetrics, "objects", new=MagicMock()
+    ) as metrics_mgr:
+        company_mgr.using.return_value.filter.return_value.values_list.return_value = [movie.movie_id]
+
+        all_movies_qs = movie_mgr.using.return_value.filter.return_value
+        all_movies_qs.aggregate.side_effect = [
+            {"film_count": 1, "total_revenue": 5000},
+            {"start": date(2020, 1, 1), "end": date(2020, 1, 1)},
+        ]
+        all_movies_qs.order_by.return_value = [movie]
+
+        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
+            "avg_rating": Decimal("7.24")
+        }
+
+        response = client.get(
+            "/studios/warner-bros-pictures/", HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+        )
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "studio-movies-grid" in content
+    assert "<html" not in content
+    assert "<!DOCTYPE" not in content
+    # The stats block isn't part of the AJAX fragment — only the grid+pager is.
+    assert "Warner Bros. Pictures" not in content
 
 
 def test_studio_detail_404_when_missing():

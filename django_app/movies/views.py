@@ -308,26 +308,53 @@ def movie_detail(request, movie_slug):
     return render(request, "movies/movie_detail.html", context)
 
 
+# ?sort= values accepted by studio_list, mapped to an order_by expression.
+STUDIO_SORTS = {
+    "film_count": F("film_count").desc(nulls_last=True),
+    "name": F("name").asc(),
+}
+
+
 def studio_list(request):
-    """Ranked sheet of production companies by film count — the /genres/ page
-    shape (table-2col + data-meter share bars, Task 38), reused rather than
-    reinvented now that a second dimension needs the same "one measured
-    column, ranked" layout. .annotate(Count).filter(...__gt=0) compiles to a
-    HAVING clause, mirroring collection_list's now-removed pattern.
+    """Browsable studio index: logo grid + name search + sort + pagination —
+    the same shape as /people/ (Task 62 redesign), not the ranked table it
+    used to be. A studio is a browsable entity with its own identity and
+    artwork, same as a person; a table of numbers was the wrong instinct
+    even though .annotate(Count).filter(...__gt=0) (a HAVING clause) still
+    does the ranking underneath.
     """
+    q = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "film_count")
+    if sort not in STUDIO_SORTS:
+        sort = "film_count"
+
     companies = (
         Company.objects.using("warehouse")
         .annotate(film_count=Count("movie_companies"))
         .filter(film_count__gt=0)
-        .order_by("-film_count", "name")
     )
+    if q:
+        companies = companies.filter(name__icontains=q)
+    companies = companies.order_by(STUDIO_SORTS[sort], "name")
+
     page_obj = Paginator(companies, STUDIOS_PER_PAGE).get_page(request.GET.get("page"))
-    context = {"page_obj": page_obj}
+    context = {
+        "page_obj": page_obj, "q": q, "sort": sort,
+        "base_query": urlencode({"q": q, "sort": sort}),
+    }
+    # See _person_list()'s identical branch: static/js/theoria.js's
+    # initLiveFilter() re-requests this URL with this header on every filter
+    # change and only wants the results fragment back, not the page around it.
+    if _is_ajax(request):
+        return render(request, "movies/_studio_results.html", context)
     return render(request, "movies/studio_list.html", context)
 
 
 def studio_detail(request, company_slug):
-    """One studio: its filmography in release order, span, avg rating, total revenue."""
+    """One studio: header stats over its whole output, plus a searchable,
+    sortable, paginated filmography — the same movie-browsing toolbar as
+    /movies/, scoped to this studio's films (Task 62 redesign).
+    """
     company = get_object_or_404(Company.objects.using("warehouse"), slug=company_slug)
 
     movie_ids = list(
@@ -335,18 +362,18 @@ def studio_detail(request, company_slug):
         .filter(company_id=company.company_id)
         .values_list("movie_id", flat=True)
     )
-    movies = (
-        Movie.objects.using("warehouse")
-        .filter(movie_id__in=movie_ids)
-        .order_by(F("release_date").asc(nulls_last=True))
-    )
+    all_movies = Movie.objects.using("warehouse").filter(movie_id__in=movie_ids)
 
     # Two aggregates, only one needing the fact_movie_metrics genre-fanout
     # guard: revenue sums straight off dim_movie (one row per film), but
     # rating must collapse the (movie, date, genre) grain first via
     # .values().distinct() — skipping that would silently multiply revenue
     # by each film's genre count instead (the Task 59 plan's own warning).
-    stats = movies.aggregate(film_count=Count("movie_id"), total_revenue=Sum("revenue"))
+    # Computed once, over the *whole* filmography — the header stats describe
+    # this studio's entire output and must not shift as the grid below is
+    # filtered, the same way a person page's stat row doesn't move when
+    # someone pages through their filmography.
+    stats = all_movies.aggregate(film_count=Count("movie_id"), total_revenue=Sum("revenue"))
     avg_rating = (
         MovieMetrics.objects.using("warehouse")
         .filter(movie_id__in=movie_ids)
@@ -354,16 +381,38 @@ def studio_detail(request, company_slug):
         .distinct()
         .aggregate(avg_rating=Avg("rating"))["avg_rating"]
     )
-    span = movies.aggregate(start=Min("release_date"), end=Max("release_date"))
+    span = all_movies.aggregate(start=Min("release_date"), end=Max("release_date"))
+
+    q = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "release")
+    if sort not in MOVIE_SORTS:
+        sort = "release"
+
+    movies = all_movies
+    if q:
+        movies = movies.filter(title__icontains=q)
+    if sort == "rating":
+        movies = movies.annotate(top_rating=Max("moviemetrics__rating"))
+    movies = movies.order_by(MOVIE_SORTS[sort])
+
+    page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
     context = {
         "company": company,
-        "movies": movies,
+        "page_obj": page_obj,
+        "q": q,
+        "sort": sort,
+        "base_query": urlencode({"q": q, "sort": sort}),
         "film_count": stats["film_count"],
         "total_revenue": stats["total_revenue"],
         "avg_rating": avg_rating,
         "period": _career_period(span["start"], span["end"]),
     }
+    # Same live-filter contract as movie_list()/_person_list(): the header
+    # stats above never need to be part of the swap, so only the grid+pager
+    # fragment is returned for an AJAX refetch.
+    if _is_ajax(request):
+        return render(request, "movies/_studio_movies_results.html", context)
     return render(request, "movies/studio_detail.html", context)
 
 

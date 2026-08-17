@@ -1,0 +1,19 @@
+{% comment %} The filmography poster grid + pager, below .toolbar on
+   studio_detail.html. Mirrors _movie_grid.html — the other half of the pair
+   static/js/theoria.js's initLiveFilter() swaps as the filter form changes.
+   Its own id/partial (not a reuse of _movie_grid.html) because the empty
+   states differ: a studio with genuinely zero films never reaches this page
+   (studio_list already filters those out), so an empty result here always
+   means "no film matches the search", never "nothing loaded yet". aria-live
+   so the swap is announced to screen readers. {% endcomment %}
+<div id="studio-movies-grid" aria-live="polite">
+    <div class="poster-grid">
+        {% for movie in page_obj %}
+        {% include "movies/_movie_card.html" with movie=movie only %}
+        {% empty %}
+        <p class="empty">No films match “{{ q }}”. Try a shorter title.</p>
+        {% endfor %}
+    </div>
+
+    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query=base_query only %}
+</div>

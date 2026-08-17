@@ -3,28 +3,38 @@
 {% block title %}Theoria — Studios{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title="Studios" sub="Every production company credited on a film in the catalog, ranked by how many." only %}
+{% include "movies/_sheet_header.html" with title="Studios" sub="Every production company credited on a film in the catalog. Search by name, or reorder by output." only %}
 
 <section class="sheet-section">
-    {% if page_obj %}
-    <div class="table-wrap">
-        <table class="table-2col">
-            <thead>
-                <tr><th scope="col">Studio</th><th scope="col" class="num">Films</th></tr>
-            </thead>
-            <tbody>
-                {% for company in page_obj %}
-                <tr>
-                    <th scope="row"><a href="{% url 'movies:studio_detail' company.slug %}">{{ company.name }}</a></th>
-                    <td class="num" data-meter>{{ company.film_count }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="toolbar">
+        {% comment %} data-live-filter + data-live-targets: static/js/theoria.js's
+           initLiveFilter() re-fetches and swaps just this region as the fields
+           below change, so results update without an Apply click or a full
+           page reload. Plain GET form underneath, so it still works with no
+           JS — see _studio_results.html's docstring. {% endcomment %}
+        <form method="get" action="" data-live-filter data-live-targets="#studios-grid">
+            <div class="field">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search studios" aria-label="Search studios by name">
+            </div>
+            {% comment %} Radio segments rather than a <select>: few, fixed options, so
+               showing them is more useful than hiding them (matches movie_list's
+               and person_list's sort control). Still a plain form control —
+               works without JS. {% endcomment %}
+            <fieldset class="segmented">
+                <legend class="visually-hidden">Order by</legend>
+                <input type="radio" name="sort" id="sort-film_count" value="film_count" {% if sort == "film_count" %}checked{% endif %}>
+                <label for="sort-film_count">Most films</label>
+                <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
+                <label for="sort-name">A–Z</label>
+            </fieldset>
+            {% comment %} Redundant once JS is live-filtering on every change — hidden
+               via the html.has-js CSS gate (see base.html) rather than removed, so a
+               no-JS visitor, who gets no auto-submit on a radio change, still has a
+               way to apply anything but the search box. {% endcomment %}
+            <button type="submit" class="apply-btn">Apply</button>
+        </form>
     </div>
-    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query="" only %}
-    {% else %}
-    <p class="empty">No studios loaded yet. Run the pipeline to fill the catalog.</p>
-    {% endif %}
+
+    {% include "movies/_studio_grid.html" %}
 </section>
 {% endblock %}
