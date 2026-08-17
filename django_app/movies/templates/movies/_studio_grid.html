@@ -1,9 +1,12 @@
 {% comment %} The logo grid + pager, below .toolbar. Mirrors _person_grid.html:
    the other half of the pair static/js/theoria.js's initLiveFilter() swaps
    as the filter form changes. aria-live so the swap is announced to screen
-   readers. {% endcomment %}
+   readers.
+
+   .is-wide: logo cards are landscape (2:1), not the 2:3 portrait poster/
+   headshot cards this grid was originally sized for — see theoria.css. {% endcomment %}
 <div id="studios-grid" aria-live="polite">
-    <div class="poster-grid">
+    <div class="poster-grid is-wide">
         {% for company in page_obj %}
         {% include "movies/_studio_card.html" with company=company only %}
         {% empty %}

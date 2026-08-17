@@ -55,6 +55,13 @@
   /* Chart area fill, read by analytics.js. */
   --chart-wash: rgba(163, 230, 53, 0.18);
 
+  /* Studio logo assets are TMDB PNGs drawn for a light backing — many are
+     dark wordmarks on transparent ground. Unlike every other surface color,
+     this plate must NOT swap with the theme, or a dark logo goes illegible
+     the moment the site switches to dark mode. Fixed, like --ink-on-lime. */
+  --logo-plate: #f4f3ee;
+  --logo-ink: #57534e;
+
   /* Sequential ramp for ranked data. PASSES all four ordinal checks
      (monotone L, adjacent ΔL ≥ .06, light-end ≥ 2:1, single hue). */
   --rank-1: #7cb518;
@@ -624,6 +631,13 @@ main.container {
   gap: var(--space-4);
 }
 
+/* Landscape cards (studio logos) need more width per card than a 2:3
+   portrait poster does, or a wide wordmark logo has almost no room to
+   render at a legible size. */
+.poster-grid.is-wide {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+
 .poster-card a {
   display: block;
   color: var(--ink);
@@ -671,27 +685,32 @@ main.container {
    cropping one with object-fit: cover (the default above) would cut letters
    off, so both the real logo and its fallback get a shorter, padded, contain
    frame instead. Coverage is ~46% (Task 59's measured figure), so the
-   fallback is an initial-letter monogram rather than a hand-drawn icon. */
+   fallback is an initial-letter monogram rather than a hand-drawn icon.
+
+   Both share ONE flat --logo-plate background (not the sheet gradient the
+   person placeholder uses) so a card with a logo and a card without one read
+   as the same family of tile at a glance — the previous version had the real
+   logo on --paper (white, but flips dark with the theme) beside a gradient
+   placeholder, two different surfaces for what should look like one kind of
+   card. --logo-plate is fixed rather than theme-tokened for the same reason:
+   TMDB's logo assets assume a light backing regardless of site theme. */
 .poster-card .logo,
 .poster-card .placeholder-studio {
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 2 / 1;
+  background: var(--logo-plate);
 }
 
 .poster-card .logo {
   object-fit: contain;
-  padding: var(--space-4);
-  background: var(--paper);
-}
-
-.poster-card .placeholder-studio {
-  background: linear-gradient(160deg, var(--sheet) 0%, var(--sheet-2) 100%);
+  object-position: center;
+  padding: var(--space-5);
 }
 
 .placeholder-studio .studio-initial {
   font-family: var(--font-display);
   font-weight: 700;
   font-size: var(--text-xl);
-  color: var(--rule-strong);
+  color: var(--logo-ink);
 }
 
 .poster-card a:hover .poster,
