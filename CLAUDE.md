@@ -33,6 +33,13 @@ Rules:
 Last completed task   : Task 61 — Warehouse: dim_country, dim_language and their bridges
 Currently on          : Task 62 — not started (Django: provenance on the movie page, and browse by country/language — Phase 14).
 Current phase         : Phase 13 (Tasks 57–60) — complete. Phase 14 (Tasks 61–63): Task 61 complete, 62–63 not started.
+Outstanding must-do   : **Task 64 — nightly cloud refresh** (warehouse to Neon + pipeline on
+GitHub Actions). Phase-independent, not started; see the "MUST DO — Automated Nightly Refresh"
+section at the end of the Task List. Best done before Task 63 so that phase's live re-run happens
+on the scheduled path. It carries live-measured research (2026-08-17) behind the design — notably
+that TMDB's `/movie/changes` feed **never reports `vote_average`/`vote_count`/`popularity`**, so
+the obvious changes-driven refresh would update the only fields that don't drift and miss the two
+that always do. Do not re-derive those figures.
 Blockers / open issues: **No blockers.** **The Studios pages were redesigned by user
 request on 2026-08-17, ad hoc and outside the numbered task flow** (same posture as the Franchise
 removal and Analytics-panel cuts logged further below) — `/studios/` was a ranked `table-2col` of
@@ -798,6 +805,116 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   4. Walk all routes live, including the new studio pages and both new filters.
   5. **Verify a fresh install empirically, not by reading the README** — a throwaway DB built from DDL `01`–`03` must produce exactly the live table list, per the Task 53 lesson that "run every DDL file in order" stopped being the same instruction as "build the current schema" once migration `11` dropped tables.
   6. Update `docs/architecture.md` with the bridge-table decision (why `bridge_` not `fact_`, and why a bridge is right for companies where a column was right for collections), and this file's Warehouse Schema section with the final table list.
+- **Outcome:**
+
+---
+
+### MUST DO — Automated Nightly Refresh
+
+> Not part of any phase. Independent of Tasks 61–63 and can run at any point, but **best done
+> before Task 63**, so that phase's live re-run happens on the scheduled path rather than being
+> re-verified by hand afterwards.
+
+#### [ ] Task 64 — Nightly cloud refresh: warehouse to Neon, pipeline on GitHub Actions
+- **Goal:** The data goes stale the moment the laptop closes, and the only way to refresh a film
+  already in the catalog is a full `run_pipeline.py` re-run. Make the catalog refresh itself
+  nightly, in the cloud, with no machine of ours powered on.
+- **Research already done (2026-08-17) — do not re-derive these, they were measured live:**
+  - **TMDB's changes feed cannot refresh ratings.** `/movie/changes` returns 6,909 changed films
+    per 24h (70 pages × 100). 400 of them were probed via `/movie/{id}/changes`: 33 distinct
+    change keys, and **`vote_average`, `vote_count` and `popularity` appear zero times** — TMDB
+    excludes them by design, since they move on nearly every film daily and would make the feed
+    useless. The keys it *does* report are `status` (116), `runtime` (52), `budget` (27),
+    `revenue` (26), plus cast/crew/images/translations/release_dates/title.
+  - **That is the exact inverse of what actually goes stale.** Measured against live TMDB at the
+    stored precision (`rating` is `NUMERIC(4,2)`; TMDB now returns 3dp, so 7.584→7.58 is
+    truncation, not drift):
+
+    | field | random n=120 | released 2024+ n=60 |
+    |---|---|---|
+    | `vote_count` | 98% | 98% |
+    | `rating` | 35% (3% by ≥0.05) | 85% (42% by ≥0.05) |
+    | `revenue` | 2% | 28% |
+    | `runtime` | 0% | 2% |
+    | `status` | 0% | 2% |
+
+    So a changes-driven refresh would faithfully update `runtime` (never drifts) and never touch
+    `rating` (the wrong thing on the page). **The changes feed's real job is discovery and
+    structural edits, not metrics.** Its date window caps at 14 days — a gap longer than that
+    requires falling back to a `discover` sweep.
+  - **A full refresh is cheap, so no incremental cleverness is warranted.** Observed throughput
+    **4.76 req/s** (not the ~2 req/s in the Task 43 note). `?append_to_response=credits` returns
+    a byte-equivalent payload (verified: 81 cast / 106 crew either way), collapsing today's 2
+    calls per film to 1. Full catalog = **1,214 calls ≈ 4.3 min** (8.5 min on the current 2-call
+    path). TMDB's soft ceiling is ~40 req/s, so there is headroom to parallelise if ever needed.
+  - **Warehouse is 215 MB** — `fact_credit` 87 MB, `dim_person` 61 MB, `fact_collaboration`
+    40 MB, `dim_date` 9.7 MB. Fits Neon's free 0.5 GB with room; if it ever tightens,
+    `fact_collaboration` is fully derived and `dim_date` has ~48.5k unreferenced rows (~50 MB
+    reclaimable).
+  - **Repo `suhaylshokirov/theoria` is public**, so GitHub Actions minutes are free and
+    unlimited. `config.py` already reads a single `DATABASE_URL`, and every stage is already
+    idempotent per `ingestion_date` — which is what makes unattended scheduling safe and this
+    task an env change plus a YAML file rather than a rewrite.
+- **Why this shape and not the alternatives:** managed Postgres + a cron file adds no
+  infrastructure — no Terraform, no Kubernetes, no Lambda — so it respects the Stack & Constraints
+  non-goals ("a DE learning project, not an infra project"). The AWS-native path (ECS Fargate +
+  EventBridge) and self-hosted Airflow both violate that spirit for no gain at this size; Modal
+  and Cloud Run Jobs work but add a platform SDK or a container build. Real orchestration
+  (DAGs, retries, backfills, lineage) is a later, separate concern and should not be bought here.
+- **Files:** new `.github/workflows/nightly-refresh.yml`, new `etl/bronze/refresh_movies.py`,
+  new `scripts/run_refresh.py`, `etl/tmdb_client.py`, `etl/gold/build_gold_datasets.py`
+  (or a new `etl/gold/build_metrics_snapshot.py`), `etl/silver/transform_movies.py`,
+  `.env.example`, `README.md`, `docs/architecture.md`, `tests/test_etl.py`
+- **Steps:**
+  1. **Move the warehouse to Neon.** Provision a free project, `pg_dump` local → `psql` into
+     Neon (215 MB, a few minutes), then repoint `DATABASE_URL`. No code change — verify by
+     running the existing test suite and Django against Neon before anything else is built.
+  2. **`append_to_response=credits` in `TMDBClient.get_movie_details()`.** Halves Bronze call
+     volume for both ingest and refresh. Free win, independent of everything else here.
+  3. **`etl/bronze/refresh_movies.py` — the missing path.** Every ingest module sources its ids
+     from a *discovery* endpoint; nothing sources them from `dim_movie`. That is the actual
+     reason a stale film requires a full pipeline re-run. This one takes
+     `SELECT movie_id FROM dim_movie` as input and writes a normal Bronze partition, so Silver,
+     Gold and the warehouse loaders downstream are untouched. Bronze stays append-only.
+  4. **Snapshot the volatile metrics to S3, not Postgres.** `fact_movie_metrics`' PK is
+     `(movie_id, date_id, genre_id)` with `date_id` derived from the *release* date and
+     `ingestion_date` only a column — so a refresh upserts in place and the previous rating is
+     gone. Write one row per film per run (`movie_id, snapshot_date, rating, vote_count,
+     revenue, popularity`) to `gold/metrics_snapshot/` as Parquet and keep only "latest" in
+     Postgres. **Deliberately S3 and not a warehouse table:** ~1,215 rows/day would grow
+     unbounded against a 0.5 GB tier, and history-of-measurements is exactly what the lake is
+     for. This is what unlocks "rating over time" / "revenue accumulating after release" later.
+  5. **`scripts/run_refresh.py`** — refresh-mode orchestrator, mirroring `run_pipeline.py`'s
+     stage sequencing but sourcing ids from step 3. Keep them separate rather than adding a flag:
+     ingest *discovers* films, refresh *updates* known ones, and conflating them is what produced
+     the current problem.
+  6. **`.github/workflows/nightly-refresh.yml`** — `schedule:` cron nightly plus
+     `workflow_dispatch` for manual runs. Secrets: `TMDB_API_KEY`, `DATABASE_URL`, AWS creds.
+     **The AWS key must be a least-privilege IAM user scoped to the one bucket** — the workflow
+     file is world-readable on a public repo (the secrets are not, and fork PRs never receive
+     them, but a general-purpose credential has no business here).
+  7. **Guard the 60-day inactivity rule.** GitHub silently disables scheduled workflows on a
+     public repo after 60 days with no repository activity — freshness would just stop, with no
+     failure to notice. Either have the job commit its run summary (activity resets the clock),
+     or make the repo private (a ~25 min nightly run is ~750 of the 2,000 free private minutes).
+     Note also that `schedule` can be delayed under load and the floor is 5-minute granularity;
+     neither matters nightly.
+  8. **Watch the cross-region cost.** S3 is `eu-central-1` and GitHub runners are US-hosted,
+     while the Silver transforms read Bronze one object at a time (~16 min per full pass — a
+     known gap). If the nightly job's wall time is dominated by Silver rather than the ~4 min of
+     TMDB calls, batch those reads as part of this task; that is the real bottleneck, not the API.
+  9. **Weekly discovery, separately.** A second, weekly schedule walking `/movie/changes` to
+     *add* new films and catch the structural edits a metrics refresh cannot see (new cast/crew,
+     retitles, runtime corrections, `In Production → Released`). Optionally use the daily ID
+     export (`files.tmdb.org/p/exports/movie_ids_MM_DD_YYYY.json.gz`, published ~08:00 UTC, no
+     auth, 3-month retention) — one file download instead of 1,215 calls, and the only way to
+     detect a TMDB id being **deleted or merged**, which would otherwise leave a dead film in
+     `dim_movie` forever.
+- **Verify:** trigger via `workflow_dispatch` and confirm it completes green end to end against
+  Neon; confirm a known 2024+ film's `vote_count` changes between two consecutive runs; confirm
+  the local Django site — unchanged, still on the laptop — serves the refreshed figures with no
+  deploy or cache step, since the views read the warehouse live; confirm a snapshot Parquet lands
+  in `gold/metrics_snapshot/`; confirm Silver DQ and warehouse checks pass in CI, not just locally.
 - **Outcome:**
 
 ---
