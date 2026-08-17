@@ -30,10 +30,26 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 60 — Analytics: studio panels
-Currently on          : Task 61 — not started (Warehouse: dim_country, dim_language and their bridges — Phase 14).
-Current phase         : Phase 13 (Tasks 57–60) — complete. Phase 14 (Tasks 61–63) not started.
-Blockers / open issues: **No blockers.** **Task 60 (2026-08-16) closes Phase 13** — two new panels
+Last completed task   : Task 61 — Warehouse: dim_country, dim_language and their bridges
+Currently on          : Task 62 — not started (Django: provenance on the movie page, and browse by country/language — Phase 14).
+Current phase         : Phase 13 (Tasks 57–60) — complete. Phase 14 (Tasks 61–63): Task 61 complete, 62–63 not started.
+Blockers / open issues: **No blockers.** **Task 61 (2026-08-17) applies Phase 13's bridge pattern
+a second and third time** — `dim_country`/`dim_language` (natural ISO-code primary keys, no
+surrogate id, no slug) and `bridge_movie_country`/`bridge_movie_language`, loaded from the Silver
+link tables Task 57 already wrote. `bridge_movie_country` carries `relation` (`origin`/
+`production`) inside its own PK, carrying forward Task 57's grain decision that the two
+relationships must coexist rather than overwrite each other. New `_existing_str_ids()` helper in
+`etl/warehouse_loader/common.py` resolves FKs against string (non-integer) primary keys — the
+first time this warehouse has needed that, since every prior dimension used a surrogate int id.
+Row-count-sanity checks reuse Task 58's `nunique()`-not-`len()` pattern for both new link tables.
+**Backfilled and live-verified across all three partitions**: `dim_country` 46 rows / `dim_language`
+73 rows cumulative (40/70 on the `2026-07-29` partition alone, matching the Phase 12 audit table
+exactly); `bridge_movie_country` 2,907 rows / `bridge_movie_language` 2,113 rows, **0 rejects on
+any partition**; *The Godfather* shows agreeing origin/production country (USA) and three
+languages (English/Italiano/Latin); 278 of 1,215 films have an origin/production disagreement,
+matching Task 57's ~23% figure. Warehouse checks 25/25 → **35/35**. No Django/UI change — Task 62
+is next and reads these tables. Tests 229 → 238.
+Prior task's notes: **Task 60 (2026-08-16) closes Phase 13** — two new panels
 spend `dim_company`/`bridge_movie_company` on the dashboard: `studio_output_by_decade.sql` (the
 leading studio, by film count, for each decade) and `top_studios_by_revenue.sql` (revenue +
 avg rating, ≥3-film floor mirroring `top_rated_directors.sql`'s). **`studio_output_by_decade`
@@ -213,7 +229,7 @@ still sit in S3 though Task 53 stopped writing them; 2 films have no `fact_movie
 All cleanup rather than capability — recorded so they aren't rediscovered as if new. The **stale
 Warehouse Schema section in this file was also fixed** (it still listed `dim_actor`,
 `dim_director` and `fact_casting`, all dropped in Tasks 35/53). Prior-phase notes follow. Task 54 is a read-side-only fix (no DDL, no ETL, no pipeline re-run, no new TMDB calls) for a movie page that `fact_credit` (Task 48) had made unreadable at scale: a person holding several jobs on one film rendered once per job across several department sections (Christopher Nolan on *The Dark Knight* was 4 rows in 3 sections), and every credit — 47–139 cast, up to ~980 crew on the worst film — rendered as a headshot card with no limit. Two complaints, two fixes, and the measurement that separates them: merging collapses 143.8 crew rows/film to 138.1 distinct people (~4%), so **merging fixes duplication, not volume**. `_merge_crew()` in `movies/views.py` groups a person's non-Acting credits by `person_id`, files them under their single most senior department via `_department_rank()` (extracted from the sort key that was duplicated in `movie_detail` and `person_detail`), and joins the jobs in department order — Nolan now reads "Director / Screenplay / Story / Producer", once. Volume is fixed by **paging cast and crew in the browser**, ten at a time: the view sends every credit and `initPagedSection()` in `static/js/theoria.js` shows a window of them, so Next is a repaint rather than a round-trip. This replaced a first, server-side implementation (`?cast_page=`/`?crew_page=`/`?crew=all` + `#cast`/`#crew` anchors) that the user judged not smooth enough; `BILLED_CREW_JOBS` went with it, since paging ten at a time makes the first page short whatever it holds. `[data-page-group]` wrappers (one per crew department) hide themselves when none of their people are on the current page; the pager is `<button>`s that ship `hidden` and are revealed only when there's more than one page, so with JS off the reader gets the whole list and no dead controls. **The two pagers are a deliberate split, documented in both partials:** `_pager.html` stays server-side for `/movies/` and `/people/` (1,215 and 122,685 rows — not a payload to hand a browser), `_pager_client.html` serves one film's ~1,200-credit maximum, which is. Crew renders as a list rather than a poster grid because crew photo coverage measured 23.8% against cast's 70.1%. **Crew rows carry faces too, after user review:** a headshot where one exists, and the same `.placeholder-person` silhouette the cast cards use where it doesn't (55 photos / 87 silhouettes on The Dark Knight) — an initials monogram was tried first and rejected, since two placeholder vocabularies on one page is one more than a reader should have to learn. That review also surfaced a **real CSS bug**: `.credit-list` never zeroed the `<ul>`'s UA-default 40px `padding-inline-start`, and because these lists paint their own background to draw the 1px gaps as hairlines, that padding rendered as an unexplained grey column down the left of every crew list — invisible on white, obvious on the dark surface. `.collab-list` (person pages) had the identical defect since Task 51; both fixed. Live-verified: `/movies/the-dark-knight/` ships **139 cast cards and 142 crew rows across 11 department groups** in one response, no server-paging params in the markup, Nolan merged and once; the paging algorithm was **executed under Node against a stub DOM** (page 1: 10 items/3 departments; page 2: 2 items collapsing to 1 heading; buttons disable at both ends). Tests 210 → 214. Prior phase's notes: Full test suite is 210/210 passing (down from 225 because Task 53 deleted the legacy actor/director tests, not because anything regressed); Silver DQ 16/16 on all three partitions, warehouse checks 20/20 — both counts dropped for the same reason (the `actors`/`directors` Silver entities and the `fact_cast`/`fact_crew` FK + load-sanity checks no longer exist). **Phase 10 is done: Tasks 47–53 all complete.** The warehouse is now exactly **9 tables** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`, `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `etl_watermarks` — and `dim_actor`/`dim_director`/`fact_cast`/`fact_crew` are **dropped** (`warehouse/ddl/11_drop_legacy_person_tables.sql`, facts before dimensions). `/people/<slug>/` is the single person page; `/actors/<slug>/` and `/directors/<slug>/` now 301 to it via a single `dim_person` slug lookup with no legacy table involved (the 381 slugs that moved during the Task 48 namespace unification are consequently **404 rather than redirected** — accepted, the site isn't public). 16 routes, 10 analytics panels, **zero empty panels**. **Gold is no longer a write-only dead end** (Task 49) — `load_gold.py` reads `gold/collaboration_edges` into `fact_collaboration`; the other four Gold datasets are still unread, and deliberately so (they're cheap enough to recompute in SQL, which the Django views already do). Caveat that remains open: `fact_collaboration` is a *derived* table, so nothing outside the pipeline can tell it's stale, and re-running Gold for an older partition overwrites counts computed from a newer one — worth revisiting as a materialized view. **Two bugs only the live runs could find, both fixed:** `assign_slugs()`'s batched `executemany` hit a `UniqueViolation` on a slug *permutation* because Postgres checks a unique index per row, not per statement (latent since Task 46; fixed by clearing the column first, in the same transaction); and `/connect/` returned a different — equally short, equally valid — path after every reload, because the adjacency query had no `ORDER BY` while Python dicts preserve insertion order (fixed; verified stable, so **Task 52's outcome line below cites a path that is no longer the one returned** — the current answer for Tom Hanks → Thelma Schoonmaker is *Philadelphia* → Tony Devon → *The King of Comedy*). **Every one of the 122,685 `dim_person` rows has at least one credit**, since the dimension is built from the credits themselves — which retires the long-standing "orphan dimension members" gap outright, now that the legacy tables it applied to are gone. **Fresh-install verification is now empirical, not assumed:** a throwaway database built from DDL `01`–`03` produces exactly the 9 live tables. Note that once `11` *drops* things, "run every DDL file in order" no longer equals "build the current schema" — README documents `01`–`03` (bootstrap) and `04`–`11` (migrations for an existing DB) as two separate paths. Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds, and unifying to `dim_person` made it *more* expensive (122,685 people, not 45k). Remaining known gaps, still open: `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`; the Silver transforms read Bronze one S3 object at a time (~16 min per full rebuild pass). Older notes: Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows), as are collections' underlying ids behind their slugs.
-Last updated          : 2026-08-16
+Last updated          : 2026-08-17
 ```
 
 **After finishing any task, in this order:**
@@ -709,15 +725,34 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > design: if Phase 13 was built well, this phase is mostly configuration. If it turns out
 > expensive, that's a signal Task 58 hardcoded something that should have been shared.
 
-#### [ ] Task 61 — Warehouse: `dim_country`, `dim_language` and their bridges
-- **Files:** new `warehouse/ddl/14_countries_languages.sql`, `warehouse/ddl/01_dimensions.sql`, `etl/warehouse_loader/{load_dimensions,load_facts}.py`, `data_quality/warehouse_checks.py`, `tests/{test_etl,test_warehouse_checks}.py`
-- **Steps:**
-  1. `dim_country(country_code PK, name)` and `dim_language(language_code PK, name, english_name)` — **the ISO code is the natural key**, so unlike every other dimension here there is no surrogate id and no slug; the code is already short, stable and URL-safe.
-  2. `bridge_movie_country(movie_id, country_code, relation, ingestion_date)` PK `(movie_id, country_code, relation)`, and `bridge_movie_language(movie_id, language_code, ingestion_date)` PK `(movie_id, language_code)`. Index both FKs on each.
-  3. Loaders and FK checks following Task 58 exactly. **If a helper wants to be extracted from `load_bridge_movie_company()` at this point, extract it** — three near-identical loaders is the moment the pattern is proven, not the moment to copy it a third time.
-  4. Backfill all three partitions.
-- **Verify:** ~40 countries, ~70 languages, ~1,506 production + ~1,200 origin links, ~2,013 language links, 0 rejects.
-- **Outcome:**
+#### [x] Task 61 — Warehouse: `dim_country`, `dim_language` and their bridges
+- **Files:** new `warehouse/ddl/14_countries_languages.sql`, `warehouse/ddl/01_dimensions.sql`, `etl/warehouse_loader/{common,load_dimensions,load_facts}.py`, `data_quality/warehouse_checks.py`, `tests/{test_etl,test_warehouse_checks}.py`
+- **Outcome:** Built exactly as scoped, following Task 58's bridge pattern for a second and third
+  time. `dim_country(country_code PK, name)` and `dim_language(language_code PK, name,
+  english_name)` use their ISO code directly as the primary key — no surrogate id, no slug, no
+  `assign_slugs()` call, since the code is already short, stable and URL-safe. `load_dim_country()`
+  and `load_dim_language()` mirror `load_dim_company()`'s distinct-by-id, filter-on-id-and-name
+  shape exactly. `bridge_movie_country(movie_id, country_code, relation, ingestion_date)` carries
+  `relation` inside its own PK — the grain decision Task 57 already made in Silver, carried through
+  unchanged, since `origin` and `production` are two simultaneously-true relationships to the same
+  country and folding `relation` out of the key would let one silently overwrite the other on
+  upsert. New `_existing_str_ids()` in `etl/warehouse_loader/common.py` (extracted alongside
+  `_existing_ids()`, which `int()`-casts and would break on a string PK) resolves both new bridges'
+  FKs. Two new `_FK_CHECKS` pairs plus distinct-count row-count-sanity checks (reusing the
+  Task 58 `nunique()` pattern — `movie_countries`/`movie_languages` are link tables too) plus two
+  new fact-load-sanity checks in `warehouse_checks.py`. Silver's `relation`-null-name origin rows
+  (17 on `2026-07-29`, Task 57) correctly get no `dim_country` row and their bridge rows are
+  quarantined via the ordinary unresolvable-FK path, not special-cased. **Live-verified across all
+  three backfilled partitions**: `dim_country` 46 rows (40 named on the `2026-07-29` partition
+  alone, matching the audit), `dim_language` 73 rows (70 on `2026-07-29`); `bridge_movie_country`
+  2,907 rows / `bridge_movie_language` 2,113 rows cumulative, **0 rejects on any partition**;
+  *The Godfather* shows `production=USA, origin=USA` (agreeing) and languages
+  English/Italiano/Latin; 278 films (of 1,215) have a origin/production country disagreement,
+  matching Task 57's ~23% figure. Warehouse checks 25/25 → **35/35** (4 new FK checks + 4 new
+  row-count checks + 2 new fact-load-sanity checks). No Django/UI change yet — Task 62 reads these
+  tables. Tests 229 → 238 (9 new: dimension dedup/null-filter for both, bridge builder FK
+  resolution + relation-passthrough for countries, bridge builder FK resolution for languages, and
+  the countries/languages distinct-vs-row-count row-count-sanity regression).
 
 #### [ ] Task 62 — Django: provenance on the movie page, and browse by country/language
 - **Goal:** Surface both without inventing two more entity pages nobody asked for.

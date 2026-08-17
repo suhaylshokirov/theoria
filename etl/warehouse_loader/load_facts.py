@@ -31,9 +31,17 @@ existence of a movie/company relationship — built from Silver's
 movie_companies link table the same way, resolving both FKs and quarantining
 unresolvable rows rather than dropping them.
 
+bridge_movie_country and bridge_movie_language (Task 61) follow the same
+pattern from Silver's movie_countries and movie_languages link tables.
+bridge_movie_country's grain is (movie_id, country_code, relation) — relation
+is resolved as a plain column, not an FK, since it's a fixed two-value tag
+("origin"/"production") rather than a reference to another dimension.
+
 S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
     silver/movie_companies/ingestion_date=YYYY-MM-DD/movie_companies.parquet
+    silver/movie_countries/ingestion_date=YYYY-MM-DD/movie_countries.parquet
+    silver/movie_languages/ingestion_date=YYYY-MM-DD/movie_languages.parquet
     silver/credits_bridge/ingestion_date=YYYY-MM-DD/credits_bridge.parquet
 
 All fact tables carry an ingestion_date column recording which Silver
@@ -63,7 +71,7 @@ from sqlalchemy.orm import Session
 
 import config
 from etl.incremental import pending_partitions, set_watermark
-from etl.warehouse_loader.common import _existing_ids, _read_silver_parquet, _upsert
+from etl.warehouse_loader.common import _existing_ids, _existing_str_ids, _read_silver_parquet, _upsert
 from warehouse.db import get_session
 
 logger = logging.getLogger(__name__)
@@ -267,6 +275,117 @@ def _build_bridge_company_rows(
     return rows, rejects
 
 
+def _build_bridge_country_rows(
+    countries_df: pd.DataFrame,
+    valid_movie_ids: set[int],
+    valid_country_codes: set[str],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Resolve every Silver movie_countries row into a bridge_movie_country row.
+
+    relation is carried through as-is, not FK-resolved — it's a fixed tag,
+    not a reference to dim_country. A country_code with no dim_country row
+    (Task 57: an origin-only code with no name anywhere in the partition) is
+    quarantined the same as any other unresolvable FK.
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+
+    for link in countries_df.to_dict("records"):
+        movie_id = link["movie_id"]
+        country_code = link["country_code"]
+
+        if pd.isna(movie_id) or int(movie_id) not in valid_movie_ids:
+            rejects.append({**link, "rejection_reason": "unknown movie_id"})
+            continue
+        if pd.isna(country_code) or country_code not in valid_country_codes:
+            rejects.append({**link, "rejection_reason": "unknown country_code"})
+            continue
+
+        rows.append({
+            "movie_id": int(movie_id),
+            "country_code": country_code,
+            "relation": link.get("relation"),
+            "ingestion_date": ingestion_date,
+        })
+
+    return rows, rejects
+
+
+def _build_bridge_language_rows(
+    languages_df: pd.DataFrame,
+    valid_movie_ids: set[int],
+    valid_language_codes: set[str],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Resolve every Silver movie_languages row into a bridge_movie_language row."""
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+
+    for link in languages_df.to_dict("records"):
+        movie_id = link["movie_id"]
+        language_code = link["language_code"]
+
+        if pd.isna(movie_id) or int(movie_id) not in valid_movie_ids:
+            rejects.append({**link, "rejection_reason": "unknown movie_id"})
+            continue
+        if pd.isna(language_code) or language_code not in valid_language_codes:
+            rejects.append({**link, "rejection_reason": "unknown language_code"})
+            continue
+
+        rows.append({
+            "movie_id": int(movie_id),
+            "language_code": language_code,
+            "ingestion_date": ingestion_date,
+        })
+
+    return rows, rejects
+
+
+def load_bridge_movie_country(
+    session: Session, countries_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert Silver movie_countries into bridge_movie_country.
+
+    Must run after load_dim_movie() and load_dim_country() have committed.
+    Returns (count, rejects).
+    """
+    valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
+    valid_country_codes = _existing_str_ids(session, "dim_country", "country_code")
+
+    rows, rejects = _build_bridge_country_rows(
+        countries_df, valid_movie_ids, valid_country_codes, ingestion_date
+    )
+    columns = ["movie_id", "country_code", "relation", "ingestion_date"]
+    count = _upsert(
+        session, "bridge_movie_country", ["movie_id", "country_code", "relation"], columns, _records(rows)
+    )
+    logger.info("bridge_movie_country: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
+def load_bridge_movie_language(
+    session: Session, languages_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert Silver movie_languages into bridge_movie_language.
+
+    Must run after load_dim_movie() and load_dim_language() have committed.
+    Returns (count, rejects).
+    """
+    valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
+    valid_language_codes = _existing_str_ids(session, "dim_language", "language_code")
+
+    rows, rejects = _build_bridge_language_rows(
+        languages_df, valid_movie_ids, valid_language_codes, ingestion_date
+    )
+    columns = ["movie_id", "language_code", "ingestion_date"]
+    count = _upsert(
+        session, "bridge_movie_language", ["movie_id", "language_code"], columns, _records(rows)
+    )
+    logger.info("bridge_movie_language: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
 def load_bridge_movie_company(
     session: Session, companies_df: pd.DataFrame, ingestion_date: dt.date,
 ) -> tuple[int, list[dict[str, Any]]]:
@@ -355,6 +474,12 @@ def load_facts(
     companies_df = _read_silver_parquet(
         bucket, "movie_companies", ingestion_date, "movie_companies.parquet"
     )
+    countries_df = _read_silver_parquet(
+        bucket, "movie_countries", ingestion_date, "movie_countries.parquet"
+    )
+    languages_df = _read_silver_parquet(
+        bucket, "movie_languages", ingestion_date, "movie_languages.parquet"
+    )
 
     counts: dict[str, int] = {}
     with get_session() as session:
@@ -363,10 +488,18 @@ def load_facts(
         counts["bridge_movie_company"], company_rejects = load_bridge_movie_company(
             session, companies_df, ingestion_date
         )
+        counts["bridge_movie_country"], country_rejects = load_bridge_movie_country(
+            session, countries_df, ingestion_date
+        )
+        counts["bridge_movie_language"], language_rejects = load_bridge_movie_language(
+            session, languages_df, ingestion_date
+        )
 
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)
     _write_rejects(credit_rejects, "fact_credit", ingestion_date, rejected_dir)
     _write_rejects(company_rejects, "bridge_movie_company", ingestion_date, rejected_dir)
+    _write_rejects(country_rejects, "bridge_movie_country", ingestion_date, rejected_dir)
+    _write_rejects(language_rejects, "bridge_movie_language", ingestion_date, rejected_dir)
 
     elapsed = time.monotonic() - t0
     logger.info(

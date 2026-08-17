@@ -79,6 +79,10 @@ _FK_CHECKS = [
     ("fact_collaboration", "person_b_id", "dim_person", "person_id"),
     ("bridge_movie_company", "movie_id", "dim_movie", "movie_id"),
     ("bridge_movie_company", "company_id", "dim_company", "company_id"),
+    ("bridge_movie_country", "movie_id", "dim_movie", "movie_id"),
+    ("bridge_movie_country", "country_code", "dim_country", "country_code"),
+    ("bridge_movie_language", "movie_id", "dim_movie", "movie_id"),
+    ("bridge_movie_language", "language_code", "dim_language", "language_code"),
 ]
 
 
@@ -302,6 +306,45 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             f"Silver distinct={distinct_companies}, dim_company={warehouse_company_count} (cumulative)"))
         logger.info("[%s] OK", s2w_name)
 
+    # Countries/languages: same link-table shape as companies above — compare
+    # against the distinct natural-key count, not the raw link row count.
+    for entity_label, silver_entity, filename, id_col, warehouse_table in [
+        ("countries", "movie_countries", "movie_countries.parquet", "country_code", "dim_country"),
+        ("languages", "movie_languages", "movie_languages.parquet", "language_code", "dim_language"),
+    ]:
+        try:
+            link_df = _read_silver_parquet(bucket, silver_entity, ingestion_date, filename)
+            distinct_count = link_df[id_col].nunique()
+        except Exception as exc:
+            results.append(CheckResult(f"rowcount:{entity_label}:bronze_to_silver", False,
+                f"Could not read Silver {silver_entity}: {exc}"))
+            logger.error("[rowcount:%s] could not read Silver: %s", entity_label, exc)
+            continue
+
+        b2s_name = f"rowcount:{entity_label}:bronze_to_silver"
+        if bronze_credits_files == 0 and len(link_df) > 0:
+            results.append(CheckResult(b2s_name, False,
+                f"Silver has {len(link_df)} {silver_entity} row(s) but no Bronze files were found"))
+            logger.error("[%s] FAIL — silver=%d but bronze files=0", b2s_name, len(link_df))
+        else:
+            results.append(CheckResult(b2s_name, True,
+                f"Bronze files present, Silver {silver_entity}={len(link_df)} row(s), "
+                f"{distinct_count} distinct {id_col}(s)"))
+            logger.info("[%s] OK", b2s_name)
+
+        s2w_name = f"rowcount:{entity_label}:silver_to_warehouse"
+        warehouse_count = _table_row_count(session, warehouse_table)
+        if warehouse_count < distinct_count:
+            results.append(CheckResult(s2w_name, False,
+                f"{warehouse_table} has only {warehouse_count} row(s), fewer than the "
+                f"{distinct_count} distinct {id_col}(s) just loaded from Silver"))
+            logger.error("[%s] FAIL — warehouse=%d < silver_distinct=%d",
+                          s2w_name, warehouse_count, distinct_count)
+        else:
+            results.append(CheckResult(s2w_name, True,
+                f"Silver distinct={distinct_count}, {warehouse_table}={warehouse_count} (cumulative)"))
+            logger.info("[%s] OK", s2w_name)
+
     return results
 
 
@@ -353,7 +396,8 @@ def check_gold_sanity(bucket: str, ingestion_date: dt.date, silver_movies_count:
 def check_fact_load_sanity(
     session: Session, ingestion_date: dt.date,
     silver_movies_count: int, silver_credit_count: int = 0,
-    silver_company_count: int = 0,
+    silver_company_count: int = 0, silver_country_count: int = 0,
+    silver_language_count: int = 0,
 ) -> list[CheckResult]:
     """A loader that silently wrote zero rows from non-empty Silver input is a bug."""
     results: list[CheckResult] = []
@@ -390,6 +434,28 @@ def check_fact_load_sanity(
         results.append(CheckResult("facts:bridge_movie_company", True,
             f"{bmc_count} row(s) loaded for ingestion_date={ingestion_date}"))
         logger.info("[facts:bridge_movie_company] OK (%d rows)", bmc_count)
+
+    bmco_count = _fact_ingestion_date_count(session, "bridge_movie_country", ingestion_date)
+    if silver_country_count > 0 and bmco_count == 0:
+        results.append(CheckResult("facts:bridge_movie_country", False,
+            f"bridge_movie_country has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"{silver_country_count} Silver movie_countries row(s)"))
+        logger.error("[facts:bridge_movie_country] FAIL — 0 rows loaded")
+    else:
+        results.append(CheckResult("facts:bridge_movie_country", True,
+            f"{bmco_count} row(s) loaded for ingestion_date={ingestion_date}"))
+        logger.info("[facts:bridge_movie_country] OK (%d rows)", bmco_count)
+
+    bmla_count = _fact_ingestion_date_count(session, "bridge_movie_language", ingestion_date)
+    if silver_language_count > 0 and bmla_count == 0:
+        results.append(CheckResult("facts:bridge_movie_language", False,
+            f"bridge_movie_language has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"{silver_language_count} Silver movie_languages row(s)"))
+        logger.error("[facts:bridge_movie_language] FAIL — 0 rows loaded")
+    else:
+        results.append(CheckResult("facts:bridge_movie_language", True,
+            f"{bmla_count} row(s) loaded for ingestion_date={ingestion_date}"))
+        logger.info("[facts:bridge_movie_language] OK (%d rows)", bmla_count)
 
     return results
 
@@ -438,12 +504,26 @@ def run_warehouse_checks(
             silver_company_count = len(silver_companies_df)
         except Exception:
             silver_company_count = 0
+        try:
+            silver_countries_df = _read_silver_parquet(
+                bucket, "movie_countries", ingestion_date, "movie_countries.parquet"
+            )
+            silver_country_count = len(silver_countries_df)
+        except Exception:
+            silver_country_count = 0
+        try:
+            silver_languages_df = _read_silver_parquet(
+                bucket, "movie_languages", ingestion_date, "movie_languages.parquet"
+            )
+            silver_language_count = len(silver_languages_df)
+        except Exception:
+            silver_language_count = 0
 
         all_results.extend(check_gold_sanity(bucket, ingestion_date, silver_movies_count))
         all_results.extend(
             check_fact_load_sanity(
                 session, ingestion_date, silver_movies_count, silver_credit_count,
-                silver_company_count,
+                silver_company_count, silver_country_count, silver_language_count,
             )
         )
 

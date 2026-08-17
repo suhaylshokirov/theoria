@@ -18,6 +18,9 @@ S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
     silver/people/ingestion_date=YYYY-MM-DD/people.parquet
     silver/genres/ingestion_date=YYYY-MM-DD/genres.parquet
+    silver/movie_companies/ingestion_date=YYYY-MM-DD/movie_companies.parquet
+    silver/movie_countries/ingestion_date=YYYY-MM-DD/movie_countries.parquet
+    silver/movie_languages/ingestion_date=YYYY-MM-DD/movie_languages.parquet
 
 Usage:
     python -m etl.warehouse_loader.load_dimensions
@@ -140,6 +143,56 @@ def load_dim_company(session: Session, df: pd.DataFrame) -> int:
     return count
 
 
+def load_dim_country(session: Session, df: pd.DataFrame) -> int:
+    """Upsert the distinct named countries referenced by Silver movie_countries into dim_country.
+
+    Mirrors load_dim_company(): the dimension is the *distinct* set of
+    country_code values across every movie_countries link row. Filtering on
+    name as well as code matters more here than for company/collection — an
+    origin-only country_code with no matching production_countries row in
+    the same payload (Task 57: ~17 rows on the 2026-07-29 partition) has no
+    name to give it, and dim_country.name is NOT NULL. Those codes simply
+    get no dimension row; load_bridge_movie_country() then quarantines their
+    bridge rows via the normal unresolvable-FK path, rather than inventing a
+    name. A code named on *any* movie's production_countries list gets a row
+    even if this exact link row's name is null, since drop_duplicates keeps
+    the last named occurrence across the whole partition.
+    """
+    named = df[df["country_code"].notna() & df["country_name"].notna()]
+    countries = (
+        named[["country_code", "country_name"]]
+        .drop_duplicates(subset=["country_code"], keep="last")
+        .rename(columns={"country_name": "name"})
+    )
+    columns = ["country_code", "name"]
+    records = _records(countries, columns)
+    count = _upsert(session, "dim_country", ["country_code"], columns, records)
+    logger.info("dim_country: upserted %d row(s)", count)
+    return count
+
+
+def load_dim_language(session: Session, df: pd.DataFrame) -> int:
+    """Upsert the distinct languages referenced by Silver movie_languages into dim_language.
+
+    Same shape as load_dim_country(): dedupe the link table down to its
+    distinct language_code values. TMDB's spoken_languages entries always
+    carry both a name and an english_name, so unlike countries there's no
+    partial-coverage case here — just the id/name null-filter every other
+    link-derived dimension applies for consistency.
+    """
+    named = df[df["language_code"].notna() & df["language_name"].notna()]
+    languages = (
+        named[["language_code", "language_name", "english_name"]]
+        .drop_duplicates(subset=["language_code"], keep="last")
+        .rename(columns={"language_name": "name"})
+    )
+    columns = ["language_code", "name", "english_name"]
+    records = _records(languages, columns)
+    count = _upsert(session, "dim_language", ["language_code"], columns, records)
+    logger.info("dim_language: upserted %d row(s)", count)
+    return count
+
+
 def _slugify(name: str) -> str:
     """Lowercase, ASCII, hyphenated form of a name/title for use in a URL.
 
@@ -243,6 +296,12 @@ def load_dimensions(
     companies_df = _read_silver_parquet(
         bucket, "movie_companies", ingestion_date, "movie_companies.parquet"
     )
+    countries_df = _read_silver_parquet(
+        bucket, "movie_countries", ingestion_date, "movie_countries.parquet"
+    )
+    languages_df = _read_silver_parquet(
+        bucket, "movie_languages", ingestion_date, "movie_languages.parquet"
+    )
 
     counts: dict[str, int] = {}
     with get_session() as session:
@@ -253,6 +312,9 @@ def load_dimensions(
         counts["dim_genre"] = load_dim_genre(session, genres_df)
         # Before load_facts.load_bridge_movie_company(), which has an FK here.
         counts["dim_company"] = load_dim_company(session, companies_df)
+        # Before load_facts.load_bridge_movie_country/language(), same reason.
+        counts["dim_country"] = load_dim_country(session, countries_df)
+        counts["dim_language"] = load_dim_language(session, languages_df)
         counts["dim_date"] = load_dim_date(session, calendar_start, calendar_end)
         counts["dim_movie_slugs"] = assign_slugs(session, "dim_movie", "movie_id", "title")
         counts["dim_person_slugs"] = assign_slugs(session, "dim_person", "person_id", "name")

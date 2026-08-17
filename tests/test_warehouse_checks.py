@@ -52,14 +52,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 9
+    assert len(results) == 13
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5, 0, 0, 0, 0, 0, 0, 0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
     results = check_fk_integrity(mock_session)
 
@@ -324,6 +324,71 @@ def test_check_row_count_sanity_companies_fails_when_warehouse_shrinks(monkeypat
     assert s2w.passed is False
 
 
+def test_check_row_count_sanity_countries_and_languages_compare_distinct_ids(monkeypatch):
+    """movie_countries/movie_languages are link tables too — a country/language
+    referenced by several films must compare against nunique(), not len(df)."""
+    countries_df = pd.DataFrame([
+        {"movie_id": 1, "country_code": "US", "country_name": "United States", "relation": "production"},
+        {"movie_id": 2, "country_code": "US", "country_name": "United States", "relation": "production"},
+        {"movie_id": 1, "country_code": "US", "country_name": "United States", "relation": "origin"},
+    ])
+    languages_df = pd.DataFrame([
+        {"movie_id": 1, "language_code": "en", "language_name": "English", "english_name": "English"},
+        {"movie_id": 2, "language_code": "en", "language_name": "English", "english_name": "English"},
+    ])
+    companies_df = pd.DataFrame([
+        {"movie_id": 1, "company_id": 900, "company_name": "Studio", "logo_path": None, "origin_country": "US"},
+    ])
+    movies_df = _silver_movies_df(0)
+    genre_bytes = json.dumps({"genres": []}).encode()
+
+    def to_bytes(df):
+        buf = io.BytesIO()
+        df.to_parquet(buf, engine="pyarrow", index=False)
+        return buf.getvalue()
+
+    countries_bytes = to_bytes(countries_df)
+    languages_bytes = to_bytes(languages_df)
+    companies_bytes = to_bytes(companies_df)
+    movies_bytes = to_bytes(movies_df)
+
+    mock_s3 = MagicMock()
+    mock_s3.exceptions.NoSuchKey = KeyError
+
+    def fake_get_object(Bucket, Key):
+        body = MagicMock()
+        if "genres.json" in Key:
+            body.read.return_value = genre_bytes
+        elif "movie_countries" in Key:
+            body.read.return_value = countries_bytes
+        elif "movie_languages" in Key:
+            body.read.return_value = languages_bytes
+        elif "movie_companies" in Key:
+            body.read.return_value = companies_bytes
+        else:
+            body.read.return_value = movies_bytes
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = fake_get_object
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    mock_session = MagicMock()
+    # dim_country=1 row (>= 1 distinct code), dim_language=1 row (>= 1 distinct code).
+    mock_session.execute.return_value.scalar.return_value = 1
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 6, 22))
+
+    country_s2w = next(r for r in results if r.check == "rowcount:countries:silver_to_warehouse")
+    language_s2w = next(r for r in results if r.check == "rowcount:languages:silver_to_warehouse")
+    assert country_s2w.passed is True
+    assert "Silver distinct=1" in country_s2w.detail
+    assert language_s2w.passed is True
+    assert "Silver distinct=1" in language_s2w.detail
+
+
 # ---------------------------------------------------------------------------
 # Gold sanity
 # ---------------------------------------------------------------------------
@@ -378,11 +443,12 @@ def test_check_gold_sanity_passes_when_no_data_expected():
 
 def test_check_fact_load_sanity_passes_when_facts_loaded():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [10, 300, 25]
+    mock_session.execute.return_value.scalar.side_effect = [10, 300, 25, 15, 8]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
         silver_movies_count=5, silver_credit_count=280, silver_company_count=20,
+        silver_country_count=12, silver_language_count=6,
     )
 
     assert all(r.passed for r in results)
@@ -390,11 +456,12 @@ def test_check_fact_load_sanity_passes_when_facts_loaded():
 
 def test_check_fact_load_sanity_fails_when_zero_rows_loaded_despite_silver_data():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0, 0, 0]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
         silver_movies_count=5, silver_credit_count=280, silver_company_count=20,
+        silver_country_count=12, silver_language_count=6,
     )
 
     assert all(r.passed is False for r in results)
@@ -403,11 +470,12 @@ def test_check_fact_load_sanity_fails_when_zero_rows_loaded_despite_silver_data(
 def test_check_fact_load_sanity_fails_only_the_fact_table_with_no_data():
     """Each fact table is judged on its own Silver input, never on another's."""
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [10, 0, 25]
+    mock_session.execute.return_value.scalar.side_effect = [10, 0, 25, 15, 8]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
         silver_movies_count=5, silver_credit_count=280, silver_company_count=20,
+        silver_country_count=12, silver_language_count=6,
     )
 
     by_check = {r.check: r.passed for r in results}
@@ -418,11 +486,12 @@ def test_check_fact_load_sanity_fails_only_the_fact_table_with_no_data():
 
 def test_check_fact_load_sanity_fails_when_bridge_movie_company_empty():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [10, 300, 0]
+    mock_session.execute.return_value.scalar.side_effect = [10, 300, 0, 15, 8]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
         silver_movies_count=5, silver_credit_count=280, silver_company_count=20,
+        silver_country_count=12, silver_language_count=6,
     )
 
     by_check = {r.check: r.passed for r in results}
@@ -431,13 +500,29 @@ def test_check_fact_load_sanity_fails_when_bridge_movie_company_empty():
     assert by_check["facts:bridge_movie_company"] is False
 
 
+def test_check_fact_load_sanity_fails_when_bridge_movie_country_or_language_empty():
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.side_effect = [10, 300, 25, 0, 0]
+
+    results = check_fact_load_sanity(
+        mock_session, dt.date(2026, 6, 22),
+        silver_movies_count=5, silver_credit_count=280, silver_company_count=20,
+        silver_country_count=12, silver_language_count=6,
+    )
+
+    by_check = {r.check: r.passed for r in results}
+    assert by_check["facts:bridge_movie_country"] is False
+    assert by_check["facts:bridge_movie_language"] is False
+
+
 def test_check_fact_load_sanity_passes_when_zero_rows_and_zero_silver():
     mock_session = MagicMock()
-    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [0, 0, 0, 0, 0]
 
     results = check_fact_load_sanity(
         mock_session, dt.date(2026, 6, 22),
         silver_movies_count=0, silver_credit_count=0, silver_company_count=0,
+        silver_country_count=0, silver_language_count=0,
     )
 
     assert all(r.passed for r in results)
@@ -463,7 +548,8 @@ def test_run_warehouse_checks_combines_all_check_groups(monkeypatch):
                          lambda bucket, date, silver_movies_count: [CheckResult("gold:a", True, "ok")])
     monkeypatch.setattr(
         warehouse_checks_module, "check_fact_load_sanity",
-        lambda session, date, silver_movies_count, silver_credit_count, silver_company_count: [
+        lambda session, date, silver_movies_count, silver_credit_count, silver_company_count,
+               silver_country_count, silver_language_count: [
             CheckResult("facts:a", True, "ok")
         ],
     )

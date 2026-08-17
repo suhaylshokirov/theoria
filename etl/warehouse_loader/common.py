@@ -46,3 +46,14 @@ def _existing_ids(session: Session, table: str, pk_col: str) -> set[int]:
     """Return the set of PK values currently present in a table."""
     rows = session.execute(text(f"SELECT {pk_col} FROM {table}")).scalars().all()
     return {int(v) for v in rows}
+
+
+def _existing_str_ids(session: Session, table: str, pk_col: str) -> set[str]:
+    """Return the set of string PK values currently present in a table.
+
+    For natural-key dimensions like dim_country/dim_language, whose PK is an
+    ISO code rather than an integer surrogate key — _existing_ids() would
+    fail to int()-cast these.
+    """
+    rows = session.execute(text(f"SELECT {pk_col} FROM {table}")).scalars().all()
+    return {str(v) for v in rows}

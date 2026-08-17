@@ -1699,8 +1699,10 @@ from etl.warehouse_loader.load_dimensions import (
     assign_slugs,
     load_dim_collection,
     load_dim_company,
+    load_dim_country,
     load_dim_date,
     load_dim_genre,
+    load_dim_language,
     load_dim_movie,
     load_dimensions,
 )
@@ -1760,6 +1762,26 @@ def _dim_companies_df():
         "company_name": ["Warner Bros.", "Warner Bros."],
         "logo_path": ["/wb.png", "/wb.png"],
         "origin_country": ["US", "US"],
+    })
+
+
+def _dim_countries_df():
+    """Two link rows for the same country, one origin without a matching
+    production name — mirrors movie_countries' shape from Task 57."""
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 2, 3], dtype="Int64"),
+        "country_code": ["US", "US", "JP"],
+        "country_name": ["United States", "United States", None],
+        "relation": ["production", "origin", "origin"],
+    })
+
+
+def _dim_languages_df():
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 2], dtype="Int64"),
+        "language_code": ["en", "en"],
+        "language_name": ["English", "English"],
+        "english_name": ["English", "English"],
     })
 
 
@@ -1865,6 +1887,29 @@ def test_load_dim_company_excludes_rows_with_null_id_or_name():
     count = load_dim_company(mock_session, df)
 
     assert count == 1  # still just the one named, id'd company
+
+
+def test_load_dim_country_deduplicates_and_drops_unnamed_origin_only_codes():
+    """A country_code with no name anywhere in the partition (JP here) gets
+    no dimension row — dim_country.name is NOT NULL, and the bridge loader
+    quarantines that code's link rows via the normal unresolvable-FK path."""
+    mock_session = MagicMock()
+    count = load_dim_country(mock_session, _dim_countries_df())
+
+    assert count == 1
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_country" in str(stmt)
+    assert params == [{"country_code": "US", "name": "United States"}]
+
+
+def test_load_dim_language_deduplicates_a_language_shared_by_several_films():
+    mock_session = MagicMock()
+    count = load_dim_language(mock_session, _dim_languages_df())
+
+    assert count == 1
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_language" in str(stmt)
+    assert params == [{"language_code": "en", "name": "English", "english_name": "English"}]
 
 
 def test_load_dim_genre_upserts_expected_columns():
@@ -1985,6 +2030,10 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
             return _dim_genres_df()
         if entity == "movie_companies":
             return _dim_companies_df()
+        if entity == "movie_countries":
+            return _dim_countries_df()
+        if entity == "movie_languages":
+            return _dim_languages_df()
         raise AssertionError(f"unexpected entity {entity}")
 
     mock_session = MagicMock()
@@ -2004,13 +2053,14 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
 
     assert counts == {
         "dim_collection": 1, "dim_movie": 2, "dim_person": 2,
-        "dim_genre": 2, "dim_company": 1, "dim_date": 2,
+        "dim_genre": 2, "dim_company": 1, "dim_country": 1, "dim_language": 1,
+        "dim_date": 2,
         "dim_movie_slugs": 0, "dim_person_slugs": 0, "dim_collection_slugs": 0,
         "dim_company_slugs": 0,
     }
-    # 6 upserts + 4 slug SELECTs (the mocked session's empty fetchall() means
+    # 8 upserts + 4 slug SELECTs (the mocked session's empty fetchall() means
     # no matching UPDATE is issued for any of the four slugged tables).
-    assert mock_session.execute.call_count == 10
+    assert mock_session.execute.call_count == 12
 
 
 # ---------------------------------------------------------------------------
@@ -2018,12 +2068,16 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
 # ---------------------------------------------------------------------------
 from etl.warehouse_loader.load_facts import (
     _build_bridge_company_rows,
+    _build_bridge_country_rows,
+    _build_bridge_language_rows,
     _build_credit_rows,
     _build_movie_metrics_rows,
     _existing_ids,
     _records,
     _write_rejects,
     load_bridge_movie_company,
+    load_bridge_movie_country,
+    load_bridge_movie_language,
     load_fact_movie_metrics,
     load_facts,
 )
@@ -2062,6 +2116,24 @@ def _fact_companies_df():
         "company_name": ["Studio One", "Unknown Studio"],
         "logo_path": [None, None],
         "origin_country": ["US", "US"],
+    })
+
+
+def _fact_countries_df():
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 999], dtype="Int64"),
+        "country_code": ["US", "ZZ"],
+        "country_name": ["United States", "Nowhere"],
+        "relation": ["production", "origin"],
+    })
+
+
+def _fact_languages_df():
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 999], dtype="Int64"),
+        "language_code": ["en", "zz"],
+        "language_name": ["English", "Nowherish"],
+        "english_name": ["English", "Nowherish"],
     })
 
 
@@ -2293,6 +2365,85 @@ def test_load_bridge_movie_company_upserts_and_returns_rejects(monkeypatch):
     assert params == [{"movie_id": 1, "company_id": 1, "ingestion_date": dt.date(2026, 6, 26)}]
 
 
+def test_build_bridge_country_rows_resolves_known_links_and_keeps_relation():
+    rows, rejects = _build_bridge_country_rows(
+        _fact_countries_df(), valid_movie_ids={1}, valid_country_codes={"US"},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == [{
+        "movie_id": 1, "country_code": "US", "relation": "production",
+        "ingestion_date": dt.date(2026, 6, 26),
+    }]
+    assert len(rejects) == 1
+    assert rejects[0]["rejection_reason"] in {"unknown movie_id", "unknown country_code"}
+
+
+def test_build_bridge_country_rows_rejects_unknown_country_code():
+    df = pd.DataFrame({
+        "movie_id": pd.array([1], dtype="Int64"),
+        "country_code": ["ZZ"],
+        "country_name": ["Nowhere"],
+        "relation": ["origin"],
+    })
+    rows, rejects = _build_bridge_country_rows(
+        df, valid_movie_ids={1}, valid_country_codes=set(), ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == []
+    assert rejects[0]["rejection_reason"] == "unknown country_code"
+
+
+def test_load_bridge_movie_country_upserts_and_returns_rejects(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    monkeypatch.setattr(load_facts_module, "_existing_ids", lambda session, table, pk_col: {1})
+    monkeypatch.setattr(load_facts_module, "_existing_str_ids", lambda session, table, pk_col: {"US"})
+
+    count, rejects = load_bridge_movie_country(
+        mock_session, _fact_countries_df(), dt.date(2026, 6, 26)
+    )
+
+    assert count == 1
+    assert len(rejects) == 1
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO bridge_movie_country" in str(stmt)
+    assert params == [{
+        "movie_id": 1, "country_code": "US", "relation": "production",
+        "ingestion_date": dt.date(2026, 6, 26),
+    }]
+
+
+def test_build_bridge_language_rows_resolves_known_links():
+    rows, rejects = _build_bridge_language_rows(
+        _fact_languages_df(), valid_movie_ids={1}, valid_language_codes={"en"},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == [{"movie_id": 1, "language_code": "en", "ingestion_date": dt.date(2026, 6, 26)}]
+    assert len(rejects) == 1
+    assert rejects[0]["rejection_reason"] in {"unknown movie_id", "unknown language_code"}
+
+
+def test_load_bridge_movie_language_upserts_and_returns_rejects(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    monkeypatch.setattr(load_facts_module, "_existing_ids", lambda session, table, pk_col: {1})
+    monkeypatch.setattr(load_facts_module, "_existing_str_ids", lambda session, table, pk_col: {"en"})
+
+    count, rejects = load_bridge_movie_language(
+        mock_session, _fact_languages_df(), dt.date(2026, 6, 26)
+    )
+
+    assert count == 1
+    assert len(rejects) == 1
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO bridge_movie_language" in str(stmt)
+    assert params == [{"movie_id": 1, "language_code": "en", "ingestion_date": dt.date(2026, 6, 26)}]
+
+
 def test_write_rejects_writes_parquet_file(tmp_path):
     """_write_rejects() must write a Parquet file named <entity>_rejected_<date>.parquet."""
     path = _write_rejects(
@@ -2346,6 +2497,10 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
             return _fact_bridge_df()
         if entity == "movie_companies":
             return _fact_companies_df()
+        if entity == "movie_countries":
+            return _fact_countries_df()
+        if entity == "movie_languages":
+            return _fact_languages_df()
         raise AssertionError(f"unexpected entity {entity}")
 
     import etl.warehouse_loader.load_facts as load_facts_module
@@ -2359,17 +2514,27 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
         "dim_movie": {1, 2, 3, 4}, "dim_date": {20200101, 20200102}, "dim_genre": {1},
         "dim_person": {10, 11, 20, 30, 40}, "dim_company": {1},
     }
+    str_id_sets = {"dim_country": {"US"}, "dim_language": {"en"}}
     monkeypatch.setattr(
         load_facts_module, "_existing_ids",
         lambda session, table, pk_col: id_sets[table],
     )
+    monkeypatch.setattr(
+        load_facts_module, "_existing_str_ids",
+        lambda session, table, pk_col: str_id_sets[table],
+    )
 
     counts = load_facts(ingestion_date=date, bucket="theoria-datalake", rejected_dir=tmp_path)
 
-    assert counts == {"fact_movie_metrics": 1, "fact_credit": 5, "bridge_movie_company": 1}
+    assert counts == {
+        "fact_movie_metrics": 1, "fact_credit": 5, "bridge_movie_company": 1,
+        "bridge_movie_country": 1, "bridge_movie_language": 1,
+    }
     rejected_files = sorted(p.name for p in tmp_path.iterdir())
     assert rejected_files == [
         "bridge_movie_company_rejected_2026-06-26.parquet",
+        "bridge_movie_country_rejected_2026-06-26.parquet",
+        "bridge_movie_language_rejected_2026-06-26.parquet",
         "fact_credit_rejected_2026-06-26.parquet",
         "fact_movie_metrics_rejected_2026-06-26.parquet",
     ]
