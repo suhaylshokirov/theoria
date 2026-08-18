@@ -33,13 +33,19 @@ Rules:
 Last completed task   : Task 61 — Warehouse: dim_country, dim_language and their bridges
 Currently on          : Task 62 — not started (Django: provenance on the movie page, and browse by country/language — Phase 14).
 Current phase         : Phase 13 (Tasks 57–60) — complete. Phase 14 (Tasks 61–63): Task 61 complete, 62–63 not started.
-Outstanding must-do   : **Task 64 — nightly cloud refresh** (warehouse to Neon + pipeline on
-GitHub Actions). Phase-independent, not started; see the "MUST DO — Automated Nightly Refresh"
-section at the end of the Task List. Best done before Task 63 so that phase's live re-run happens
-on the scheduled path. It carries live-measured research (2026-08-17) behind the design — notably
-that TMDB's `/movie/changes` feed **never reports `vote_average`/`vote_count`/`popularity`**, so
-the obvious changes-driven refresh would update the only fields that don't drift and miss the two
-that always do. Do not re-derive those figures.
+Outstanding must-do   : **Two phase-independent must-dos, both not started.** (1) **Task 64 —
+nightly cloud refresh** (warehouse to Neon + pipeline on GitHub Actions); see "MUST DO — Automated
+Nightly Refresh". Best done before Task 63 so that phase's live re-run happens on the scheduled
+path. It carries live-measured research (2026-08-17) behind the design — notably that TMDB's
+`/movie/changes` feed **never reports `vote_average`/`vote_count`/`popularity`**, so the obvious
+changes-driven refresh would update the only fields that don't drift and miss the two that always
+do. Do not re-derive those figures. (2) **Task 65 — studio provenance page** (description,
+headquarters, homepage, parent company on `/studios/<slug>/`, above the filmography); see "MUST
+DO — Studio Provenance Page", added 2026-08-17 by user request right after the Studios redesign.
+Needs one new TMDB endpoint (`/company/{id}`, ~1,383 calls, ≈5 min at Task 64's measured 4.76
+req/s) never called before in this project — the plan's own first step is a live payload-shape +
+coverage check before any code is written, since nothing about that endpoint's response has been
+measured yet.
 Blockers / open issues: **No blockers.** **The Studios pages were redesigned by user
 request on 2026-08-17, ad hoc and outside the numbered task flow** (same posture as the Franchise
 removal and Analytics-panel cuts logged further below) — `/studios/` was a ranked `table-2col` of
@@ -915,6 +921,116 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   the local Django site — unchanged, still on the laptop — serves the refreshed figures with no
   deploy or cache step, since the views read the warehouse live; confirm a snapshot Parquet lands
   in `gold/metrics_snapshot/`; confirm Silver DQ and warehouse checks pass in CI, not just locally.
+- **Outcome:**
+
+---
+
+### MUST DO — Studio Provenance Page
+
+> Not part of any phase. Independent of Tasks 61–64 and can run at any point. Raised by user
+> request on 2026-08-17, immediately after the Studios redesign: the studio page shows a
+> filmography and four derived stats, but nothing about the studio itself — no description, no
+> headquarters, no official site, no parent company. All four exist on TMDB and are currently
+> uncollected at every layer (Bronze included) — `dim_company`'s five columns
+> (`company_id, name, logo_path, origin_country, slug`) come entirely from the `production_companies`
+> stub embedded in a *movie's* detail payload, which TMDB deliberately keeps thin (id/name/
+> logo/origin only). The richer fields live on a company's **own** detail endpoint, which this
+> project has never called.
+
+#### [ ] Task 65 — Bronze → Silver → warehouse → Django: studio bios, headquarters, homepage, parent company
+- **Goal:** `GET /company/{company_id}` on TMDB returns `description`, `headquarters`, `homepage`,
+  and `parent_company` (nested `{id, name, logo_path}` or `null`) alongside the fields already
+  collected. Surface all four on the studio page, above the filmography, the way `movie_detail`
+  surfaces `overview`/`imdb_id`/`homepage` (Tasks 41, 56).
+- **Before writing any code:** make one live `GET /company/{id}` call (e.g. Warner Bros. Pictures,
+  id 174) and confirm the response shape assumed below — field names, whether `parent_company` is
+  omitted vs. `null` when absent, and whether `description` is `""` or absent when empty. This
+  project's convention (Tasks 40, 57) is checks and transforms written from the *measured* payload
+  shape, never assumed from memory — do the same here before Silver or DDL is written. At the same
+  time, measure real coverage across a sample of ~50–100 companies (this endpoint is expected to
+  be far sparser than `movie.overview` — TMDB's own docs and spot checks suggest many smaller
+  companies have an empty `description`) and write the actual figure into this task's Outcome
+  rather than guessing one.
+- **Cost, already reasoned through (do not re-derive):** ~1,383 companies (`dim_company`'s current
+  row count) at Task 64's measured **4.76 req/s** ≈ under 5 minutes — cheap, unlike the deferred
+  Task 43 person-bio enrichment (45k+ calls), which is why this is worth doing at all.
+- **Files:** `etl/tmdb_client.py`, new `etl/bronze/ingest_companies.py`, new
+  `etl/silver/transform_companies.py`, `data_quality/silver_checks.py`, `warehouse/ddl/01_dimensions.sql`
+  + new `warehouse/ddl/15_company_details.sql`, `etl/warehouse_loader/load_dimensions.py`,
+  `scripts/run_pipeline.py`, `django_app/movies/{models,views}.py`,
+  `movies/templates/movies/studio_detail.html`, `tests/{test_etl,test_data_quality,test_django_views}.py`
+- **Steps:**
+  1. `TMDBClient.get_company_details(company_id)` — a one-line wrapper on `self.get(f"company/{company_id}")`,
+     identical shape to `get_movie_details()`.
+  2. `ingest_companies(company_ids, ingestion_date)` in a new `etl/bronze/ingest_companies.py`,
+     mirroring `ingest_movie_details()` exactly: one JSON file per id, written as it completes so a
+     mid-run failure never loses progress already made, returns `(succeeded_ids, failed_ids)`.
+     S3 layout: `bronze/company_details/ingestion_date=YYYY-MM-DD/<company_id>.json`.
+  3. **Where the company_id list comes from is the one real design decision here.** TMDB has no
+     "list all companies" endpoint, and `run_pipeline.py` already threads `movie_ids` in-memory
+     from discovery straight into `ingest_movie_details()`/`ingest_credits()` — company_ids need
+     the same shape but aren't known until *after* movie details are fetched (they live inside
+     each movie's `production_companies` array, not in the discovery listing). Add a small
+     `_extract_company_ids(movie_ids, ingestion_date, bucket)` helper that re-reads the Bronze
+     `movie_details` files just written (same `_list_bronze_keys`/`_read_json_from_s3` pattern
+     `transform_movie_links.py` already uses) and returns the deduplicated set of
+     `production_companies[].id`. Call it in `run_pipeline.py` right after `ingest_movie_details()`,
+     before the Silver transforms.
+  4. **Skip company_ids already enriched in a prior partition, rather than re-fetching every run.**
+     This is a deliberate deviation from the "every Bronze entity is fetched fresh every partition"
+     norm `ingest_movie_details()` follows — ratings/votes genuinely drift and are worth re-fetching
+     (Task 64's whole nightly-refresh premise), but a studio's description/headquarters/parent
+     essentially never change. Check `bronze/company_details/` across *all* prior ingestion_dates
+     (not just this one) for an existing `<company_id>.json` before calling the API for it. Document
+     this as the deliberate exception it is, since it breaks the pattern a future reader would
+     otherwise expect from every other Bronze ingestion module.
+  5. New `etl/silver/transform_companies.py`, reading `bronze/company_details/` for the date and
+     writing `silver/company_details/company_details.parquet`: one row per company_id —
+     `company_id, description, headquarters, homepage, parent_company_id, parent_company_name`.
+     Normalise TMDB's `""` to `None` for `description`/`headquarters`/`homepage`, same convention
+     as Tasks 36/55. `parent_company_id`/`parent_company_name` both null when TMDB's
+     `parent_company` is `null`.
+  6. New `ENTITY_CONFIGS["company_details"]` in `silver_checks.py`, written from the *measured*
+     payload shape (step 0), not copied from the transform.
+  7. `15_company_details.sql`: idempotent `ALTER TABLE dim_company ADD COLUMN IF NOT EXISTS
+     description TEXT, headquarters TEXT, homepage TEXT, parent_company_id INTEGER,
+     parent_company_name TEXT`. Add the same five columns to `dim_company` in `01_dimensions.sql`
+     for a fresh bootstrap. **No FK constraint on `parent_company_id`, and this is deliberate**: a
+     parent company (e.g. The Walt Disney Company) is not guaranteed to itself hold a
+     `bridge_movie_company` row — it may never be directly credited on a film, only its
+     subsidiaries are — so enforcing referential integrity would either reject a legitimate parent
+     link or force fabricating a `dim_company` row for a company that was never actually linked to
+     a movie, breaking the "this dimension is the distinct set of companies actually linked to a
+     film" invariant Task 58 established. `parent_company_id` is a soft, unenforced reference:
+     resolved at *read* time (step 9), the same "render only when it resolves" judgment Task 56
+     already applied to IMDb/homepage links.
+  8. `load_dim_company()` in `load_dimensions.py` currently derives the whole dimension from Silver's
+     `movie_companies` link table alone. It now needs a second Silver source
+     (`company_details`, one row per company, not per movie/company pair) **left-joined** onto the
+     first — a company with no Bronze company-details row yet (a fresh company introduced this
+     partition, enrichment pending, or a company whose one API call failed) must still upsert with
+     its existing five columns and simply leave the five new ones null, never block the load.
+  9. Django: five new fields on `Company` (`TextField(null=True)` / `parent_company_id =
+     IntegerField(null=True)`). `studio_detail` resolves the parent — if `parent_company_id` is set,
+     one extra `Company.objects.using("warehouse").filter(company_id=...).first()` (a single detail
+     page, not the list, so one query is cheap) — and links to it only if that row exists, else
+     renders the plain `parent_company_name` text with no link. New provenance block in
+     `studio_detail.html`, positioned above the toolbar+filmography per the request ("above their
+     films"): `description` as prose (only when non-null — the Task 56 "print only when there's
+     something to say" rule), then a record list for Headquarters / Official site (`.ext-link`,
+     reusing Task 56's exact outbound-link treatment — no new CSS) / Parent company. A studio with
+     none of the four (real TMDB sparsity, not a bug) renders no block at all, the same way
+     `movie_detail`'s "Elsewhere" row disappears when both IMDb and homepage are null.
+  10. Wire `ingest_companies()`/`transform_companies()` into `run_pipeline.py` in sequence; backfill
+      all three existing partitions once, then let the normal pipeline cadence keep it current
+      (subject to step 4's already-enriched skip).
+- **Verify:** the live payload-shape + coverage numbers from the pre-work step land in this task's
+  Outcome, not assumed figures; `dim_company` gains all five columns with 0 rows lost; Warner Bros.
+  Pictures' page shows a real description/headquarters/homepage; a studio with a resolvable parent
+  (e.g. a Marvel or Lucasfilm subsidiary → The Walt Disney Company, if Disney itself has a
+  `dim_company` row) links to it; a studio with an *unresolvable* parent shows the name as plain
+  text, not a dead link; a studio with none of the four fields renders no provenance block; Silver
+  DQ and warehouse checks both pass; full test suite green.
 - **Outcome:**
 
 ---
