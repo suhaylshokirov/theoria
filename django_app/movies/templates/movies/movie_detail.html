@@ -26,10 +26,10 @@
         {% if movie.overview %}<p class="specimen-synopsis">{{ movie.overview }}</p>{% endif %}
 
         <dl class="record-list">
-            {% if metrics.rating %}
+            {% if movie_rating.rating %}
             <div class="record-row">
                 <dt class="label">Rating</dt>
-                <dd class="mono">{{ metrics.rating|floatformat:1 }} / 10</dd>
+                <dd>{% include "movies/_rating_badge.html" with rating=movie_rating.rating vote_count=movie_rating.vote_count imdb_id=movie.imdb_id only %}</dd>
             </div>
             {% endif %}
             <div class="record-row">

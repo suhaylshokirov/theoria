@@ -182,6 +182,38 @@ class MovieMetrics(models.Model):
         return f"{self.movie_id}/{self.date_id}/{self.genre_id}"
 
 
+class MovieRating(models.Model):
+    """fact_movie_rating: one row per (movie, source) — Tasks 66-68.
+
+    Unlike fact_movie_metrics (movie, date, genre), this table carries no
+    genre fan-out: a film has exactly one row per rating source, so reading
+    it needs none of the .values(...).distinct() dedupe guards the older
+    table required everywhere it was read. `source` is 'imdb' or 'tmdb'
+    (enforced by a CHECK in warehouse/ddl/15_movie_ratings.sql); the UI
+    reads 'imdb' exclusively (Task 68) — TMDB's own vote_average/vote_count
+    are still loaded and queryable here, never rendered.
+
+    Same fake-single-PK workaround as the other composite-PK fact models:
+    `movie` carries primary_key=True purely to satisfy Django's one-pk rule;
+    the real PK is the composite (movie_id, source) in Postgres.
+    """
+
+    movie = models.ForeignKey(
+        Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True
+    )
+    source = models.CharField(max_length=16)
+    rating = models.DecimalField(max_digits=4, decimal_places=2, null=True)
+    vote_count = models.IntegerField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "fact_movie_rating"
+
+    def __str__(self):
+        return f"{self.movie_id}/{self.source}"
+
+
 class Company(models.Model):
     """A production company (Task 58). Films have 2.81 companies on average."""
 

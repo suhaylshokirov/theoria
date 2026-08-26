@@ -30,7 +30,7 @@ from django.test.utils import setup_test_environment, teardown_test_environment 
 
 from movies.models import (  # noqa: E402
     Company, Country, Credit, Genre, Language, Movie, MovieCompany,
-    MovieCountry, MovieLanguage, MovieMetrics, Person,
+    MovieCountry, MovieLanguage, MovieRating, Person,
 )
 
 client = Client()
@@ -71,19 +71,21 @@ def test_home_returns_200_with_expected_context():
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Person, "objects", new=MagicMock()
     ) as person_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr:
         using = movie_mgr.using.return_value
         using.count.return_value = 99
-        # top_rated: .annotate(...).order_by(...)[:12]
+        # top_rated and newest both now annotate(imdb_rating=...).order_by(...)[:12]
+        # (Task 68), so both hit this same chain regardless of which order_by
+        # expression each actually orders by.
         using.annotate.return_value.order_by.return_value.__getitem__.return_value = [movie]
-        # newest: .order_by(...)[:12]
-        using.order_by.return_value.__getitem__.return_value = [movie]
         # mosaic: .filter(poster_path__isnull=False).order_by(...)[:120]
         using.filter.return_value.order_by.return_value.__getitem__.return_value = [movie]
         person_mgr.using.return_value.count.return_value = 122685
         credit_mgr.using.return_value.count.return_value = 237454
-        metrics_mgr.using.return_value.aggregate.return_value = {
+        # avg_rating now reads fact_movie_rating filtered to source="imdb"
+        # instead of averaging every fact_movie_metrics row (Task 68).
+        rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
             "avg_rating": Decimal("6.84")
         }
 
@@ -146,9 +148,43 @@ def test_movie_list_search_and_sort():
 
     assert response.status_code == 200
     qs.filter.assert_called_once_with(title__icontains="test")
-    qs.annotate.assert_called_once()  # rating sort needs the Max annotation
+    # Annotated unconditionally now (Task 68) — always called once, whether
+    # or not this request happens to sort by rating.
+    qs.annotate.assert_called_once()
     assert response.context["q"] == "test"
     assert response.context["sort"] == "rating"
+
+
+def test_movie_list_sort_by_rating_uses_the_imdb_annotation():
+    """MOVIE_SORTS["rating"] and the card display both read the same
+    Max("movierating__rating", filter=source="imdb") annotation (Task 68) —
+    sorting and what each card shows can never disagree."""
+    from django.db.models import Max, Q
+
+    movie = _movie()
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Country, "objects", new=MagicMock()
+    ) as country_mgr, patch.object(
+        Language, "objects", new=MagicMock()
+    ) as language_mgr:
+        country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
+        language_mgr.using.return_value.annotate.return_value.order_by.return_value.values_list.return_value = []
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [movie]
+
+        response = client.get("/movies/", {"sort": "rating"})
+
+    assert response.status_code == 200
+    (_, kwargs), = qs.annotate.call_args_list
+    imdb_rating = kwargs["imdb_rating"]
+    assert isinstance(imdb_rating, Max)
+    assert imdb_rating.source_expressions[0].name == "movierating__rating"
+    assert imdb_rating.filter == Q(movierating__source="imdb")
+    # order_by() was handed the same F("imdb_rating") this annotation defines.
+    (order_expr,), _ = qs.order_by.call_args
+    assert order_expr.expression.name == "imdb_rating"
 
 
 def test_movie_list_invalid_sort_falls_back_to_release():
@@ -421,8 +457,8 @@ def test_movie_detail_returns_200_with_expected_context():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -436,9 +472,9 @@ def test_movie_detail_returns_200_with_expected_context():
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
             cast_credit, crew_credit
         ]
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = {
-            "rating": Decimal("8.50"),
-        }
+        rating_mgr.using.return_value.filter.return_value.first.return_value = MovieRating(
+            movie=movie, source="imdb", rating=Decimal("8.50"), vote_count=12345,
+        )
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -451,7 +487,7 @@ def test_movie_detail_returns_200_with_expected_context():
     # whole crew is always sent; the browser pages it (Task 54).
     assert [d["name"] for d in response.context["crew"]] == ["Directing"]
     assert response.context["crew"][0]["people"][0]["person"] == director
-    assert response.context["metrics"]["rating"] == Decimal("8.50")
+    assert response.context["movie_rating"].rating == Decimal("8.50")
 
 
 def test_movie_detail_renders_studios_as_links():
@@ -464,8 +500,8 @@ def test_movie_detail_renders_studios_as_links():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -477,7 +513,7 @@ def test_movie_detail_renders_studios_as_links():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -487,21 +523,23 @@ def test_movie_detail_renders_studios_as_links():
     assert "Warner Bros. Pictures" in body
 
 
-def test_movie_detail_renders_rating_and_synopsis():
-    """Rating and overview must reach the rendered page, with no vote count.
+def test_movie_detail_renders_rating_badge_with_vote_count_and_synopsis():
+    """The IMDb badge (Task 68) and the overview must both reach the page.
 
-    The rating lives in fact_movie_metrics and the synopsis in dim_movie.overview
-    — both existed in the pipeline long before any page displayed them. The vote
-    count is deliberately not shown to readers.
+    The rating now lives in fact_movie_rating and the synopsis in
+    dim_movie.overview — the synopsis existed in the pipeline long before any
+    page displayed it. Unlike the old fact_movie_metrics-backed row, the
+    badge does show a vote count, and links out to IMDb when imdb_id is set.
     """
     movie = _movie()
     movie.overview = "A test synopsis describing the film."
+    movie.imdb_id = "tt1234567"
 
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -513,9 +551,9 @@ def test_movie_detail_renders_rating_and_synopsis():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = {
-            "rating": Decimal("8.50"),
-        }
+        rating_mgr.using.return_value.filter.return_value.first.return_value = MovieRating(
+            movie=movie, source="imdb", rating=Decimal("8.50"), vote_count=2103445,
+        )
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -523,7 +561,42 @@ def test_movie_detail_renders_rating_and_synopsis():
     assert response.status_code == 200
     assert "8.5" in body
     assert "A test synopsis describing the film." in body
-    assert "vote" not in body.lower()
+    assert "2,103,445 votes" in body
+    assert 'href="https://www.imdb.com/title/tt1234567/"' in body
+    assert "IMDb rating 8.5 out of 10" in body
+
+
+def test_movie_detail_renders_no_badge_when_no_imdb_rating():
+    """No fact_movie_rating row for this film → no badge, no em dash, no
+    empty row — the same restraint Task 56 applied to original_title. Real:
+    only 1,139 of the partition's 1,215 films have an IMDb rating."""
+    movie = _movie()
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr, patch.object(
+        MovieCountry, "objects", new=MagicMock()
+    ) as country_mgr, patch.object(
+        MovieLanguage, "objects", new=MagicMock()
+    ) as language_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        country_mgr.using.return_value.filter.return_value.select_related.return_value = []
+        language_mgr.using.return_value.filter.return_value.select_related.return_value = []
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    body = response.content.decode()
+    assert response.status_code == 200
+    assert "rating-badge" not in body
+    assert "imdb.svg" not in body
+    assert response.context["movie_rating"] is None
 
 
 def test_movie_detail_renders_original_title_when_differs():
@@ -537,8 +610,8 @@ def test_movie_detail_renders_original_title_when_differs():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -550,7 +623,7 @@ def test_movie_detail_renders_original_title_when_differs():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -569,8 +642,8 @@ def test_movie_detail_hides_original_title_when_same_as_title():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -582,7 +655,7 @@ def test_movie_detail_hides_original_title_when_same_as_title():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -604,8 +677,8 @@ def test_movie_detail_cast_present_when_no_director_credited():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -619,7 +692,7 @@ def test_movie_detail_cast_present_when_no_director_credited():
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [
             cast_credit
         ]
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -644,8 +717,8 @@ def test_movie_detail_merges_multi_job_crew_person():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -657,7 +730,7 @@ def test_movie_detail_merges_multi_job_crew_person():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -689,8 +762,8 @@ def test_movie_detail_person_appears_in_cast_and_crew():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -702,7 +775,7 @@ def test_movie_detail_person_appears_in_cast_and_crew():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -739,8 +812,8 @@ def test_movie_detail_sends_every_credit_for_client_side_paging():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -754,7 +827,7 @@ def test_movie_detail_sends_every_credit_for_client_side_paging():
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = (
             cast_credits + crew_credits
         )
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -797,8 +870,8 @@ def test_movie_detail_crew_grouped_in_department_order():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -810,7 +883,7 @@ def test_movie_detail_crew_grouped_in_department_order():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -843,8 +916,8 @@ def test_movie_detail_crew_rows_carry_a_face_or_silhouette():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -856,7 +929,7 @@ def test_movie_detail_crew_rows_carry_a_face_or_silhouette():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -892,8 +965,8 @@ def test_movie_detail_shows_one_countries_row_when_origin_and_production_agree()
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -905,7 +978,7 @@ def test_movie_detail_shows_one_countries_row_when_origin_and_production_agree()
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -930,8 +1003,8 @@ def test_movie_detail_splits_origin_and_production_when_they_disagree():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -943,7 +1016,7 @@ def test_movie_detail_splits_origin_and_production_when_they_disagree():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -973,8 +1046,8 @@ def test_movie_detail_reconciles_original_language_with_spoken_languages():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -986,7 +1059,7 @@ def test_movie_detail_reconciles_original_language_with_spoken_languages():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = rows
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -1007,8 +1080,8 @@ def test_movie_detail_singular_language_label_for_one_language():
     with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(
         MovieCountry, "objects", new=MagicMock()
@@ -1020,7 +1093,7 @@ def test_movie_detail_singular_language_label_for_one_language():
         language_mgr.using.return_value.filter.return_value.select_related.return_value = rows
         genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.first.return_value = None
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
 
         response = client.get(f"/movies/{movie.movie_id}/")
 
@@ -1125,12 +1198,19 @@ def test_person_detail_merges_multi_job_credits_into_one_filmography_row():
     with patch("movies.views.get_object_or_404", return_value=person), patch.object(
         Credit, "objects", new=MagicMock()
     ) as credit_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr:
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
+        # No .values(...).distinct() guard any more (Task 68) — fact_movie_rating
+        # is one row per (movie, source), so a plain filter+aggregate is correct.
+        rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
             "avg_rating": Decimal("7.50")
         }
+        # Same film set powers each poster's own badge — one more query,
+        # still constant regardless of filmography size (Task 68).
+        rating_mgr.using.return_value.filter.return_value.values_list.return_value = [
+            (movie.movie_id, Decimal("7.50")),
+        ]
         movie_mgr.using.return_value.filter.return_value.aggregate.return_value = {
             "earliest": date(2020, 1, 1), "latest": date(2020, 1, 1),
         }
@@ -1148,6 +1228,52 @@ def test_person_detail_merges_multi_job_credits_into_one_filmography_row():
     assert response.context["credit_count"] == 3
     assert response.context["film_count"] == 1
     assert response.context["career_period"] == "2020"
+    assert response.context["avg_rating"] == Decimal("7.50")
+    # The poster grid displays exactly the figure the average was computed
+    # from — the annotation attached onto the same Movie instance.
+    assert filmography[0]["movie"].imdb_rating == Decimal("7.50")
+
+
+def test_person_detail_filmography_ratings_use_constant_number_of_queries():
+    """The per-poster IMDb figure (Task 68) must come from one extra query
+    for the whole grid, not one query per film — a filmography of several
+    films must issue the same number of MovieRating queries as one of a
+    single film, guarding against an N+1 that would only show up at scale."""
+    person = _person()
+    movies = [_movie(movie_id=i, title=f"Movie {i}") for i in range(1, 4)]
+    credits = [
+        Credit(movie=m, person=person, department="Acting", job="Actor",
+               character_name="Role", ordering=0)
+        for m in movies
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), patch.object(
+        Credit, "objects", new=MagicMock()
+    ) as credit_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr:
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
+        rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
+            "avg_rating": Decimal("7.00")
+        }
+        rating_mgr.using.return_value.filter.return_value.values_list.return_value = [
+            (m.movie_id, Decimal("7.00")) for m in movies
+        ]
+        movie_mgr.using.return_value.filter.return_value.aggregate.return_value = {
+            "earliest": date(2020, 1, 1), "latest": date(2020, 1, 1),
+        }
+
+        response = client.get("/people/test-person/")
+
+    assert response.status_code == 200
+    assert len(response.context["filmography"]) == 3
+    # Exactly two MovieRating queries — the avg_rating aggregate and the
+    # per-card ratings dict — however many films are in the filmography.
+    assert rating_mgr.using.return_value.filter.call_count == 2
+    assert all(
+        row["movie"].imdb_rating == Decimal("7.00")
+        for row in response.context["filmography"]
+    )
 
 
 def test_person_detail_404_when_missing():
@@ -1245,8 +1371,8 @@ def test_studio_detail_returns_200_with_expected_stats():
     with patch("movies.views.get_object_or_404", return_value=studio), patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr:
         company_mgr.using.return_value.filter.return_value.values_list.return_value = [movie.movie_id]
 
         all_movies_qs = movie_mgr.using.return_value.filter.return_value
@@ -1254,9 +1380,15 @@ def test_studio_detail_returns_200_with_expected_stats():
             {"film_count": 1, "total_revenue": 5000},
             {"start": date(2020, 1, 1), "end": date(2020, 1, 1)},
         ]
+        # The grid is always annotated with imdb_rating now (Task 68), not
+        # only when sorting by it — pass-through so the existing order_by
+        # config below still applies to the annotated queryset.
+        all_movies_qs.annotate.return_value = all_movies_qs
         all_movies_qs.order_by.return_value = [movie]
 
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
+        # No .values(...).distinct() guard any more (Task 68) — fact_movie_rating
+        # is one row per (movie, source).
+        rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
             "avg_rating": Decimal("7.24")
         }
 
@@ -1284,8 +1416,8 @@ def test_studio_detail_filters_filmography_by_search(monkeypatch):
     with patch("movies.views.get_object_or_404", return_value=studio), patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr:
         company_mgr.using.return_value.filter.return_value.values_list.return_value = [movie.movie_id]
 
         all_movies_qs = movie_mgr.using.return_value.filter.return_value
@@ -1293,10 +1425,13 @@ def test_studio_detail_filters_filmography_by_search(monkeypatch):
             {"film_count": 1, "total_revenue": 5000},
             {"start": date(2020, 1, 1), "end": date(2020, 1, 1)},
         ]
+        # Pass-through so the unconditional imdb_rating annotate() (Task 68)
+        # still leads to the same filter/order_by mocks configured below.
+        all_movies_qs.annotate.return_value = all_movies_qs
         filtered_qs = all_movies_qs.filter.return_value
         filtered_qs.order_by.return_value = [movie]
 
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
+        rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
             "avg_rating": Decimal("7.24")
         }
 
@@ -1318,8 +1453,8 @@ def test_studio_detail_ajax_request_renders_results_fragment_only():
     with patch("movies.views.get_object_or_404", return_value=studio), patch.object(
         MovieCompany, "objects", new=MagicMock()
     ) as company_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        MovieMetrics, "objects", new=MagicMock()
-    ) as metrics_mgr:
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr:
         company_mgr.using.return_value.filter.return_value.values_list.return_value = [movie.movie_id]
 
         all_movies_qs = movie_mgr.using.return_value.filter.return_value
@@ -1327,9 +1462,10 @@ def test_studio_detail_ajax_request_renders_results_fragment_only():
             {"film_count": 1, "total_revenue": 5000},
             {"start": date(2020, 1, 1), "end": date(2020, 1, 1)},
         ]
+        all_movies_qs.annotate.return_value = all_movies_qs
         all_movies_qs.order_by.return_value = [movie]
 
-        metrics_mgr.using.return_value.filter.return_value.values.return_value.distinct.return_value.aggregate.return_value = {
+        rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
             "avg_rating": Decimal("7.24")
         }
 

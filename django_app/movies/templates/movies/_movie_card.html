@@ -15,6 +15,14 @@
         <div class="card-body">
             <span class="card-title">{{ movie.title }}</span>
             <span class="card-sub">{% if card_sub %}{{ card_sub }}{% elif movie.release_date %}{{ movie.release_date|date:"Y" }}{% else %}—{% endif %}</span>
+            {% comment %} Compact badge: mark + figure only, no vote count, no
+               link — a poster grid full of outbound links would be noise.
+               movie.imdb_rating is the filtered annotation the calling view
+               puts on its queryset (Task 68); a Movie fetched without it
+               (e.g. the home mosaic, which never renders through this
+               partial) simply has no attribute and the include renders
+               nothing. {% endcomment %}
+            {% include "movies/_rating_badge.html" with rating=movie.imdb_rating only %}
         </div>
     </a>
 </div>

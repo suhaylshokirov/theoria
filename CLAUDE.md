@@ -30,10 +30,12 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 67 — Warehouse: fact_movie_rating (IMDb + TMDB at one-row-per-film-per-source grain)
-Currently on          : Task 68 — not started (Django: render the IMDb rating with its mark, and repoint every reader of TMDB's).
+Last completed task   : Task 68 — Django: the IMDb rating rendered with its mark, every reader of TMDB's repointed
+Currently on          : Task 63 — not started, and **next by user decision (2026-08-26)**: closes Phase 14
+(analytics panels, full live re-run, doc truth-up). Task 69 follows it and should reuse that run
+rather than repeating it.
 Current phase         : Phase 14 (Tasks 61–63): 61–62 complete, **63 still not started**. Phase 15
-(Tasks 66–69, added 2026-08-26 by user request): 66–67 complete, 68–69 not started. **Note the two
+(Tasks 66–69, added 2026-08-26 by user request): 66–68 complete, 69 not started. **Note the two
 phases are interleaved** — Phase 15 was started before Phase 14 was closed, because the user raised
 the ratings change directly. Task 63 and Task 69 both call for a full live pipeline re-run and a doc
 truth-up; **running Task 63 first would avoid doing that ~25-minute run twice**, or the two closing
@@ -952,8 +954,42 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 #### [ ] Task 68 — Django: the IMDb rating, with its mark
 - **Goal:** Surface IMDb everywhere the TMDB rating is read today — the movie page, `?sort=rating`, home's Avg rating tile, the person and studio Avg rating stats — plus a compact figure on the poster cards, which show no rating at all today.
 - **Files:** `django_app/movies/{models,views}.py`, new `movies/templates/movies/_rating_badge.html`, `movie_detail.html`, `_movie_card.html`, new `django_app/static/img/imdb.svg`, `static/css/theoria.css`, `tests/test_django_views.py`
-- **Key points:** one filtered annotation (`Max("movierating__rating", filter=Q(movierating__source="imdb"))`) serves both sorting *and* card display, so the two can never disagree — and it must be annotated on the queryset, never queried per card. **Delete the dedupe guards rather than porting them**, with a comment saying why, or a future reader will read their absence as an oversight. `home()`'s Avg rating **will change value** — it currently averages every fact row, over-weighting multi-genre films; the new grain fixes that. The mark is `static/img/imdb.svg` (Wikimedia, PD-textlogo) — the project's **first image asset**, a deliberate deviation from the inline-SVG convention because hand-drawing a specific wordmark would be a poor reproduction. Badge needs a real screen-reader label, and links out via the **existing `.ext-link` rule**, which has had zero consumers since `da9b59b` removed the Elsewhere row.
-- **Outcome:**
+- **Outcome:** Built as scoped. New `MovieRating` model (`managed = False`, fake single PK on
+  `movie`, same shape as every other composite-PK fact). **One filtered annotation —
+  `Max("movierating__rating", filter=Q(movierating__source="imdb"))` — serves both sorting and card
+  display**, annotated unconditionally rather than only when `sort == "rating"` (as the old
+  `moviemetrics` annotation was), so a list can no longer sort by one number and render another;
+  `MOVIE_SORTS["rating"]` points at the same annotation. The genre-fanout dedupe guards in
+  `studio_detail()` and `person_detail()` were **deleted, not ported**, each with a comment saying
+  the new one-row-per-film grain makes them unnecessary — without that comment their absence reads
+  as an oversight and someone re-adds them. `movie_detail()`'s context key was renamed
+  `metrics` → `movie_rating` and now renders a vote count, which the page never showed before.
+  New `_rating_badge.html` partial (the project's first shared icon partial) renders **nothing**
+  when `rating` is falsy, a compact mark+figure on cards, and a full mark+figure+votes badge linked
+  to IMDb on the detail page — reusing the `.ext-link` rule that had sat in `theoria.css` with zero
+  consumers since `da9b59b`. `.rating-badge` is a new **additive** component; no shared rule was
+  restyled (Task 38's CSS contract). `django_app/static/img/imdb.svg` is the project's **first image
+  asset** — a deliberate deviation from the inline-SVG convention, since hand-drawing a specific
+  wordmark would be a poor reproduction; taken verbatim from Wikimedia Commons (PD-textlogo).
+  Accessibility: the label lives on the link (`aria-label="IMDb rating 9.2 out of 10"`) with the
+  mark's `alt=""` and both figure spans `aria-hidden` — a logo plus a bare number is silent to a
+  screen reader. **One necessary deviation from the plan's literal snippet:** `person_detail()`'s
+  filmography comes from `Credit.select_related("movie")`, not a bare `Movie` queryset, so a
+  queryset `.annotate()` was impossible; one extra `values_list` builds a dict and attaches
+  `imdb_rating` as an instance attribute — still constant-cost, which is what the constraint
+  actually required. **Live-verified**: all 10 routes 200, bad slug 404s; `/movies/the-godfather/`
+  shows 9.2 / 2,250,628 votes linking to `imdb.com/title/tt0068646/`; `/movies/?sort=rating` ranks
+  Shawshank 9.3 → Godfather 9.2 → Dark Knight 9.1 with every card showing the figure it sorted by;
+  `/movies/vixen/` (no IMDb row) renders zero badges and no Rating row at all, 200 not an error.
+  **N+1 verified by counting queries, not by inspection**: `/movies/` is **4 queries for 24 cards**,
+  `/` 7, `/studios/<slug>/` 7, `/people/<slug>/` 5 — flat regardless of card count.
+  **`home()`'s Avg rating moved 7.16 → 7.25**, which is the fix landing: the old figure averaged
+  every `fact_movie_metrics` row and over-weighted multi-genre films. **Worth knowing:** 1,139 of
+  1,215 films (93.7%) have an IMDb rating, and the 76 that don't are almost entirely unreleased or
+  just-released titles below IMDb's ≥5-vote floor (54 of the 114 films released 2024+). Because
+  `/movies/` defaults to newest-first, **the default landing view is the one place the badges look
+  absent** — correct behaviour that reads as a bug. Worth revisiting the default sort. Tests
+  268 → **271**.
 
 #### [ ] Task 69 — Analytics, live re-run, doc truth-up
 - **Goal:** The phase-closing task, following Tasks 44 and 53.

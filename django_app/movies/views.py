@@ -1,7 +1,7 @@
 from datetime import date
 
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, F, Max, Min, Sum
+from django.db.models import Avg, Count, F, Max, Min, Q, Sum
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
@@ -9,7 +9,7 @@ from django.utils.http import urlencode
 
 from movies.models import (
     Company, Country, Credit, Genre, Language, Movie, MovieCompany,
-    MovieCountry, MovieLanguage, MovieMetrics, Person,
+    MovieCountry, MovieLanguage, MovieRating, Person,
 )
 
 MOVIES_PER_PAGE = 24
@@ -40,9 +40,17 @@ MOSAIC_LIMIT = 120
 
 # ?sort= values accepted by movie_list, mapped to an order_by expression.
 # Nulls always sort last so movies missing a field don't lead the list.
+#
+# "rating" points at imdb_rating — the single filtered annotation
+# (Max("movierating__rating", filter=Q(movierating__source="imdb"))) that
+# every rating-bearing view below also uses for card display, so sorting and
+# display can never disagree (Task 68). fact_movie_rating is one row per
+# (movie, source) — no genre fan-out — so Max() here is a defensive plain
+# lookup, not a fan-out collapse the way the equivalent moviemetrics
+# annotation used to be.
 MOVIE_SORTS = {
     "release": F("release_date").desc(nulls_last=True),
-    "rating": F("top_rating").desc(nulls_last=True),
+    "rating": F("imdb_rating").desc(nulls_last=True),
     "revenue": F("revenue").desc(nulls_last=True),
     "title": F("title").asc(),
 }
@@ -52,16 +60,18 @@ def home(request):
     """Landing page: the catalog as a contact sheet, plus warehouse-wide stats."""
     top_rated = (
         Movie.objects.using("warehouse")
-        .annotate(top_rating=Max("moviemetrics__rating"))
-        .order_by(F("top_rating").desc(nulls_last=True))[:12]
+        .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
+        .order_by(F("imdb_rating").desc(nulls_last=True))[:12]
     )
     newest = (
         Movie.objects.using("warehouse")
+        .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
         .order_by(F("release_date").desc(nulls_last=True))[:12]
     )
 
     # The mosaic only holds films that actually have a poster — a missing
-    # image would punch a hole in the sheet.
+    # image would punch a hole in the sheet. It never renders through
+    # _movie_card.html (see home.html), so it doesn't need imdb_rating.
     mosaic = (
         Movie.objects.using("warehouse")
         .filter(poster_path__isnull=False)
@@ -72,9 +82,13 @@ def home(request):
         "movie_count": Movie.objects.using("warehouse").count(),
         "person_count": Person.objects.using("warehouse").count(),
         "credit_count": Credit.objects.using("warehouse").count(),
-        "avg_rating": MovieMetrics.objects.using("warehouse").aggregate(
-            avg_rating=Avg("rating")
-        )["avg_rating"],
+        # Reads fact_movie_rating instead of fact_movie_metrics (Task 68):
+        # the old figure averaged every fact_movie_metrics row, silently
+        # over-weighting multi-genre films since a film's rating repeats
+        # once per genre there. This is a true per-film average.
+        "avg_rating": MovieRating.objects.using("warehouse").filter(
+            source="imdb"
+        ).aggregate(avg_rating=Avg("rating"))["avg_rating"],
         "top_rated": top_rated,
         "newest": newest,
         "mosaic": mosaic,
@@ -112,8 +126,13 @@ def movie_list(request):
         # production agreeing) or, in principle, several spoken languages —
         # either join can hand back the same movie more than once.
         movies = movies.distinct()
-    if sort == "rating":
-        movies = movies.annotate(top_rating=Max("moviemetrics__rating"))
+    # Annotated unconditionally, not only when sort == "rating" — the cards
+    # display this figure too, so it must exist whether or not the list is
+    # being sorted by it (Task 68). MOVIE_SORTS["rating"] points at the same
+    # annotation, so sorting and display can never disagree.
+    movies = movies.annotate(
+        imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
+    )
     movies = movies.order_by(MOVIE_SORTS[sort])
 
     page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
@@ -330,17 +349,13 @@ def movie_detail(request, movie_slug):
     )
     languages = _movie_languages(movie, language_rows)
 
-    # fact_movie_metrics has one row per (movie, date, genre), and rating is
-    # a movie-level measure repeated identically across those rows. So take
-    # one row rather than averaging: .values(...).distinct() collapses the
-    # genre fan-out to a single tuple, and .first() reads it. Averaging here
-    # would be a silent trap — it happens to give the right answer only
-    # because the duplicated values are equal.
-    metrics = (
-        MovieMetrics.objects.using("warehouse")
-        .filter(movie_id=movie_id)
-        .values("rating")
-        .distinct()
+    # fact_movie_rating (Task 66-68) is one row per (movie, source) — no
+    # genre fan-out — so this is a plain lookup, replacing the old
+    # fact_movie_metrics read that needed .values(...).distinct() to
+    # collapse a genre-repeated rating before taking one row.
+    movie_rating = (
+        MovieRating.objects.using("warehouse")
+        .filter(movie_id=movie_id, source="imdb")
         .first()
     )
 
@@ -356,7 +371,7 @@ def movie_detail(request, movie_slug):
         "studios": studios,
         "countries": countries,
         "languages": languages,
-        "metrics": metrics,
+        "movie_rating": movie_rating,
     }
     return render(request, "movies/movie_detail.html", context)
 
@@ -462,21 +477,20 @@ def studio_detail(request, company_slug):
     )
     all_movies = Movie.objects.using("warehouse").filter(movie_id__in=movie_ids)
 
-    # Two aggregates, only one needing the fact_movie_metrics genre-fanout
-    # guard: revenue sums straight off dim_movie (one row per film), but
-    # rating must collapse the (movie, date, genre) grain first via
-    # .values().distinct() — skipping that would silently multiply revenue
-    # by each film's genre count instead (the Task 59 plan's own warning).
-    # Computed once, over the *whole* filmography — the header stats describe
-    # this studio's entire output and must not shift as the grid below is
-    # filtered, the same way a person page's stat row doesn't move when
-    # someone pages through their filmography.
+    # Revenue sums straight off dim_movie (one row per film). Rating used to
+    # need a fact_movie_metrics genre-fanout guard (.values().distinct()
+    # before averaging) — fact_movie_rating is one row per (movie, source),
+    # so that guard is unnecessary here and deliberately not ported
+    # (Task 68): a plain .filter(source="imdb").aggregate(Avg(...)) is
+    # already correct at this grain. Computed once, over the *whole*
+    # filmography — the header stats describe this studio's entire output
+    # and must not shift as the grid below is filtered, the same way a
+    # person page's stat row doesn't move when someone pages through their
+    # filmography.
     stats = all_movies.aggregate(film_count=Count("movie_id"), total_revenue=Sum("revenue"))
     avg_rating = (
-        MovieMetrics.objects.using("warehouse")
-        .filter(movie_id__in=movie_ids)
-        .values("movie_id", "rating")
-        .distinct()
+        MovieRating.objects.using("warehouse")
+        .filter(movie_id__in=movie_ids, source="imdb")
         .aggregate(avg_rating=Avg("rating"))["avg_rating"]
     )
     span = all_movies.aggregate(start=Min("release_date"), end=Max("release_date"))
@@ -486,11 +500,14 @@ def studio_detail(request, company_slug):
     if sort not in MOVIE_SORTS:
         sort = "release"
 
-    movies = all_movies
+    # Annotated unconditionally (not only when sort == "rating"), same as
+    # movie_list() — the grid below always displays this figure, so it must
+    # always be there to display, whichever way the list is sorted.
+    movies = all_movies.annotate(
+        imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
+    )
     if q:
         movies = movies.filter(title__icontains=q)
-    if sort == "rating":
-        movies = movies.annotate(top_rating=Max("moviemetrics__rating"))
     movies = movies.order_by(MOVIE_SORTS[sort])
 
     page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
@@ -654,15 +671,26 @@ def person_detail(request, person_slug):
 
     movie_ids = {c.movie_id for c in credits}
 
-    # Same genre-fanout guard as everywhere else: fact_movie_metrics repeats a
-    # movie's rating once per genre, so collapse before averaging.
+    # fact_movie_rating is one row per (movie, source) — no genre fan-out —
+    # so, unlike the old fact_movie_metrics read this replaces, there's no
+    # .values(...).distinct() dedupe guard to port here (Task 68).
     avg_rating = (
-        MovieMetrics.objects.using("warehouse")
-        .filter(movie_id__in=movie_ids)
-        .values("movie_id", "rating")
-        .distinct()
+        MovieRating.objects.using("warehouse")
+        .filter(movie_id__in=movie_ids, source="imdb")
         .aggregate(avg_rating=Avg("rating"))["avg_rating"]
     )
+
+    # One more query gives every poster in the filmography grid its own IMDb
+    # figure, without turning the grid into one query per card (Task 68) —
+    # same film set as the aggregate above, so this stays a constant number
+    # of queries regardless of how many films this person has.
+    imdb_ratings = dict(
+        MovieRating.objects.using("warehouse")
+        .filter(movie_id__in=movie_ids, source="imdb")
+        .values_list("movie_id", "rating")
+    )
+    for row in filmography:
+        row["movie"].imdb_rating = imdb_ratings.get(row["movie"].movie_id)
 
     span = Movie.objects.using("warehouse").filter(movie_id__in=movie_ids).aggregate(
         earliest=Min("release_date"), latest=Max("release_date")

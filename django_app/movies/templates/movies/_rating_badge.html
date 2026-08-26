@@ -1,0 +1,34 @@
+{% comment %} IMDb rating badge (Task 68) — the mark (static/img/imdb.svg), the
+   figure, and — full badge only — the vote count and an outbound link to
+   imdb.com. Compact (poster cards: mark + figure) vs. full (movie detail:
+   + vote count, linked out) is controlled entirely by which optional params
+   the caller passes, not a separate flag.
+
+   Renders nothing when there is no rating — no badge, no em dash, no empty
+   row — the same restraint Task 56 applied to original_title: only 1,139 of
+   the partition's films have an IMDb rating, so this path is real.
+
+   Params (pass with `only`):
+     rating     : Decimal/float 0–10 — required; omit/falsy renders nothing
+     vote_count : optional int — shown only when also given an imdb_id
+     imdb_id    : optional string — when present, wraps the badge in a link
+                  out to imdb.com (".ext-link" draws the outward marker) and
+                  is what makes vote_count worth showing at all
+{% endcomment %}
+{% load static %}
+{% if rating %}
+{% if imdb_id %}
+<a class="rating-badge ext-link" href="https://www.imdb.com/title/{{ imdb_id }}/"
+   target="_blank" rel="noopener noreferrer"
+   aria-label="IMDb rating {{ rating|floatformat:1 }} out of 10">
+    <img class="rating-badge-mark" src="{% static 'img/imdb.svg' %}" alt="" width="24" height="24">
+    <span class="rating-badge-figure" aria-hidden="true">{{ rating|floatformat:1 }}</span>
+    {% if vote_count %}<span class="rating-badge-votes" aria-hidden="true">{{ vote_count|floatformat:"0g" }} votes</span>{% endif %}
+</a>
+{% else %}
+<span class="rating-badge" aria-label="IMDb rating {{ rating|floatformat:1 }} out of 10">
+    <img class="rating-badge-mark" src="{% static 'img/imdb.svg' %}" alt="" width="24" height="24">
+    <span class="rating-badge-figure" aria-hidden="true">{{ rating|floatformat:1 }}</span>
+</span>
+{% endif %}
+{% endif %}

@@ -745,6 +745,62 @@ main.container {
   color: var(--ink-faint);
 }
 
+/* --- Rating badge (IMDb) ----------------------------------------------------
+   Added component, Task 68 — the IMDb mark (static/img/imdb.svg) plus the
+   figure, and on the movie detail page, the vote count and an outbound link.
+   Compact (poster cards) vs. full (movie detail) is entirely which optional
+   params _rating_badge.html was given, not a class switch, so there is one
+   .rating-badge rather than two. IMDb yellow (#F5C518) belongs to the mark
+   image itself — nothing here recolours toward it, since that yellow must
+   never be mistaken for this site's own lime measurement mark, which stays
+   reserved for meter bars, keyed posters, and the active nav link. */
+
+.rating-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.poster-card .rating-badge {
+  margin-top: var(--space-2);
+}
+
+a.rating-badge:hover .rating-badge-figure,
+a.rating-badge:focus-visible .rating-badge-figure {
+  color: var(--lime-text);
+}
+
+.rating-badge-mark {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.rating-badge-figure {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--text-xs);
+}
+
+.rating-badge-votes {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+/* The detail page's badge stands in for a whole record-row dd, so it gets a
+   larger mark and figure than the compact card use above. */
+.record-row .rating-badge-mark {
+  width: 24px;
+  height: 24px;
+}
+
+.record-row .rating-badge-figure {
+  font-size: var(--text-md);
+}
+
 /* --- Chips ----------------------------------------------------------------- */
 
 .chips {
