@@ -26,16 +26,13 @@
 </div>
 
 <section class="sheet-section">
-    <div class="section-head">
-        <h2>Filmography</h2>
-        <span class="section-note">{{ film_count }} film{{ film_count|pluralize }}</span>
-    </div>
-
     <div class="toolbar">
         {% comment %} Same live-filter contract as movie_list.html, scoped to this
            studio's films. data-live-targets only names the grid below — the
            stats block above is this studio's whole output and never changes
-           as the filmography is filtered. {% endcomment %}
+           as the filmography is filtered. Sits above the section-head so the
+           "Filmography" label stays right against the grid it names, instead
+           of the toolbar wedging itself between the two. {% endcomment %}
         <form method="get" action="" data-live-filter data-live-targets="#studio-movies-grid">
             <div class="field">
                 <input type="search" name="q" value="{{ q }}" placeholder="Search this filmography" aria-label="Search {{ company.name }}'s films by title">
@@ -53,6 +50,11 @@
             </fieldset>
             <button type="submit" class="apply-btn">Apply</button>
         </form>
+    </div>
+
+    <div class="section-head">
+        <h2>Filmography</h2>
+        <span class="section-note">{{ film_count }} film{{ film_count|pluralize }}</span>
     </div>
 
     {% include "movies/_studio_movies_grid.html" %}
