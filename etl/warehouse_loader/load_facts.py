@@ -37,11 +37,18 @@ bridge_movie_country's grain is (movie_id, country_code, relation) — relation
 is resolved as a plain column, not an FK, since it's a fixed two-value tag
 ("origin"/"production") rather than a reference to another dimension.
 
+fact_movie_rating (Phase 15) loads from two Silver sources at once:
+silver/imdb_ratings (source='imdb') and silver/movies' own vote_average/
+vote_count columns (source='tmdb'). Both land in the same table at the same
+(movie_id, source) grain — one row per film per source, never fanned out by
+genre the way fact_movie_metrics is.
+
 S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
     silver/movie_companies/ingestion_date=YYYY-MM-DD/movie_companies.parquet
     silver/movie_countries/ingestion_date=YYYY-MM-DD/movie_countries.parquet
     silver/movie_languages/ingestion_date=YYYY-MM-DD/movie_languages.parquet
+    silver/imdb_ratings/ingestion_date=YYYY-MM-DD/imdb_ratings.parquet
     silver/credits_bridge/ingestion_date=YYYY-MM-DD/credits_bridge.parquet
 
 All fact tables carry an ingestion_date column recording which Silver
@@ -407,6 +414,82 @@ def load_bridge_movie_company(
     return count, rejects
 
 
+def _build_movie_rating_rows(
+    ratings_df: pd.DataFrame,
+    movies_df: pd.DataFrame,
+    valid_movie_ids: set[int],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build fact_movie_rating rows from both sources at once.
+
+    silver/imdb_ratings -> source='imdb'; silver/movies' own vote_average/
+    vote_count -> source='tmdb'. Loading TMDB here too, not just IMDb, is
+    what makes this table the single answer to "what is this film rated"
+    rather than a second partial answer sitting alongside
+    fact_movie_metrics. Both inputs are already one row per movie_id (Silver
+    guarantees it for movies.parquet; imdb_ratings.parquet is built from an
+    inner join against that same one-row-per-movie table), so no dedupe is
+    needed here — the grain is correct by construction.
+
+    Returns (rows, rejects).
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+
+    for record in ratings_df.to_dict("records"):
+        movie_id = record.get("movie_id")
+        if pd.isna(movie_id) or int(movie_id) not in valid_movie_ids:
+            rejects.append({**record, "source": "imdb", "rejection_reason": "unknown movie_id"})
+            continue
+        rows.append({
+            "movie_id": int(movie_id),
+            "source": "imdb",
+            "rating": record.get("rating"),
+            "vote_count": record.get("vote_count"),
+            "ingestion_date": ingestion_date,
+        })
+
+    for record in movies_df.to_dict("records"):
+        movie_id = record.get("movie_id")
+        if pd.isna(movie_id) or int(movie_id) not in valid_movie_ids:
+            rejects.append({
+                "movie_id": movie_id,
+                "source": "tmdb",
+                "rating": record.get("vote_average"),
+                "vote_count": record.get("vote_count"),
+                "rejection_reason": "unknown movie_id",
+            })
+            continue
+        rows.append({
+            "movie_id": int(movie_id),
+            "source": "tmdb",
+            "rating": record.get("vote_average"),
+            "vote_count": record.get("vote_count"),
+            "ingestion_date": ingestion_date,
+        })
+
+    return rows, rejects
+
+
+def load_fact_movie_rating(
+    session: Session, ratings_df: pd.DataFrame, movies_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert both IMDb and TMDB ratings into fact_movie_rating.
+
+    Must run after load_dim_movie() has committed, since movie_id is
+    resolved against the live dimension. Returns (count, rejects).
+    """
+    valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
+
+    rows, rejects = _build_movie_rating_rows(
+        ratings_df, movies_df, valid_movie_ids, ingestion_date
+    )
+    columns = ["movie_id", "source", "rating", "vote_count", "ingestion_date"]
+    count = _upsert(session, "fact_movie_rating", ["movie_id", "source"], columns, _records(rows))
+    logger.info("fact_movie_rating: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
 def load_fact_movie_metrics(
     session: Session, movies_df: pd.DataFrame, ingestion_date: dt.date,
 ) -> tuple[int, list[dict[str, Any]]]:
@@ -480,10 +563,16 @@ def load_facts(
     languages_df = _read_silver_parquet(
         bucket, "movie_languages", ingestion_date, "movie_languages.parquet"
     )
+    ratings_df = _read_silver_parquet(
+        bucket, "imdb_ratings", ingestion_date, "imdb_ratings.parquet"
+    )
 
     counts: dict[str, int] = {}
     with get_session() as session:
         counts["fact_movie_metrics"], metrics_rejects = load_fact_movie_metrics(session, movies_df, ingestion_date)
+        counts["fact_movie_rating"], rating_rejects = load_fact_movie_rating(
+            session, ratings_df, movies_df, ingestion_date
+        )
         counts["fact_credit"], credit_rejects = load_fact_credit(session, bridge_df, ingestion_date)
         counts["bridge_movie_company"], company_rejects = load_bridge_movie_company(
             session, companies_df, ingestion_date
@@ -496,6 +585,7 @@ def load_facts(
         )
 
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)
+    _write_rejects(rating_rejects, "fact_movie_rating", ingestion_date, rejected_dir)
     _write_rejects(credit_rejects, "fact_credit", ingestion_date, rejected_dir)
     _write_rejects(company_rejects, "bridge_movie_company", ingestion_date, rejected_dir)
     _write_rejects(country_rejects, "bridge_movie_country", ingestion_date, rejected_dir)

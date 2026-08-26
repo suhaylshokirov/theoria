@@ -83,6 +83,7 @@ _FK_CHECKS = [
     ("bridge_movie_country", "country_code", "dim_country", "country_code"),
     ("bridge_movie_language", "movie_id", "dim_movie", "movie_id"),
     ("bridge_movie_language", "language_code", "dim_language", "language_code"),
+    ("fact_movie_rating", "movie_id", "dim_movie", "movie_id"),
 ]
 
 
@@ -140,6 +141,23 @@ def _bronze_credits_file_count(bucket: str, ingestion_date: dt.date) -> int:
     """Count Bronze credits files (one per movie) for a date."""
     prefix = s3_utils.build_path("bronze", "credits", ingestion_date, "")
     return _count_s3_objects(bucket, prefix)
+
+
+def _bronze_imdb_ratings_row_count(bucket: str, ingestion_date: dt.date) -> int:
+    """Count rows in the single Bronze IMDb ratings snapshot for a date. 0 if missing.
+
+    Unlike every other Bronze source here, this one is a single bulk file
+    rather than one-per-entity — so "how many rows did Bronze provide" means
+    parsing the file itself, not counting S3 objects.
+    """
+    key = s3_utils.build_path("bronze", "imdb_ratings", ingestion_date, "title.ratings.tsv.gz")
+    client = s3_utils.get_s3_client()
+    try:
+        response = client.get_object(Bucket=bucket, Key=key)
+        raw = response["Body"].read()
+        return len(pd.read_csv(io.BytesIO(raw), sep="\t", compression="gzip", usecols=[0]))
+    except Exception:
+        return 0
 
 
 def _bronze_genre_count(bucket: str, ingestion_date: dt.date) -> int:
@@ -345,6 +363,20 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
                 f"Silver distinct={distinct_count}, {warehouse_table}={warehouse_count} (cumulative)"))
             logger.info("[%s] OK", s2w_name)
 
+    # fact_movie_rating (Phase 15): Bronze is a single bulk file rather than
+    # one object per movie, so bronze_count comes from parsing that file
+    # rather than counting S3 keys. warehouse_table's row count also includes
+    # the source='tmdb' rows load_fact_movie_rating() writes alongside the
+    # IMDb ones, so this is a looser (but never-wrong) "never shrinks below
+    # what Silver just produced" check, same shape as every other entity here.
+    results.extend(_check_entity_counts(
+        session, bucket, ingestion_date,
+        entity_label="imdb_ratings",
+        bronze_count=_bronze_imdb_ratings_row_count(bucket, ingestion_date),
+        silver_entity="imdb_ratings", silver_filename="imdb_ratings.parquet",
+        warehouse_table="fact_movie_rating",
+    ))
+
     return results
 
 
@@ -397,7 +429,7 @@ def check_fact_load_sanity(
     session: Session, ingestion_date: dt.date,
     silver_movies_count: int, silver_credit_count: int = 0,
     silver_company_count: int = 0, silver_country_count: int = 0,
-    silver_language_count: int = 0,
+    silver_language_count: int = 0, silver_rating_count: int = 0,
 ) -> list[CheckResult]:
     """A loader that silently wrote zero rows from non-empty Silver input is a bug."""
     results: list[CheckResult] = []
@@ -456,6 +488,21 @@ def check_fact_load_sanity(
         results.append(CheckResult("facts:bridge_movie_language", True,
             f"{bmla_count} row(s) loaded for ingestion_date={ingestion_date}"))
         logger.info("[facts:bridge_movie_language] OK (%d rows)", bmla_count)
+
+    # fact_movie_rating gets rows from two Silver sources: a non-empty
+    # movies partition alone guarantees source='tmdb' rows, so either input
+    # being non-empty should produce at least one row for this date.
+    fmr_count = _fact_ingestion_date_count(session, "fact_movie_rating", ingestion_date)
+    if (silver_movies_count > 0 or silver_rating_count > 0) and fmr_count == 0:
+        results.append(CheckResult("facts:fact_movie_rating", False,
+            f"fact_movie_rating has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"{silver_movies_count} Silver movie row(s) / {silver_rating_count} Silver "
+            f"imdb_ratings row(s)"))
+        logger.error("[facts:fact_movie_rating] FAIL — 0 rows loaded")
+    else:
+        results.append(CheckResult("facts:fact_movie_rating", True,
+            f"{fmr_count} row(s) loaded for ingestion_date={ingestion_date}"))
+        logger.info("[facts:fact_movie_rating] OK (%d rows)", fmr_count)
 
     return results
 
@@ -518,12 +565,20 @@ def run_warehouse_checks(
             silver_language_count = len(silver_languages_df)
         except Exception:
             silver_language_count = 0
+        try:
+            silver_ratings_df = _read_silver_parquet(
+                bucket, "imdb_ratings", ingestion_date, "imdb_ratings.parquet"
+            )
+            silver_rating_count = len(silver_ratings_df)
+        except Exception:
+            silver_rating_count = 0
 
         all_results.extend(check_gold_sanity(bucket, ingestion_date, silver_movies_count))
         all_results.extend(
             check_fact_load_sanity(
                 session, ingestion_date, silver_movies_count, silver_credit_count,
                 silver_company_count, silver_country_count, silver_language_count,
+                silver_rating_count,
             )
         )
 

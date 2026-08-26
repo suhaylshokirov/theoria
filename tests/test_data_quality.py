@@ -304,6 +304,9 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
     languages_df = pd.DataFrame([{
         "movie_id": 550, "language_code": "en", "language_name": "English", "english_name": "English",
     }])
+    imdb_ratings_df = pd.DataFrame([{
+        "movie_id": 550, "imdb_id": "tt0110912", "rating": 8.9, "vote_count": 2_150_000,
+    }])
     return {
         "movies": _movies_df(),
         "people": people_df,
@@ -314,6 +317,7 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
         "movie_companies": companies_df,
         "movie_countries": countries_df,
         "movie_languages": languages_df,
+        "imdb_ratings": imdb_ratings_df,
     }
 
 
@@ -382,3 +386,23 @@ def test_run_silver_checks_movie_countries_requires_relation(tmp_path):
 
     countries_nulls = next(r for r in results if r.entity == "movie_countries" and r.check == "nulls")
     assert not countries_nulls.passed
+
+
+def test_run_silver_checks_imdb_ratings_rating_out_of_range_fails(tmp_path):
+    """rating is checked against IMDb's own published 0-10 scale, not a guess
+    mirroring the transform — a bad value must fail the ranges check."""
+    dfs = _all_entity_dfs()
+    dfs["imdb_ratings"] = pd.DataFrame([{
+        "movie_id": 550, "imdb_id": "tt0110912", "rating": 15.0, "vote_count": 100,
+    }])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    ratings_range = next(r for r in results if r.entity == "imdb_ratings" and r.check == "ranges")
+    assert not ratings_range.passed

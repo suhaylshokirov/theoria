@@ -93,6 +93,26 @@ def write_json(bucket: str, key: str, data: Any) -> str:
     return uri
 
 
+def write_bytes(bucket: str, key: str, data: bytes) -> str:
+    """Upload raw bytes verbatim to s3://bucket/key — no serialisation at all.
+
+    For Bronze sources that are already a complete file as fetched (e.g.
+    IMDb's gzipped bulk ratings snapshot), rather than a Python object this
+    module has to serialise to JSON or Parquet. The bytes stored are
+    byte-identical to what the source server returned, which is what "Bronze
+    is immutable, raw" means for a source that isn't a per-entity API call.
+    """
+    get_s3_client().put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=data,
+        ContentType="application/gzip",
+    )
+    uri = f"s3://{bucket}/{key}"
+    logger.info("Wrote raw bytes to %s (%d bytes)", uri, len(data))
+    return uri
+
+
 def write_parquet(bucket: str, key: str, df: pd.DataFrame) -> str:
     """Serialise a DataFrame to Parquet in-memory and upload to s3://bucket/key.
 

@@ -30,9 +30,14 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 62 — Django: provenance on the movie page, and browse by country/language
-Currently on          : Task 63 — not started (Analytics, live re-run, verification, and doc truth-up — closes Phase 14).
-Current phase         : Phase 13 (Tasks 57–60) — complete. Phase 14 (Tasks 61–63): Task 61–62 complete, 63 not started.
+Last completed task   : Task 67 — Warehouse: fact_movie_rating (IMDb + TMDB at one-row-per-film-per-source grain)
+Currently on          : Task 68 — not started (Django: render the IMDb rating with its mark, and repoint every reader of TMDB's).
+Current phase         : Phase 14 (Tasks 61–63): 61–62 complete, **63 still not started**. Phase 15
+(Tasks 66–69, added 2026-08-26 by user request): 66–67 complete, 68–69 not started. **Note the two
+phases are interleaved** — Phase 15 was started before Phase 14 was closed, because the user raised
+the ratings change directly. Task 63 and Task 69 both call for a full live pipeline re-run and a doc
+truth-up; **running Task 63 first would avoid doing that ~25-minute run twice**, or the two closing
+tasks can be merged. Decide before starting either.
 Outstanding must-do   : **Two phase-independent must-dos, both not started.** (1) **Task 64 —
 nightly cloud refresh** (warehouse to Neon + pipeline on GitHub Actions); see "MUST DO — Automated
 Nightly Refresh". Best done before Task 63 so that phase's live re-run happens on the scheduled
@@ -46,7 +51,18 @@ Needs one new TMDB endpoint (`/company/{id}`, ~1,383 calls, ≈5 min at Task 64'
 req/s) never called before in this project — the plan's own first step is a live payload-shape +
 coverage check before any code is written, since nothing about that endpoint's response has been
 measured yet.
-Blockers / open issues: **No blockers.** **Task 62 (2026-08-26) reads Task 61's
+Blockers / open issues: **No blockers.** **Tasks 66–67 (2026-08-26) landed together in one commit**
+— they share `tests/test_etl.py` heavily enough that splitting the commit would have meant partial
+hunk staging, so the usual one-task-one-commit rule was knowingly relaxed here rather than faked.
+**The live warehouse is now 16 tables** (verified by querying `information_schema`, not by reading
+this file — the Warehouse Schema section below still claims 9 and is stale by seven; Task 69 trues
+it up). **`fact_movie_rating` currently covers only the `2026-07-29` partition's 1,139 films, not
+all 1,215** — by design, since the Silver transform filters IMDb's global snapshot against the
+partition's own `movies.parquet`; the catalog-wide fill happens on Task 69's full re-run, and
+backdating today's ratings into the two 2026-07 partitions was rejected because it would make
+`ingestion_date` lie. **A latent robustness gap found live, not by tests:** the Silver transform
+hung 4.5 minutes on a stalled S3 `StreamingBody.read()` with no read deadline; a retry took 9.2s.
+Harmless when a human is watching, potentially a silent nightly stall under Task 64. **Task 62 (2026-08-26) reads Task 61's
 dim_country/dim_language + bridges from Django for the first time** — four new models
 (`Country`, `Language`, `MovieCountry`, `MovieLanguage` in `movies/models.py`), all following the
 existing bridge-model shape (natural-key FK, fake-single-PK on the movie side, same as
@@ -297,7 +313,7 @@ still sit in S3 though Task 53 stopped writing them; 2 films have no `fact_movie
 All cleanup rather than capability — recorded so they aren't rediscovered as if new. The **stale
 Warehouse Schema section in this file was also fixed** (it still listed `dim_actor`,
 `dim_director` and `fact_casting`, all dropped in Tasks 35/53). Prior-phase notes follow. Task 54 is a read-side-only fix (no DDL, no ETL, no pipeline re-run, no new TMDB calls) for a movie page that `fact_credit` (Task 48) had made unreadable at scale: a person holding several jobs on one film rendered once per job across several department sections (Christopher Nolan on *The Dark Knight* was 4 rows in 3 sections), and every credit — 47–139 cast, up to ~980 crew on the worst film — rendered as a headshot card with no limit. Two complaints, two fixes, and the measurement that separates them: merging collapses 143.8 crew rows/film to 138.1 distinct people (~4%), so **merging fixes duplication, not volume**. `_merge_crew()` in `movies/views.py` groups a person's non-Acting credits by `person_id`, files them under their single most senior department via `_department_rank()` (extracted from the sort key that was duplicated in `movie_detail` and `person_detail`), and joins the jobs in department order — Nolan now reads "Director / Screenplay / Story / Producer", once. Volume is fixed by **paging cast and crew in the browser**, ten at a time: the view sends every credit and `initPagedSection()` in `static/js/theoria.js` shows a window of them, so Next is a repaint rather than a round-trip. This replaced a first, server-side implementation (`?cast_page=`/`?crew_page=`/`?crew=all` + `#cast`/`#crew` anchors) that the user judged not smooth enough; `BILLED_CREW_JOBS` went with it, since paging ten at a time makes the first page short whatever it holds. `[data-page-group]` wrappers (one per crew department) hide themselves when none of their people are on the current page; the pager is `<button>`s that ship `hidden` and are revealed only when there's more than one page, so with JS off the reader gets the whole list and no dead controls. **The two pagers are a deliberate split, documented in both partials:** `_pager.html` stays server-side for `/movies/` and `/people/` (1,215 and 122,685 rows — not a payload to hand a browser), `_pager_client.html` serves one film's ~1,200-credit maximum, which is. Crew renders as a list rather than a poster grid because crew photo coverage measured 23.8% against cast's 70.1%. **Crew rows carry faces too, after user review:** a headshot where one exists, and the same `.placeholder-person` silhouette the cast cards use where it doesn't (55 photos / 87 silhouettes on The Dark Knight) — an initials monogram was tried first and rejected, since two placeholder vocabularies on one page is one more than a reader should have to learn. That review also surfaced a **real CSS bug**: `.credit-list` never zeroed the `<ul>`'s UA-default 40px `padding-inline-start`, and because these lists paint their own background to draw the 1px gaps as hairlines, that padding rendered as an unexplained grey column down the left of every crew list — invisible on white, obvious on the dark surface. `.collab-list` (person pages) had the identical defect since Task 51; both fixed. Live-verified: `/movies/the-dark-knight/` ships **139 cast cards and 142 crew rows across 11 department groups** in one response, no server-paging params in the markup, Nolan merged and once; the paging algorithm was **executed under Node against a stub DOM** (page 1: 10 items/3 departments; page 2: 2 items collapsing to 1 heading; buttons disable at both ends). Tests 210 → 214. Prior phase's notes: Full test suite is 210/210 passing (down from 225 because Task 53 deleted the legacy actor/director tests, not because anything regressed); Silver DQ 16/16 on all three partitions, warehouse checks 20/20 — both counts dropped for the same reason (the `actors`/`directors` Silver entities and the `fact_cast`/`fact_crew` FK + load-sanity checks no longer exist). **Phase 10 is done: Tasks 47–53 all complete.** The warehouse is now exactly **9 tables** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`, `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `etl_watermarks` — and `dim_actor`/`dim_director`/`fact_cast`/`fact_crew` are **dropped** (`warehouse/ddl/11_drop_legacy_person_tables.sql`, facts before dimensions). `/people/<slug>/` is the single person page; `/actors/<slug>/` and `/directors/<slug>/` now 301 to it via a single `dim_person` slug lookup with no legacy table involved (the 381 slugs that moved during the Task 48 namespace unification are consequently **404 rather than redirected** — accepted, the site isn't public). 16 routes, 10 analytics panels, **zero empty panels**. **Gold is no longer a write-only dead end** (Task 49) — `load_gold.py` reads `gold/collaboration_edges` into `fact_collaboration`; the other four Gold datasets are still unread, and deliberately so (they're cheap enough to recompute in SQL, which the Django views already do). Caveat that remains open: `fact_collaboration` is a *derived* table, so nothing outside the pipeline can tell it's stale, and re-running Gold for an older partition overwrites counts computed from a newer one — worth revisiting as a materialized view. **Two bugs only the live runs could find, both fixed:** `assign_slugs()`'s batched `executemany` hit a `UniqueViolation` on a slug *permutation* because Postgres checks a unique index per row, not per statement (latent since Task 46; fixed by clearing the column first, in the same transaction); and `/connect/` returned a different — equally short, equally valid — path after every reload, because the adjacency query had no `ORDER BY` while Python dicts preserve insertion order (fixed; verified stable, so **Task 52's outcome line below cites a path that is no longer the one returned** — the current answer for Tom Hanks → Thelma Schoonmaker is *Philadelphia* → Tony Devon → *The King of Comedy*). **Every one of the 122,685 `dim_person` rows has at least one credit**, since the dimension is built from the credits themselves — which retires the long-standing "orphan dimension members" gap outright, now that the legacy tables it applied to are gone. **Fresh-install verification is now empirical, not assumed:** a throwaway database built from DDL `01`–`03` produces exactly the 9 live tables. Note that once `11` *drops* things, "run every DDL file in order" no longer equals "build the current schema" — README documents `01`–`03` (bootstrap) and `04`–`11` (migrations for an existing DB) as two separate paths. Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds, and unifying to `dim_person` made it *more* expensive (122,685 people, not 45k). Remaining known gaps, still open: `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`; the Silver transforms read Bronze one S3 object at a time (~16 min per full rebuild pass). Older notes: Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows), as are collections' underlying ids behind their slugs.
-Last updated          : 2026-08-17
+Last updated          : 2026-08-26
 ```
 
 **After finishing any task, in this order:**
@@ -439,6 +455,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 12    | Movie Provenance — the scalar fields | 55–56 | Complete |
 | 13    | Studios — `dim_company` + the first bridge table | 57–60 | Complete |
 | 14    | Where and in What Language | 61–63 | In progress (61–62 done, 63 not started) |
+| 15    | IMDb becomes the rating of record | 66–69 | In progress (66–67 done, 68–69 not started) |
 
 ---
 
@@ -850,6 +867,98 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   4. Walk all routes live, including the new studio pages and both new filters.
   5. **Verify a fresh install empirically, not by reading the README** — a throwaway DB built from DDL `01`–`03` must produce exactly the live table list, per the Task 53 lesson that "run every DDL file in order" stopped being the same instruction as "build the current schema" once migration `11` dropped tables.
   6. Update `docs/architecture.md` with the bridge-table decision (why `bridge_` not `fact_`, and why a bridge is right for companies where a column was right for collections), and this file's Warehouse Schema section with the final table list.
+- **Outcome:**
+
+---
+
+### Phase 15 — IMDb becomes the rating of record
+
+> Full plan: `~/.claude/plans/serene-herding-wadler.md`. Raised by user request on 2026-08-26:
+> every rating the site shows is TMDB's `vote_average`, and the user wanted the number a reader
+> sees to come from IMDb instead, with IMDb's own mark beside it so the source is visible rather
+> than implied. **Kinopoisk was researched and then dropped by user decision** ("we don't need to
+> touch Kinopoisk at all") — the research is recorded in the plan file so it isn't redone: its
+> free tier is 200 req/day via `api.poiskkino.dev` (the old `api.kinopoisk.dev` 301s there now),
+> and `/v1.4/movie` accepts array filters with `limit` max 250, so the whole catalog would have
+> batched into ~5–13 calls. Not needed; noted in case it ever is.
+>
+> **The decisive research finding:** IMDb publishes `title.ratings.tsv.gz` at `datasets.imdbws.com`
+> — 8.6 MB, refreshed daily, **no auth, no key, no quota**, three columns
+> (`tconst`/`averageRating`/`numVotes`). We have carried `imdb_id` since Task 55, so the whole
+> feature is one HTTP GET and a join: **zero per-movie API calls, no new secret, no new Python
+> dependency**. Measured live before any code: **1,211 of 1,215 films match (99.7%)** — the 4
+> misses are 2 films with no `imdb_id` and 2 whose id is below IMDb's ≥5-vote publication floor.
+> This makes the ratings path *cheaper* than the TMDB one it replaces.
+
+#### [x] Task 66 — Bronze + Silver: the IMDb ratings dataset
+- **Files:** new `etl/bronze/ingest_imdb_ratings.py`, new `etl/silver/transform_imdb_ratings.py`, `etl/s3_utils.py`, `config.py`, `.env.example`, `data_quality/silver_checks.py`, `scripts/run_pipeline.py`, `tests/{test_etl,test_data_quality}.py`
+- **Outcome:** `ingest_imdb_ratings()` is the project's **first non-TMDB Bronze source and its first
+  bulk-file one** — every other ingest module writes one JSON per entity id because it calls a
+  per-entity API, whereas here a single daily snapshot *is* the raw response, so one file per
+  partition is the faithful representation rather than a shortcut. It uses `requests` directly with
+  its own retry loop mirroring `tmdb_client.py`'s posture (no `TMDBClient` — there is no API key to
+  inject), and stores the gzip **verbatim** via a new `s3_utils.write_bytes()`, the module's third
+  writer alongside `write_json`/`write_parquet`. `IMDB_RATINGS_URL` is declared with `_optional()`
+  and the real URL as its default, so the location is configurable but **nothing new becomes
+  *required* in `.env`**. `transform_imdb_ratings()` is the **first Silver transform that joins two
+  Silver inputs** — the Bronze snapshot against that partition's own `movies.parquet`, on `imdb_id`
+  — deliberately *not* against `dim_movie`, since Silver reading the warehouse would be a layer
+  inversion and would make the transform's output depend on load order rather than only on
+  immutable upstream data. Resolving `imdb_id → movie_id` in Silver (not the loader) keeps the
+  loader's job identical to every other one. The filter is what earns its keep: the raw file is
+  1,709,992 titles, overwhelmingly TV episodes, so shipping it to Silver untouched would be
+  99.9% waste. Films drop out of the join for two reasons, both logged and neither an error — no
+  `imdb_id` at all, or an id below IMDb's publication vote floor. `ENTITY_CONFIGS["imdb_ratings"]`
+  was written from **IMDb's published schema**, not by mirroring the transform (the Task 40 lesson,
+  where a check that copied the transform's assumptions confirmed the bug instead of catching it).
+  **Live-verified on `2026-07-29`**: 8,635,427 bytes to Bronze (byte-identical to source), 1,709,992
+  rows parsed, **1,139 of 1,140** films matched in 10.26s, 1 excluded. Silver DQ 28/28 → **32/32**.
+  **One environmental gotcha worth recording:** the first transform run hung for 4.5 minutes in
+  `do_sys_poll` on a stalled S3 socket — `StreamingBody.read()` has no read deadline of its own, so
+  a dropped transfer blocks indefinitely rather than failing. A fresh run took 9.2s for the same
+  read. Transient, not a code defect, but a real robustness gap if this ever runs unattended
+  (relevant to Task 64).
+
+#### [x] Task 67 — Warehouse: `fact_movie_rating`
+- **Files:** new `warehouse/ddl/15_movie_ratings.sql`, `warehouse/ddl/02_facts.sql`, `etl/warehouse_loader/load_facts.py`, `data_quality/warehouse_checks.py`, `tests/{test_etl,test_warehouse_checks}.py`
+- **Outcome:** `fact_movie_rating(movie_id, source, rating, vote_count, ingestion_date)`, PK
+  `(movie_id, source)`, with a `CHECK (source IN ('imdb','tmdb'))` and an index on
+  `(source, rating DESC)` so "top rated films" is an index range scan with no sort. **The grain is
+  the whole point.** `fact_movie_metrics` is at `(movie_id, date_id, genre_id)`, so a multi-genre
+  film stores its rating once per genre — the reason every reader of it carries a `SELECT DISTINCT`
+  / `.values(...).distinct()` guard. A rating has nothing to do with a film's genres, so putting it
+  at its true grain makes that guard unnecessary **by construction** rather than something each
+  caller must remember. The Godfather is the worked example: **2 rows in `fact_movie_metrics`** (one
+  rating, stored twice, once for Crime and once for Drama) versus **2 rows in `fact_movie_rating`**
+  (two genuinely different facts, IMDb 9.20 and TMDB 8.69). Two alternatives were considered and
+  are recorded in the DDL header: **no `dim_rating_source` table** (a two-row dimension whose only
+  attributes — icon, label, outbound URL template — are pure presentation would be over-modelling;
+  a CHECK enforces the vocabulary and Django owns the display metadata), and **`fact_` not
+  `bridge_`** (this table carries a measure, so it earns the prefix under the naming rule
+  `13_companies.sql` established). `load_fact_movie_rating()` builds from **both** Silver sources in
+  one function — `imdb_ratings.parquet` → `source='imdb'` and `movies.parquet`'s existing
+  `vote_average`/`vote_count` → `source='tmdb'` — which is what makes the table the single answer to
+  "what is this film rated" instead of a second partial answer sitting beside `fact_movie_metrics`.
+  Unresolvable FKs are quarantined, never dropped. **Live-verified on `2026-07-29`**:
+  `fact_movie_rating` **2,279 rows** (1,139 imdb + 1,140 tmdb), **0 rejects**; imdb avg 7.248 vs
+  tmdb avg 7.236, but max vote counts of **3,229,396 vs 40,480** — IMDb carries ~80× the votes
+  behind each figure, which is the actual reason to prefer it. Spot checks read back from Postgres:
+  The Godfather imdb 9.20 / 2,250,628; The Dark Knight 9.10 / 3,217,719; Inception 8.80 / 2,860,602.
+  Zero films have more than one `imdb` row. Warehouse checks 35/35 → **39/39** (1 FK + 2 row-count +
+  1 fact-load-sanity). **No Django/UI change yet — nothing renders this table until Task 68.**
+  Tests 250 → **268** (18 new, including an explicit grain regression test, since one-row-per-film
+  is the entire premise of the table).
+
+#### [ ] Task 68 — Django: the IMDb rating, with its mark
+- **Goal:** Surface IMDb everywhere the TMDB rating is read today — the movie page, `?sort=rating`, home's Avg rating tile, the person and studio Avg rating stats — plus a compact figure on the poster cards, which show no rating at all today.
+- **Files:** `django_app/movies/{models,views}.py`, new `movies/templates/movies/_rating_badge.html`, `movie_detail.html`, `_movie_card.html`, new `django_app/static/img/imdb.svg`, `static/css/theoria.css`, `tests/test_django_views.py`
+- **Key points:** one filtered annotation (`Max("movierating__rating", filter=Q(movierating__source="imdb"))`) serves both sorting *and* card display, so the two can never disagree — and it must be annotated on the queryset, never queried per card. **Delete the dedupe guards rather than porting them**, with a comment saying why, or a future reader will read their absence as an oversight. `home()`'s Avg rating **will change value** — it currently averages every fact row, over-weighting multi-genre films; the new grain fixes that. The mark is `static/img/imdb.svg` (Wikimedia, PD-textlogo) — the project's **first image asset**, a deliberate deviation from the inline-SVG convention because hand-drawing a specific wordmark would be a poor reproduction. Badge needs a real screen-reader label, and links out via the **existing `.ext-link` rule**, which has had zero consumers since `da9b59b` removed the Elsewhere row.
+- **Outcome:**
+
+#### [ ] Task 69 — Analytics, live re-run, doc truth-up
+- **Goal:** The phase-closing task, following Tasks 44 and 53.
+- **Files:** `warehouse/queries/{movies_by_decade,top_rated_directors,top_studios_by_revenue,director_trend_over_time}.sql`, `django_app/analytics/views.py`, `README.md`, `docs/architecture.md`, `CLAUDE.md`, `for_learning.md`
+- **Key points:** repoint all four rating queries and **delete their `SELECT DISTINCT movie_id, rating` CTE** — that deletion is the phase's payoff made visible. Full live re-run for the current date across the whole catalog, which is also what gives all 1,215 films an IMDb rating (a partition only gets ratings for the films it contains, so the 1,139/1,140 above is per-partition, not catalog-wide). **`CLAUDE.md`'s Warehouse Schema section is stale** — it claims 9 tables "as of Task 54"; the live warehouse had **15** before this phase and **16** after (verified 2026-08-26). True up the whole section, not just this phase's addition. `fact_movie_metrics.rating`/`.vote_count` will have no readers after this phase — leave them and record them as a knowingly-accepted write-only path, the same posture already taken for `dim_collection`.
 - **Outcome:**
 
 ---

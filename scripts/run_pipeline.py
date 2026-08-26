@@ -29,11 +29,13 @@ from data_quality.warehouse_checks import run_warehouse_checks
 from etl.bronze.ingest_credits import ingest_credits
 from etl.bronze.ingest_discover import ingest_discover
 from etl.bronze.ingest_genres import ingest_genres
+from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
 from etl.bronze.ingest_movie_details import ingest_movie_details
 from etl.bronze.ingest_movies import ingest_movies
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.silver.transform_credits_bridge import transform_credits_bridge
 from etl.silver.transform_genres import transform_genres
+from etl.silver.transform_imdb_ratings import transform_imdb_ratings
 from etl.silver.transform_movie_links import transform_movie_links
 from etl.silver.transform_movies import transform_movies
 from etl.silver.transform_people import transform_people
@@ -92,12 +94,17 @@ def run_pipeline(
         len(succeeded_details), len(movie_ids),
         len(succeeded_credits), len(movie_ids),
     )
+    # IMDb's ratings snapshot is a single daily file, not per-movie, so it has
+    # no movie_ids dependency — but its Silver transform reads
+    # transform_movies()'s output below, so it must run after that.
+    ingest_imdb_ratings(ingestion_date=ingestion_date)
 
     transform_movies(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date)
     transform_credits_bridge(ingestion_date=ingestion_date)
     transform_movie_links(ingestion_date=ingestion_date)
+    transform_imdb_ratings(ingestion_date=ingestion_date)
 
     silver_results = run_silver_checks(ingestion_date=ingestion_date)
     silver_failed = [r for r in silver_results if not r.passed]

@@ -79,6 +79,11 @@ DISCOVER_END_YEAR = int(_optional("DISCOVER_END_YEAR", "2026"))
 DISCOVER_PAGES_PER_YEAR = int(_optional("DISCOVER_PAGES_PER_YEAR", "1"))
 DISCOVER_MIN_VOTES = int(_optional("DISCOVER_MIN_VOTES", "300"))
 
+# --- IMDb datasets -----------------------------------------------------------
+# Public bulk export, refreshed daily by IMDb — no auth, no key, no quota.
+# https://datasets.imdbws.com/title.ratings.tsv.gz (tconst/averageRating/numVotes).
+IMDB_RATINGS_URL = _optional("IMDB_RATINGS_URL", "https://datasets.imdbws.com/title.ratings.tsv.gz")
+
 # --- Django ----------------------------------------------------------------
 DJANGO_SECRET_KEY = _require("DJANGO_SECRET_KEY")
 DJANGO_DEBUG = _optional("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")

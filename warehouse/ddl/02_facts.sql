@@ -64,3 +64,23 @@ CREATE INDEX IF NOT EXISTS idx_fcollab_person_a ON fact_collaboration (person_a_
 CREATE INDEX IF NOT EXISTS idx_fcollab_person_b ON fact_collaboration (person_b_id);
 CREATE INDEX IF NOT EXISTS idx_fcollab_a_rank ON fact_collaboration (person_a_id, films_together DESC);
 CREATE INDEX IF NOT EXISTS idx_fcollab_b_rank ON fact_collaboration (person_b_id, films_together DESC);
+
+
+-- fact_movie_rating (Phase 15) is the rating of record, at each film's true
+-- grain — one row per (movie, source), unlike fact_movie_metrics.rating
+-- which repeats once per genre. See 15_movie_ratings.sql for the full
+-- rationale (why fact_ not bridge_, why no dim_rating_source).
+CREATE TABLE IF NOT EXISTS fact_movie_rating (
+    movie_id       INTEGER     NOT NULL,
+    source         VARCHAR(16) NOT NULL,
+    rating         NUMERIC(4,2),
+    vote_count     INTEGER,
+    ingestion_date DATE        NOT NULL,
+    CONSTRAINT pk_fact_movie_rating PRIMARY KEY (movie_id, source),
+    CONSTRAINT fk_fact_movie_rating_movie
+        FOREIGN KEY (movie_id) REFERENCES dim_movie (movie_id),
+    CONSTRAINT ck_fact_movie_rating_source CHECK (source IN ('imdb', 'tmdb'))
+);
+CREATE INDEX IF NOT EXISTS idx_fact_movie_rating_movie_id ON fact_movie_rating (movie_id);
+CREATE INDEX IF NOT EXISTS idx_fact_movie_rating_source_rating
+    ON fact_movie_rating (source, rating DESC);

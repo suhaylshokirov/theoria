@@ -132,6 +132,20 @@ def test_write_json_puts_serialised_object():
     assert json.loads(kwargs["Body"].decode("utf-8")) == data
 
 
+def test_write_bytes_puts_raw_body_verbatim():
+    """write_bytes() must upload the exact bytes given, with no transformation."""
+    mock_client = MagicMock()
+    data = b"\x1f\x8b\x00raw-gzip-bytes-not-touched"
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_client):
+        uri = s3_utils.write_bytes("theoria-datalake", "bronze/imdb_ratings/x.tsv.gz", data)
+
+    assert uri == "s3://theoria-datalake/bronze/imdb_ratings/x.tsv.gz"
+    _, kwargs = mock_client.put_object.call_args
+    assert kwargs["Bucket"] == "theoria-datalake"
+    assert kwargs["Key"] == "bronze/imdb_ratings/x.tsv.gz"
+    assert kwargs["Body"] == data
+
+
 def test_write_parquet_puts_dataframe():
     mock_client = MagicMock()
     df = pd.DataFrame({"movie_id": [1, 2], "title": ["A", "B"]})
@@ -526,6 +540,68 @@ def test_ingest_credits_empty_input_returns_empty_lists():
     assert succeeded == []
     assert failed == []
     mock_s3.put_object.assert_not_called()
+
+
+# --- ingest_imdb_ratings --------------------------------------------------------
+
+import etl.bronze.ingest_imdb_ratings as ingest_imdb_ratings_module
+from etl.bronze.ingest_imdb_ratings import _fetch_with_retry, ingest_imdb_ratings
+
+
+def _fake_requests_response(status_code: int, content: bytes = b"", headers: dict | None = None):
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.content = content
+    resp.headers = headers or {}
+    return resp
+
+
+def test_ingest_imdb_ratings_writes_raw_bytes_verbatim():
+    """The gzip body from IMDb must be written to Bronze byte-for-byte, untouched."""
+    raw_gzip = b"\x1f\x8b\x00fake-gzip-payload"
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3), \
+         patch.object(
+             ingest_imdb_ratings_module, "requests",
+             MagicMock(get=MagicMock(return_value=_fake_requests_response(200, raw_gzip))),
+         ):
+        uri = ingest_imdb_ratings(ingestion_date=dt.date(2026, 6, 22))
+
+    assert uri == "s3://theoria-datalake/bronze/imdb_ratings/ingestion_date=2026-06-22/title.ratings.tsv.gz"
+    _, kwargs = mock_s3.put_object.call_args
+    assert kwargs["Key"] == "bronze/imdb_ratings/ingestion_date=2026-06-22/title.ratings.tsv.gz"
+    assert kwargs["Body"] == raw_gzip
+
+
+def test_fetch_with_retry_retries_on_retryable_status_then_succeeds():
+    """A 503 followed by a 200 must succeed without raising, after one retry."""
+    mock_requests = MagicMock()
+    mock_requests.get.side_effect = [
+        _fake_requests_response(503),
+        _fake_requests_response(200, b"ok-body"),
+    ]
+    mock_requests.RequestException = Exception
+
+    with patch.object(ingest_imdb_ratings_module, "requests", mock_requests), \
+         patch.object(ingest_imdb_ratings_module.time, "sleep", return_value=None):
+        result = _fetch_with_retry("https://example.com/x", max_retries=3, backoff_factor=0)
+
+    assert result == b"ok-body"
+    assert mock_requests.get.call_count == 2
+
+
+def test_fetch_with_retry_raises_after_exhausting_retries():
+    """A persistent non-retryable failure must raise RuntimeError, not hang or swallow it."""
+    mock_requests = MagicMock()
+    mock_requests.get.return_value = _fake_requests_response(404)
+    mock_requests.RequestException = Exception
+
+    with patch.object(ingest_imdb_ratings_module, "requests", mock_requests), \
+         patch.object(ingest_imdb_ratings_module.time, "sleep", return_value=None):
+        with pytest.raises(RuntimeError):
+            _fetch_with_retry("https://example.com/x", max_retries=2, backoff_factor=0)
 
 
 # --- transform_movies ---------------------------------------------------------
@@ -1234,6 +1310,113 @@ def test_transform_movie_links_raises_when_no_bronze_files():
             transform_movie_links(
                 ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
             )
+
+
+# --- transform_imdb_ratings -----------------------------------------------------
+
+import gzip
+
+from etl.silver.transform_imdb_ratings import _parse_ratings_tsv, transform_imdb_ratings
+
+
+def _make_ratings_tsv_gz(rows: list[tuple[str, str, str]]) -> bytes:
+    """Build a gzip-compressed TSV body shaped like IMDb's title.ratings.tsv.gz."""
+    lines = ["tconst\taverageRating\tnumVotes"]
+    for tconst, rating, votes in rows:
+        lines.append(f"{tconst}\t{rating}\t{votes}")
+    return gzip.compress("\n".join(lines).encode("utf-8"))
+
+
+def _silver_movies_with_imdb_df() -> pd.DataFrame:
+    """Four films: two with a matching IMDb rating, one with an unmatched
+    imdb_id, and one with no imdb_id at all — exercising both drop paths."""
+    return pd.DataFrame({
+        "movie_id": pd.array([238, 155, 999, 1000], dtype="Int64"),
+        "imdb_id": pd.array(["tt0068646", "tt0468569", "tt9999999", None], dtype="string"),
+        "title": ["The Godfather", "The Dark Knight", "No Rating Film", "No IMDb ID Film"],
+    })
+
+
+def _make_multi_key_s3_mock(bodies: dict[str, bytes]) -> MagicMock:
+    """S3 mock serving different raw bytes bodies, matched by a key substring."""
+    mock_s3 = MagicMock()
+
+    def get_object(Bucket, Key):
+        for marker, data in bodies.items():
+            if marker in Key:
+                body = MagicMock()
+                body.read.return_value = data
+                return {"Body": body}
+        raise AssertionError(f"No mock data for key: {Key}")
+
+    mock_s3.get_object.side_effect = get_object
+    return mock_s3
+
+
+def test_parse_ratings_tsv_renames_and_parses_columns():
+    raw = _make_ratings_tsv_gz([("tt0068646", "9.2", "2250628")])
+    df = _parse_ratings_tsv(raw)
+    assert list(df.columns) == ["imdb_id", "rating", "vote_count"]
+    assert df.iloc[0]["imdb_id"] == "tt0068646"
+    assert df.iloc[0]["rating"] == 9.2
+    assert df.iloc[0]["vote_count"] == 2250628
+
+
+def test_parse_ratings_tsv_treats_backslash_n_as_null():
+    """IMDb documents \\N as its null marker — defensive, even though all
+    three columns are 100% populated in practice (measured live)."""
+    raw = _make_ratings_tsv_gz([("tt0000001", "\\N", "\\N")])
+    df = _parse_ratings_tsv(raw)
+    assert pd.isna(df.iloc[0]["rating"])
+    assert pd.isna(df.iloc[0]["vote_count"])
+
+
+def test_transform_imdb_ratings_joins_and_writes_one_row_per_matched_movie():
+    movies_buf = io.BytesIO()
+    _silver_movies_with_imdb_df().to_parquet(movies_buf, engine="pyarrow", index=False)
+
+    ratings_gz = _make_ratings_tsv_gz([
+        ("tt0068646", "9.2", "2250628"),
+        ("tt0468569", "9.1", "3217719"),
+    ])
+    mock_s3 = _make_multi_key_s3_mock({
+        "imdb_ratings": ratings_gz,
+        "silver/movies": movies_buf.getvalue(),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uri = transform_imdb_ratings(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    assert uri == "s3://theoria-datalake/silver/imdb_ratings/ingestion_date=2026-06-22/imdb_ratings.parquet"
+
+    _, kwargs = mock_s3.put_object.call_args
+    written = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+
+    assert list(written.columns) == ["movie_id", "imdb_id", "rating", "vote_count"]
+    assert len(written) == 2  # only the two matched films — 999 and 1000 drop out
+    assert set(written["movie_id"]) == {238, 155}
+    godfather = written[written["movie_id"] == 238].iloc[0]
+    assert godfather["rating"] == 9.2
+    assert godfather["vote_count"] == 2250628
+
+
+def test_transform_imdb_ratings_excludes_null_and_unmatched_imdb_ids_with_logging(caplog):
+    movies_buf = io.BytesIO()
+    _silver_movies_with_imdb_df().to_parquet(movies_buf, engine="pyarrow", index=False)
+    # Only The Godfather has a matching rating row; 155 has an imdb_id IMDb
+    # never rates, 999 the same, 1000 has no imdb_id at all.
+    ratings_gz = _make_ratings_tsv_gz([("tt0068646", "9.2", "2250628")])
+    mock_s3 = _make_multi_key_s3_mock({
+        "imdb_ratings": ratings_gz,
+        "silver/movies": movies_buf.getvalue(),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.INFO):
+            transform_imdb_ratings(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    assert any("no imdb_id" in r.message for r in caplog.records)
+    assert any("no matching IMDb rating row" in r.message for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
@@ -2072,6 +2255,7 @@ from etl.warehouse_loader.load_facts import (
     _build_bridge_language_rows,
     _build_credit_rows,
     _build_movie_metrics_rows,
+    _build_movie_rating_rows,
     _existing_ids,
     _records,
     _write_rejects,
@@ -2079,6 +2263,7 @@ from etl.warehouse_loader.load_facts import (
     load_bridge_movie_country,
     load_bridge_movie_language,
     load_fact_movie_metrics,
+    load_fact_movie_rating,
     load_facts,
 )
 
@@ -2134,6 +2319,15 @@ def _fact_languages_df():
         "language_code": ["en", "zz"],
         "language_name": ["English", "Nowherish"],
         "english_name": ["English", "Nowherish"],
+    })
+
+
+def _fact_ratings_df():
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 999], dtype="Int64"),
+        "imdb_id": ["tt0000001", "tt0000999"],
+        "rating": [8.5, 7.0],
+        "vote_count": pd.array([1000, 2000], dtype="Int64"),
     })
 
 
@@ -2444,6 +2638,73 @@ def test_load_bridge_movie_language_upserts_and_returns_rejects(monkeypatch):
     assert params == [{"movie_id": 1, "language_code": "en", "ingestion_date": dt.date(2026, 6, 26)}]
 
 
+def test_build_movie_rating_rows_builds_both_sources():
+    rows, rejects = _build_movie_rating_rows(
+        _fact_ratings_df(), _fact_movies_df(), valid_movie_ids={1, 2, 3, 4},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    by_source = {(r["movie_id"], r["source"]) for r in rows}
+    assert (1, "imdb") in by_source
+    assert (1, "tmdb") in by_source
+    assert (2, "tmdb") in by_source
+    imdb_row = next(r for r in rows if r["movie_id"] == 1 and r["source"] == "imdb")
+    assert imdb_row["rating"] == 8.5
+    assert imdb_row["vote_count"] == 1000
+    tmdb_row = next(r for r in rows if r["movie_id"] == 1 and r["source"] == "tmdb")
+    assert tmdb_row["rating"] == _fact_movies_df().iloc[0]["vote_average"]
+    # movie_id 999 only appears in the imdb ratings input and isn't a known movie.
+    assert {r["rejection_reason"] for r in rejects} == {"unknown movie_id"}
+
+
+def test_build_movie_rating_rows_rejects_unknown_movie_id_from_either_source():
+    rows, rejects = _build_movie_rating_rows(
+        _fact_ratings_df(), _fact_movies_df(), valid_movie_ids=set(),
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    assert rows == []
+    sources = {r["source"] for r in rejects}
+    assert sources == {"imdb", "tmdb"}
+    assert all(r["rejection_reason"] == "unknown movie_id" for r in rejects)
+
+
+def test_build_movie_rating_rows_one_imdb_row_per_multi_genre_film():
+    """Grain regression: fact_movie_metrics repeats a multi-genre film's
+    rating once per genre; fact_movie_rating must not — exactly one 'imdb'
+    row per movie regardless of how many genres it has.
+
+    Movie 1 in _fact_movies_df() carries genre_ids=[1], but the point here is
+    that _build_movie_rating_rows() never looks at genre_ids at all — the
+    single imdb_ratings.parquet row for a movie yields exactly one row.
+    """
+    rows, _ = _build_movie_rating_rows(
+        _fact_ratings_df(), _fact_movies_df(), valid_movie_ids={1, 2, 3, 4},
+        ingestion_date=dt.date(2026, 6, 26),
+    )
+
+    imdb_rows_for_movie_1 = [r for r in rows if r["movie_id"] == 1 and r["source"] == "imdb"]
+    assert len(imdb_rows_for_movie_1) == 1
+
+
+def test_load_fact_movie_rating_upserts_both_sources_and_returns_rejects(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+
+    monkeypatch.setattr(load_facts_module, "_existing_ids", lambda session, table, pk_col: {1, 2, 3, 4})
+
+    count, rejects = load_fact_movie_rating(
+        mock_session, _fact_ratings_df(), _fact_movies_df(), dt.date(2026, 6, 26)
+    )
+
+    assert count == 5  # 4 tmdb rows (movies 1-4) + 1 imdb row (movie 1)
+    assert len(rejects) == 1  # movie 999's imdb row has no matching dim_movie row
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO fact_movie_rating" in str(stmt)
+    sources_in_params = {p["source"] for p in params}
+    assert sources_in_params == {"imdb", "tmdb"}
+
+
 def test_write_rejects_writes_parquet_file(tmp_path):
     """_write_rejects() must write a Parquet file named <entity>_rejected_<date>.parquet."""
     path = _write_rejects(
@@ -2501,6 +2762,8 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
             return _fact_countries_df()
         if entity == "movie_languages":
             return _fact_languages_df()
+        if entity == "imdb_ratings":
+            return _fact_ratings_df()
         raise AssertionError(f"unexpected entity {entity}")
 
     import etl.warehouse_loader.load_facts as load_facts_module
@@ -2527,8 +2790,8 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
     counts = load_facts(ingestion_date=date, bucket="theoria-datalake", rejected_dir=tmp_path)
 
     assert counts == {
-        "fact_movie_metrics": 1, "fact_credit": 5, "bridge_movie_company": 1,
-        "bridge_movie_country": 1, "bridge_movie_language": 1,
+        "fact_movie_metrics": 1, "fact_movie_rating": 5, "fact_credit": 5,
+        "bridge_movie_company": 1, "bridge_movie_country": 1, "bridge_movie_language": 1,
     }
     rejected_files = sorted(p.name for p in tmp_path.iterdir())
     assert rejected_files == [
@@ -2537,6 +2800,7 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
         "bridge_movie_language_rejected_2026-06-26.parquet",
         "fact_credit_rejected_2026-06-26.parquet",
         "fact_movie_metrics_rejected_2026-06-26.parquet",
+        "fact_movie_rating_rejected_2026-06-26.parquet",
     ]
 
 

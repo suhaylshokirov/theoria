@@ -127,6 +127,20 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         ],
         "ranges": {},
     },
+    # Written from IMDb's *published* schema (tconst/averageRating/numVotes,
+    # `\N` for null) rather than by mirroring transform_imdb_ratings.py — the
+    # Task 40 lesson again: a check copying the transform's own assumptions
+    # can only confirm the transform agrees with itself.
+    "imdb_ratings": {
+        "parquet": "imdb_ratings.parquet",
+        "pk_cols": ["movie_id"],
+        "required_cols": ["movie_id", "imdb_id", "rating"],
+        "expected_cols": ["movie_id", "imdb_id", "rating", "vote_count"],
+        "ranges": {
+            "rating": (0.0, 10.0),
+            "vote_count": (0, None),
+        },
+    },
 }
 
 
