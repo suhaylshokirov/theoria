@@ -533,7 +533,8 @@ main.container {
    that is how the old stylesheet ended up with paddings cancelling out. */
 
 .sheet-section + .sheet-section,
-.sheet-head + .sheet-section {
+.sheet-head + .sheet-section,
+.stats + .sheet-section {
   margin-top: var(--space-9);
 }
 
