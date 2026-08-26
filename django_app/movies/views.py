@@ -2,12 +2,14 @@ from datetime import date
 
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, F, Max, Min, Sum
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 
 
 from movies.models import (
-    Company, Credit, Genre, Movie, MovieCompany, MovieMetrics, Person,
+    Company, Country, Credit, Genre, Language, Movie, MovieCompany,
+    MovieCountry, MovieLanguage, MovieMetrics, Person,
 )
 
 MOVIES_PER_PAGE = 24
@@ -81,27 +83,62 @@ def home(request):
 
 
 def movie_list(request):
-    """Browsable movie catalog: poster grid + title search + sort + pagination."""
+    """Browsable movie catalog: poster grid + title search + sort + pagination.
+
+    Country and language are facets of a film, not entities with their own
+    biography (Task 62) — so these are plain filters on this list, the same
+    shape as `q`/`sort`, rather than new /countries/ or /languages/ index and
+    detail pages. Filtering by either matches any relation (a film's origin
+    *or* production country) — a browsing reader asking "what Japanese films
+    are here" doesn't want to have to pick which claim about "Japanese" they
+    meant first.
+    """
     q = request.GET.get("q", "").strip()
     sort = request.GET.get("sort", "release")
     if sort not in MOVIE_SORTS:
         sort = "release"
+    country = request.GET.get("country", "").strip()
+    language = request.GET.get("language", "").strip()
 
     movies = Movie.objects.using("warehouse").all()
     if q:
         movies = movies.filter(title__icontains=q)
+    if country:
+        movies = movies.filter(movie_countries__country_id=country)
+    if language:
+        movies = movies.filter(movie_languages__language_id=language)
+    if country or language:
+        # A film can carry two country rows for the same code (origin and
+        # production agreeing) or, in principle, several spoken languages —
+        # either join can hand back the same movie more than once.
+        movies = movies.distinct()
     if sort == "rating":
         movies = movies.annotate(top_rating=Max("moviemetrics__rating"))
     movies = movies.order_by(MOVIE_SORTS[sort])
 
     page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
+    country_choices = list(
+        Country.objects.using("warehouse").order_by("name")
+        .values_list("country_code", "name")
+    )
+    language_choices = list(
+        Language.objects.using("warehouse")
+        .annotate(display_name=Coalesce("english_name", "name"))
+        .order_by("display_name")
+        .values_list("language_code", "display_name")
+    )
+
     # Built here, not in the template, so the shared _pager.html partial
     # doesn't need to know which params any given page carries — see
     # _pager.html's docstring.
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
-        "base_query": urlencode({"q": q, "sort": sort}),
+        "country": country, "language": language,
+        "country_choices": country_choices, "language_choices": language_choices,
+        "base_query": urlencode(
+            {"q": q, "sort": sort, "country": country, "language": language}
+        ),
     }
     # See _person_list()'s identical branch: static/js/theoria.js's
     # initLiveFilter() re-requests this URL with this header on every filter
@@ -279,6 +316,20 @@ def movie_detail(request, movie_slug):
         .order_by("company__name")
     ]
 
+    country_rows = list(
+        MovieCountry.objects.using("warehouse")
+        .filter(movie_id=movie_id)
+        .select_related("country")
+    )
+    countries = _country_provenance(country_rows)
+
+    language_rows = list(
+        MovieLanguage.objects.using("warehouse")
+        .filter(movie_id=movie_id)
+        .select_related("language")
+    )
+    languages = _movie_languages(movie, language_rows)
+
     # fact_movie_metrics has one row per (movie, date, genre), and rating is
     # a movie-level measure repeated identically across those rows. So take
     # one row rather than averaging: .values(...).distinct() collapses the
@@ -303,9 +354,56 @@ def movie_detail(request, movie_slug):
         "credit_count": len(credits),
         "directors": directors,
         "studios": studios,
+        "countries": countries,
+        "languages": languages,
         "metrics": metrics,
     }
     return render(request, "movies/movie_detail.html", context)
+
+
+def _country_provenance(country_rows):
+    """Group a film's bridge_movie_country rows into a display-ready shape.
+
+    Origin and production are two simultaneously-true claims about a film's
+    country (Task 57) that agree on ~77% of films. Showing both as separately
+    labeled rows only when they actually disagree keeps the common case to
+    one row instead of two identical lists — the same judgment Task 56 made
+    for original_title. Returns a dict with all three keys always present so
+    the template doesn't have to branch on which shape it got.
+    """
+    origin = sorted({r.country.name for r in country_rows if r.relation == "origin"})
+    production = sorted(
+        {r.country.name for r in country_rows if r.relation == "production"}
+    )
+    if origin and production and origin != production:
+        return {"origin": origin, "production": production, "countries": []}
+    return {"origin": [], "production": [], "countries": origin or production}
+
+
+def _movie_languages(movie, language_rows):
+    """One merged, deduplicated language list, anchored on original_language.
+
+    dim_movie.original_language and bridge_movie_language (Task 57/61) are
+    two facts about the same thing rather than two different things, so this
+    reconciles them into a single ordered list instead of shipping both
+    side by side unexplained (Task 62): the original language leads if it
+    resolves to a known dim_language row, followed by any other language the
+    bridge records for the film, each name listed once.
+    """
+    names = []
+    seen = set()
+    original = next(
+        (r.language for r in language_rows if r.language_id == movie.original_language),
+        None,
+    )
+    if original:
+        names.append(original.name)
+        seen.add(original.language_code)
+    for r in sorted(language_rows, key=lambda r: r.language.name):
+        if r.language_id not in seen:
+            names.append(r.language.name)
+            seen.add(r.language_id)
+    return names
 
 
 # ?sort= values accepted by studio_list, mapped to an order_by expression.

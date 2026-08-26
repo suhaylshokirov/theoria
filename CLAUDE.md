@@ -30,9 +30,9 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 61 — Warehouse: dim_country, dim_language and their bridges
-Currently on          : Task 62 — not started (Django: provenance on the movie page, and browse by country/language — Phase 14).
-Current phase         : Phase 13 (Tasks 57–60) — complete. Phase 14 (Tasks 61–63): Task 61 complete, 62–63 not started.
+Last completed task   : Task 62 — Django: provenance on the movie page, and browse by country/language
+Currently on          : Task 63 — not started (Analytics, live re-run, verification, and doc truth-up — closes Phase 14).
+Current phase         : Phase 13 (Tasks 57–60) — complete. Phase 14 (Tasks 61–63): Task 61–62 complete, 63 not started.
 Outstanding must-do   : **Two phase-independent must-dos, both not started.** (1) **Task 64 —
 nightly cloud refresh** (warehouse to Neon + pipeline on GitHub Actions); see "MUST DO — Automated
 Nightly Refresh". Best done before Task 63 so that phase's live re-run happens on the scheduled
@@ -46,7 +46,38 @@ Needs one new TMDB endpoint (`/company/{id}`, ~1,383 calls, ≈5 min at Task 64'
 req/s) never called before in this project — the plan's own first step is a live payload-shape +
 coverage check before any code is written, since nothing about that endpoint's response has been
 measured yet.
-Blockers / open issues: **No blockers.** **The Studios pages were redesigned by user
+Blockers / open issues: **No blockers.** **Task 62 (2026-08-26) reads Task 61's
+dim_country/dim_language + bridges from Django for the first time** — four new models
+(`Country`, `Language`, `MovieCountry`, `MovieLanguage` in `movies/models.py`), all following the
+existing bridge-model shape (natural-key FK, fake-single-PK on the movie side, same as
+`MovieCompany`). Two view-level judgment calls, both landed exactly as the plan called for rather
+than shipping raw bridge rows: `_country_provenance()` collapses a film's origin and production
+countries into one plain "Countries" row when they agree (~77% of films) and only splits into
+"Country of origin"/"Production countries" when they actually disagree, the same restraint Task 56
+applied to `original_title`; `_movie_languages()` **reconciles** `dim_movie.original_language`
+with `bridge_movie_language` into one ordered, deduplicated list (the original language leads,
+resolved to a name — replacing the old raw-ISO-code "Language: EN" row — followed by any other
+spoken language) rather than shipping two disconnected language facts side by side. `/movies/`
+gained `?country=`/`?language=` `<select>` filters — plain facets on the existing list, not new
+`/countries/`/`/languages/` index pages, per the plan's own framing. Filtering by country matches
+*either* relation (a reader browsing "Japanese films" shouldn't have to pick origin vs. production
+first), joined via the new bridge FKs with `.distinct()` to collapse the fan-out a shared
+origin+production country code would otherwise cause; `base_query` was extended so both filters
+survive pagination through the existing shared `_pager.html`, unchanged. Read-side only — no DDL,
+no ETL, no pipeline re-run, reusing Task 61's tables exactly as they landed. **Live-verified**:
+`/movies/the-godfather/` renders `Countries: United States of America` (agreeing) and
+`Languages: English, Italiano, Latin`, matching Task 61's own verification numbers exactly;
+`/movies/blade-runner/` (a disagreeing film) renders separate `Country of origin: United States of
+America` and `Production countries: Hong Kong, United Kingdom, United States of America` rows;
+`/movies/?country=JP` returns **34** films across 2 pages (24+10) with `country=JP` preserved on
+the pager's Previous/Next links; `/movies/?language=ja` returns **63** films across 3 pages; a
+non-matching code (`?country=ZZ`) shows the new "No films match this filter" message rather than
+the generic empty-catalog one; the two `<select>`s list all 46 countries and 73 languages. Tests
+243 → **250** (7 new: two country-provenance render cases — agree/disagree — two
+language-reconciliation cases — merged-list/singular-label — two `/movies/` filter tests, and one
+pagination-survival test; the 11 existing `movie_detail` tests and 4 existing `movie_list` tests
+were updated to mock the two new queries/managers the views now make, the same mechanical update
+Task 59 made to `movie_detail`'s tests when it added studios). **The Studios pages were redesigned by user
 request on 2026-08-17, ad hoc and outside the numbered task flow** (same posture as the Franchise
 removal and Analytics-panel cuts logged further below) — `/studios/` was a ranked `table-2col` of
 studio name + film count, the same shape Task 59 deliberately reused from the old `/genres/` page.
@@ -407,7 +438,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 11    | Movie Page Legibility  | 54     | Complete |
 | 12    | Movie Provenance — the scalar fields | 55–56 | Complete |
 | 13    | Studios — `dim_company` + the first bridge table | 57–60 | Complete |
-| 14    | Where and in What Language | 61–63 | Not started |
+| 14    | Where and in What Language | 61–63 | In progress (61–62 done, 63 not started) |
 
 ---
 
@@ -791,7 +822,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   resolution + relation-passthrough for countries, bridge builder FK resolution for languages, and
   the countries/languages distinct-vs-row-count row-count-sanity regression).
 
-#### [ ] Task 62 — Django: provenance on the movie page, and browse by country/language
+#### [x] Task 62 — Django: provenance on the movie page, and browse by country/language
 - **Goal:** Surface both without inventing two more entity pages nobody asked for.
 - **Files:** `django_app/movies/{models,views}.py`, `movies/templates/movies/{movie_detail,movie_list}.html`, `tests/test_django_views.py`
 - **Steps:**
@@ -799,7 +830,15 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   2. `/movies/?country=` and `?language=` filters on the existing list page, alongside `?q=` and `?sort=`. **Filters, not detail pages** — a country is a facet of a film, not a thing with a biography, and `/movies/?country=JP` answers the real question ("what Japanese films are here") with no new template.
   3. The filter must survive pagination: `_pager.html` already takes a `base_query`, and `movie_list` already builds one with `urlencode` — extend it, don't rebuild it.
   4. `dim_movie.original_language` already exists and is already shown on the movie page (16 distinct values). **Reconcile it with `spoken_languages` rather than shipping two language facts side by side** with no explanation of how they differ.
-- **Outcome:**
+- **Outcome:** Built exactly as scoped — see the detailed write-up under "Blockers / open issues"
+  above for the full design rationale and live-verification numbers. Four new `managed = False`
+  models (`Country`, `Language`, `MovieCountry`, `MovieLanguage`) mirror the existing bridge-model
+  shape. `movie_detail` gained `_country_provenance()` (one "Countries" row when origin/production
+  agree, split rows only when they disagree) and `_movie_languages()` (merges
+  `original_language` with the spoken-languages bridge into one ordered, deduplicated,
+  name-resolved list). `/movies/` gained `?country=`/`?language=` `<select>` filters, matching
+  either relation for country, with `base_query` extended so both survive pagination. No DDL/ETL
+  change. Tests 243 → 250.
 
 #### [ ] Task 63 — Analytics, live re-run, verification, doc truth-up
 - **Goal:** The phase-closing task, following Tasks 44 and 53.

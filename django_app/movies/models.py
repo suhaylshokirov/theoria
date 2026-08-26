@@ -229,3 +229,88 @@ class MovieCompany(models.Model):
         return f"{self.movie_id}/{self.company_id}"
 
 
+class Country(models.Model):
+    """A country (Task 61). Uses its ISO 3166-1 alpha-2 code directly as the
+    primary key — no surrogate id or slug, since the code is already short,
+    stable and URL-safe."""
+
+    country_code = models.CharField(max_length=10, primary_key=True)
+    name = models.TextField()
+
+    class Meta:
+        managed = False
+        db_table = "dim_country"
+
+    def __str__(self):
+        return self.name
+
+
+class Language(models.Model):
+    """A language (Task 61). Same natural-key reasoning as Country, keyed on
+    ISO 639-1. `english_name` is nullable — prefer it for display and fall
+    back to `name` (its own-language form) when absent."""
+
+    language_code = models.CharField(max_length=10, primary_key=True)
+    name = models.TextField()
+    english_name = models.TextField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_language"
+
+    def __str__(self):
+        return self.english_name or self.name
+
+
+class MovieCountry(models.Model):
+    """bridge_movie_country: which countries a film originates from and/or
+    was produced in. Same fake-single-PK workaround as the other bridge/fact
+    models above; the real PK is the composite (movie_id, country_code,
+    relation) in Postgres. `relation` ("origin"/"production") is part of that
+    key rather than a plain payload column, because Task 57 found the two are
+    simultaneously-true claims about a film's country that disagree on ~23%
+    of films — folding relation out of the key would let one overwrite the
+    other on upsert.
+    """
+
+    movie = models.ForeignKey(
+        Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True,
+        related_name="movie_countries",
+    )
+    country = models.ForeignKey(
+        Country, on_delete=models.DO_NOTHING, db_column="country_code",
+        related_name="movie_countries",
+    )
+    relation = models.CharField(max_length=20)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "bridge_movie_country"
+
+    def __str__(self):
+        return f"{self.movie_id}/{self.country_id}/{self.relation}"
+
+
+class MovieLanguage(models.Model):
+    """bridge_movie_language: which languages are spoken in a film. Same
+    fake-single-PK workaround as the other bridge/fact models above; the real
+    PK is the composite (movie_id, language_code) in Postgres.
+    """
+
+    movie = models.ForeignKey(
+        Movie, on_delete=models.DO_NOTHING, db_column="movie_id", primary_key=True,
+        related_name="movie_languages",
+    )
+    language = models.ForeignKey(
+        Language, on_delete=models.DO_NOTHING, db_column="language_code",
+        related_name="movie_languages",
+    )
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "bridge_movie_language"
+
+    def __str__(self):
+        return f"{self.movie_id}/{self.language_id}"

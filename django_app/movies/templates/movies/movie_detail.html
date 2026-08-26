@@ -41,9 +41,28 @@
                 <dd class="mono">{% if movie.runtime %}{{ movie.runtime }} min{% else %}—{% endif %}</dd>
             </div>
             <div class="record-row">
-                <dt class="label">Language</dt>
-                <dd class="mono">{% if movie.original_language %}{{ movie.original_language|upper }}{% else %}—{% endif %}</dd>
+                <dt class="label">{% if languages|length > 1 %}Languages{% else %}Language{% endif %}</dt>
+                <dd>{% if languages %}{{ languages|join:", " }}{% else %}—{% endif %}</dd>
             </div>
+            {% if countries.countries %}
+            <div class="record-row">
+                <dt class="label">Countries</dt>
+                <dd>{{ countries.countries|join:", " }}</dd>
+            </div>
+            {% elif countries.origin or countries.production %}
+            {% if countries.origin %}
+            <div class="record-row">
+                <dt class="label">Country of origin</dt>
+                <dd>{{ countries.origin|join:", " }}</dd>
+            </div>
+            {% endif %}
+            {% if countries.production %}
+            <div class="record-row">
+                <dt class="label">Production countries</dt>
+                <dd>{{ countries.production|join:", " }}</dd>
+            </div>
+            {% endif %}
+            {% endif %}
             <div class="record-row">
                 <dt class="label">Budget</dt>
                 <dd class="mono">{% if movie.budget %}${{ movie.budget|floatformat:"0g" }}{% else %}—{% endif %}</dd>
