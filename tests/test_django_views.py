@@ -526,9 +526,9 @@ def test_movie_detail_renders_rating_and_synopsis():
     assert "vote" not in body.lower()
 
 
-def test_movie_detail_renders_identifiers_and_original_title_when_differs():
-    """imdb_id/homepage render as outbound links; original_title only shows
-    when it differs from title — printing the same string twice is noise."""
+def test_movie_detail_renders_original_title_when_differs():
+    """original_title only shows when it differs from title — printing the
+    same string twice is noise."""
     movie = _movie(title="Seven Samurai")
     movie.original_title = "Shichinin no Samurai"
     movie.imdb_id = "tt0047478"
@@ -557,10 +557,7 @@ def test_movie_detail_renders_identifiers_and_original_title_when_differs():
     body = response.content.decode()
     assert response.status_code == 200
     assert "Shichinin no Samurai" in body
-    assert 'href="https://www.imdb.com/title/tt0047478/"' in body
-    assert 'href="https://example.com/seven-samurai"' in body
-    assert "tt0047478" not in body.replace('href="https://www.imdb.com/title/tt0047478/"', "")
-    assert 'rel="noopener noreferrer"' in body
+    assert "Elsewhere" not in body
 
 
 def test_movie_detail_hides_original_title_when_same_as_title():
