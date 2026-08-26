@@ -635,7 +635,8 @@ main.container {
    portrait poster does, or a wide wordmark logo has almost no room to
    render at a legible size. */
 .poster-grid.is-wide {
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--space-6);
 }
 
 .poster-card a {
@@ -709,7 +710,7 @@ main.container {
 .placeholder-studio .studio-initial {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: var(--text-xl);
+  font-size: var(--text-2xl);
   color: var(--logo-ink);
 }
 
