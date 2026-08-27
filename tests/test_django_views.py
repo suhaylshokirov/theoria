@@ -564,6 +564,7 @@ def test_movie_detail_renders_rating_badge_with_vote_count_and_synopsis():
     assert "2,103,445 votes" in body
     assert 'href="https://www.imdb.com/title/tt1234567/"' in body
     assert "IMDb rating 8.5 out of 10" in body
+    assert "8.5 / 10" in body  # the visible figure carries the "/ 10" scale
 
 
 def test_movie_detail_renders_no_badge_when_no_imdb_rating():
@@ -595,7 +596,7 @@ def test_movie_detail_renders_no_badge_when_no_imdb_rating():
     body = response.content.decode()
     assert response.status_code == 200
     assert "rating-badge" not in body
-    assert "imdb.svg" not in body
+    assert "rating-badge-mark" not in body
     assert response.context["movie_rating"] is None
 
 

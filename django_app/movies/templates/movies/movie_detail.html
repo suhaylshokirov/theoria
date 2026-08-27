@@ -27,7 +27,7 @@
 
         <dl class="record-list">
             {% if movie_rating.rating %}
-            <div class="record-row">
+            <div class="record-row record-row--rating">
                 <dt class="label">Rating</dt>
                 <dd>{% include "movies/_rating_badge.html" with rating=movie_rating.rating vote_count=movie_rating.vote_count imdb_id=movie.imdb_id only %}</dd>
             </div>

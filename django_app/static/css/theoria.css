@@ -746,14 +746,14 @@ main.container {
 }
 
 /* --- Rating badge (IMDb) ----------------------------------------------------
-   Added component, Task 68 — the IMDb mark (static/img/imdb.svg) plus the
-   figure, and on the movie detail page, the vote count and an outbound link.
-   Compact (poster cards) vs. full (movie detail) is entirely which optional
-   params _rating_badge.html was given, not a class switch, so there is one
-   .rating-badge rather than two. IMDb yellow (#F5C518) belongs to the mark
-   image itself — nothing here recolours toward it, since that yellow must
-   never be mistaken for this site's own lime measurement mark, which stays
-   reserved for meter bars, keyed posters, and the active nav link. */
+   Added component, Task 68 — a text "IMDb" chip plus the figure and its
+   "/ 10" scale, and on the movie detail page, the vote count and an outbound
+   link. Compact (poster cards) vs. full (movie detail) is entirely which
+   optional params _rating_badge.html was given, not a class switch, so there
+   is one .rating-badge rather than two. IMDb yellow (#F5C518) is confined to
+   the chip's fill — nothing else here recolours toward it, since that yellow
+   must never be mistaken for this site's own lime measurement mark, which
+   stays reserved for meter bars, keyed posters, and the active nav link. */
 
 .rating-badge {
   display: inline-flex;
@@ -772,33 +772,50 @@ a.rating-badge:focus-visible .rating-badge-figure {
   color: var(--lime-text);
 }
 
+/* The mark is CSS text, not an image: "IMDb" in the brand yellow (#F5C518) on a
+   dark chip, the way the real logo reads. The SVG wordmark went illegible at
+   the small sizes this badge sits in, and a black-on-yellow chip stays crisp at
+   any size. The yellow is confined to this chip's fill — nothing here tints
+   toward it — so it can't be mistaken for the site's lime measurement mark. */
 .rating-badge-mark {
-  width: 18px;
-  height: 18px;
   flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: 3px;
+  background: #f5c518;
+  color: #000;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  line-height: 1;
+  letter-spacing: 0.02em;
 }
 
 .rating-badge-figure {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
 }
 
 .rating-badge-votes {
+  margin-left: var(--space-2);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
   color: var(--ink-faint);
 }
 
-/* The detail page's badge stands in for a whole record-row dd, so it gets a
-   larger mark and figure than the compact card use above. */
-.record-row .rating-badge-mark {
-  width: 24px;
-  height: 24px;
+/* The detail page's badge stands in for a whole record-row dd. The figure
+   matches the other rows' values (--text-sm, inherited); only the chip is
+   stepped up so the "IMDb" mark stays legible. record-row--rating centres the
+   12px label against the taller badge — without it the label top-aligns and
+   the row looks off. */
+.record-row--rating {
+  align-items: center;
 }
 
-.record-row .rating-badge-figure {
-  font-size: var(--text-md);
+.record-row .rating-badge-mark {
+  padding: 3px 5px;
+  font-size: var(--text-2xs);
 }
 
 /* --- Chips ----------------------------------------------------------------- */
