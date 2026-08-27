@@ -111,11 +111,8 @@ def test_movie_list_returns_200_with_pagination():
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Country, "objects", new=MagicMock()
-    ) as country_mgr, patch.object(
-        Language, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as country_mgr:
         country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
-        language_mgr.using.return_value.annotate.return_value.order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.annotate.return_value = qs
@@ -134,11 +131,8 @@ def test_movie_list_search_and_sort():
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Country, "objects", new=MagicMock()
-    ) as country_mgr, patch.object(
-        Language, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as country_mgr:
         country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
-        language_mgr.using.return_value.annotate.return_value.order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.annotate.return_value = qs
@@ -165,11 +159,8 @@ def test_movie_list_sort_by_rating_uses_the_imdb_annotation():
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Country, "objects", new=MagicMock()
-    ) as country_mgr, patch.object(
-        Language, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as country_mgr:
         country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
-        language_mgr.using.return_value.annotate.return_value.order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.annotate.return_value = qs
         qs.order_by.return_value = [movie]
@@ -190,11 +181,8 @@ def test_movie_list_sort_by_rating_uses_the_imdb_annotation():
 def test_movie_list_invalid_sort_falls_back_to_release():
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Country, "objects", new=MagicMock()
-    ) as country_mgr, patch.object(
-        Language, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as country_mgr:
         country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
-        language_mgr.using.return_value.annotate.return_value.order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.annotate.return_value = qs
@@ -212,11 +200,8 @@ def test_movie_list_ajax_request_renders_results_fragment_only():
     movie = _movie()
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Country, "objects", new=MagicMock()
-    ) as country_mgr, patch.object(
-        Language, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as country_mgr:
         country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
-        language_mgr.using.return_value.annotate.return_value.order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.annotate.return_value = qs
@@ -239,13 +224,10 @@ def test_movie_list_filters_by_country():
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Country, "objects", new=MagicMock()
-    ) as country_mgr, patch.object(
-        Language, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as country_mgr:
         country_mgr.using.return_value.order_by.return_value.values_list.return_value = [
             ("JP", "Japan")
         ]
-        language_mgr.using.return_value.annotate.return_value.order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.distinct.return_value = qs
@@ -261,56 +243,24 @@ def test_movie_list_filters_by_country():
     assert response.context["country_choices"] == [("JP", "Japan")]
 
 
-def test_movie_list_filters_by_language():
-    """?language= narrows the catalog via bridge_movie_language (Task 62)."""
-    movie = _movie()
-
+def test_movie_list_country_survives_pagination():
+    """base_query (fed to the shared _pager.html) must carry country forward,
+    the same way it already carries q/sort — see _pager.html's docstring on
+    why this is built in the view rather than the template."""
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Country, "objects", new=MagicMock()
-    ) as country_mgr, patch.object(
-        Language, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as country_mgr:
         country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
-        language_mgr.using.return_value.annotate.return_value.order_by.return_value.values_list.return_value = [
-            ("ja", "Japanese")
-        ]
-        qs = movie_mgr.using.return_value.all.return_value
-        qs.filter.return_value = qs
-        qs.distinct.return_value = qs
-        qs.annotate.return_value = qs
-        qs.order_by.return_value = [movie]
-
-        response = client.get("/movies/", {"language": "ja"})
-
-    assert response.status_code == 200
-    qs.filter.assert_called_once_with(movie_languages__language_id="ja")
-    qs.distinct.assert_called_once()
-    assert response.context["language"] == "ja"
-    assert response.context["language_choices"] == [("ja", "Japanese")]
-
-
-def test_movie_list_country_and_language_survive_pagination():
-    """base_query (fed to the shared _pager.html) must carry country/language
-    forward, the same way it already carries q/sort — see _pager.html's
-    docstring on why this is built in the view rather than the template."""
-    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        Country, "objects", new=MagicMock()
-    ) as country_mgr, patch.object(
-        Language, "objects", new=MagicMock()
-    ) as language_mgr:
-        country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
-        language_mgr.using.return_value.annotate.return_value.order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.distinct.return_value = qs
         qs.annotate.return_value = qs
         qs.order_by.return_value = []
 
-        response = client.get("/movies/", {"country": "JP", "language": "ja"})
+        response = client.get("/movies/", {"country": "JP"})
 
     base_query = response.context["base_query"]
     assert "country=JP" in base_query
-    assert "language=ja" in base_query
 
 
 # ---------------------------------------------------------------------------

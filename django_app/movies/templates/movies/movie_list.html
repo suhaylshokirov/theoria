@@ -3,7 +3,7 @@
 {% block title %}Theoria — Films{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title="Films" sub="Every title the warehouse holds. Search by name, narrow by country or language, or reorder by what was measured." only %}
+{% include "movies/_sheet_header.html" with title="Films" sub="Every title the warehouse holds. Search by name, narrow by country, or reorder by what was measured." only %}
 
 <section class="sheet-section">
     <div class="toolbar">
@@ -30,24 +30,15 @@
                 <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
                 <label for="sort-title">A–Z</label>
             </fieldset>
-            {% comment %} Countries and languages are facets of a film, not entities
-               with their own page (Task 62) — plain <select> filters here, the
-               same treatment person_list.html gives "known for". {% endcomment %}
+            {% comment %} Country is a facet of a film, not an entity with its own
+               page (Task 62) — a plain <select> filter here, the same treatment
+               person_list.html gives "known for". {% endcomment %}
             <div class="field">
                 <label for="movie-country" class="visually-hidden">Filter by country</label>
                 <select name="country" id="movie-country">
                     <option value="">Any country</option>
                     {% for code, name in country_choices %}
                     <option value="{{ code }}" {% if country == code %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="field">
-                <label for="movie-language" class="visually-hidden">Filter by language</label>
-                <select name="language" id="movie-language">
-                    <option value="">Any language</option>
-                    {% for code, name in language_choices %}
-                    <option value="{{ code }}" {% if language == code %}selected{% endif %}>{{ name }}</option>
                     {% endfor %}
                 </select>
             </div>

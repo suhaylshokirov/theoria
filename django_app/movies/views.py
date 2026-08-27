@@ -2,13 +2,12 @@ from datetime import date
 
 from django.core.paginator import Paginator
 from django.db.models import Avg, Count, F, Max, Min, Q, Sum
-from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 
 
 from movies.models import (
-    Company, Country, Credit, Genre, Language, Movie, MovieCompany,
+    Company, Country, Credit, Genre, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieRating, Person,
 )
 
@@ -99,33 +98,28 @@ def home(request):
 def movie_list(request):
     """Browsable movie catalog: poster grid + title search + sort + pagination.
 
-    Country and language are facets of a film, not entities with their own
-    biography (Task 62) — so these are plain filters on this list, the same
-    shape as `q`/`sort`, rather than new /countries/ or /languages/ index and
-    detail pages. Filtering by either matches any relation (a film's origin
-    *or* production country) — a browsing reader asking "what Japanese films
-    are here" doesn't want to have to pick which claim about "Japanese" they
-    meant first.
+    Country is a facet of a film, not an entity with its own biography
+    (Task 62) — so it's a plain filter on this list, the same shape as
+    `q`/`sort`, rather than a new /countries/ index and detail page.
+    Filtering by it matches any relation (a film's origin *or* production
+    country) — a browsing reader asking "what Japanese films are here"
+    doesn't want to have to pick which claim about "Japanese" they meant
+    first.
     """
     q = request.GET.get("q", "").strip()
     sort = request.GET.get("sort", "release")
     if sort not in MOVIE_SORTS:
         sort = "release"
     country = request.GET.get("country", "").strip()
-    language = request.GET.get("language", "").strip()
 
     movies = Movie.objects.using("warehouse").all()
     if q:
         movies = movies.filter(title__icontains=q)
     if country:
-        movies = movies.filter(movie_countries__country_id=country)
-    if language:
-        movies = movies.filter(movie_languages__language_id=language)
-    if country or language:
         # A film can carry two country rows for the same code (origin and
-        # production agreeing) or, in principle, several spoken languages —
-        # either join can hand back the same movie more than once.
-        movies = movies.distinct()
+        # production agreeing), so the join can hand back the same movie
+        # more than once.
+        movies = movies.filter(movie_countries__country_id=country).distinct()
     # Annotated unconditionally, not only when sort == "rating" — the cards
     # display this figure too, so it must exist whether or not the list is
     # being sorted by it (Task 68). MOVIE_SORTS["rating"] points at the same
@@ -141,23 +135,15 @@ def movie_list(request):
         Country.objects.using("warehouse").order_by("name")
         .values_list("country_code", "name")
     )
-    language_choices = list(
-        Language.objects.using("warehouse")
-        .annotate(display_name=Coalesce("english_name", "name"))
-        .order_by("display_name")
-        .values_list("language_code", "display_name")
-    )
 
     # Built here, not in the template, so the shared _pager.html partial
     # doesn't need to know which params any given page carries — see
     # _pager.html's docstring.
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
-        "country": country, "language": language,
-        "country_choices": country_choices, "language_choices": language_choices,
-        "base_query": urlencode(
-            {"q": q, "sort": sort, "country": country, "language": language}
-        ),
+        "country": country,
+        "country_choices": country_choices,
+        "base_query": urlencode({"q": q, "sort": sort, "country": country}),
     }
     # See _person_list()'s identical branch: static/js/theoria.js's
     # initLiveFilter() re-requests this URL with this header on every filter

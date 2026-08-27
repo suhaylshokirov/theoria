@@ -10,7 +10,7 @@
         {% empty %}
         <p class="empty">
             {% if q %}No films match “{{ q }}”. Try a shorter title.
-            {% elif country or language %}No films match this filter. Try loosening it.
+            {% elif country %}No films match this filter. Try loosening it.
             {% else %}No films loaded yet. Run the pipeline to fill the catalog.{% endif %}
         </p>
         {% endfor %}

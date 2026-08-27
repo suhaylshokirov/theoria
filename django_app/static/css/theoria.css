@@ -741,7 +741,15 @@ main.container {
 }
 
 .poster-card .card-title {
-  display: block;
+  /* Reserve two lines whether the title fills them or not, so the sub-line
+     and the rating badge below it sit at the same height on every card in a
+     row. Without this a one-line title pulls its badge up above the badges
+     of neighbours whose titles wrapped. Longer titles clamp at two lines. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-height: calc(2 * 1.3em);
   font-size: var(--text-sm);
   font-weight: 600;
   line-height: 1.3;
