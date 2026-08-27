@@ -14,7 +14,11 @@
         {% endif %}
         <div class="card-body">
             <span class="card-title">{{ movie.title }}</span>
-            <span class="card-sub">{% if card_sub %}{{ card_sub }}{% elif movie.release_date %}{{ movie.release_date|date:"Y" }}{% else %}—{% endif %}</span>
+            {% if card_sub %}
+            <span class="card-role">{{ card_sub }}</span>
+            {% else %}
+            <span class="card-sub">{% if movie.release_date %}{{ movie.release_date|date:"Y" }}{% else %}—{% endif %}</span>
+            {% endif %}
             {% comment %} Compact badge: mark + figure only, no vote count, no
                link — a poster grid full of outbound links would be noise.
                movie.imdb_rating is the filtered annotation the calling view

@@ -76,6 +76,12 @@
   --font-label: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --font-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "Spline Sans Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  /* The personnel face: Work Sans, used for what a person did on a film — a
+     cast member's character, and every crew job from directing to camera.
+     A humanist grotesque, warmer and rounder than the Instrument Sans body
+     and off the mono axis entirely, so a credit reads as a name rather than
+     a field value. */
+  --font-role: "Work Sans", "Helvetica Neue", Arial, sans-serif;
 
   --text-3xs: 0.6875rem;
   --text-2xs: 0.75rem;
@@ -114,6 +120,10 @@
   --dur-fast: 120ms;
   --dur: 220ms;
   --dur-slow: 420ms;
+
+  /* Search magnifier (Material Symbols "search"), carried as a mask source so
+     it can be tinted per theme and per state. Used by .field:has(search). */
+  --icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%23000'%3E%3Cpath d='M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z'/%3E%3C/svg%3E");
 
   color-scheme: light;
 }
@@ -737,11 +747,24 @@ main.container {
   line-height: 1.3;
 }
 
+/* The numeric sub-line: a release year, or a "Pop 8.4" fallback. Mono suits a
+   bare figure. Prose sub-lines (a character/role) use .card-role instead. */
 .poster-card .card-sub {
   display: block;
   margin-top: var(--space-1);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+/* A performance's role/character. Personnel face (Work Sans), same size and
+   weight footprint as the mono sub it replaces. See --font-role. */
+.poster-card .card-role {
+  display: block;
+  margin-top: var(--space-1);
+  font-family: var(--font-role);
+  font-size: var(--text-2xs);
+  line-height: 1.3;
   color: var(--ink-faint);
 }
 
@@ -991,6 +1014,26 @@ td[data-meter] .meter-fill {
   border-color: var(--lime-mark);
 }
 
+/* A magnifier sits at the head of every search field. It is a masked shape,
+   not an <img>, so its colour tracks the theme (and turns lime while the
+   field is focused, matching the border). Placed on the .field wrapper via
+   :has() so no search template has to carry the markup, and never on the
+   <select> fields that share the .field shell. */
+.field:has(input[type="search"])::before {
+  content: "";
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin-left: var(--space-4);
+  background-color: var(--ink-faint);
+  -webkit-mask: var(--icon-search) center / contain no-repeat;
+  mask: var(--icon-search) center / contain no-repeat;
+}
+
+.field:has(input[type="search"]:focus)::before {
+  background-color: var(--lime-mark);
+}
+
 input[type="text"],
 input[type="search"] {
   border: none;
@@ -1000,6 +1043,11 @@ input[type="search"] {
   font-size: var(--text-sm);
   padding: var(--space-3) var(--space-5);
   min-width: 200px;
+}
+
+/* The icon already supplies the left inset for a search field. */
+.field:has(input[type="search"]) input[type="search"] {
+  padding-left: var(--space-3);
 }
 
 input[type="text"]:focus,
@@ -1496,8 +1544,11 @@ button:hover,
   border-bottom-color: var(--lime-mark);
 }
 
+/* The crew job(s) a person held — same personnel face as a cast card's role,
+   so directing, writing and camera all read as craft credits rather than
+   monospaced field values. See --font-role. */
 .credit-jobs {
-  font-family: var(--font-mono);
+  font-family: var(--font-role);
   font-size: var(--text-2xs);
   color: var(--ink-faint);
   text-align: right;
