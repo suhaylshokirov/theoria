@@ -5,3 +5,4 @@ Appended one line per run by `.github/workflows/nightly-refresh.yml` and
 60-day scheduled-workflow inactivity timer on a public repo.
 
 Format: `<UTC timestamp>  <status>  <run label>  (<trigger>)`
+2026-08-28T09:57:29Z  cancelled  run 1  (workflow_dispatch)
