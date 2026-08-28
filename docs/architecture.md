@@ -301,6 +301,56 @@ before rewriting it, inside the same transaction, so no batch ever asks Postgres
 half-written unique values at once. Found by a live run, not a test — the bug only exists under
 real concurrent-looking writes, which a mocked-session unit test can't reproduce.
 
+### 4.2 The nightly refresh: a separate path for films already in the warehouse
+
+Every Bronze ingest module sources its `movie_id`s from a *discovery* endpoint — `movie/popular`,
+`discover/movie`. Nothing sources them from `dim_movie`. So a film already in the catalogue has
+no refresh path: its rating, vote count and revenue are frozen at whatever they were the day its
+partition was written, and the only way to move them is a full re-discovery run that also happens
+to re-fetch everything.
+
+**`scripts/run_refresh.py` is that missing path, and it is a separate orchestrator, not a flag on
+`run_pipeline.py`.** Ingest *discovers* films; refresh *updates* known ones. Conflating the two
+verbs behind one `--refresh` switch is what produced the gap in the first place. `run_refresh`
+reuses every Silver, Gold and warehouse stage unchanged — the only substitution is at the head:
+`etl/bronze/refresh_movies.py` reads `SELECT movie_id FROM dim_movie ORDER BY movie_id` and
+writes the *same* `bronze/movie_details/` and `bronze/credits/` key shapes the ingest modules
+write, so nothing downstream can tell the difference.
+
+**One TMDB call per film, not two.** `TMDBClient.get_movie_details(..., append_to_response="credits")`
+returns the detail payload with `credits` folded in; `refresh_movies` splits it back into the two
+Bronze files. TMDB rate-limits per request, so this halves the call volume of the refresh (and is
+available to the ingest path too). Measured throughput is ~4.76 req/s, so the full ~1,215-film
+catalogue refreshes in roughly 4–5 minutes of API time.
+
+**Why the volatile-metrics snapshot goes to S3, not a warehouse table.** `fact_movie_metrics`
+has PK `(movie_id, date_id, genre_id)` where `date_id` is derived from the film's *release* date;
+`ingestion_date` is only a column. A refresh therefore upserts each row in place and the previous
+rating is gone — the warehouse holds "latest", never a history. `build_metrics_snapshot` writes
+one row per film per run (`movie_id, snapshot_date, rating, vote_count, revenue, popularity`) to
+`gold/metrics_snapshot/ingestion_date=…/` *before* the warehouse load overwrites those values.
+Keeping this in Postgres would grow ~1,215 rows/day unbounded against a 0.5 GB managed tier, and
+history-of-measurements is exactly what the lake layer is for. This is what makes "rating over
+time" or "revenue still accumulating after release" answerable later without schema change.
+
+**Why not drive the refresh from TMDB's `/movie/changes` feed.** It looks like the right tool —
+a daily list of what changed — but a live probe of 400 changed films found it reports `status`,
+`runtime`, `budget`, `revenue`, cast/crew and images, and **never** `vote_average`, `vote_count`
+or `popularity`. TMDB excludes those by design because they move on nearly every film daily. The
+changes feed's real job is discovery and structural edits (handled by the weekly
+`run_pipeline --source discover`); it cannot see the two fields that actually go stale, so the
+refresh re-fetches every film rather than trusting a feed that omits the point.
+
+**Why Neon + GitHub Actions and not an AWS-native scheduler.** `config.py` already reads a single
+`DATABASE_URL` and every stage is already idempotent per `ingestion_date`, so moving the
+warehouse to a managed Postgres and running the existing scripts on a cron is an environment
+change plus two YAML files — no new infrastructure, which keeps faith with §11's non-goals. ECS
+Fargate + EventBridge, or self-hosted Airflow, would buy orchestration this project does not need
+at this size. One operational wrinkle: GitHub silently disables scheduled workflows on a public
+repo after 60 days without repository activity, so each run appends a line to
+`ops/refresh-history.md` and commits it — the commit is the activity that keeps the schedule
+alive.
+
 ## 5. Data quality: quarantine, never drop
 
 Two quality gates run at different layers, both following the same pattern: check → tag failing

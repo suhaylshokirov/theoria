@@ -3088,3 +3088,241 @@ def test_load_gold_reads_gold_not_silver(monkeypatch):
     assert counts == {"fact_collaboration": 2}
     key = mock_s3.get_object.call_args[1]["Key"]
     assert key == "gold/collaboration_edges/ingestion_date=2026-06-26/collaboration_edges.parquet"
+
+
+# --- Task 64: TMDBClient.get_movie_details(append_to_response=...) ------------
+
+
+def test_get_movie_details_without_append_sends_no_extra_params():
+    """The default call shape is unchanged: only the api_key is sent."""
+    client = _client()
+    with patch.object(
+        client.session, "get", return_value=_fake_response(200, {"id": 550})
+    ) as mock_get:
+        client.get_movie_details(550)
+
+    _, kwargs = mock_get.call_args
+    assert "append_to_response" not in kwargs["params"]
+
+
+def test_get_movie_details_appends_credits_when_requested():
+    """append_to_response is forwarded as a query param so one call covers both."""
+    client = _client()
+    with patch.object(
+        client.session,
+        "get",
+        return_value=_fake_response(200, {"id": 550, "credits": {"cast": [], "crew": []}}),
+    ) as mock_get:
+        client.get_movie_details(550, append_to_response="credits")
+
+    _, kwargs = mock_get.call_args
+    assert kwargs["params"]["append_to_response"] == "credits"
+
+
+# --- Task 64: etl/bronze/refresh_movies.py ----------------------------------
+
+import json as _json
+
+from etl.bronze.refresh_movies import refresh_movies
+
+
+def _refresh_payload(movie_id: int) -> dict:
+    """A movie-detail payload with credits folded in (append_to_response=credits)."""
+    return {
+        "id": movie_id,
+        "title": f"Movie {movie_id}",
+        "vote_average": 7.5,
+        "credits": {
+            "cast": [{"id": 1, "name": "A"}],
+            "crew": [{"id": 2, "name": "B", "job": "Director"}],
+        },
+    }
+
+
+def _bodies_by_key(mock_s3) -> dict[str, dict]:
+    """Decode every write_json PutObject the mock captured, keyed by S3 key."""
+    out: dict[str, dict] = {}
+    for _, kwargs in mock_s3.put_object.call_args_list:
+        out[kwargs["Key"]] = _json.loads(kwargs["Body"])
+    return out
+
+
+def test_refresh_movies_writes_details_and_credits_per_film():
+    """One TMDB call per film, split back into the two Bronze keys the transforms read."""
+    mock_client = MagicMock()
+    mock_client.get_movie_details.side_effect = [
+        _refresh_payload(550),
+        _refresh_payload(551),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = refresh_movies(
+            movie_ids=[550, 551],
+            ingestion_date=dt.date(2026, 7, 29),
+            client=mock_client,
+        )
+
+    assert (succeeded, failed) == ([550, 551], [])
+    # One append_to_response=credits call per film — never a separate /credits call.
+    assert mock_client.get_movie_details.call_count == 2
+    assert mock_client.get_movie_credits.call_count == 0
+    for _, kwargs in mock_client.get_movie_details.call_args_list:
+        assert kwargs["append_to_response"] == "credits"
+
+    bodies = _bodies_by_key(mock_s3)
+    assert set(bodies) == {
+        "bronze/movie_details/ingestion_date=2026-07-29/550.json",
+        "bronze/movie_details/ingestion_date=2026-07-29/551.json",
+        "bronze/credits/ingestion_date=2026-07-29/550.json",
+        "bronze/credits/ingestion_date=2026-07-29/551.json",
+    }
+
+    details = bodies["bronze/movie_details/ingestion_date=2026-07-29/550.json"]
+    credits = bodies["bronze/credits/ingestion_date=2026-07-29/550.json"]
+    # The details file is byte-comparable to the ingest path: no credits key.
+    assert "credits" not in details
+    assert details["vote_average"] == 7.5
+    # The credits file matches the standalone movie/{id}/credits shape.
+    assert credits == {
+        "id": 550,
+        "cast": [{"id": 1, "name": "A"}],
+        "crew": [{"id": 2, "name": "B", "job": "Director"}],
+    }
+
+
+def test_refresh_movies_defaults_ids_to_dim_movie():
+    """With no movie_ids, the corpus is every id in dim_movie, ascending."""
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.scalars.return_value.all.return_value = [551, 550]
+    mock_engine = MagicMock()
+    mock_engine.connect.return_value.__enter__.return_value = mock_conn
+
+    mock_client = MagicMock()
+    mock_client.get_movie_details.side_effect = lambda mid, **_: _refresh_payload(mid)
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = refresh_movies(
+            ingestion_date=dt.date(2026, 7, 29),
+            client=mock_client,
+            engine=mock_engine,
+        )
+
+    assert failed == []
+    assert sorted(succeeded) == [550, 551]
+    queried = [c.args[0] for c in mock_client.get_movie_details.call_args_list]
+    assert queried == [551, 550]  # order preserved from the SELECT
+
+
+def test_refresh_movies_continues_after_a_failed_film():
+    """A failed film is recorded, writes nothing partial, and does not abort the run."""
+    mock_client = MagicMock()
+    mock_client.get_movie_details.side_effect = [
+        _refresh_payload(100),
+        RuntimeError("TMDB 404"),
+        _refresh_payload(300),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = refresh_movies(
+            movie_ids=[100, 200, 300],
+            ingestion_date=dt.date(2026, 7, 29),
+            client=mock_client,
+        )
+
+    assert (succeeded, failed) == ([100, 300], [200])
+    # 2 films * 2 files each — nothing written for the failed film.
+    assert mock_s3.put_object.call_count == 4
+
+
+def test_refresh_movies_tolerates_a_payload_with_no_credits(caplog):
+    """A missing credits sub-object still yields a credits file, with a warning."""
+    mock_client = MagicMock()
+    mock_client.get_movie_details.return_value = {"id": 42, "title": "No credits"}
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.WARNING):
+            succeeded, failed = refresh_movies(
+                movie_ids=[42],
+                ingestion_date=dt.date(2026, 7, 29),
+                client=mock_client,
+            )
+
+    assert (succeeded, failed) == ([42], [])
+    credits = _bodies_by_key(mock_s3)[
+        "bronze/credits/ingestion_date=2026-07-29/42.json"
+    ]
+    assert credits == {"id": 42, "cast": [], "crew": []}
+    assert "no credits" in caplog.text.lower()
+
+
+# --- Task 64: etl/gold/build_metrics_snapshot.py --------------------------------
+
+from etl.gold.build_metrics_snapshot import build_metrics_snapshot
+
+
+def _silver_movies_for_snapshot() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "movie_id": pd.array([550, 551, pd.NA], dtype="Int64"),
+            "title": ["Fight Club", "Se7en", "Broken"],
+            "vote_average": [8.4, 8.3, 0.0],
+            "vote_count": pd.array([29000, 20000, 0], dtype="Int64"),
+            "revenue": pd.array([100_853_753, 327_333_559, 0], dtype="Int64"),
+            "popularity": [61.4, 42.0, 0.0],
+        }
+    )
+
+
+def test_build_metrics_snapshot_writes_expected_shape():
+    """Six columns, vote_average renamed to rating, snapshot_date stamped, null id dropped."""
+    mock_s3 = MagicMock()
+    body = MagicMock()
+    body.read.return_value = _parquet_body(_silver_movies_for_snapshot())
+    mock_s3.get_object.return_value = {"Body": body}
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uri = build_metrics_snapshot(
+            ingestion_date=dt.date(2026, 7, 29), bucket="theoria-datalake"
+        )
+
+    put_kwargs = mock_s3.put_object.call_args[1]
+    assert put_kwargs["Key"] == (
+        "gold/metrics_snapshot/ingestion_date=2026-07-29/metrics_snapshot.parquet"
+    )
+    assert uri.endswith(put_kwargs["Key"])
+
+    written = pd.read_parquet(io.BytesIO(put_kwargs["Body"]))
+    assert list(written.columns) == [
+        "movie_id", "snapshot_date", "rating", "vote_count", "revenue", "popularity",
+    ]
+    assert len(written) == 2  # the null-movie_id row is dropped
+    assert set(written["movie_id"]) == {550, 551}
+    assert (written["snapshot_date"] == dt.date(2026, 7, 29)).all()
+    assert written.loc[written["movie_id"] == 550, "rating"].iloc[0] == 8.4
+
+
+def test_build_metrics_snapshot_reads_silver_movies_for_the_date():
+    """It must source from the silver/movies partition for the requested date."""
+    mock_s3 = MagicMock()
+    body = MagicMock()
+    body.read.return_value = _parquet_body(_silver_movies_for_snapshot())
+    mock_s3.get_object.return_value = {"Body": body}
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        build_metrics_snapshot(
+            ingestion_date=dt.date(2026, 7, 29), bucket="theoria-datalake"
+        )
+
+    assert mock_s3.get_object.call_args[1]["Key"] == (
+        "silver/movies/ingestion_date=2026-07-29/movies.parquet"
+    )

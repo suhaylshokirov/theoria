@@ -31,9 +31,36 @@ Rules:
 
 ```
 Last completed task   : Task 68 — Django: the IMDb rating rendered with its mark, every reader of TMDB's repointed
-Currently on          : Task 63 — not started, and **next by user decision (2026-08-26)**: closes Phase 14
-(analytics panels, full live re-run, doc truth-up). Task 69 follows it and should reuse that run
-rather than repeating it.
+Currently on          : **Task 64 — nightly cloud refresh (user decision 2026-08-27, "Task 64 first").
+CODE half written + green; NEON MIGRATION (step 1) DONE and verified; AWS IAM + GitHub secrets +
+the `workflow_dispatch` verification still pending on the user.** Built and tested (278 tests, +8):
+`TMDBClient.get_movie_details(append_to_response=)` (1 call not 2), `etl/bronze/refresh_movies.py`
+(ids from `dim_movie`, writes the same `bronze/movie_details/` + `bronze/credits/` keys the ingest
+path writes — smoke-verified it reads all 1,215 live ids ascending),
+`etl/gold/build_metrics_snapshot.py` (dated volatile-metrics rows to `gold/metrics_snapshot/`, S3
+not Postgres — reasoning in `docs/architecture.md` §4.2), `scripts/run_refresh.py` (separate
+orchestrator, not a `--refresh` flag), `.github/workflows/{nightly-refresh,weekly-discovery}.yml`
++ `ops/refresh-history.md` (60-day-inactivity guard). Docs done: README "Keeping the catalog
+fresh", architecture §4.2, `.env.example` Neon note. **Neon migration (2026-08-27):** local
+`theoria` DB (16 tables) `pg_dump` → `psql` into Neon project `ep-spring-brook-b1kjdyyg` (region
+`eu-central-1`, **PG 18.6**), 0 restore errors, every table's row count matches local exactly
+(`dim_movie` 1215, `dim_person` 122685, `fact_credit` 237454, `fact_collaboration` 193064, …).
+`.env` `DATABASE_URL` repointed to the **direct** (non-pooler) endpoint + `?sslmode=require` (old
+local URL kept as a comment on the line above; `.env.local-backup-20260827` also saved). Verified
+against Neon: `check_connection()` True, warehouse checks **39/39**, full suite **278/278**,
+`manage.py check` clean, live ORM read returns The Godfather / `tt0068646`. First query after
+Neon idle-suspend takes ~20–45s (compute cold-start) then drops to normal — happens once per
+idle period, not per query; the nightly job eats one cold-start, negligible vs a ~5-min run.
+**NOT done — needs the user's cloud accounts:** (a) a least-privilege AWS IAM user scoped to the
+one datalake bucket; (b) seven repo secrets in GitHub → Settings → Secrets → Actions
+(`TMDB_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`,
+`DATABASE_URL` = the Neon direct URL, `DJANGO_SECRET_KEY`); (c) trigger `nightly-refresh` via
+`workflow_dispatch`, confirm green + a `metrics_snapshot` Parquet lands + a 2024+ film's
+`vote_count` moves between two consecutive runs. `run_refresh.py` has still never executed
+end-to-end (needs live S3 + TMDB). No `for_learning.md` entry yet — task isn't finished.
+**Step 8** (batch Silver's one-S3-object-at-a-time reads if they dominate CI wall time) left as a
+follow-up. **Then** Task 63 — user decision 2026-08-26, closes Phase 14: analytics panels, full
+live re-run, doc truth-up. Task 69 follows it and should reuse that run.
 Current phase         : Phase 14 (Tasks 61–63): 61–62 complete, **63 still not started**. Phase 15
 (Tasks 66–69, added 2026-08-26 by user request): 66–68 complete, 69 not started. **Note the two
 phases are interleaved** — Phase 15 was started before Phase 14 was closed, because the user raised
@@ -457,7 +484,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 12    | Movie Provenance — the scalar fields | 55–56 | Complete |
 | 13    | Studios — `dim_company` + the first bridge table | 57–60 | Complete |
 | 14    | Where and in What Language | 61–63 | In progress (61–62 done, 63 not started) |
-| 15    | IMDb becomes the rating of record | 66–69 | In progress (66–67 done, 68–69 not started) |
+| 15    | IMDb becomes the rating of record | 66–69 | In progress (66–68 done, 69 not started) |
 
 ---
 
@@ -819,7 +846,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   Tests 250 → **268** (18 new, including an explicit grain regression test, since one-row-per-film
   is the entire premise of the table).
 
-#### [ ] Task 68 — Django: the IMDb rating, with its mark
+#### [x] Task 68 — Django: the IMDb rating, with its mark
 - **Goal:** Surface IMDb everywhere the TMDB rating is read today — the movie page, `?sort=rating`, home's Avg rating tile, the person and studio Avg rating stats — plus a compact figure on the poster cards, which show no rating at all today.
 - **Files:** `django_app/movies/{models,views}.py`, new `movies/templates/movies/_rating_badge.html`, `movie_detail.html`, `_movie_card.html`, new `django_app/static/img/imdb.svg`, `static/css/theoria.css`, `tests/test_django_views.py`
 - **Outcome:** Built as scoped. New `MovieRating` model (`managed = False`, fake single PK on
@@ -973,7 +1000,77 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   the local Django site — unchanged, still on the laptop — serves the refreshed figures with no
   deploy or cache step, since the views read the warehouse live; confirm a snapshot Parquet lands
   in `gold/metrics_snapshot/`; confirm Silver DQ and warehouse checks pass in CI, not just locally.
-- **Outcome:**
+- **Outcome (2026-08-27) — CODE HALF DONE, INFRA HALF PENDING ON THE USER. Task stays `[ ]`.**
+  Written and green (`pytest` 270 → **278**, +8; no regressions; verified against Neon too):
+  - **Step 2** — `TMDBClient.get_movie_details(movie_id, *, append_to_response=None)`. Backward
+    compatible (default `None` → identical call). `refresh_movies` passes `"credits"`; the ingest
+    path was left untouched (not in scope; a later free win).
+  - **Step 3** — `etl/bronze/refresh_movies.py`. `refresh_movies(movie_ids=None, ingestion_date,
+    client, engine)` — `movie_ids` defaults to `SELECT movie_id FROM dim_movie ORDER BY movie_id`
+    (ascending so a retry re-processes in the same order and two runs' logs line up film-for-film,
+    the `/connect/` ORDER BY lesson). `_split_payload()` separates one `append_to_response=credits`
+    response into a details file with the `credits` key removed (byte-comparable to
+    `ingest_movie_details`'s output) and a credits file rebuilt into the `{"id","cast","crew"}`
+    shape the standalone `/credits` endpoint returns (what `transform_credits_bridge` /
+    `transform_people` read). Missing `credits` in the payload → empty cast/crew + a warning,
+    never a crash. Write-as-you-go, returns `(succeeded, failed)`. **Smoke-verified against the
+    live local warehouse**: `_movie_ids_from_warehouse()` returns all **1,215** ids, ascending.
+    The module has **never run end-to-end** (would hit live S3 + TMDB).
+  - **Step 4** — `etl/gold/build_metrics_snapshot.py`. Reads `silver/movies/<date>/movies.parquet`,
+    writes `gold/metrics_snapshot/<date>/metrics_snapshot.parquet` with exactly
+    `movie_id, snapshot_date, rating, vote_count, revenue, popularity` (`vote_average`→`rating`),
+    null-`movie_id` rows dropped, `snapshot_date` = the ingestion date. S3 not Postgres, per the
+    step's own reasoning. IMDb ratings deliberately **not** folded in — the step lists six TMDB
+    columns; noted as a possible later addition given Phase 15 made IMDb the rating of record.
+  - **Step 5** — `scripts/run_refresh.py`. Separate orchestrator (not a flag). Sequence:
+    `ingest_genres` → `refresh_movies` → `ingest_imdb_ratings` → the six Silver transforms →
+    `run_silver_checks` → `build_gold_datasets` → **`build_metrics_snapshot`** (before the load
+    upserts `fact_movie_metrics` in place) → `load_dimensions`/`load_facts`/`load_gold` →
+    `run_warehouse_checks`. Genres + IMDb ratings are still fetched fresh (genres for
+    `transform_genres`'s Bronze input; ratings/votes are the fields that actually drift).
+  - **Steps 6–7** — `.github/workflows/nightly-refresh.yml` (cron `12 3 * * *` + `workflow_dispatch`,
+    `timeout-minutes: 60`, `concurrency` group, `permissions: contents: write` only for the
+    summary commit) and `.github/workflows/weekly-discovery.yml` (cron `20 4 * * 1`, runs
+    `run_pipeline --source discover`). Both `always()`-append a line to `ops/refresh-history.md`
+    and commit `[skip ci]` — that commit is the activity that stops GitHub disabling the schedule
+    after 60 idle days. Secrets referenced: `TMDB_API_KEY`, `AWS_ACCESS_KEY_ID`,
+    `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`, `DATABASE_URL`, `DJANGO_SECRET_KEY`
+    (the last is required by `config.py` even though the refresh never touches Django).
+  - **Docs** — README §"Keeping the catalog fresh" + layout/test-count bump; `docs/architecture.md`
+    new **§4.2** (separate orchestrator not a flag; `append_to_response` = 1 call; snapshot to S3
+    not a table; why `/movie/changes` can't drive it — the 2026-08-17 measurement; Neon +
+    Actions vs an AWS-native scheduler; the 60-day guard); `.env.example` Neon/`sslmode` note.
+  - **8 new tests** in `tests/test_etl.py`: `get_movie_details` with/without `append_to_response`;
+    `refresh_movies` — two-file split + `{"id","cast","crew"}` shape + no separate `/credits`
+    call, `dim_movie` default via a mocked engine (order preserved), continue-after-failure with
+    no partial writes, missing-`credits` tolerance; `build_metrics_snapshot` — six-column shape +
+    rename + null-id drop + `snapshot_date` stamp, and reads-the-right-Silver-key.
+
+  - **Step 1 — Neon migration. DONE and verified (2026-08-27).** Local `theoria` (16 tables) →
+    `pg_dump --no-owner --no-privileges` plain SQL → `psql` into Neon project
+    `ep-spring-brook-b1kjdyyg` (`eu-central-1`, PG 18.6), 0 restore errors. Row counts match local
+    table-for-table. `.env` `DATABASE_URL` now the **direct** (non-pooler) Neon endpoint +
+    `?sslmode=require` — direct not pooled because the loaders hold longer transactions
+    (`assign_slugs` clear-then-rewrite, batched `executemany`) and Neon's own guidance is
+    direct-for-migrations/long-sessions, pooled-for-serverless. Old local URL kept commented on
+    the line above + `.env.local-backup-20260827`. Against Neon: `check_connection` True,
+    warehouse checks 39/39, `pytest` 278/278, `manage.py check` clean, ORM read OK. Gotcha logged:
+    first query after Neon's idle-suspend is a ~20–45s cold-start, once per idle period.
+
+  **NOT DONE — every remaining item needs the user's cloud accounts, none are code:**
+  1. **AWS IAM** — a least-privilege user scoped to the one datalake bucket (the workflow file is
+     world-readable; a general-purpose key must not sit behind it).
+  2. **Repo secrets** — the seven names listed above, in GitHub → Settings → Secrets → Actions
+     (`DATABASE_URL` = the Neon direct URL now in `.env`).
+  3. **Verify** — `workflow_dispatch` the nightly job; confirm green, a `metrics_snapshot`
+     Parquet in S3, and a 2024+ film's `vote_count` moving between two consecutive runs; confirm
+     the local Django site serves the refreshed figures with no deploy (views read the warehouse
+     live). Then tick this box, write the `for_learning.md` entry, and update the status block.
+  - **Step 8 (cross-region Silver reads)** — left as a follow-up. If CI wall time is dominated by
+    Silver's one-S3-object-at-a-time reads rather than the ~5 min of TMDB calls, batch them.
+  - **Step 9 (daily TMDB id export for deletions/merges)** — `weekly-discovery.yml` covers new
+    titles + structural edits via `--source discover`; the `movie_ids_*.json.gz` export path for
+    detecting deleted/merged ids is not implemented.
 
 ---
 

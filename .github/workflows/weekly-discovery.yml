@@ -1,0 +1,70 @@
+name: weekly-discovery
+
+# The nightly refresh only updates films already in dim_movie. It cannot see a
+# film that didn't exist yet, and it doesn't re-run discovery. This weekly job
+# does: a full `run_pipeline.py --source discover` pass, which adds newly
+# qualifying titles and picks up the structural edits a metrics-only refresh
+# misses (new cast/crew, retitles, runtime corrections, In Production ->
+# Released).
+#
+# Same idempotency guarantee as the nightly job — safe to retry or overlap.
+
+on:
+  schedule:
+    # 04:20 UTC every Monday — after that night's refresh has finished.
+    - cron: "20 4 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pipeline-discovery
+  cancel-in-progress: false
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Verify configuration
+        run: python -c "import config; print('config OK')"
+
+      - name: Run discovery pipeline
+        run: python -m scripts.run_pipeline --source discover
+
+      - name: Record run summary
+        if: always()
+        run: |
+          mkdir -p ops
+          printf '%s  %s  discovery run %s  (%s)\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "${{ job.status }}" \
+            "${{ github.run_number }}" \
+            "${{ github.event_name }}" \
+            >> ops/refresh-history.md
+          git config user.name  "theoria-refresh-bot"
+          git config user.email "theoria-refresh-bot@users.noreply.github.com"
+          git add ops/refresh-history.md
+          git commit -m "weekly-discovery: run ${{ github.run_number }} [skip ci]" || exit 0
+          git push

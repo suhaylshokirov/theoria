@@ -191,6 +191,31 @@ The `DISCOVER_*` variables in `.env` are a **definition of the dataset**, not tu
 lowering `DISCOVER_MIN_VOTES` doesn't make the pipeline slower, it makes the warehouse describe a
 different population.
 
+### Keeping the catalog fresh
+
+`run_pipeline.py` *discovers* films — it can't refetch the ones already stored, so a film's
+rating and vote count go stale the moment its partition is written. `run_refresh.py` is the
+counterpart: it reads every `movie_id` from `dim_movie`, refetches each film's TMDB details and
+credits in **one** call (`append_to_response=credits`) plus today's IMDb ratings snapshot, then
+runs the same Silver → Gold → warehouse stages.
+
+```bash
+python -m scripts.run_refresh                 # refresh every film in the warehouse for today
+python -m etl.bronze.refresh_movies --movie-ids 550 551   # or just a few
+```
+
+Before the warehouse load upserts `fact_movie_metrics` in place, `build_metrics_snapshot` appends
+one row per film (`rating`, `vote_count`, `revenue`, `popularity`) to
+`gold/metrics_snapshot/ingestion_date=…/` — the lake keeps the history the warehouse overwrites.
+
+Two GitHub Actions workflows run this unattended against a managed Postgres (Neon free tier) set
+via the `DATABASE_URL` repo secret — no code change, every stage reads that one variable:
+`nightly-refresh.yml` (daily `run_refresh`) and `weekly-discovery.yml` (weekly
+`run_pipeline --source discover` to add new titles and catch structural edits). Each run appends a
+line to `ops/refresh-history.md`; that commit doubles as the activity that stops GitHub disabling
+the schedules after 60 idle days. See `docs/architecture.md` for why the snapshot is S3 and not a
+warehouse table, and why refresh is a separate orchestrator rather than a flag.
+
 ### 4. Run the site
 
 ```bash
@@ -218,7 +243,7 @@ order — which is what makes them stable across re-runs rather than reassigned.
 pytest
 ```
 
-225 tests covering the ETL transforms, data quality checks, warehouse loaders and Django views.
+278 tests covering the ETL transforms, data quality checks, warehouse loaders and Django views.
 The suite mocks S3, TMDB and PostgreSQL **at the boundary** — no live infrastructure, no fixtures
 loaded into a real database, no network. Django views are driven through their real URLs with the
 managers patched, so routing and template rendering are genuinely exercised.
@@ -238,7 +263,10 @@ warehouse/
   ddl/                    01–03 bootstrap, 04–13 migrations
   queries/                analytics SQL — never inline in application code
 django_app/               core (settings, router) · movies · analytics
-scripts/run_pipeline.py   end-to-end orchestration
+scripts/
+  run_pipeline.py         end-to-end orchestration (discovery)
+  run_refresh.py          refresh films already in the warehouse
+.github/workflows/        nightly refresh + weekly discovery, on managed Postgres
 tests/                    ETL, data quality and view tests
 docs/architecture.md      design decisions and their evidence
 ```

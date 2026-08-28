@@ -148,9 +148,22 @@ class TMDBClient:
             params["vote_count.gte"] = min_votes
         return self.get("discover/movie", params=params)
 
-    def get_movie_details(self, movie_id: int) -> dict[str, Any]:
-        """Full detail record for a single movie."""
-        return self.get(f"movie/{movie_id}")
+    def get_movie_details(
+        self, movie_id: int, *, append_to_response: str | None = None
+    ) -> dict[str, Any]:
+        """Full detail record for a single movie.
+
+        `append_to_response` folds sub-resources into the same payload — e.g.
+        ``append_to_response="credits"`` returns the movie object with an extra
+        ``"credits": {"cast": [...], "crew": [...]}`` key, so one HTTP call
+        covers what would otherwise be two (details + /credits). TMDB bills and
+        rate-limits per request, so this halves the call volume of any path
+        that needs both (Bronze ingest and the nightly refresh).
+        """
+        params = (
+            {"append_to_response": append_to_response} if append_to_response else None
+        )
+        return self.get(f"movie/{movie_id}", params=params)
 
     def get_movie_credits(self, movie_id: int) -> dict[str, Any]:
         """Cast and crew for a single movie."""
