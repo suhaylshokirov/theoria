@@ -162,6 +162,66 @@ def test_write_parquet_puts_dataframe():
     pd.testing.assert_frame_equal(round_tripped, df)
 
 
+def _json_body_client(payloads: dict[str, dict]) -> MagicMock:
+    """MagicMock S3 client whose get_object serves `payloads` as JSON bodies."""
+    import json
+
+    client = MagicMock()
+
+    def get_object(Bucket, Key):
+        body = MagicMock()
+        body.read.return_value = json.dumps(payloads[Key]).encode("utf-8")
+        return {"Body": body}
+
+    client.get_object.side_effect = get_object
+    return client
+
+
+def test_read_json_objects_returns_results_in_input_key_order():
+    """Fetch order is concurrent, but results must line up with `keys` 1:1."""
+    payloads = {f"k{i}": {"id": i} for i in range(10)}
+    client = _json_body_client(payloads)
+    keys = list(payloads)
+    with patch.object(s3_utils, "get_s3_client", return_value=client):
+        results = s3_utils.read_json_objects("bkt", keys, max_workers=4)
+
+    assert [key for key, _, _ in results] == keys
+    assert [payload for _, payload, _ in results] == [{"id": i} for i in range(10)]
+    assert all(err is None for _, _, err in results)
+
+
+def test_read_json_objects_captures_per_key_errors_without_sinking_the_batch():
+    """One unreadable object yields (key, None, exc); the rest still parse."""
+    import json
+
+    client = MagicMock()
+
+    def get_object(Bucket, Key):
+        if Key == "bad":
+            raise RuntimeError("boom")
+        body = MagicMock()
+        body.read.return_value = json.dumps({"key": Key}).encode("utf-8")
+        return {"Body": body}
+
+    client.get_object.side_effect = get_object
+    with patch.object(s3_utils, "get_s3_client", return_value=client):
+        results = s3_utils.read_json_objects("bkt", ["good1", "bad", "good2"])
+
+    by_key = {key: (payload, err) for key, payload, err in results}
+    assert by_key["good1"] == ({"key": "good1"}, None)
+    assert by_key["good2"] == ({"key": "good2"}, None)
+    payload, err = by_key["bad"]
+    assert payload is None
+    assert isinstance(err, RuntimeError)
+
+
+def test_read_json_objects_empty_keys_makes_no_calls():
+    client = MagicMock()
+    with patch.object(s3_utils, "get_s3_client", return_value=client):
+        assert s3_utils.read_json_objects("bkt", []) == []
+    client.get_object.assert_not_called()
+
+
 # --- ingest_genres ------------------------------------------------------------
 
 import datetime as dt

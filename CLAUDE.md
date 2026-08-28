@@ -58,8 +58,16 @@ one datalake bucket; (b) seven repo secrets in GitHub → Settings → Secrets �
 `workflow_dispatch`, confirm green + a `metrics_snapshot` Parquet lands + a 2024+ film's
 `vote_count` moves between two consecutive runs. `run_refresh.py` has still never executed
 end-to-end (needs live S3 + TMDB). No `for_learning.md` entry yet — task isn't finished.
-**Step 8** (batch Silver's one-S3-object-at-a-time reads if they dominate CI wall time) left as a
-follow-up. **Then** Task 63 — user decision 2026-08-26, closes Phase 14: analytics panels, full
+**Step 8 DONE (2026-08-28):** the first `workflow_dispatch` run hit the 60-min job timeout —
+cross-region Silver reads (4 transforms × ~1,215 serial `get_object` from a US runner to
+`eu-central-1` S3) were the wall. New `s3_utils.read_json_objects(bucket, keys)` fetches them
+through a 32-worker `ThreadPoolExecutor` (results returned in input-key order, per-key errors
+captured not raised); the four transforms lost their duplicated `_read_json_from_s3`. Added
+`connect_timeout=10`/`read_timeout=30`/`retries` + `max_pool_connections` to the boto3 client so a
+stalled socket fails fast instead of hanging to the job timeout (the Task 66 gotcha). Job timeouts
+bumped `nightly-refresh` 60→90, `weekly-discovery` 90→120. Tests 278 → **281** (+3 for the new
+helper). `refresh_movies`' own ~2,400 serial S3 writes left serial for now (write-as-you-go
+crash-safety); revisit only if it dominates the next run. **Then** Task 63 — user decision 2026-08-26, closes Phase 14: analytics panels, full
 live re-run, doc truth-up. Task 69 follows it and should reuse that run.
 Current phase         : Phase 14 (Tasks 61–63): 61–62 complete, **63 still not started**. Phase 15
 (Tasks 66–69, added 2026-08-26 by user request): 66–68 complete, 69 not started. **Note the two
@@ -1066,8 +1074,15 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
      Parquet in S3, and a 2024+ film's `vote_count` moving between two consecutive runs; confirm
      the local Django site serves the refreshed figures with no deploy (views read the warehouse
      live). Then tick this box, write the `for_learning.md` entry, and update the status block.
-  - **Step 8 (cross-region Silver reads)** — left as a follow-up. If CI wall time is dominated by
-    Silver's one-S3-object-at-a-time reads rather than the ~5 min of TMDB calls, batch them.
+  - **Step 8 (cross-region Silver reads) — DONE 2026-08-28.** The first `workflow_dispatch` run
+    timed out at the 60-min job cap; the four Silver transforms reading ~1,215 Bronze objects each
+    with a serial `get_object` from a US runner to `eu-central-1` S3 were the bottleneck (~15-20
+    min of pure round-trip latency). New `s3_utils.read_json_objects()` does those reads through a
+    32-worker thread pool (input-order results, per-key error capture); the transforms' four copies
+    of `_read_json_from_s3` are gone. boto3 client got `connect_timeout`/`read_timeout`/`retries`
+    so a stalled socket fails fast (Task 66 gotcha). Job timeouts raised to 90 (nightly) / 120
+    (weekly). `refresh_movies`' ~2,400 serial S3 writes left as-is (write-as-you-go crash-safety);
+    revisit only if it dominates. Tests 278 → 281.
   - **Step 9 (daily TMDB id export for deletions/merges)** — `weekly-discovery.yml` covers new
     titles + structural edits via `--source discover`; the `movie_ids_*.json.gz` export path for
     detecting deleted/merged ids is not implemented.

@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import logging
 import time
 from typing import Any
@@ -59,13 +58,6 @@ def _list_bronze_keys(bucket: str, ingestion_date: dt.date) -> list[str]:
             if obj["Key"].endswith(".json"):
                 keys.append(obj["Key"])
     return keys
-
-
-def _read_json_from_s3(bucket: str, key: str) -> dict[str, Any]:
-    """Download and parse a single JSON object from S3."""
-    client = s3_utils.get_s3_client()
-    response = client.get_object(Bucket=bucket, Key=key)
-    return json.loads(response["Body"].read())
 
 
 def _person_row(member: dict[str, Any]) -> dict[str, Any]:
@@ -165,9 +157,10 @@ def transform_people(
     people_rows: list[dict[str, Any]] = []
     errors = 0
 
-    for key in keys:
+    for key, payload, read_err in s3_utils.read_json_objects(bucket, keys):
         try:
-            payload = _read_json_from_s3(bucket, key)
+            if read_err is not None:
+                raise read_err
             people_rows.extend(_extract_people(payload))
         except Exception as exc:
             errors += 1

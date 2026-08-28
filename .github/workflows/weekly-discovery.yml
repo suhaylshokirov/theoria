@@ -25,7 +25,10 @@ concurrency:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # A full run_pipeline pass, so slower than the nightly refresh. Cross-region
+    # S3 reads are batched (s3_utils.read_json_objects) but the discovery sweep
+    # and full re-transform still run longer; 120 is headroom.
+    timeout-minutes: 120
 
     env:
       TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}

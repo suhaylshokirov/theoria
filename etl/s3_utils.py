@@ -1,8 +1,10 @@
-"""Shared S3 write helpers for every ingestion / transform script.
+"""Shared S3 helpers for every ingestion / transform script.
 
 This is the *single* place that knows:
 - how to build an S3 client (credentials + region come from config.py),
 - how to serialise data to JSON / Parquet bytes,
+- how to fetch many small objects at once without paying the latency of each
+  round-trip in series,
 - the project's S3 key layout (the path convention lives here and nowhere else).
 
 Keeping all of this in one module means Bronze/Silver/Gold scripts never
@@ -24,14 +26,35 @@ import datetime as dt
 import io
 import json
 import logging
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 import boto3
 import pandas as pd
+from botocore.config import Config
 
 import config
 
 logger = logging.getLogger(__name__)
+
+# How many object reads to have in flight at once in read_json_objects(). The
+# Silver transforms each fetch ~1,200 small JSON files; run serially against a
+# bucket in another region than the runner, that round-trip latency dominates
+# the whole nightly job. 32 parallel reads collapse ~15 min of waiting to ~1.
+DEFAULT_READ_WORKERS = 32
+
+# connect/read timeouts so one stalled socket fails fast and retries instead of
+# hanging until the job's own timeout kills it (seen once in CI: a dropped S3
+# transfer blocked read() for 4.5 min). max_pool_connections must exceed
+# DEFAULT_READ_WORKERS or threads queue on the connection pool and the
+# parallelism is lost.
+_CLIENT_CONFIG = Config(
+    connect_timeout=10,
+    read_timeout=30,
+    retries={"max_attempts": 4, "mode": "standard"},
+    max_pool_connections=DEFAULT_READ_WORKERS * 2,
+)
 
 # Module-level client, created lazily and reused (connection pooling, fewer
 # credential lookups). Never built at import time so importing this module
@@ -52,8 +75,56 @@ def get_s3_client():
             aws_access_key_id=config.AWS_ACCESS_KEY_ID,
             aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY,
             region_name=config.AWS_REGION,
+            config=_CLIENT_CONFIG,
         )
     return _s3_client
+
+
+def read_json_objects(
+    bucket: str,
+    keys: Sequence[str],
+    *,
+    max_workers: int = DEFAULT_READ_WORKERS,
+) -> list[tuple[str, Any, Exception | None]]:
+    """Download and JSON-parse many S3 objects concurrently.
+
+    Returns one ``(key, parsed_or_None, error_or_None)`` tuple per input key, in
+    the **same order as `keys`** — the fetch order is nondeterministic but the
+    result order is not, so two runs over the same partition line up row for row.
+
+    A failure to fetch or parse one object is captured in that object's tuple,
+    never raised: one unreadable file must not sink a batch of 1,200. The caller
+    decides what a failure means (count it, log it, abort if they all failed).
+
+    boto3 clients are thread-safe for API calls, so every worker shares the one
+    pooled client from ``get_s3_client()``.
+    """
+    keys = list(keys)
+    if not keys:
+        return []
+
+    client = get_s3_client()
+    results: list[tuple[str, Any, Exception | None]] = [
+        (key, None, None) for key in keys
+    ]
+
+    def _fetch(key: str) -> Any:
+        response = client.get_object(Bucket=bucket, Key=key)
+        return json.loads(response["Body"].read())
+
+    workers = min(max_workers, len(keys))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        future_to_index = {
+            pool.submit(_fetch, key): i for i, key in enumerate(keys)
+        }
+        for future in as_completed(future_to_index):
+            i = future_to_index[future]
+            try:
+                results[i] = (keys[i], future.result(), None)
+            except Exception as exc:  # noqa: BLE001 — reported per key, not raised
+                results[i] = (keys[i], None, exc)
+
+    return results
 
 
 def build_path(
