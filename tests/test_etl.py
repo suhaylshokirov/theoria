@@ -2037,7 +2037,12 @@ def test_records_converts_na_to_none():
 
 
 def test_upsert_builds_on_conflict_sql_and_executes():
-    """_upsert() must build an INSERT ... ON CONFLICT DO UPDATE statement and execute it once."""
+    """_upsert() must build an INSERT ... ON CONFLICT DO UPDATE statement and execute it once.
+
+    The statement is a Core INSERT construct, not textual SQL, so SQLAlchemy's
+    insertmanyvalues can batch a multi-row executemany into chunked VALUES
+    instead of one round-trip per row.
+    """
     mock_session = MagicMock()
     records = [{"a": 1, "b": "x"}]
 
@@ -2046,9 +2051,10 @@ def test_upsert_builds_on_conflict_sql_and_executes():
     assert count == 1
     mock_session.execute.assert_called_once()
     (stmt, params), _ = mock_session.execute.call_args
-    sql = str(stmt)
-    assert "INSERT INTO some_table" in sql
-    assert "ON CONFLICT (a) DO UPDATE SET b = EXCLUDED.b" in sql
+    sql = str(stmt).lower()
+    assert "insert into some_table" in sql
+    assert "on conflict (a) do update set b = excluded.b" in sql
+    # The records list is passed straight through as executemany params.
     assert params == records
 
 
@@ -2191,12 +2197,14 @@ def test_assign_slugs_numbers_name_collisions_in_id_order():
     count = assign_slugs(mock_session, "dim_actor", "actor_id", "name")
 
     assert count == 3
-    (_, update_params), _ = mock_session.execute.call_args
-    assert update_params == [
-        {"id": 1, "slug": "john-smith"},
-        {"id": 2, "slug": "john-smith-2"},
-        {"id": 3, "slug": "jane-doe"},
-    ]
+    # The rewrite is one chunked UPDATE ... FROM (VALUES ...) with flat params.
+    (stmt, update_params), _ = mock_session.execute.call_args
+    assert "FROM (VALUES" in str(stmt)
+    assert update_params == {
+        "id_0": 1, "slug_0": "john-smith",
+        "id_1": 2, "slug_1": "john-smith-2",
+        "id_2": 3, "slug_2": "jane-doe",
+    }
 
 
 def test_assign_slugs_is_stable_across_reruns():
@@ -2232,7 +2240,8 @@ def test_assign_slugs_clears_slugs_before_rewriting_them():
 
     statements = [str(call.args[0]) for call in mock_session.execute.call_args_list]
     assert "SET slug = NULL" in statements[1]
-    assert "SET slug = :slug" in statements[2]
+    assert "SET slug = v.slug" in statements[2]
+    assert "FROM (VALUES" in statements[2]
 
 
 def test_build_calendar_computes_surrogate_key_and_decade():

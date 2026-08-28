@@ -67,7 +67,20 @@ captured not raised); the four transforms lost their duplicated `_read_json_from
 stalled socket fails fast instead of hanging to the job timeout (the Task 66 gotcha). Job timeouts
 bumped `nightly-refresh` 60→90, `weekly-discovery` 90→120. Tests 278 → **281** (+3 for the new
 helper). `refresh_movies`' own ~2,400 serial S3 writes left serial for now (write-as-you-go
-crash-safety); revisit only if it dominates the next run. **Then** Task 63 — user decision 2026-08-26, closes Phase 14: analytics panels, full
+crash-safety); revisit only if it dominates the next run. **Step 8b — the warehouse load was the
+next wall (2026-08-28).** The Silver-read fix let the run reach `load_dimensions`, where it
+crawled: `dim_movie` took 137s for 1,215 rows = ~113ms/row = one driver round-trip per row over
+the US↔Frankfurt link. `dim_person` (122k), `dim_date` (~49.7k), `fact_credit` (237k),
+`fact_collaboration` (193k) on that path = hours. Cause: `common._upsert` built its statement with
+`text()`, so SQLAlchemy's `insertmanyvalues` batching never engaged (it only rewrites INSERTs it
+compiled itself). Rewrote `_upsert` as a `postgresql.insert()` Core construct with
+`on_conflict_do_update` — verified against local PG that 2,000 rows now go as 2 batched
+`VALUES (...),(...)` statements, `ON CONFLICT` intact. `assign_slugs`' bulk `UPDATE ... WHERE id = :id`
+executemany had the same one-per-row problem (nothing batches an executemany UPDATE) — new
+`_apply_slugs()` does chunked `UPDATE ... FROM (VALUES ...)` (~1,000 rows/statement, verified:
+2,500 rows in 3 statements, collision numbering preserved, 0 null/dupe slugs). One `_upsert` fix
+covers all three loaders (dimensions, facts, gold). Tests still 281 (3 assertions updated for the
+new statement shape, no new tests). **Then** Task 63 — user decision 2026-08-26, closes Phase 14: analytics panels, full
 live re-run, doc truth-up. Task 69 follows it and should reuse that run.
 Current phase         : Phase 14 (Tasks 61–63): 61–62 complete, **63 still not started**. Phase 15
 (Tasks 66–69, added 2026-08-26 by user request): 66–68 complete, 69 not started. **Note the two

@@ -243,9 +243,39 @@ def assign_slugs(session: Session, table: str, id_col: str, name_col: str) -> in
 
     if records:
         session.execute(text(f"UPDATE {table} SET slug = NULL WHERE slug IS NOT NULL"))
-        session.execute(text(f"UPDATE {table} SET slug = :slug WHERE {id_col} = :id"), records)
+        _apply_slugs(session, table, id_col, records)
     logger.info("%s: assigned %d slug(s)", table, len(records))
     return len(records)
+
+
+_SLUG_UPDATE_CHUNK = 1000
+
+
+def _apply_slugs(session: Session, table: str, id_col: str,
+                 records: list[dict[str, Any]]) -> None:
+    """Write {id, slug} pairs back to `table` in chunked UPDATE ... FROM (VALUES).
+
+    A textual executemany UPDATE is one driver round-trip per row. That is
+    tolerable on a local socket and multi-hour for dim_person's ~122k rows
+    against an out-of-region database — insertmanyvalues batches INSERTs but
+    nothing batches an executemany UPDATE, so the batching is done by hand:
+    ~1,000 rows per statement, matched back by id.
+    """
+    for start in range(0, len(records), _SLUG_UPDATE_CHUNK):
+        chunk = records[start:start + _SLUG_UPDATE_CHUNK]
+        tuples = ", ".join(f"(:id_{i}, :slug_{i})" for i in range(len(chunk)))
+        params: dict[str, Any] = {}
+        for i, rec in enumerate(chunk):
+            params[f"id_{i}"] = rec["id"]
+            params[f"slug_{i}"] = rec["slug"]
+        session.execute(
+            text(
+                f"UPDATE {table} AS t SET slug = v.slug "
+                f"FROM (VALUES {tuples}) AS v(id, slug) "
+                f"WHERE t.{id_col} = v.id::bigint"
+            ),
+            params,
+        )
 
 
 def _build_calendar(start: dt.date, end: dt.date) -> pd.DataFrame:

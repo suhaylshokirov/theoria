@@ -12,7 +12,8 @@ import io
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import text
+from sqlalchemy import Column, MetaData, Table, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from etl import s3_utils
@@ -28,17 +29,25 @@ def _read_silver_parquet(bucket: str, entity: str, ingestion_date: dt.date, file
 
 def _upsert(session: Session, table: str, pk_cols: list[str], columns: list[str],
             records: list[dict[str, Any]]) -> int:
-    """Bulk upsert records into `table`, updating non-PK columns on conflict."""
+    """Bulk upsert records into `table`, updating non-PK columns on conflict.
+
+    Built as a Core INSERT construct rather than a textual statement on purpose:
+    SQLAlchemy's insertmanyvalues only rewrites a multi-row executemany into
+    batched ``VALUES (...), (...), ...`` statements when it compiled the INSERT
+    itself. A ``text()`` executemany falls through to one round-trip per row —
+    fine on a local socket, but ~2 minutes per 1,000 rows against a database in
+    another region, and ``dim_person`` / ``fact_credit`` are 120k+ rows each.
+    """
     if not records:
         return 0
     update_cols = [c for c in columns if c not in pk_cols]
-    set_clause = ", ".join(f"{c} = EXCLUDED.{c}" for c in update_cols)
-    sql = (
-        f"INSERT INTO {table} ({', '.join(columns)}) "
-        f"VALUES ({', '.join(f':{c}' for c in columns)}) "
-        f"ON CONFLICT ({', '.join(pk_cols)}) DO UPDATE SET {set_clause}"
+    tbl = Table(table, MetaData(), *(Column(c) for c in columns))
+    stmt = pg_insert(tbl)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=pk_cols,
+        set_={c: stmt.excluded[c] for c in update_cols},
     )
-    session.execute(text(sql), records)
+    session.execute(stmt, records)
     return len(records)
 
 
