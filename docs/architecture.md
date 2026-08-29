@@ -351,6 +351,39 @@ repo after 60 days without repository activity, so each run appends a line to
 `ops/refresh-history.md` and commits it — the commit is the activity that keeps the schedule
 alive.
 
+### 4.3 The local read replica
+
+Once the warehouse moved to Neon in `eu-central-1`, Django — running on a laptop — paid a
+~90 ms round-trip on *every* query. A `SELECT 1` that was ~0.1 ms on the old local socket became
+~86 ms; pages issuing 3–7 queries went from tens of milliseconds to 2–6 seconds. Nothing was
+wrong with the data; the database had simply moved a continent away.
+
+The fix keeps the app on the laptop and gives it a local copy to read:
+
+```
+TMDB / IMDb ──▶ GitHub Actions nightly job ──▶ Neon         (source of truth, cloud)
+                                                 │
+                          scripts/sync_warehouse_from_neon.py   (run on demand)
+                                                 ▼
+                                          local Postgres   ◀── Django reads this
+```
+
+`sync_warehouse_from_neon.py` is a full point-in-time snapshot, not an incremental merge: it
+truncates every warehouse table and reloads it from Neon inside one transaction, with FK triggers
+disabled for the load (`session_replication_role = replica`) since the snapshot is already
+internally consistent. ~624k rows copy in ~60 s. It is run by hand — when you sit down to work,
+after the nightly job has finished — because the laptop is usually off at 03:12 UTC when that job
+runs.
+
+`pg_dump` is not used: the laptop's client is v16, Neon is v18, and `pg_dump` refuses to read
+from a newer server. A plain `COPY … TO/FROM STDOUT` streamed through libpq has no such check.
+
+Two `DATABASE_URL`s result, which is the point: locally it names the fast replica, and in the
+GitHub Actions job it names Neon. `NEON_DATABASE_URL` (local-only) is the sync source. The cloud
+pipeline is unchanged — it still writes Neon directly and never syncs. Hosting the app next to
+Neon instead (co-located in `eu-central-1`) is the other way to erase the latency and stays open
+as a later step; the replica was chosen because it costs nothing and keeps the site laptop-local.
+
 ## 5. Data quality: quarantine, never drop
 
 Two quality gates run at different layers, both following the same pattern: check → tag failing

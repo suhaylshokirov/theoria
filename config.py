@@ -64,7 +64,16 @@ AWS_REGION = _optional("AWS_REGION", "eu-central-1")
 S3_BUCKET = _require("S3_BUCKET")
 
 # --- PostgreSQL warehouse --------------------------------------------------
+# DATABASE_URL is the warehouse this process reads and writes:
+#   * locally, the fast on-machine replica Django serves from;
+#   * in the nightly GitHub Actions job, the Neon instance (the source of truth).
 DATABASE_URL = _require("DATABASE_URL")
+
+# NEON_DATABASE_URL is only set locally, and only used by
+# scripts/sync_warehouse_from_neon.py to pull Neon -> the local replica. The
+# cloud job never sets it (it writes Neon directly via DATABASE_URL), so it is
+# optional, not required.
+NEON_DATABASE_URL = _optional("NEON_DATABASE_URL", "")
 
 # --- Ingestion tuning ------------------------------------------------------
 MAX_PAGES = int(_optional("MAX_PAGES", "5"))

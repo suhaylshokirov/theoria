@@ -216,6 +216,21 @@ line to `ops/refresh-history.md`; that commit doubles as the activity that stops
 the schedules after 60 idle days. See `docs/architecture.md` for why the snapshot is S3 and not a
 warehouse table, and why refresh is a separate orchestrator rather than a flag.
 
+### Local read replica
+
+Neon lives in `eu-central-1`, so reading it directly from a laptop adds a ~90 ms round-trip to
+every query — seconds per page. Instead, Django reads a **local Postgres copy**, refreshed from
+Neon on demand:
+
+```bash
+python -m scripts.sync_warehouse_from_neon     # pull Neon → local (~60s, ~624k rows)
+```
+
+Set `DATABASE_URL` to the local database and `NEON_DATABASE_URL` to the Neon endpoint (see
+`.env.example`). Run the sync when you start work, after the nightly job has finished. The cloud
+pipeline is unaffected — it writes Neon directly. `docs/architecture.md` §4.3 has the full
+rationale (including why `pg_dump` can't be used across the v16→v18 client/server gap).
+
 ### 4. Run the site
 
 ```bash
@@ -266,6 +281,7 @@ django_app/               core (settings, router) · movies · analytics
 scripts/
   run_pipeline.py         end-to-end orchestration (discovery)
   run_refresh.py          refresh films already in the warehouse
+  sync_warehouse_from_neon.py  pull Neon → the local Postgres replica Django reads
 .github/workflows/        nightly refresh + weekly discovery, on managed Postgres
 tests/                    ETL, data quality and view tests
 docs/architecture.md      design decisions and their evidence

@@ -12,8 +12,16 @@ python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python -c "import config"                    # verify env is set up
 pytest                                       # run all tests
-python manage.py runserver                   # start Django
+python -m scripts.sync_warehouse_from_neon   # pull Neon → local replica (run before serving)
+python manage.py runserver                   # start Django (reads the local replica)
 ```
+
+**Warehouse topology:** the nightly GitHub Actions job writes **Neon** (`eu-central-1`, source of
+truth). Django runs locally and reads a **local Postgres replica** — reading Neon directly costs
+~90 ms/query (seconds/page). `scripts/sync_warehouse_from_neon.py` does a full truncate-and-reload
+Neon → local (~60s, ~624k rows); run it on demand after the nightly job. `.env` locally:
+`DATABASE_URL` = local replica, `NEON_DATABASE_URL` = Neon (sync source only). See
+`docs/architecture.md` §4.3.
 
 ## graphify
 
@@ -46,6 +54,20 @@ compiled; rewrote it as a `postgresql.insert().on_conflict_do_update()` Core con
 `assign_slugs` as chunked `UPDATE ... FROM (VALUES ...)`; run 3's whole warehouse load then took
 ~2 min). `pytest` **281/281**. Neon: direct (non-pooler) endpoint + `?sslmode=require`; first
 query after an idle-suspend is a ~20–45s cold-start, once per idle period.
+**Follow-up (2026-08-29, ad hoc, not a numbered task):** with the warehouse on Neon in
+`eu-central-1`, every Django query from the laptop cost a ~90ms round-trip (`SELECT 1` = 86ms;
+pages 2–6s). Fixed with a **local read replica**: new `scripts/sync_warehouse_from_neon.py` does a
+full truncate-and-reload Neon → local Postgres in one txn (`session_replication_role=replica`,
+`COPY … TO/FROM STDOUT` streamed through libpq — `pg_dump` refuses v16-client→v18-server), ~624k
+rows in ~60s. `config.py` gained `NEON_DATABASE_URL` (`_optional`, local-only sync source); `.env`
+`DATABASE_URL` repointed to the local replica (`postgres@localhost:5432/theoria`, still 16 tables,
+already had `fact_movie_rating`). Cloud pipeline unchanged — its `DATABASE_URL` secret is still
+Neon. After the sync, the same pages: `/` 48ms, `/movies/the-godfather/` 19ms, `/analytics/` 41ms;
+warehouse checks 39/39 and `pytest` **287/287** (+6 guard tests) against the replica; Spider-Man
+still shows Released/$2.23B/IMDb 8.0, proving the replica carries run 3's data. Docs: architecture
+§4.3, README "Local read replica", `.env.example`, this file's Quick Commands. Hosting the app in
+`eu-central-1` instead stays open as a later option (settings prep — whitenoise, env
+`ALLOWED_HOSTS`, a Postgres for the `default` DB — is independent and not done).
 Currently on          : **Nothing active.** Next is **Task 63** (close Phase 14 — user decision
 2026-08-26: analytics panels for country/language, full live re-run, doc truth-up) then **Task 69**
 (close Phase 15 — repoint the four rating queries to `fact_movie_rating`, drop their
