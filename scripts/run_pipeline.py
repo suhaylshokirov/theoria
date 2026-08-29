@@ -65,9 +65,6 @@ def run_pipeline(
     each year in a configured range). Everything downstream is identical —
     both return a plain list of movie_ids.
     """
-    # Fail on a missing TMDB/AWS secret now, not 4 minutes into ingestion.
-    config.require_etl()
-
     if ingestion_date is None:
         ingestion_date = dt.date.today()
     if max_pages is None:

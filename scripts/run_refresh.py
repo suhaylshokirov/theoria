@@ -35,7 +35,6 @@ import datetime as dt
 import logging
 import time
 
-import config
 from data_quality.silver_checks import run_silver_checks
 from data_quality.warehouse_checks import run_warehouse_checks
 from etl.bronze.ingest_genres import ingest_genres
@@ -58,9 +57,6 @@ logger = logging.getLogger(__name__)
 
 def run_refresh(ingestion_date: dt.date | None = None) -> None:
     """Refresh every film in the warehouse for a single ingestion_date."""
-    # Fail on a missing TMDB/AWS secret now, not 4 minutes into ingestion.
-    config.require_etl()
-
     if ingestion_date is None:
         ingestion_date = dt.date.today()
 

@@ -14,17 +14,11 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
-from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
+    path('admin/', admin.site.urls),
     path('analytics/', include('analytics.urls')),
     path('', include('movies.urls')),
 ]
-
-# See settings.ADMIN_ENABLED: the admin has nothing to administer here and no
-# database to sign in against once deployed, so the route exists only where it
-# can actually work rather than 404-ing or 500-ing on a public URL.
-if settings.ADMIN_ENABLED:
-    urlpatterns.insert(0, path('admin/', admin.site.urls))

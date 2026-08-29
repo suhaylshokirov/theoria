@@ -129,24 +129,13 @@ Full decision log, with the alternatives considered and the measurements behind 
 
 ```bash
 python -m venv venv && source venv/bin/activate
-pip install -r requirements-etl.txt   # superset: web runtime + pipeline + tests
+pip install -r requirements.txt
 cp .env.example .env              # fill in API key, AWS credentials, DATABASE_URL
 python -c "import config"         # fails loud, listing every missing variable at once
-python -c "import config; config.require_etl()"   # same, for the pipeline's own set
 pytest                            # full suite; no network or database needed
 ```
 
 `config.py` is the only place that reads the environment. No script hardcodes a key, path or URL.
-
-**Two requirements files, on purpose.** `requirements.txt` holds only what the web site runs on
-(Django, psycopg2, python-dotenv); `requirements-etl.txt` includes it and adds pandas, pyarrow,
-boto3, SQLAlchemy and pytest. The hosted function installs the small one, so the ETL stack — an
-order of magnitude larger, and never imported by a view — stays out of a bundle with a hard size
-limit. Locally you want `requirements-etl.txt`.
-
-Which variables are required depends on what you are running: `DATABASE_URL` always,
-`DJANGO_SECRET_KEY` for the site, and `TMDB_API_KEY`/`AWS_*`/`S3_BUCKET` for the pipeline. A
-missing one still stops the process before it does any work — it is just the right process now.
 
 ### 2. Create the warehouse schema
 
@@ -263,45 +252,6 @@ Films and people are addressed by slug (`/people/tom-hanks/`), never by warehous
 Slugs are recomputed for the whole table on every load, with collisions numbered in ascending id
 order — which is what makes them stable across re-runs rather than reassigned. Legacy
 `/actors/<slug>/` and `/directors/<slug>/` URLs 301 to the unified person page.
-
-### 5. Hosting the site
-
-The site deploys to Vercel as a single Python function. Vercel finds `django_app/manage.py`,
-reads `WSGI_APPLICATION` from settings, runs `collectstatic` during the build, and serves the
-collected assets from its CDN. `vercel.json` carries the three settings that matter:
-
-| Setting | Value | Why |
-|---|---|---|
-| `regions` | `fra1` | Frankfurt, the same region as the Neon warehouse. Left at the default `iad1` (US East), every query would cross the Atlantic and a page would cost seconds, not milliseconds — the very problem the local replica exists to solve. |
-| `ignoreCommand` | a `git diff` over the paths the site actually serves | The nightly job commits a line to `ops/refresh-history.md` to keep its schedule alive. Vercel does **not** honour `[skip ci]`, so without this every nightly run would redeploy the site for a file no page reads. |
-| `functions.excludeFiles` | tests, ETL, scripts, docs | Python bundles are not tree-shaken: everything reachable at build time ships. |
-
-**Deployed data needs no deploy.** The nightly GitHub Actions job writes Neon; the site reads
-Neon. New ratings appear on the site the moment the job finishes, with no build and no cache step.
-`scripts/sync_warehouse_from_neon.py` and `manage.py serve` stay a *local* concern — the hosted
-site is already co-located with the warehouse and reads it directly.
-
-**Schema changes go the other way round.** Django never migrates the warehouse (every model is
-`managed = False` and the router refuses migrations against it), so a new column means: apply the
-`.sql` to Neon, run the loader, *then* deploy the code that reads it. Deploying first means every
-visitor gets a 500 until the column exists. Preview deployments read the production warehouse too
-— safe, since the site cannot write to it, but it does mean a preview of a new-column feature
-stays broken until the DDL is applied.
-
-Environment variables to set on the project: `DATABASE_URL` (the Neon **pooled** endpoint),
-`DJANGO_SECRET_KEY` (a fresh one — not the local development key), and optionally
-`DJANGO_ALLOWED_HOSTS` for a custom domain. No TMDB or AWS credentials: the site never calls
-either, and `config.py` no longer demands them of a process that doesn't.
-
-Settings adapt on their own via the platform's own `VERCEL` variable — `DEBUG` is forced off,
-`ALLOWED_HOSTS` picks up `.vercel.app` (so preview URLs work without being listed in advance),
-secure cookies and the proxy SSL header switch on, the warehouse connection is held open across
-requests, and `/admin/` is not routed at all rather than 500-ing on a public URL.
-
-> Running locally with `DJANGO_DEBUG=False` requires `python manage.py collectstatic` first.
-> Production uses `ManifestStaticFilesStorage`, which resolves every asset through a manifest
-> that `collectstatic` writes — that is what makes a CSS change take effect immediately instead
-> of waiting out a cached copy, and it fails loudly rather than serving a stale file.
 
 ---
 
