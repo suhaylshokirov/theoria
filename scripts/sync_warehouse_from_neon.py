@@ -29,6 +29,7 @@ Usage:
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import time
 from tempfile import SpooledTemporaryFile
@@ -174,8 +175,81 @@ def sync_warehouse_from_neon() -> dict[str, int]:
     return counts
 
 
+def _needs_sync(local: dt.date | None, remote: dt.date | None) -> bool:
+    """Decide whether the replica is behind Neon.
+
+    Pure so the decision can be tested without a database: sync when the replica
+    has never been loaded, or when Neon carries a newer ingestion_date. Never
+    sync when Neon itself has no data.
+    """
+    if remote is None:
+        return False
+    return local is None or local < remote
+
+
+def _max_ingestion_date(conn) -> dt.date | None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT max(ingestion_date) FROM fact_movie_rating")
+        return cur.fetchone()[0]
+
+
+def sync_if_stale() -> bool:
+    """Sync only when Neon's latest ingestion_date is newer than the replica's.
+
+    Returns True if a sync ran. A Neon connectivity problem is logged and
+    swallowed (returns False) — a laptop offline at breakfast should still be
+    able to start the site on yesterday's replica.
+    """
+    source_url = config.NEON_DATABASE_URL
+    target_url = config.DATABASE_URL
+    try:
+        _guard(source_url, target_url)
+    except RuntimeError as exc:
+        logger.warning("Replica freshness check skipped: %s", exc)
+        return False
+
+    try:
+        source = psycopg2.connect(_to_libpq(source_url), connect_timeout=10)
+    except psycopg2.OperationalError as exc:
+        logger.warning("Neon unreachable — starting on the existing replica: %s", exc)
+        return False
+    try:
+        source.set_session(readonly=True, autocommit=True)
+        remote = _max_ingestion_date(source)
+    finally:
+        source.close()
+
+    target = psycopg2.connect(_to_libpq(target_url))
+    try:
+        local = _max_ingestion_date(target)
+    finally:
+        target.close()
+
+    if not _needs_sync(local, remote):
+        logger.info("Local replica is current (ingestion_date=%s) — no sync needed.", local)
+        return False
+
+    logger.info("Neon is ahead (%s > %s) — refreshing the local replica.", remote, local)
+    sync_warehouse_from_neon()
+    return True
+
+
 if __name__ == "__main__":
+    import argparse
+
     from etl.logging_config import setup_logging
 
     setup_logging("sync_warehouse_from_neon")
-    sync_warehouse_from_neon()
+    parser = argparse.ArgumentParser(
+        description="Pull the warehouse from Neon into the local Postgres replica."
+    )
+    parser.add_argument(
+        "--if-stale",
+        action="store_true",
+        help="Only sync when Neon's ingestion_date is newer than the replica's.",
+    )
+    args = parser.parse_args()
+    if args.if_stale:
+        sync_if_stale()
+    else:
+        sync_warehouse_from_neon()

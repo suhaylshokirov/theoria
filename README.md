@@ -219,17 +219,20 @@ warehouse table, and why refresh is a separate orchestrator rather than a flag.
 ### Local read replica
 
 Neon lives in `eu-central-1`, so reading it directly from a laptop adds a ~90 ms round-trip to
-every query — seconds per page. Instead, Django reads a **local Postgres copy**, refreshed from
-Neon on demand:
+every query — seconds per page. Instead, Django reads a **local Postgres copy**:
 
 ```bash
-python -m scripts.sync_warehouse_from_neon     # pull Neon → local (~60s, ~624k rows)
+cd django_app && python manage.py serve      # syncs the replica if stale, then runserver
 ```
 
+`serve` checks one date against Neon and does a full reload (~60s, ~624k rows) *only* when the
+nightly job has produced a newer `ingestion_date` — a normal restart is instant. To run the sync
+by itself (e.g. from cron): `python -m scripts.sync_warehouse_from_neon [--if-stale]`.
+
 Set `DATABASE_URL` to the local database and `NEON_DATABASE_URL` to the Neon endpoint (see
-`.env.example`). Run the sync when you start work, after the nightly job has finished. The cloud
-pipeline is unaffected — it writes Neon directly. `docs/architecture.md` §4.3 has the full
-rationale (including why `pg_dump` can't be used across the v16→v18 client/server gap).
+`.env.example`). The cloud pipeline is unaffected — it writes Neon directly. `docs/architecture.md`
+§4.3 has the full rationale (including why `pg_dump` can't be used across the v16→v18
+client/server gap).
 
 ### 4. Run the site
 

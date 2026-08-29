@@ -371,9 +371,16 @@ TMDB / IMDb ──▶ GitHub Actions nightly job ──▶ Neon         (source 
 `sync_warehouse_from_neon.py` is a full point-in-time snapshot, not an incremental merge: it
 truncates every warehouse table and reloads it from Neon inside one transaction, with FK triggers
 disabled for the load (`session_replication_role = replica`) since the snapshot is already
-internally consistent. ~624k rows copy in ~60 s. It is run by hand — when you sit down to work,
-after the nightly job has finished — because the laptop is usually off at 03:12 UTC when that job
-runs.
+internally consistent. ~624k rows copy in ~60 s.
+
+The sync is not scheduled — the laptop is usually off at 03:12 UTC when the nightly job runs — so
+`manage.py serve` folds it into starting the site: `sync_if_stale()` compares
+`max(ingestion_date)` on Neon against the replica and reloads *only* when Neon is ahead. A normal
+restart is one ~90 ms date query and nothing else; the 60 s cost is paid once, the first time you
+start the site after a nightly run. If Neon is unreachable the check is logged and skipped, so the
+site still starts on the existing replica. (A `systemd --user` timer with `Persistent=true` calling
+`sync_warehouse_from_neon --if-stale` would make it fully hands-off, catching up after the machine
+wakes; not set up, since `serve` covers the felt need.)
 
 `pg_dump` is not used: the laptop's client is v16, Neon is v18, and `pg_dump` refuses to read
 from a newer server. A plain `COPY … TO/FROM STDOUT` streamed through libpq has no such check.
