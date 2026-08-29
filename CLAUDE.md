@@ -30,71 +30,38 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : Task 68 — Django: the IMDb rating rendered with its mark, every reader of TMDB's repointed
-Currently on          : **Task 64 — nightly cloud refresh (user decision 2026-08-27, "Task 64 first").
-CODE half written + green; NEON MIGRATION (step 1) DONE and verified; AWS IAM + GitHub secrets +
-the `workflow_dispatch` verification still pending on the user.** Built and tested (278 tests, +8):
-`TMDBClient.get_movie_details(append_to_response=)` (1 call not 2), `etl/bronze/refresh_movies.py`
-(ids from `dim_movie`, writes the same `bronze/movie_details/` + `bronze/credits/` keys the ingest
-path writes — smoke-verified it reads all 1,215 live ids ascending),
-`etl/gold/build_metrics_snapshot.py` (dated volatile-metrics rows to `gold/metrics_snapshot/`, S3
-not Postgres — reasoning in `docs/architecture.md` §4.2), `scripts/run_refresh.py` (separate
-orchestrator, not a `--refresh` flag), `.github/workflows/{nightly-refresh,weekly-discovery}.yml`
-+ `ops/refresh-history.md` (60-day-inactivity guard). Docs done: README "Keeping the catalog
-fresh", architecture §4.2, `.env.example` Neon note. **Neon migration (2026-08-27):** local
-`theoria` DB (16 tables) `pg_dump` → `psql` into Neon project `ep-spring-brook-b1kjdyyg` (region
-`eu-central-1`, **PG 18.6**), 0 restore errors, every table's row count matches local exactly
-(`dim_movie` 1215, `dim_person` 122685, `fact_credit` 237454, `fact_collaboration` 193064, …).
-`.env` `DATABASE_URL` repointed to the **direct** (non-pooler) endpoint + `?sslmode=require` (old
-local URL kept as a comment on the line above; `.env.local-backup-20260827` also saved). Verified
-against Neon: `check_connection()` True, warehouse checks **39/39**, full suite **278/278**,
-`manage.py check` clean, live ORM read returns The Godfather / `tt0068646`. First query after
-Neon idle-suspend takes ~20–45s (compute cold-start) then drops to normal — happens once per
-idle period, not per query; the nightly job eats one cold-start, negligible vs a ~5-min run.
-**NOT done — needs the user's cloud accounts:** (a) a least-privilege AWS IAM user scoped to the
-one datalake bucket; (b) seven repo secrets in GitHub → Settings → Secrets → Actions
-(`TMDB_API_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`,
-`DATABASE_URL` = the Neon direct URL, `DJANGO_SECRET_KEY`); (c) trigger `nightly-refresh` via
-`workflow_dispatch`, confirm green + a `metrics_snapshot` Parquet lands + a 2024+ film's
-`vote_count` moves between two consecutive runs. `run_refresh.py` has still never executed
-end-to-end (needs live S3 + TMDB). No `for_learning.md` entry yet — task isn't finished.
-**Step 8 DONE (2026-08-28):** the first `workflow_dispatch` run hit the 60-min job timeout —
-cross-region Silver reads (4 transforms × ~1,215 serial `get_object` from a US runner to
-`eu-central-1` S3) were the wall. New `s3_utils.read_json_objects(bucket, keys)` fetches them
-through a 32-worker `ThreadPoolExecutor` (results returned in input-key order, per-key errors
-captured not raised); the four transforms lost their duplicated `_read_json_from_s3`. Added
-`connect_timeout=10`/`read_timeout=30`/`retries` + `max_pool_connections` to the boto3 client so a
-stalled socket fails fast instead of hanging to the job timeout (the Task 66 gotcha). Job timeouts
-bumped `nightly-refresh` 60→90, `weekly-discovery` 90→120. Tests 278 → **281** (+3 for the new
-helper). `refresh_movies`' own ~2,400 serial S3 writes left serial for now (write-as-you-go
-crash-safety); revisit only if it dominates the next run. **Step 8b — the warehouse load was the
-next wall (2026-08-28).** The Silver-read fix let the run reach `load_dimensions`, where it
-crawled: `dim_movie` took 137s for 1,215 rows = ~113ms/row = one driver round-trip per row over
-the US↔Frankfurt link. `dim_person` (122k), `dim_date` (~49.7k), `fact_credit` (237k),
-`fact_collaboration` (193k) on that path = hours. Cause: `common._upsert` built its statement with
-`text()`, so SQLAlchemy's `insertmanyvalues` batching never engaged (it only rewrites INSERTs it
-compiled itself). Rewrote `_upsert` as a `postgresql.insert()` Core construct with
-`on_conflict_do_update` — verified against local PG that 2,000 rows now go as 2 batched
-`VALUES (...),(...)` statements, `ON CONFLICT` intact. `assign_slugs`' bulk `UPDATE ... WHERE id = :id`
-executemany had the same one-per-row problem (nothing batches an executemany UPDATE) — new
-`_apply_slugs()` does chunked `UPDATE ... FROM (VALUES ...)` (~1,000 rows/statement, verified:
-2,500 rows in 3 statements, collision numbering preserved, 0 null/dupe slugs). One `_upsert` fix
-covers all three loaders (dimensions, facts, gold). Tests still 281 (3 assertions updated for the
-new statement shape, no new tests). **Then** Task 63 — user decision 2026-08-26, closes Phase 14: analytics panels, full
-live re-run, doc truth-up. Task 69 follows it and should reuse that run.
+Last completed task   : **Task 64 — nightly cloud refresh: warehouse on Neon, pipeline on GitHub
+Actions. DONE and verified green end-to-end 2026-08-29** (`nightly-refresh` run 3, `success` in
+`ops/refresh-history.md` at 06:15:30Z, on commit `52b41e0`). All four verify gates pass: a
+`gold/metrics_snapshot/ingestion_date=2026-08-29/` Parquet landed beside the `2026-08-28` one;
+`vote_count` moved on 941/1,215 films between the two snapshots; the untouched local Django site
+now serves the refreshed figures with no deploy (`/movies/spider-man-brand-new-day/` flipped
+Post Production→Released, revenue 0→$2.23B, gained an IMDb 8.0 / 266,257-votes badge — the user's
+own worked example); Silver DQ + warehouse checks ran and passed inside the CI job. Full history
+below in the Task 64 Outcome block, incl. Step 8 (parallel cross-region Silver reads via
+`s3_utils.read_json_objects`, a 32-worker pool + boto3 client timeouts) and Step 8b (the warehouse
+load was doing one DB round-trip per row — `dim_movie` 137s for 1,215 rows — because
+`common._upsert` used `text()` and SQLAlchemy's `insertmanyvalues` only batches INSERTs it
+compiled; rewrote it as a `postgresql.insert().on_conflict_do_update()` Core construct, and
+`assign_slugs` as chunked `UPDATE ... FROM (VALUES ...)`; run 3's whole warehouse load then took
+~2 min). `pytest` **281/281**. Neon: direct (non-pooler) endpoint + `?sslmode=require`; first
+query after an idle-suspend is a ~20–45s cold-start, once per idle period.
+Currently on          : **Nothing active.** Next is **Task 63** (close Phase 14 — user decision
+2026-08-26: analytics panels for country/language, full live re-run, doc truth-up) then **Task 69**
+(close Phase 15 — repoint the four rating queries to `fact_movie_rating`, drop their
+`SELECT DISTINCT movie_id, rating` CTEs, full catalog-wide re-run, true up the stale Warehouse
+Schema section). Both call for a full live re-run + doc truth-up and **can now run on the nightly
+scheduled path** rather than by hand — that was the reason to do Task 64 first. Running Task 63
+before Task 69 avoids the ~25-min run twice, or merge the two closing tasks. **Task 65** (studio
+provenance page) is also outstanding and phase-independent.
 Current phase         : Phase 14 (Tasks 61–63): 61–62 complete, **63 still not started**. Phase 15
 (Tasks 66–69, added 2026-08-26 by user request): 66–68 complete, 69 not started. **Note the two
 phases are interleaved** — Phase 15 was started before Phase 14 was closed, because the user raised
 the ratings change directly. Task 63 and Task 69 both call for a full live pipeline re-run and a doc
 truth-up; **running Task 63 first would avoid doing that ~25-minute run twice**, or the two closing
 tasks can be merged. Decide before starting either.
-Outstanding must-do   : **Two phase-independent must-dos, both not started.** (1) **Task 64 —
-nightly cloud refresh** (warehouse to Neon + pipeline on GitHub Actions); see "MUST DO — Automated
-Nightly Refresh". Best done before Task 63 so that phase's live re-run happens on the scheduled
-path. It carries live-measured research (2026-08-17) behind the design — notably that TMDB's
-`/movie/changes` feed **never reports `vote_average`/`vote_count`/`popularity`**, so the obvious
-changes-driven refresh would update the only fields that don't drift and miss the two that always
-do. Do not re-derive those figures. (2) **Task 65 — studio provenance page** (description,
+Outstanding must-do   : **One phase-independent must-do, not started.** ~~Task 64~~ is **DONE**
+(2026-08-29, see above). Remaining: **Task 65 — studio provenance page** (description,
 headquarters, homepage, parent company on `/studios/<slug>/`, above the filmography); see "MUST
 DO — Studio Provenance Page", added 2026-08-17 by user request right after the Studios redesign.
 Needs one new TMDB endpoint (`/company/{id}`, ~1,383 calls, ≈5 min at Task 64's measured 4.76
@@ -112,7 +79,9 @@ partition's own `movies.parquet`; the catalog-wide fill happens on Task 69's ful
 backdating today's ratings into the two 2026-07 partitions was rejected because it would make
 `ingestion_date` lie. **A latent robustness gap found live, not by tests:** the Silver transform
 hung 4.5 minutes on a stalled S3 `StreamingBody.read()` with no read deadline; a retry took 9.2s.
-Harmless when a human is watching, potentially a silent nightly stall under Task 64. **Task 62 (2026-08-26) reads Task 61's
+**Closed by Task 64 Step 8** — the boto3 client now sets `connect_timeout=10`/`read_timeout=30`
++ `retries`, so a stalled socket fails fast and retries instead of hanging the nightly job.
+**Task 62 (2026-08-26) reads Task 61's
 dim_country/dim_language + bridges from Django for the first time** — four new models
 (`Country`, `Language`, `MovieCountry`, `MovieLanguage` in `movies/models.py`), all following the
 existing bridge-model shape (natural-key FK, fake-single-PK on the movie side, same as
@@ -363,7 +332,7 @@ still sit in S3 though Task 53 stopped writing them; 2 films have no `fact_movie
 All cleanup rather than capability — recorded so they aren't rediscovered as if new. The **stale
 Warehouse Schema section in this file was also fixed** (it still listed `dim_actor`,
 `dim_director` and `fact_casting`, all dropped in Tasks 35/53). Prior-phase notes follow. Task 54 is a read-side-only fix (no DDL, no ETL, no pipeline re-run, no new TMDB calls) for a movie page that `fact_credit` (Task 48) had made unreadable at scale: a person holding several jobs on one film rendered once per job across several department sections (Christopher Nolan on *The Dark Knight* was 4 rows in 3 sections), and every credit — 47–139 cast, up to ~980 crew on the worst film — rendered as a headshot card with no limit. Two complaints, two fixes, and the measurement that separates them: merging collapses 143.8 crew rows/film to 138.1 distinct people (~4%), so **merging fixes duplication, not volume**. `_merge_crew()` in `movies/views.py` groups a person's non-Acting credits by `person_id`, files them under their single most senior department via `_department_rank()` (extracted from the sort key that was duplicated in `movie_detail` and `person_detail`), and joins the jobs in department order — Nolan now reads "Director / Screenplay / Story / Producer", once. Volume is fixed by **paging cast and crew in the browser**, ten at a time: the view sends every credit and `initPagedSection()` in `static/js/theoria.js` shows a window of them, so Next is a repaint rather than a round-trip. This replaced a first, server-side implementation (`?cast_page=`/`?crew_page=`/`?crew=all` + `#cast`/`#crew` anchors) that the user judged not smooth enough; `BILLED_CREW_JOBS` went with it, since paging ten at a time makes the first page short whatever it holds. `[data-page-group]` wrappers (one per crew department) hide themselves when none of their people are on the current page; the pager is `<button>`s that ship `hidden` and are revealed only when there's more than one page, so with JS off the reader gets the whole list and no dead controls. **The two pagers are a deliberate split, documented in both partials:** `_pager.html` stays server-side for `/movies/` and `/people/` (1,215 and 122,685 rows — not a payload to hand a browser), `_pager_client.html` serves one film's ~1,200-credit maximum, which is. Crew renders as a list rather than a poster grid because crew photo coverage measured 23.8% against cast's 70.1%. **Crew rows carry faces too, after user review:** a headshot where one exists, and the same `.placeholder-person` silhouette the cast cards use where it doesn't (55 photos / 87 silhouettes on The Dark Knight) — an initials monogram was tried first and rejected, since two placeholder vocabularies on one page is one more than a reader should have to learn. That review also surfaced a **real CSS bug**: `.credit-list` never zeroed the `<ul>`'s UA-default 40px `padding-inline-start`, and because these lists paint their own background to draw the 1px gaps as hairlines, that padding rendered as an unexplained grey column down the left of every crew list — invisible on white, obvious on the dark surface. `.collab-list` (person pages) had the identical defect since Task 51; both fixed. Live-verified: `/movies/the-dark-knight/` ships **139 cast cards and 142 crew rows across 11 department groups** in one response, no server-paging params in the markup, Nolan merged and once; the paging algorithm was **executed under Node against a stub DOM** (page 1: 10 items/3 departments; page 2: 2 items collapsing to 1 heading; buttons disable at both ends). Tests 210 → 214. Prior phase's notes: Full test suite is 210/210 passing (down from 225 because Task 53 deleted the legacy actor/director tests, not because anything regressed); Silver DQ 16/16 on all three partitions, warehouse checks 20/20 — both counts dropped for the same reason (the `actors`/`directors` Silver entities and the `fact_cast`/`fact_crew` FK + load-sanity checks no longer exist). **Phase 10 is done: Tasks 47–53 all complete.** The warehouse is now exactly **9 tables** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`, `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `etl_watermarks` — and `dim_actor`/`dim_director`/`fact_cast`/`fact_crew` are **dropped** (`warehouse/ddl/11_drop_legacy_person_tables.sql`, facts before dimensions). `/people/<slug>/` is the single person page; `/actors/<slug>/` and `/directors/<slug>/` now 301 to it via a single `dim_person` slug lookup with no legacy table involved (the 381 slugs that moved during the Task 48 namespace unification are consequently **404 rather than redirected** — accepted, the site isn't public). 16 routes, 10 analytics panels, **zero empty panels**. **Gold is no longer a write-only dead end** (Task 49) — `load_gold.py` reads `gold/collaboration_edges` into `fact_collaboration`; the other four Gold datasets are still unread, and deliberately so (they're cheap enough to recompute in SQL, which the Django views already do). Caveat that remains open: `fact_collaboration` is a *derived* table, so nothing outside the pipeline can tell it's stale, and re-running Gold for an older partition overwrites counts computed from a newer one — worth revisiting as a materialized view. **Two bugs only the live runs could find, both fixed:** `assign_slugs()`'s batched `executemany` hit a `UniqueViolation` on a slug *permutation* because Postgres checks a unique index per row, not per statement (latent since Task 46; fixed by clearing the column first, in the same transaction); and `/connect/` returned a different — equally short, equally valid — path after every reload, because the adjacency query had no `ORDER BY` while Python dicts preserve insertion order (fixed; verified stable, so **Task 52's outcome line below cites a path that is no longer the one returned** — the current answer for Tom Hanks → Thelma Schoonmaker is *Philadelphia* → Tony Devon → *The King of Comedy*). **Every one of the 122,685 `dim_person` rows has at least one credit**, since the dimension is built from the credits themselves — which retires the long-standing "orphan dimension members" gap outright, now that the legacy tables it applied to are gone. **Fresh-install verification is now empirical, not assumed:** a throwaway database built from DDL `01`–`03` produces exactly the 9 live tables. Note that once `11` *drops* things, "run every DDL file in order" no longer equals "build the current schema" — README documents `01`–`03` (bootstrap) and `04`–`11` (migrations for an existing DB) as two separate paths. Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds, and unifying to `dim_person` made it *more* expensive (122,685 people, not 45k). Remaining known gaps, still open: `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`; the Silver transforms read Bronze one S3 object at a time (~16 min per full rebuild pass). Older notes: Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows), as are collections' underlying ids behind their slugs.
-Last updated          : 2026-08-26
+Last updated          : 2026-08-29
 ```
 
 **After finishing any task, in this order:**
@@ -921,7 +890,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > before Task 63**, so that phase's live re-run happens on the scheduled path rather than being
 > re-verified by hand afterwards.
 
-#### [ ] Task 64 — Nightly cloud refresh: warehouse to Neon, pipeline on GitHub Actions
+#### [x] Task 64 — Nightly cloud refresh: warehouse to Neon, pipeline on GitHub Actions
 - **Goal:** The data goes stale the moment the laptop closes, and the only way to refresh a film
   already in the catalog is a full `run_pipeline.py` re-run. Make the catalog refresh itself
   nightly, in the cloud, with no machine of ours powered on.
@@ -1021,7 +990,22 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   the local Django site — unchanged, still on the laptop — serves the refreshed figures with no
   deploy or cache step, since the views read the warehouse live; confirm a snapshot Parquet lands
   in `gold/metrics_snapshot/`; confirm Silver DQ and warehouse checks pass in CI, not just locally.
-- **Outcome (2026-08-27) — CODE HALF DONE, INFRA HALF PENDING ON THE USER. Task stays `[ ]`.**
+- **Outcome (2026-08-29) — DONE. The catalog now refreshes itself nightly in the cloud with no
+  machine of ours on.** `nightly-refresh` run 3 (`workflow_dispatch`) completed **green end to
+  end against Neon** on commit `52b41e0` (Step 8 + Step 8b) — logged `success` in
+  `ops/refresh-history.md` at 2026-08-29T06:15:30Z. All four verification gates pass:
+  **(a)** `s3://<bucket>/gold/metrics_snapshot/ingestion_date=2026-08-29/metrics_snapshot.parquet`
+  landed (42 KB), sitting beside the `2026-08-28` partition that runs 1–2 wrote before they
+  timed out in the load phase. **(b)** `vote_count` moved on **941 of 1,215** films between the
+  two consecutive snapshots (rating moved on 422; revenue on 0 — TMDB's community revenue figure
+  is stable day-to-day, expected). **(c)** the local Django site — untouched, still on the laptop,
+  no deploy or cache step — now serves the refreshed figures: `/movies/spider-man-brand-new-day/`
+  flipped `Post Production → Released`, `revenue 0 → $2,232,611,878`, and gained an IMDb badge of
+  **8.0 / 266,257 votes** (`fact_movie_rating (969681,'imdb')`), exactly the user's worked
+  example. **(d)** `run_silver_checks` and `run_warehouse_checks` both ran inside the CI job and
+  passed (the job is green; they abort it on failure). Local `pytest` **281/281**. The nightly
+  path is what Task 63 and Task 69's full live re-runs will now run on. **`run_refresh.py` has
+  now executed end-to-end** for the first time. Prior-state notes (all still accurate) follow:
   Written and green (`pytest` 270 → **278**, +8; no regressions; verified against Neon too):
   - **Step 2** — `TMDBClient.get_movie_details(movie_id, *, append_to_response=None)`. Backward
     compatible (default `None` → identical call). `refresh_movies` passes `"credits"`; the ingest
@@ -1078,15 +1062,12 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
     warehouse checks 39/39, `pytest` 278/278, `manage.py check` clean, ORM read OK. Gotcha logged:
     first query after Neon's idle-suspend is a ~20–45s cold-start, once per idle period.
 
-  **NOT DONE — every remaining item needs the user's cloud accounts, none are code:**
-  1. **AWS IAM** — a least-privilege user scoped to the one datalake bucket (the workflow file is
-     world-readable; a general-purpose key must not sit behind it).
-  2. **Repo secrets** — the seven names listed above, in GitHub → Settings → Secrets → Actions
-     (`DATABASE_URL` = the Neon direct URL now in `.env`).
-  3. **Verify** — `workflow_dispatch` the nightly job; confirm green, a `metrics_snapshot`
-     Parquet in S3, and a 2024+ film's `vote_count` moving between two consecutive runs; confirm
-     the local Django site serves the refreshed figures with no deploy (views read the warehouse
-     live). Then tick this box, write the `for_learning.md` entry, and update the status block.
+  **Infra steps — ALL DONE (2026-08-29):**
+  1. **AWS IAM** — the user created a least-privilege user scoped to the one datalake bucket.
+  2. **Repo secrets** — all seven added in GitHub → Settings → Secrets → Actions
+     (`DATABASE_URL` = the Neon direct URL). Confirmed live: run 3's "Verify configuration" step
+     passed and the job read S3 + TMDB + Neon successfully.
+  3. **Verify** — done; see the Outcome block above (all four gates green on run 3).
   - **Step 8 (cross-region Silver reads) — DONE 2026-08-28.** The first `workflow_dispatch` run
     timed out at the 60-min job cap; the four Silver transforms reading ~1,215 Bronze objects each
     with a serial `get_object` from a US runner to `eu-central-1` S3 were the bottleneck (~15-20
@@ -1096,6 +1077,21 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
     so a stalled socket fails fast (Task 66 gotcha). Job timeouts raised to 90 (nightly) / 120
     (weekly). `refresh_movies`' ~2,400 serial S3 writes left as-is (write-as-you-go crash-safety);
     revisit only if it dominates. Tests 278 → 281.
+  - **Step 8b (warehouse load: one round-trip per row) — DONE 2026-08-28.** With Silver fixed,
+    the next `workflow_dispatch` run crawled in `load_dimensions`: `dim_movie` took 137s for 1,215
+    rows (~113ms/row = one driver round-trip per row over the US↔Frankfurt link); `dim_person`
+    (122k), `dim_date` (~49.7k), `fact_credit` (237k), `fact_collaboration` (193k) on that path
+    would have been hours. Cause: `common._upsert` built its statement with `text()`, so
+    SQLAlchemy's `insertmanyvalues` batching never engaged (it only rewrites INSERTs it compiled
+    itself). Rewrote `_upsert` as a `postgresql.insert()` Core construct with
+    `on_conflict_do_update` (one fix covers dimensions, facts and gold loaders).
+    `assign_slugs`' per-row `UPDATE ... WHERE id = :id` executemany had the same problem — nothing
+    batches an executemany UPDATE — so new `_apply_slugs()` does chunked
+    `UPDATE ... FROM (VALUES ...)` (~1,000 rows/statement). Verified against local PG: 2,000-row
+    upsert → 2 batched statements; 2,500-row slug pass → 3 statements, collision numbering intact,
+    0 null/dupe slugs. **Confirmed live on run 3**: the full warehouse load (all dims + facts +
+    gold + `run_warehouse_checks`) finished in ~2 min — the phase that had stalled 15+ min on
+    `dim_movie` alone. Tests stayed 281 (3 assertions updated for the new statement shape).
   - **Step 9 (daily TMDB id export for deletions/merges)** — `weekly-discovery.yml` covers new
     titles + structural edits via `--source discover`; the `movie_ids_*.json.gz` export path for
     detecting deleted/merged ids is not implemented.
