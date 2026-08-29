@@ -9,11 +9,28 @@ A movie analytics platform (mini IMDb + analytics) built to learn real Data Engi
 
 ```bash
 python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python -c "import config"                    # verify env is set up
+pip install -r requirements-etl.txt          # superset; requirements.txt is web-only
+python -c "import config"                    # verify env is set up (core vars)
+python -c "import config; config.require_etl()"   # the pipeline's own required set
 pytest                                       # run all tests
 python manage.py serve                        # auto-sync replica if stale, then runserver
 ```
+
+**Two requirements files:** `requirements.txt` is the *web runtime only* (Django, psycopg2,
+python-dotenv) because the hosted Vercel function installs exactly that file into a bundle capped
+at 500 MB; `requirements-etl.txt` includes it and adds pandas/pyarrow/boto3/SQLAlchemy/pytest.
+Install the ETL one locally and in CI. `config.py` groups required env vars by **role** — core
+(`DATABASE_URL`), web (`DJANGO_SECRET_KEY`), etl (`TMDB_API_KEY`, `AWS_*`, `S3_BUCKET`) — enforced
+by `require_web()`/`require_etl()` where that role starts, so neither process demands the other's
+secrets. See `docs/architecture.md` §4.4.
+
+**Hosting:** the site deploys to Vercel as one Python function, pinned to `fra1` so it sits in
+the same region as Neon (the default `iad1` would re-create the ~90 ms/query problem the local
+replica exists to solve). Data changes need no deploy — Actions writes Neon, the site reads it.
+Schema changes need the *reverse* order of the Django habit: apply the DDL to Neon and run the
+loader **before** deploying the code that reads it, since Django never migrates the warehouse.
+`vercel.json`'s `ignoreCommand` stops the nightly `ops/refresh-history.md` commit from redeploying
+the site every night — Vercel does not honour `[skip ci]`. See `docs/architecture.md` §4.4.
 
 **Warehouse topology:** the nightly GitHub Actions job writes **Neon** (`eu-central-1`, source of
 truth). Django runs locally and reads a **local Postgres replica** — reading Neon directly costs
@@ -73,6 +90,55 @@ double-run guarded via `RUN_MAIN`. `pytest` **292/292** (+11: 6 endpoint-guard, 
 decision), warehouse checks 39/39 against the replica. Docs: architecture §4.3, README, Quick
 Commands. Hosting the app in `eu-central-1` instead stays open as a later option (settings prep —
 whitenoise, env `ALLOWED_HOSTS`, a Postgres for the `default` DB — is independent and not done).
+**Follow-up 2 (2026-08-29, ad hoc, not a numbered task) — the repo is now Vercel-deployable.**
+Code and config only; **nothing has been deployed yet** (creating the Vercel project and setting
+its env vars is a dashboard step only the user can do — see the handoff list). Changes:
+`config.py` groups required env vars by **role** (core/web/etl) with `require_web()`/`require_etl()`
+enforcing at the point that role starts — the web function can now boot without the S3 *write*
+credentials it never uses, and the nightly job no longer needs a `DJANGO_SECRET_KEY` (a wart
+recorded when Task 64 wrote the workflow, now gone from both YAML files). Backstop
+`require_etl()` calls added in `TMDBClient.__init__` and `s3_utils.get_s3_client()` so a directly-run
+ETL module still fails before its first request, not midway. `requirements.txt` is now **web-only**
+(Django/psycopg2/python-dotenv, ~55 MB) with the pipeline stack moved to `requirements-etl.txt`
+(pyarrow+pandas+numpy+botocore alone are ~275 MB against Vercel's un-tree-shaken 500 MB bundle
+cap); both workflows and the README/Quick Commands now install the ETL file. `settings.py` keys
+everything off the platform's own `VERCEL` var: `DEBUG` forced off regardless of `DJANGO_DEBUG`,
+`ALLOWED_HOSTS` += `.vercel.app` (preview hostnames are per-commit and unlistable in advance) +
+`DJANGO_ALLOWED_HOSTS`, derived `CSRF_TRUSTED_ORIGINS`, `STATIC_ROOT` + `ManifestStaticFilesStorage`
+(production only — content hashes, so a CSS change lands immediately), `CONN_MAX_AGE=600` +
+`sslmode=require` on the warehouse connection (the existing `urlparse` silently dropped the
+`?sslmode=require` in the Neon URL), secure cookies + `SECURE_PROXY_SSL_HEADER`, `default` DB to
+`/tmp` (read-only FS), and **`/admin/` not routed at all** via new `settings.ADMIN_ENABLED` — it
+has nothing to administer and no auth DB, so the alternative is a guaranteed 500 on a public URL.
+New `vercel.json`: `regions: ["fra1"]` (co-located with Neon — the default `iad1` would re-create
+the ~90 ms/query problem, and `home()` makes 7 queries), `maxDuration: 60` (Neon's free-tier cold
+start is 20–45 s), `excludeFiles`, and an **`ignoreCommand`** — the nightly job commits to
+`ops/refresh-history.md` to keep its schedule alive and **Vercel does not honour `[skip ci]`**, so
+without it every nightly run would redeploy the site for a file no page reads. Verified against
+real history: `5791c7d` (run 3) and `8b6c5ba` (Task 64 close-out) both skip, `654a02e`/`9cf408c`
+both build. **Verified by simulation, not assumed:** a scratch harness cleared the environment,
+patched out `.env`, set `VERCEL=1` and served real requests through the real WSGI app with
+`TMDB_API_KEY=''`/`S3_BUCKET=''` — all 7 routes 200, `/admin/` **404** (not 500), bad slug 404,
+`DEBUG=False`, rendered HTML carries content-hashed asset URLs. `manage.py check --deploy` under
+`VERCEL=1` is clean but for two deliberate items (HSTS unset on purpose — vercel.app is already
+preloaded and HSTS is not quickly reversible; SECRET_KEY strength, which is the user's to set in
+the dashboard). `pytest` 292 → **297** (+5 in new `tests/test_config.py`, pinning both halves of
+the role change: a web-only env imports and passes `require_web()`, an ETL-only env passes
+`require_etl()`, each `require_*` still lists *every* missing name at once, and `DATABASE_URL` is
+still enforced at import). Docs: `docs/architecture.md` **§4.4**, README **§5 Hosting the site**,
+`.env.example`, Quick Commands above. **Still to do, by the user:** create the Vercel project,
+set `DATABASE_URL` (Neon **pooled** endpoint) + a **fresh** `DJANGO_SECRET_KEY` + optional
+`DJANGO_ALLOWED_HOSTS`, confirm the region is `fra1`, then deploy and walk the routes.
+**First deploy attempt (2026-08-29) failed; fixed.** Build succeeded, function 500'd on every
+route with `ModuleNotFoundError: No module named 'theoria_site'`. Cause: `manage.py` lives in
+`django_app/`, so every local entry point (runserver, tests, `manage.py check`) implicitly puts
+that directory on `sys.path`; Vercel imports `django_app/theoria_site/wsgi.py` **by path from the
+repo root**, where `theoria_site` resolves to nothing. Fixed by making `wsgi.py`/`asgi.py` insert
+their own `BASE_DIR` on `sys.path` before Django resolves `DJANGO_SETTINGS_MODULE`. **Nothing local
+could have caught this** — the test suite enters through the same directory that hides the
+assumption; reproduced with a harness that loads the file by path from the repo root with
+`django_app/` absent from `sys.path` (old file → the exact production error, new file → 200s).
+`pytest` still 297/297.
 Currently on          : **Nothing active.** Next is **Task 63** (close Phase 14 — user decision
 2026-08-26: analytics panels for country/language, full live re-run, doc truth-up) then **Task 69**
 (close Phase 15 — repoint the four rating queries to `fact_movie_rating`, drop their
@@ -419,7 +485,9 @@ theoria/
 ├── for_learning.md             # ← teaching log, appended after every task
 ├── config.py                   # loads all env vars; fails loud if missing
 ├── .env.example
-├── requirements.txt
+├── vercel.json                 # hosting: fra1 region, ignoreCommand, bundle excludes
+├── requirements.txt            # web runtime only (what the hosted function installs)
+├── requirements-etl.txt        # the above + pipeline stack; install this locally
 └── README.md
 ```
 

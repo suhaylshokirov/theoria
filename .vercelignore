@@ -1,0 +1,11 @@
+# Only consulted for `vercel deploy` from the CLI; Git deployments use
+# .gitignore. Keeps a local CLI deploy from uploading the virtualenv and the
+# scratch directories, which would otherwise be tens of thousands of files.
+venv/
+.venv/
+logs/
+data_quality/rejected/
+graphify-out/
+staticfiles/
+.pytest_cache/
+__pycache__/

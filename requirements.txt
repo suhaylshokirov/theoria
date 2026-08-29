@@ -1,18 +1,12 @@
-# --- Core ETL ---
-requests==2.32.3
-pandas==2.2.3
-pyarrow==18.1.0
-boto3==1.35.92
+# Web runtime — and *only* the web runtime.
+#
+# The hosted Django function installs exactly this file, so every line here is
+# weight in a bundle capped at 500 MB. The ETL dependencies (pandas, pyarrow,
+# boto3) are an order of magnitude larger than these three and the site never
+# imports one of them, so they live in requirements-etl.txt instead.
+#
+# Local development and CI want both:  pip install -r requirements-etl.txt
 
-# --- Warehouse ---
-SQLAlchemy==2.0.36
-psycopg2-binary==2.9.10
-
-# --- Config ---
-python-dotenv==1.0.1
-
-# --- Web UI ---
 Django==5.1.4
-
-# --- Testing ---
-pytest==8.3.4
+psycopg2-binary==2.9.10
+python-dotenv==1.0.1

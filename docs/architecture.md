@@ -388,8 +388,84 @@ from a newer server. A plain `COPY … TO/FROM STDOUT` streamed through libpq ha
 Two `DATABASE_URL`s result, which is the point: locally it names the fast replica, and in the
 GitHub Actions job it names Neon. `NEON_DATABASE_URL` (local-only) is the sync source. The cloud
 pipeline is unchanged — it still writes Neon directly and never syncs. Hosting the app next to
-Neon instead (co-located in `eu-central-1`) is the other way to erase the latency and stays open
-as a later step; the replica was chosen because it costs nothing and keeps the site laptop-local.
+Neon instead (co-located in `eu-central-1`) is the other way to erase the latency; the replica was
+chosen because it costs nothing and keeps the site laptop-local. §4.4 takes the other route as
+well, for a different reason — being reachable at all — and the two coexist.
+
+### 4.4 Hosting the read layer on Vercel
+
+The site deploys to Vercel as a single Python function: Vercel finds `django_app/manage.py`,
+resolves the entrypoint from `WSGI_APPLICATION`, runs `collectstatic` at build time and serves the
+result from its CDN. Only the read layer moves. The pipeline stays on GitHub Actions, and that
+split is forced rather than chosen: Vercel's Hobby functions cap at 300 s and a full refresh runs
+~25 minutes. It is also the right split — ingestion is a scheduled batch job, not a request.
+
+**The region is the whole latency argument, restated.** §4.3 measured ~90 ms per query from the
+laptop to Neon in `eu-central-1`, which is what the local replica exists to avoid. A function
+running in Vercel's default `iad1` would reproduce exactly that, and worse: `home()` issues seven
+queries, so a transatlantic hop per query would make the hosted site slower than the laptop was
+before the replica existed. Pinning `regions: ["fra1"]` co-locates the function with Neon and
+collapses the round-trip to the same order as a local socket — so the hosted site reads Neon
+*directly* and needs no replica at all. The replica keeps its job for local development; the two
+answer the same question ("how do we not pay 90 ms a query?") in the two places it gets asked.
+
+**Configuration required knowing which process needs what.** `config.py` previously demanded every
+variable of every importer, so the web function could not boot without TMDB and AWS credentials it
+would never use — a deployment holding S3 *write* credentials to serve a read-only page. Variables
+are now grouped by role (core / web / etl) and enforced by `require_web()` / `require_etl()` at the
+point that role starts. Nothing became quieter: a missing key still stops the process before any
+work happens. The symmetric win is that the nightly job no longer needs a `DJANGO_SECRET_KEY`,
+a wart that had been recorded and tolerated since the job was written.
+
+**Two requirements files, for a hard reason.** Python function bundles are capped at 500 MB and are
+not tree-shaken — everything reachable at build time ships. pyarrow, pandas, numpy and botocore
+alone are ~275 MB, and no view imports one of them. `requirements.txt` is now the web runtime only;
+`requirements-etl.txt` includes it and adds the pipeline stack.
+
+**The nightly job would otherwise redeploy the site every night.** The refresh workflow commits a
+line to `ops/refresh-history.md` so that repository activity keeps GitHub from disabling the
+schedule after 60 idle days (§4.2). That commit carries `[skip ci]`, which stops Actions —
+**Vercel does not honour it**. Left alone, every nightly run would rebuild and redeploy the site
+for a file no page reads, discarding warm instances so the next visitor pays a cold start on both
+Vercel and Neon. `vercel.json`'s `ignoreCommand` diffs the paths the site actually serves
+(`django_app/`, `warehouse/queries/`, `config.py`, `requirements.txt`) and skips the build when
+none of them changed. Verified against real history: the run-3 commit and the Task 64 close-out
+commit both skip; the replica and `manage.py serve` commits both build.
+
+**Deploy order is the inverse of what a Django habit expects.** Django never migrates the warehouse
+— every model is `managed = False` and `WarehouseRouter.allow_migrate` refuses it — so Vercel will
+never apply a schema change. A new column means: apply the DDL to Neon, run the loader, *then*
+deploy the reader. The reverse order 500s every request until the column exists. Preview
+deployments read the production warehouse, which is safe only because the site cannot write to it;
+that same read-only design is what makes sharing one database across environments acceptable here.
+
+Everything environment-specific keys off the platform's own `VERCEL` variable rather than a flag
+someone has to remember: `DEBUG` is forced off regardless of `DJANGO_DEBUG`, `ALLOWED_HOSTS` gains
+`.vercel.app` (preview hostnames are generated per commit and cannot be listed in advance), secure
+cookies and `SECURE_PROXY_SSL_HEADER` switch on, `CONN_MAX_AGE` holds the Neon connection across
+requests on a warm instance, and `/admin/` is not routed — it has nothing to administer and no
+database to authenticate against, so the alternative is a guaranteed 500 on a public URL.
+
+**The first deploy failed on an assumption nothing local could expose.** `manage.py` lives in
+`django_app/`, so running anything through it puts that directory on `sys.path` and
+`theoria_site.settings` imports — every local path, tests included, inherits that for free. The
+platform imports `wsgi.py` by file path from the repository root instead, where `theoria_site`
+resolves to nothing: `ModuleNotFoundError`, 500 on every route including `/favicon.ico`. The fix is
+for the entrypoint to state its own import root (`sys.path.insert` of `BASE_DIR` before Django
+resolves the settings module) rather than depend on who launched it. Verified by loading the file
+the way the platform does — by path, from the repo root, with `django_app/` absent from `sys.path`
+— which reproduces the exact production error against the old file and returns 200s against the new
+one. Worth noting as a class of bug: a layout assumption held by *every* local entry point is
+invisible to a test suite that also enters through it.
+
+`ManifestStaticFilesStorage` is used in production only. It content-hashes every asset, so a CSS
+change takes effect immediately rather than waiting out a returning visitor's cached copy, and it
+resolves names through a manifest `collectstatic` writes — which means it fails loudly if the build
+step was skipped rather than quietly serving something stale.
+
+The remaining cost is Neon's free tier, where scale-to-zero cannot be disabled: after five idle
+minutes the next request pays a cold start, measured at 20–45 s on this project. For a low-traffic
+site that is most first visits. It is a plan setting, not an architectural problem.
 
 ## 5. Data quality: quarantine, never drop
 

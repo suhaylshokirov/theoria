@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["fra1"],
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- django_app/ warehouse/queries/ config.py requirements.txt vercel.json",
+  "functions": {
+    "django_app/theoria_site/wsgi.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{venv/**,tests/**,etl/**,scripts/**,data_quality/**,logs/**,docs/**,ops/**,graphify-out/**,warehouse/ddl/**,.github/**,**/*.md,**/*.parquet}"
+    }
+  }
+}

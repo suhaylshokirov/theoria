@@ -39,8 +39,6 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       S3_BUCKET: ${{ secrets.S3_BUCKET }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      # config.py requires this even though the refresh never touches Django.
-      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -51,10 +49,10 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-etl.txt
 
       - name: Verify configuration
-        run: python -c "import config; print('config OK')"
+        run: python -c "import config; config.require_etl(); print('config OK')"
 
       - name: Run refresh pipeline
         run: python -m scripts.run_refresh

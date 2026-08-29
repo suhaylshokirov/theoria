@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import os
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -23,13 +24,57 @@ PROJECT_ROOT = BASE_DIR.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 import config  # noqa: E402
 
+# config.py only enforces the variables *every* process needs on import; this
+# is the Django site starting up, so this is where its own required set is
+# checked. Fails loud before Django touches anything else.
+config.require_web()
+
+# ON_VERCEL is set by the platform itself, so it is true in the deployed
+# function and false everywhere else without anyone having to remember a flag.
+ON_VERCEL = bool(os.environ.get("VERCEL"))
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config.DJANGO_SECRET_KEY
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config.DJANGO_DEBUG
+# DJANGO_DEBUG defaults to True for local development, and forgetting to set it
+# to False is exactly the mistake that would leak tracebacks and settings to
+# the public internet -- so being hosted overrides it outright rather than
+# trusting an environment variable to have been set correctly.
+DEBUG = config.DJANGO_DEBUG and not ON_VERCEL
 
-ALLOWED_HOSTS = []
+# Hosts are additive: whatever DJANGO_ALLOWED_HOSTS names, plus every
+# *.vercel.app URL when deployed. The wildcard covers preview deployments,
+# whose hostname is generated per commit and cannot be listed in advance.
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
+if ON_VERCEL:
+    ALLOWED_HOSTS.append(".vercel.app")
+    for _var in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL"):
+        _host = os.environ.get(_var)
+        if _host and _host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_host)
+# Left empty for local development on purpose: Django already treats an empty
+# ALLOWED_HOSTS under DEBUG as localhost + 127.0.0.1 + [::1] + any .localhost
+# subdomain, and spelling that list out by hand only ever gets it narrower.
+
+# Django needs the scheme here, and matches a leading-dot host as a wildcard
+# only when written as "*.domain" -- so translate rather than reuse verbatim.
+CSRF_TRUSTED_ORIGINS = [
+    f"https://*{host}" if host.startswith(".") else f"https://{host}"
+    for host in ALLOWED_HOSTS
+    if host not in ("localhost", "127.0.0.1")
+]
+
+# The /admin/ route is served only where it can actually work. Nothing in the
+# warehouse is registered with it (every model is managed = False and
+# read-only), and the deployed function has no persistent database behind
+# django.contrib.auth -- so on Vercel the route would be a guaranteed 500 on
+# a public URL. Local development keeps it.
+ADMIN_ENABLED = not ON_VERCEL
 
 
 # Application definition
@@ -89,10 +134,17 @@ WSGI_APPLICATION = 'theoria_site.wsgi.application'
 
 _warehouse_url = urlparse(config.DATABASE_URL.replace('postgresql+psycopg2', 'postgresql'))
 
+# Nothing this site serves reads the 'default' database: no view touches
+# sessions, messages or auth, and the router sends every warehouse model to
+# 'warehouse'. It still has to point somewhere Django can open, and the
+# deployed filesystem is read-only apart from /tmp -- so on Vercel it points
+# at an ephemeral file that is expected to stay empty.
+_default_sqlite = Path('/tmp/db.sqlite3') if ON_VERCEL else BASE_DIR / 'db.sqlite3'
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': _default_sqlite,
     },
     'warehouse': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -101,10 +153,35 @@ DATABASES = {
         'PASSWORD': _warehouse_url.password,
         'HOST': _warehouse_url.hostname,
         'PORT': _warehouse_url.port,
+        # Hold the connection open across requests when deployed. Vercel's
+        # Fluid compute reuses a warm instance for many requests, so paying a
+        # TLS handshake to Neon on every one is pure waste; locally the
+        # replica is on the same machine and a fresh connection costs nothing.
+        'CONN_MAX_AGE': 600 if ON_VERCEL else 0,
+        'CONN_HEALTH_CHECKS': ON_VERCEL,
+        'OPTIONS': {'sslmode': 'require'} if ON_VERCEL else {},
     },
 }
 
 DATABASE_ROUTERS = ['core.routers.WarehouseRouter']
+
+
+# Transport security
+#
+# Only applied when deployed: locally the dev server speaks plain HTTP, and
+# turning these on there would redirect the site into a scheme it cannot
+# answer. Vercel terminates TLS at the edge and forwards the original scheme
+# in X-Forwarded-Proto, which is what lets Django tell an already-secure
+# request from one that needs redirecting.
+if ON_VERCEL:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    # SECURE_HSTS_SECONDS is deliberately unset. HSTS is a promise a browser
+    # caches and honours for its full duration, so a misconfiguration is not
+    # quickly reversible; vercel.app is already HSTS-preloaded, so the header
+    # would buy nothing here. Set it deliberately if a custom domain is added.
 
 
 # Password validation
@@ -144,6 +221,28 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# collectstatic's destination. Vercel runs collectstatic during the build and
+# serves what lands here from its CDN, so in production these files never
+# reach the function at all.
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# ManifestStaticFilesStorage rewrites each file to a content-hashed name, so a
+# CSS change takes effect immediately instead of waiting out a returning
+# visitor's cached copy. Production only: it resolves names through a manifest
+# that collectstatic writes, which does not exist while developing.
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': (
+            'django.contrib.staticfiles.storage.StaticFilesStorage'
+            if DEBUG
+            else 'django.contrib.staticfiles.storage.ManifestStaticFilesStorage'
+        ),
+    },
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
