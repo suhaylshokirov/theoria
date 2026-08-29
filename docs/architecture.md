@@ -446,6 +446,18 @@ cookies and `SECURE_PROXY_SSL_HEADER` switch on, `CONN_MAX_AGE` holds the Neon c
 requests on a warm instance, and `/admin/` is not routed — it has nothing to administer and no
 database to authenticate against, so the alternative is a guaranteed 500 on a public URL.
 
+**The first deploy failed on an assumption nothing local could expose.** `manage.py` lives in
+`django_app/`, so running anything through it puts that directory on `sys.path` and
+`theoria_site.settings` imports — every local path, tests included, inherits that for free. The
+platform imports `wsgi.py` by file path from the repository root instead, where `theoria_site`
+resolves to nothing: `ModuleNotFoundError`, 500 on every route including `/favicon.ico`. The fix is
+for the entrypoint to state its own import root (`sys.path.insert` of `BASE_DIR` before Django
+resolves the settings module) rather than depend on who launched it. Verified by loading the file
+the way the platform does — by path, from the repo root, with `django_app/` absent from `sys.path`
+— which reproduces the exact production error against the old file and returns 200s against the new
+one. Worth noting as a class of bug: a layout assumption held by *every* local entry point is
+invisible to a test suite that also enters through it.
+
 `ManifestStaticFilesStorage` is used in production only. It content-hashes every asset, so a CSS
 change takes effect immediately rather than waiting out a returning visitor's cached copy, and it
 resolves names through a manifest `collectstatic` writes — which means it fails loudly if the build

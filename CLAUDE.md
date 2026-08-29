@@ -129,6 +129,16 @@ still enforced at import). Docs: `docs/architecture.md` **§4.4**, README **§5 
 `.env.example`, Quick Commands above. **Still to do, by the user:** create the Vercel project,
 set `DATABASE_URL` (Neon **pooled** endpoint) + a **fresh** `DJANGO_SECRET_KEY` + optional
 `DJANGO_ALLOWED_HOSTS`, confirm the region is `fra1`, then deploy and walk the routes.
+**First deploy attempt (2026-08-29) failed; fixed.** Build succeeded, function 500'd on every
+route with `ModuleNotFoundError: No module named 'theoria_site'`. Cause: `manage.py` lives in
+`django_app/`, so every local entry point (runserver, tests, `manage.py check`) implicitly puts
+that directory on `sys.path`; Vercel imports `django_app/theoria_site/wsgi.py` **by path from the
+repo root**, where `theoria_site` resolves to nothing. Fixed by making `wsgi.py`/`asgi.py` insert
+their own `BASE_DIR` on `sys.path` before Django resolves `DJANGO_SETTINGS_MODULE`. **Nothing local
+could have caught this** — the test suite enters through the same directory that hides the
+assumption; reproduced with a harness that loads the file by path from the repo root with
+`django_app/` absent from `sys.path` (old file → the exact production error, new file → 200s).
+`pytest` still 297/297.
 Currently on          : **Nothing active.** Next is **Task 63** (close Phase 14 — user decision
 2026-08-26: analytics panels for country/language, full live re-run, doc truth-up) then **Task 69**
 (close Phase 15 — repoint the four rating queries to `fact_movie_rating`, drop their
