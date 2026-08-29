@@ -91,8 +91,8 @@ decision), warehouse checks 39/39 against the replica. Docs: architecture §4.3,
 Commands. Hosting the app in `eu-central-1` instead stays open as a later option (settings prep —
 whitenoise, env `ALLOWED_HOSTS`, a Postgres for the `default` DB — is independent and not done).
 **Follow-up 2 (2026-08-29, ad hoc, not a numbered task) — the repo is now Vercel-deployable.**
-Code and config only; **nothing has been deployed yet** (creating the Vercel project and setting
-its env vars is a dashboard step only the user can do — see the handoff list). Changes:
+**LIVE at https://theoria-ochre.vercel.app/ since 2026-08-29**, verified end to end (see the
+verification line at the end of this block). Changes:
 `config.py` groups required env vars by **role** (core/web/etl) with `require_web()`/`require_etl()`
 enforcing at the point that role starts — the web function can now boot without the S3 *write*
 credentials it never uses, and the nightly job no longer needs a `DJANGO_SECRET_KEY` (a wart
@@ -126,9 +126,23 @@ the dashboard). `pytest` 292 → **297** (+5 in new `tests/test_config.py`, pinn
 the role change: a web-only env imports and passes `require_web()`, an ETL-only env passes
 `require_etl()`, each `require_*` still lists *every* missing name at once, and `DATABASE_URL` is
 still enforced at import). Docs: `docs/architecture.md` **§4.4**, README **§5 Hosting the site**,
-`.env.example`, Quick Commands above. **Still to do, by the user:** create the Vercel project,
-set `DATABASE_URL` (Neon **pooled** endpoint) + a **fresh** `DJANGO_SECRET_KEY` + optional
-`DJANGO_ALLOWED_HOSTS`, confirm the region is `fra1`, then deploy and walk the routes.
+`.env.example`, Quick Commands above. **Vercel project config:** exactly two env vars
+(`DATABASE_URL` = the Neon **pooled** endpoint, `DJANGO_SECRET_KEY` = a fresh one) — deliberately
+no TMDB/AWS credentials, since the site never calls either and a public function has no business
+holding S3 *write* keys. **Live verification (2026-08-29):** all 12 routes 200
+(`/`, `/movies/`, a film, `/people/`, a person, `/studios/`, a studio, `/analytics/`,
+`?country=JP`, `?sort=rating`, `/actors/`), `/admin/` and a bad slug both **404**;
+`x-vercel-id: hkg1::fra1::…` confirms the function really runs in **fra1** beside Neon; CSS serves
+content-hashed from the CDN (`/static/css/theoria.140331234ca1.css`); *The Godfather* renders
+**IMDb 9.2 / 2,251,225 votes** — *more* votes than the 2,250,628 recorded at Task 67, which is the
+nightly job's refresh showing up on the hosted site with **no deploy**, exactly the property
+§4.4 claims. First request after an idle period took **14.4s** (Neon free-tier cold start,
+unavoidable below a paid plan); warm requests ~1s from a half-way-round-the-world client.
+**One process note:** the work was reverted and then restored on user request within the same
+session (`b541c69` then `11a51d8`), because the site was assumed broken while in fact the fix
+commit simply had not been pushed yet — the deployed function was still running the pre-fix code.
+Diagnosing "which commit is actually live" *before* concluding the code is wrong would have
+skipped both commits.
 **First deploy attempt (2026-08-29) failed; fixed.** Build succeeded, function 500'd on every
 route with `ModuleNotFoundError: No module named 'theoria_site'`. Cause: `manage.py` lives in
 `django_app/`, so every local entry point (runserver, tests, `manage.py check`) implicitly puts
