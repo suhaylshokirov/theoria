@@ -47,6 +47,12 @@ class TMDBClient:
         timeout: float = 10.0,
         session: requests.Session | None = None,
     ) -> None:
+        if not api_key:
+            # config.py leaves TMDB_API_KEY unenforced at import so the Django
+            # site can boot without it; this is the first moment it is really
+            # needed. require_etl() names the missing variable precisely.
+            config.require_etl()
+            raise config.ConfigError("TMDBClient was given an empty api_key.")
         self.api_key = api_key
         # Strip trailing slash so f"{base_url}/{path}" never doubles up.
         self.base_url = base_url.rstrip("/")

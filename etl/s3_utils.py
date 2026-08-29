@@ -67,9 +67,16 @@ def get_s3_client():
 
     Credentials and region are read from config.py, never from os.environ or
     hardcoded values here.
+
+    The credential check happens here rather than at import: config.py leaves
+    the AWS variables unenforced so the Django site can boot without them (see
+    its module docstring), which means this is the first moment they are
+    genuinely required. boto3 would otherwise accept the empty strings and
+    fail later with an opaque signature error.
     """
     global _s3_client
     if _s3_client is None:
+        config.require_etl()
         _s3_client = boto3.client(
             "s3",
             aws_access_key_id=config.AWS_ACCESS_KEY_ID,
