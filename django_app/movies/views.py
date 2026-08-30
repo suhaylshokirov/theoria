@@ -410,6 +410,7 @@ def _movie_languages(movie, language_rows):
 # ?sort= values accepted by studio_list, mapped to an order_by expression.
 STUDIO_SORTS = {
     "film_count": F("film_count").desc(nulls_last=True),
+    "revenue": F("total_revenue").desc(nulls_last=True),
     "name": F("name").asc(),
 }
 
@@ -427,9 +428,15 @@ def studio_list(request):
     if sort not in STUDIO_SORTS:
         sort = "film_count"
 
+    # total_revenue sums straight off dim_movie through the bridge — one bridge
+    # row per (movie, studio), so no genre-fanout guard is needed here (same as
+    # studio_detail()'s revenue stat).
     companies = (
         Company.objects.using("warehouse")
-        .annotate(film_count=Count("movie_companies"))
+        .annotate(
+            film_count=Count("movie_companies"),
+            total_revenue=Sum("movie_companies__movie__revenue"),
+        )
         .filter(film_count__gt=0)
     )
     if q:

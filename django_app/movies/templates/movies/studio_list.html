@@ -3,7 +3,7 @@
 {% block title %}Theoria — Studios{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title="Studios" sub="Every production company credited on a film in the catalog. Search by name, or reorder by output." only %}
+{% include "movies/_sheet_header.html" with title="Studios" sub="Every production company credited on a film in the catalog. Search by name, or reorder by output or revenue." only %}
 
 <section class="sheet-section">
     <div class="toolbar">
@@ -24,6 +24,8 @@
                 <legend class="visually-hidden">Order by</legend>
                 <input type="radio" name="sort" id="sort-film_count" value="film_count" {% if sort == "film_count" %}checked{% endif %}>
                 <label for="sort-film_count">Most films</label>
+                <input type="radio" name="sort" id="sort-revenue" value="revenue" {% if sort == "revenue" %}checked{% endif %}>
+                <label for="sort-revenue">Revenue</label>
                 <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
                 <label for="sort-name">A–Z</label>
             </fieldset>

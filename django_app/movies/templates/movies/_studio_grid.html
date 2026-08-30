@@ -8,7 +8,7 @@
 <div id="studios-grid" aria-live="polite">
     <div class="poster-grid is-wide">
         {% for company in page_obj %}
-        {% include "movies/_studio_card.html" with company=company only %}
+        {% include "movies/_studio_card.html" with company=company sort=sort only %}
         {% empty %}
         <p class="empty">
             {% if q %}No studios match “{{ q }}”.

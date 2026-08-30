@@ -1,6 +1,10 @@
 {% comment %} A studio as a frame on the sheet, mirroring _person_card.html.
    Params (pass with `only`):
      company : a Company
+     sort    : the active ?sort= value — when "revenue", the card sub-line
+               shows total revenue instead of the film count, so the ordering
+               is legible (same idea as a movie card showing its rating under
+               ?sort=rating).
 
    Logos are landscape/transparent PNGs, unlike a poster or a headshot, so
    they get their own .logo treatment (object-fit: contain, padded) rather
@@ -22,7 +26,11 @@
         {% endif %}
         <div class="card-body">
             <span class="card-title">{{ company.name }}</span>
+            {% if sort == "revenue" and company.total_revenue %}
+            <span class="card-sub">${{ company.total_revenue|floatformat:"0g" }}</span>
+            {% else %}
             <span class="card-sub">{{ company.film_count }} film{{ company.film_count|pluralize }}</span>
+            {% endif %}
         </div>
     </a>
 </div>

@@ -74,6 +74,11 @@ HQ 96%, homepage 64%, parent 10%, **description 4%** (catalog-wide ~1%). Fresh-i
 DB from `01`–`03` → exactly 16 tables, `dim_company` 10 columns. `pytest` **313/313** (+15).
 Silver DQ `company_details` 4/4; warehouse checks unchanged (Task 65 adds none). Full detail in the
 Task 65 Outcome block below. Docs: `architecture.md` §3.9, `README.md`.
+**Ad-hoc follow-up (2026-08-30, user request, not a numbered task):** the `/studios/` index sort
+gained a **Revenue** option (`STUDIO_SORTS["revenue"]` → `Sum("movie_companies__movie__revenue")`,
+plain sum off the bridge — no genre fan-out). When `?sort=revenue` the studio card shows total
+revenue as its sub-line instead of the film count (the `?sort=rating` movie-card precedent), so the
+ordering is legible. `pytest` 313 → **314**.
 Prior task: **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
 The Task 63 panels landed as "Films by production country" (ranked table off
 `bridge_movie_country`/`dim_country`) and "Non-English cinema over time" (Chart.js line + table

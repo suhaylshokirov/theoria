@@ -1282,6 +1282,27 @@ def test_studio_list_search_and_sort():
     assert response.context["sort"] == "name"
 
 
+def test_studio_list_sort_by_revenue():
+    """?sort=revenue orders by the Sum(...__movie__revenue) annotation."""
+    from movies.views import STUDIO_SORTS
+
+    studio = _company()
+    with patch.object(Company, "objects", new=MagicMock()) as company_mgr:
+        qs = company_mgr.using.return_value
+        qs.annotate.return_value = qs
+        qs.filter.return_value = qs
+        qs.order_by.return_value = [studio]
+
+        response = client.get("/studios/", {"sort": "revenue"})
+
+    assert response.status_code == 200
+    assert response.context["sort"] == "revenue"
+    qs.order_by.assert_called_once_with(STUDIO_SORTS["revenue"], "name")
+    # The annotation the sort reads must be present.
+    _, kwargs = qs.annotate.call_args
+    assert "total_revenue" in kwargs
+
+
 def test_studio_list_invalid_sort_falls_back_to_film_count():
     with patch.object(Company, "objects", new=MagicMock()) as company_mgr:
         qs = company_mgr.using.return_value
