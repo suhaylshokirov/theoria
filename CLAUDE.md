@@ -56,7 +56,21 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : **Task 70 — replaced the `/movies/` country filter with a genre filter
+Last completed task   : **Task 71 — genre chips on the movie page link to the filtered index
+(2026-08-30).** One template line and one test: `<span class="chip">` → `<a class="chip"
+href="/movies/?genre={{ genre.genre_name|slugify }}">`. No view change and no `?sort=` in the
+href — `/movies/` already defaults to newest-first, which is where a reader clicking a genre wants
+to land. The slug comes from Django's built-in `slugify` **template filter**, which is the same
+`django.utils.text.slugify` the view uses for its `{slug: genre_id}` map, so the two sides can't
+drift (this is what `dim_genre` having no slug column costs, and it's cheap). **Zero new CSS**:
+`.chip:hover` was written for links and had been stranded since the chips were demoted to `<span>`s
+on 2026-08-14 when `/genres/` was removed — the cascade was checked, not assumed (`.chip`'s ink
+colour outranks the global `a` lime; `.chip:hover` overrides `a:hover`'s underline by source
+order). Live-verified: Godfather → `?genre=drama`/`?genre=crime`, Inception →
+`?genre=science-fiction` (multi-word slug round-trips); each lands 200 with the `<select>`
+preselected and results newest-first; `?genre=tv-movie` returns its 2 films. `pytest` **317**.
+Full detail in the Task 71 block below.
+Prior task: **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).** App-layer only, exactly as scoped: no DDL, no ETL, no pipeline run, no new
 CSS/JS/templates. `movie_list()` lost the `country` param, the
 `movie_countries__country_id`/`.distinct()` filter, `country_choices` and the `Country` import
@@ -269,9 +283,9 @@ could have caught this** — the test suite enters through the same directory th
 assumption; reproduced with a harness that loads the file by path from the repo root with
 `django_app/` absent from `sys.path` (old file → the exact production error, new file → 200s).
 `pytest` still 297/297.
-Currently on          : **Nothing active.** Task 70 (genre filter on `/movies/`) is DONE
-(2026-08-30). Phases 14 and 15 are closed (Tasks 63 + 69) and Task 65 (studio provenance page) is
-DONE. No queued tasks remain.
+Currently on          : **Nothing active.** Tasks 70 and 71 (the genre filter on `/movies/`, then
+the movie page's genre chips linking into it) are both DONE (2026-08-30). Phases 14 and 15 are
+closed (Tasks 63 + 69) and Task 65 (studio provenance page) is DONE. No queued tasks remain.
 Current phase         : **None active.** Phases 12–15 all complete; Tasks 64, 65 and 70 (all
 phase-independent) all done. Next phase is unplanned.
 Outstanding must-do   : **None.** ~~Task 64~~ (nightly cloud refresh) DONE 2026-08-29;
@@ -1681,6 +1695,40 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   — grepped `README.md`/`docs/architecture.md` for the list-page country filter and found none;
   the `?country=`/`country_choices` mentions there are all about the warehouse schema or
   `movie_detail`'s provenance rows (Task 62), which this task doesn't touch.
+
+#### [x] Task 71 — Genre chips on the movie page link to the filtered index
+- **Goal:** A film's genre chips have been plain, unclickable text since **2026-08-14**, when the
+  `/genres/` index and detail pages were removed and left them pointing nowhere. Task 70 gave them
+  somewhere to point. Clicking "Horror" should land on the Films index filtered to Horror, newest
+  first — **no new page**, just the index the reader already knows.
+- **Files:** `django_app/movies/templates/movies/movie_detail.html`, `tests/test_django_views.py`
+- **Outcome (2026-08-30):** One template change and one test. `<span class="chip">` became
+  `<a class="chip" href="{% url 'movies:movie_list' %}?genre={{ genre.genre_name|slugify }}">`.
+  Three decisions worth recording:
+  **(1) No view change, and no `?sort=` on the link.** `/movies/` already defaults to
+  `sort="release"` (newest first), which is exactly where a reader clicking a genre wants to land,
+  so pinning `&sort=release` into the href would duplicate a default into 19 hrefs for nothing.
+  **(2) The slug is built by Django's built-in `slugify` template filter**, which *is*
+  `django.utils.text.slugify` — the same function `movie_list()` uses to build its
+  `{slug: genre_id}` map. `dim_genre` has no slug column (Task 70 deliberately added none), so
+  both sides must derive it, and deriving it through one shared function is what stops them
+  drifting. A view-side change (attaching a slug to each `Genre` in `movie_detail()`) was
+  considered and rejected: it would compute the same string a second way for no gain.
+  **(3) Zero new CSS — and the reason is a small piece of history.** `.chip:hover` in
+  `theoria.css` already sets `background: var(--lime-wash)`, `border-color: var(--lime-mark)` and
+  `text-decoration: none` — a hover state written for links, left stranded when the chips were
+  demoted to `<span>`s in 2026-08-14. Making them anchors again brought it back to life. Checked
+  the cascade rather than assuming: `.chip`'s `color: var(--ink)` (0,1,0) beats the global
+  `a`'s lime (0,0,1), and `a:hover`'s underline (0,1,1) is overridden by `.chip:hover` (0,1,1,
+  later in source), so a chip renders identically at rest and gains only the hover it was
+  always styled for.
+  **Live-verified:** `/movies/the-godfather/` renders `?genre=drama` + `?genre=crime`;
+  `/movies/inception/` renders `?genre=adventure`, `?genre=action`, `?genre=science-fiction`
+  (multi-word slug round-trips). Following each: 200, the genre `<select>` arrives **preselected**
+  to that genre, and results are newest-first (`?genre=drama` → three 2026 films). `?genre=tv-movie`
+  returns its 2 films (Midnight Matinee 1988, Duel 1971) — the smallest genre, proving the path
+  isn't only right for large ones. `pytest` 316 → **317** (1 new: chips render as links to the
+  filtered index, and no bare `<span class="chip">` survives).
 
 ---
 

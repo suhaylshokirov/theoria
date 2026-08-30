@@ -534,6 +534,45 @@ def test_movie_detail_renders_studios_as_links():
     assert "Warner Bros. Pictures" in body
 
 
+def test_movie_detail_renders_genres_as_links_to_the_filtered_index():
+    """A film's genre chips link back to /movies/?genre=<slug> (Task 71).
+
+    They were plain text from 2026-08-14, when the /genres/ index was removed
+    and left them pointing nowhere. The slug is the slugified genre *name*,
+    matching the {slug: genre_id} map movie_list() builds — dim_genre has no
+    slug column, so both sides derive it the same way or they drift. No
+    ?sort= is carried: /movies/ already defaults to newest-first.
+    """
+    movie = _movie()
+    genre = Genre(genre_id=878, genre_name="Science Fiction")
+
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr, patch.object(
+        MovieCountry, "objects", new=MagicMock()
+    ) as country_mgr, patch.object(
+        MovieLanguage, "objects", new=MagicMock()
+    ) as language_mgr:
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        country_mgr.using.return_value.filter.return_value.select_related.return_value = []
+        language_mgr.using.return_value.filter.return_value.select_related.return_value = []
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = [genre]
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
+
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    body = response.content.decode()
+    assert 'href="/movies/?genre=science-fiction"' in body
+    assert "Science Fiction" in body
+    # The chip is a link now, not the <span> it was left as.
+    assert '<span class="chip">' not in body
+
+
 def test_movie_detail_renders_rating_badge_with_vote_count_and_synopsis():
     """The IMDb badge (Task 68) and the overview must both reach the page.
 

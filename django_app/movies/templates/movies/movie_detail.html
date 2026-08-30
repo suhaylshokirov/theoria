@@ -89,10 +89,18 @@
             {% endif %}
         </dl>
 
+        {% comment %} Each genre links back to the Films index filtered to it (Task 71).
+           No ?sort= on the link: /movies/ already defaults to newest-first, which
+           is what a reader clicking "Horror" wants to land on. The slug is built
+           with the same django.utils.text.slugify the view's {slug: genre_id} map
+           uses, so the two can't drift — dim_genre has no slug column to read.
+           These chips were plain text from 2026-08-14, when the /genres/ index was
+           removed and left them pointing nowhere; .chip:hover has been waiting for
+           a link ever since, so this needs no new CSS. {% endcomment %}
         {% if genres %}
         <div class="chips">
             {% for genre in genres %}
-            <span class="chip">{{ genre.genre_name }}</span>
+            <a class="chip" href="{% url 'movies:movie_list' %}?genre={{ genre.genre_name|slugify }}">{{ genre.genre_name }}</a>
             {% endfor %}
         </div>
         {% endif %}
