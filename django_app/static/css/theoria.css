@@ -789,6 +789,25 @@ main.container {
   color: var(--ink-muted);
 }
 
+/* A filmography's job_display ranges from one word ("Thanks") to a joined
+   string of every job a person held on that film — the credits data has
+   rows up to 9 jobs deep. Without a reserved, clamped height here, the rating
+   badge under each card lands at a different row depending on how many lines
+   that card's role text happened to wrap to, and the grid reads as uneven
+   rather than as a sheet of frames sharing one plan. Clamped at 3 lines: wide
+   enough to show a common 4-job stack ("Director / Screenplay / Story /
+   Producer") in full, and a graceful cutoff for the rare deeper one — the
+   same trade-off .card-title already makes for a long name. Scoped to
+   .is-film, same as .card-title's own min-height above: a rating badge only
+   ever follows a film card, so only a film card needs this alignment. */
+.poster-card.is-film .card-role {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  min-height: calc(3 * 1.3em);
+}
+
 /* --- Rating badge (IMDb) ----------------------------------------------------
    Added component, Task 68 — a text "IMDb" chip plus the figure and its
    "/ 10" scale, and on the movie detail page, the vote count and an outbound
