@@ -1287,7 +1287,10 @@ button:hover,
 .specimen-plate .plate-caption {
   margin-top: var(--space-3);
   font-size: var(--text-3xs);
-  color: var(--ink-faint);
+  /* Same medium weight + --ink-muted as the card sub-lines, so the year under
+     the poster here reads at the strength every other sub-line does. */
+  font-weight: 500;
+  color: var(--ink-muted);
 }
 
 .specimen-tagline {

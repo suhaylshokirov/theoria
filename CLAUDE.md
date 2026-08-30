@@ -86,6 +86,9 @@ prose variant on a person's filmography and a movie's cast grid) was left at def
 `--ink-faint`. Given the same `font-weight: 500` + `color: var(--ink-muted)`, keeping its Work Sans
 face. CSS-only, no template/JS/test change — `.card-sub` and `.card-role` are the only two
 card sub-line devices, so every card sub-line site-wide now reads at one strength.
+`.specimen-plate .plate-caption` (the release year under the poster on the movie detail page —
+not a card, a lone plate caption) given the same `font-weight: 500` + `--ink-muted` in the same
+pass, size left at `--text-3xs`.
 Prior task: **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
 The Task 63 panels landed as "Films by production country" (ranked table off
 `bridge_movie_country`/`dim_country`) and "Non-English cinema over time" (Chart.js line + table
