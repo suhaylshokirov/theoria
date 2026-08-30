@@ -1350,6 +1350,17 @@ button:hover,
   font-size: var(--text-sm);
 }
 
+/* Every value in the record list reads at one weight, whatever face it uses.
+   Left alone, the numeric rows (.mono) inherit the global .mono weight of 500
+   and the rating figure sits at 600, while the prose rows (languages, people,
+   studios) stay at the body 400 — three weights for one tier of fact. The
+   mono face on numbers is kept; only the weight is levelled. */
+.record-list dd,
+.record-list dd.mono,
+.record-list .rating-badge-figure {
+  font-weight: 400;
+}
+
 .specimen .chips {
   margin-top: var(--space-6);
 }

@@ -96,6 +96,13 @@ one line. Moved to `.poster-card.is-film .card-title`; `_movie_card.html`'s wrap
 `is-film` class. The `-webkit-line-clamp: 2` stays on the base rule as a harmless max. `pytest`
 314/314 (person-card count test at `test_django_views.py:792` unaffected — cast renders
 `_person_card`).
+**Ad-hoc follow-up 4 (2026-08-30, user request):** movie-detail record-list weight mismatch. The
+`.mono` numeric rows (Released, Runtime, Budget, Revenue) inherited the global
+`.mono { font-weight: 500 }` cap and the rating figure sat at 600, while the prose rows
+(Language, Countries, Directed by, Studios) were at the body 400 — three weights for one tier of
+fact. New `.record-list dd, .record-list dd.mono, .record-list .rating-badge-figure { font-weight:
+400 }` levels them; the mono face on numbers is untouched. Scoped to `.record-list` so table and
+card-sub-line `.mono` weights are unaffected. `pytest` 314/314.
 Prior task: **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
 The Task 63 panels landed as "Films by production country" (ranked table off
 `bridge_movie_country`/`dim_country`) and "Non-English cinema over time" (Chart.js line + table
