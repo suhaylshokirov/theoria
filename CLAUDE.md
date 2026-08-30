@@ -57,9 +57,15 @@ Rules:
 
 ```
 Last completed task   : **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
-The `/analytics/` dashboard went from 4 panels to **6** (new: "Films by production country" —
-ranked table off `bridge_movie_country`/`dim_country`; "Non-English cinema over time" — Chart.js
-line + table off `dim_movie.original_language`, 1970s 24.8% → 2010s 2.0%). All **four** rating
+The Task 63 panels landed as "Films by production country" (ranked table off
+`bridge_movie_country`/`dim_country`) and "Non-English cinema over time" (Chart.js line + table
+off `dim_movie.original_language`), taking `/analytics/` to 6 panels. **Ad-hoc follow-up same day
+(user request, not a numbered task):** "Non-English cinema over time" and the older "Studio output
+by decade" (Task 60) were both **removed from the dashboard** — app-layer only, per the documented
+Franchises/9→2-panel precedent: `studio_output_by_decade.sql` and `non_english_cinema_over_time.sql`
+are left untouched in `warehouse/queries/`, just no longer read; the language line chart was
+dropped from `analytics.js`. `/analytics/` is now **4 panels** (Rating by decade, Revenue by
+genre, Top studios by revenue, Films by production country). All **four** rating
 `.sql` queries repointed `fact_movie_metrics` → `fact_movie_rating WHERE source='imdb'` and their
 `SELECT DISTINCT movie_id, rating` de-dup CTEs **deleted** (the payoff of Phase 15's grain, made
 visible) — `fact_movie_metrics.rating`/`.vote_count` now have zero readers, kept as a
@@ -298,6 +304,9 @@ rather than left silently ignored. Live-verified: all 4 panels render with real 
 `top_studios_by_revenue` ranks Warner Bros. Pictures first (128 films, $45.3B, ★7.24) and every
 studio link resolves 200. Tests unchanged in count (229) — the existing dashboard context test
 was extended with the two new panels' fixtures and assertions rather than duplicated.
+**Later (2026-08-30, ad-hoc user request): the `studio_output_by_decade` panel was removed from
+the dashboard** — `studio_output_by_decade.sql` is kept in `warehouse/queries/` (unread), only the
+`views.py`/`dashboard.html` wiring was deleted; `top_studios_by_revenue` stays.
 Prior task's notes: **Task 59 (2026-08-16) gave `dim_company` its pages** —
 `/studios/` (ranked table, most films first) and `/studios/<slug>/` (filmography + stats), plus a
 "Studios" record row on the movie page. The plan's own page-shape reference (`genre_list.html`,
@@ -885,16 +894,19 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   6. Update `docs/architecture.md` with the bridge-table decision (why `bridge_` not `fact_`, and why a bridge is right for companies where a column was right for collections), and this file's Warehouse Schema section with the final table list.
 - **Outcome (2026-08-30, merged with Task 69 — one commit, the Task 66–67 "landed together"
   precedent, because the two share this close-out too tightly to split without faking it):**
-  Two new panels on `/analytics/` (now **6 panels**): **"Films by production country"** (ranked
-  table off `bridge_movie_country WHERE relation='production'` → `dim_country`, with an
-  IMDb-sourced avg rating; US 1,050 / UK 202 / France 74 / Germany 52 / Japan 35 …) and
-  **"Non-English cinema over time"** (Chart.js line + table, `dim_movie.original_language <> 'en'`
-  share by decade — 1970s **24.8%** → 2010s **2.0%**, 2020s back to 8.7%; NULL language counted as
-  unknown, not non-English). Both queries carry an explicit `LIMIT` per the Task 42/60 rule even
-  though naturally bounded; timed **16.1 ms** / **6.6 ms** against the replica, full `/analytics/`
-  well under budget. `analytics.js` gained a third line chart (`#language-chart`) copied from the
-  decade-chart block; `analytics.css` untouched (its "only adds, never restyles" contract). The
-  sheet-header sub-copy now names country and language. **The "full live re-run" step was
+  Shipped two new panels on `/analytics/`: **"Films by production country"** (ranked table off
+  `bridge_movie_country WHERE relation='production'` → `dim_country`, with an IMDb-sourced avg
+  rating; US 1,050 / UK 202 / France 74 / Germany 52 / Japan 35 …) and **"Non-English cinema over
+  time"** (Chart.js line + table, `dim_movie.original_language <> 'en'` share by decade — 1970s
+  **24.8%** → 2010s **2.0%**; NULL language counted as unknown, not non-English). Both queries
+  carry an explicit `LIMIT` per the Task 42/60 rule even though naturally bounded; timed
+  **16.1 ms** / **6.6 ms** against the replica. `analytics.js` gained a third line chart;
+  `analytics.css` untouched (its "only adds, never restyles" contract). **Same-day ad-hoc
+  follow-up (user request):** "Non-English cinema over time" was removed again, together with the
+  older "Studio output by decade" panel (Task 60) — app-layer only (query files kept, per the
+  Franchises/9→2 precedent), the language line chart dropped from `analytics.js`. `/analytics/`
+  now stands at **4 panels**: Rating by decade, Revenue by genre, Top studios by revenue, Films by
+  production country. **The "full live re-run" step was
   deliberately skipped** — see the Task 69 outcome: the Task 64 nightly cloud path had already
   brought all 1,211 rateable films' IMDb ratings and the Phase 13–14 bridge data into one current
   partition (`2026-08-29`), so a hand re-run would only re-prove `nightly-refresh` runs 3–4.

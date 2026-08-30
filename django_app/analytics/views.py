@@ -26,20 +26,16 @@ def _run_query(filename):
 def dashboard(request):
     movies_by_decade = _run_query("movies_by_decade.sql")
     revenue_by_genre = _run_query("revenue_by_genre.sql")
-    studio_output_by_decade = _run_query("studio_output_by_decade.sql")
     top_studios_by_revenue = _run_query("top_studios_by_revenue.sql")
     films_by_production_country = _run_query("films_by_production_country.sql")
-    non_english_over_time = _run_query("non_english_cinema_over_time.sql")
 
     context = {
         "revenue_by_genre": revenue_by_genre,
         "movies_by_decade": movies_by_decade,
-        "studio_output_by_decade": studio_output_by_decade,
         "top_studios_by_revenue": top_studios_by_revenue,
         "films_by_production_country": films_by_production_country,
-        "non_english_over_time": non_english_over_time,
         # Pre-shaped as flat label/value lists (with Decimal -> float) for the
-        # Chart.js trend panels — the tables above reuse the raw rows.
+        # two Chart.js trend panels — the tables above reuse the raw rows.
         "decade_labels": [row["decade"] for row in movies_by_decade],
         "decade_avg_ratings": [
             float(row["avg_rating"]) if row["avg_rating"] is not None else None
@@ -49,11 +45,6 @@ def dashboard(request):
         "genre_revenue": [
             float(row["total_revenue"]) if row["total_revenue"] is not None else None
             for row in revenue_by_genre
-        ],
-        "language_labels": [row["decade"] for row in non_english_over_time],
-        "language_non_english_pct": [
-            float(row["non_english_pct"]) if row["non_english_pct"] is not None else None
-            for row in non_english_over_time
         ],
     }
     return render(request, "analytics/dashboard.html", context)

@@ -177,38 +177,6 @@
         }),
       }));
     }
-
-    var langLabels = readJSON("language-labels");
-    var langPct = readJSON("language-non-english-pct");
-    var langCanvas = document.getElementById("language-chart");
-    if (langCanvas && langLabels && langLabels.length) {
-      charts.push(new Chart(langCanvas, {
-        type: "line",
-        data: {
-          labels: langLabels,
-          datasets: [
-            {
-              label: "Non-English share",
-              data: langPct,
-              borderColor: MARK,
-              borderWidth: 2,
-              pointRadius: 4,
-              pointHoverRadius: 7,
-              pointHitRadius: 16,
-              pointBackgroundColor: MARK,
-              pointBorderColor: PAPER,
-              pointBorderWidth: 2,
-              backgroundColor: WASH,
-              fill: true,
-              tension: 0.25,
-            },
-          ],
-        },
-        options: baseOptions(function (v) {
-          return Number(v).toFixed(1) + "%";
-        }),
-      }));
-    }
   }
 
   // Rebuild on theme change: Chart.js bakes colours into the instance, so
