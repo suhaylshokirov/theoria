@@ -79,6 +79,13 @@ gained a **Revenue** option (`STUDIO_SORTS["revenue"]` → `Sum("movie_companies
 plain sum off the bridge — no genre fan-out). When `?sort=revenue` the studio card shows total
 revenue as its sub-line instead of the film count (the `?sort=rating` movie-card precedent), so the
 ordering is legible. `pytest` 313 → **314**.
+**Ad-hoc follow-up 2 (2026-08-30, user request, not a numbered task):** card sub-line consistency.
+`c0ba97a` had bolded only `.poster-card .card-sub` (the numeric sub-line — year / "Pop X" /
+revenue / film count — shared across all three card partials); `.poster-card .card-role` (the
+prose variant on a person's filmography and a movie's cast grid) was left at default weight /
+`--ink-faint`. Given the same `font-weight: 500` + `color: var(--ink-muted)`, keeping its Work Sans
+face. CSS-only, no template/JS/test change — `.card-sub` and `.card-role` are the only two
+card sub-line devices, so every card sub-line site-wide now reads at one strength.
 Prior task: **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
 The Task 63 panels landed as "Films by production country" (ranked table off
 `bridge_movie_country`/`dim_country`) and "Non-English cinema over time" (Chart.js line + table
