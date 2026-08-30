@@ -56,7 +56,52 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : **Task 65 — studio provenance page (2026-08-30).** `dim_company` gained
+Last completed task   : **Task 70 — replaced the `/movies/` country filter with a genre filter
+(2026-08-30).** App-layer only, exactly as scoped: no DDL, no ETL, no pipeline run, no new
+CSS/JS/templates. `movie_list()` lost the `country` param, the
+`movie_countries__country_id`/`.distinct()` filter, `country_choices` and the `Country` import
+(`MovieCountry` stays — `movie_detail`'s provenance rows still use it); gained a genre `<select>`
+sourced from `Genre.objects.using("warehouse").annotate(film_count=Count("moviemetrics__movie",
+distinct=True)).filter(film_count__gt=0)` — the `Count(..., distinct=True)`/`HAVING` shape is the
+Task 59 precedent, reused rather than re-derived, and is what keeps `Documentary` (0 films) off
+the list. **Genre membership lives only in `fact_movie_metrics` — there is no bridge table for
+it** — so the filter joins that fact table directly
+(`movies.filter(moviemetrics__genre_id=genre_ids[genre]).distinct()`), the same join+`.distinct()`
+shape the country filter used. **The URL carries a slugified genre name
+(`?genre=science-fiction`), never the raw `genre_id`**: `dim_genre` has no slug column and this
+task deliberately added none (a warehouse migration for a read-side filter would mean DDL against
+both Neon and the replica, plus a loader change, for a URL cosmetic) — `{slugify(name): genre_id}`
+is built in the view from the same `values_list` that feeds the `<select>`, keeping the no-raw-
+surrogate-keys-in-URLs rule intact the cheap way. An unknown slug (`?genre=nonsense`) silently
+falls back to unfiltered, the same posture `sort`/`gender`/`known_for` already take — not a 404,
+not an empty grid. **The load-bearing comment is on the `.distinct()` call**, naming the actual
+mechanism rather than "defensive": `fact_movie_metrics`' PK is `(movie_id, date_id, genre_id)` and
+`date_id` derives from the *release* date, so a film whose release date moved between ingestions
+keeps two `date_id` rows per genre — *Avatar Aang: The Last Airbender* and *The Odyssey*, 7
+duplicate `(movie, genre)` pairs between them — and without `.distinct()` both would render twice
+in the grid and be double-counted by the paginator. `movie_list.html`'s `<select>` took the
+country one's exact slot in the same `.field`/`[data-live-filter]` wrapper, so `initLiveFilter()`
+needed no change; `_movie_grid.html`'s empty-state branch became `{% elif genre %}`; the sheet
+header's sub-copy now says "narrow by genre". **Live-verified against the replica**:
+`/movies/?genre=horror&sort=release` and `?genre=action&sort=revenue` both 200 with the expected
+ordering (Evil Dead Burn / Night of the Living Dead newest-first; Avatar / Avengers: Endgame /
+Avatar: The Way of Water biggest-grossing-first); `/movies/?genre=action` totals **429** films
+across **18** pages (17×24 + 21) — exactly the measured figure — with *Avatar Aang: The Last
+Airbender* and *The Odyssey* each appearing **exactly once** (page 1), the `.distinct()` proof;
+the pager's Next link carries `genre=action` forward; the `<select>` lists **18** options (no
+Documentary) plus "Any genre"; `?genre=nonsense` renders the full unfiltered catalog at 200;
+`/movies/` with no params is byte-for-byte the same shape as before; `/movies/the-godfather/`
+still renders its Countries row (country provenance on the movie page, `dim_country`,
+`bridge_movie_country`, and the "Films by production country" analytics panel are all untouched —
+scoped deliberately out of this task); `/analytics/` still 200s with that panel intact. `git
+status` confirms `theoria.css`/`theoria.js` untouched and no new files. Tests 314 → **316** (+4:
+`test_movie_list_filters_by_genre`, `test_movie_list_unknown_genre_falls_back_to_unfiltered`,
+`test_movie_list_genre_composes_with_revenue_sort`, `test_movie_list_genre_survives_pagination`;
+`test_movie_list_filters_by_country`/`test_movie_list_country_survives_pagination` became their
+genre equivalents rather than staying as extra tests, and every other `movie_list` test's
+`Country.objects` mock was repointed at `Genre.objects`' longer `.annotate().filter().order_by()
+.values_list()` chain).
+Prior task: **Task 65 — studio provenance page (2026-08-30).** `dim_company` gained
 `description`/`headquarters`/`homepage`/`parent_company_id`/`parent_company_name` from
 `GET /company/{id}` (first call to that endpoint), surfaced above the filmography on
 `/studios/<slug>/`. New `etl/bronze/ingest_companies.py` (skips any company already enriched in
@@ -224,12 +269,14 @@ could have caught this** — the test suite enters through the same directory th
 assumption; reproduced with a harness that loads the file by path from the repo root with
 `django_app/` absent from `sys.path` (old file → the exact production error, new file → 200s).
 `pytest` still 297/297.
-Currently on          : **Nothing active.** Phases 14 and 15 are closed (Tasks 63 + 69) and
-**Task 65 (studio provenance page) is DONE** (2026-08-30). No queued tasks remain.
-Current phase         : **None active.** Phases 12–15 all complete; Tasks 64 and 65 (both
-phase-independent must-dos) both done. Next phase is unplanned.
+Currently on          : **Nothing active.** Task 70 (genre filter on `/movies/`) is DONE
+(2026-08-30). Phases 14 and 15 are closed (Tasks 63 + 69) and Task 65 (studio provenance page) is
+DONE. No queued tasks remain.
+Current phase         : **None active.** Phases 12–15 all complete; Tasks 64, 65 and 70 (all
+phase-independent) all done. Next phase is unplanned.
 Outstanding must-do   : **None.** ~~Task 64~~ (nightly cloud refresh) DONE 2026-08-29;
-~~Task 65~~ (studio provenance page) DONE 2026-08-30. Both phase-independent must-dos are closed.
+~~Task 65~~ (studio provenance page) DONE 2026-08-30; ~~Task 70~~ (genre filter on `/movies/`)
+DONE 2026-08-30.
 A possible follow-up, not scheduled: ~10 companies linked only in pre-`2026-08-29` `movie_companies`
 partitions still have null detail columns (they were absent from the partition the backfill joined
 against); their Silver rows exist, so the next nightly run that includes them self-heals.
@@ -1511,6 +1558,129 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   joined against the `2026-08-29` `movie_companies` partition (1,388 distinct companies), so ~10
   companies linked only in older partitions have null detail columns until a nightly run that
   includes them; `transform_companies` already has their Silver rows, so it self-heals.
+
+---
+
+### Feature — Browse the Films index by genre
+
+> Raised by user request on 2026-08-30. `/movies/` today offers a title search, four sort
+> segments (Newest / Rated / Revenue / A–Z) and a **country** `<select>`. The country facet has
+> not earned its slot — genre is how people actually narrow a catalog ("the newest horror films",
+> "the highest-grossing action films"), and the two filters compose with the existing sorts the
+> same way, so this is a swap, not an addition.
+>
+> **Measured before planning (2026-08-30, live replica), so the design isn't built on guesses:**
+>
+> | fact | value |
+> |---|---|
+> | `dim_genre` rows | 19 |
+> | genres with ≥1 film in the catalog | **18** — `Documentary` has **0** |
+> | films with ≥1 genre row | 1,213 / 1,215 (the 2 known `fact_movie_metrics`-less films) |
+> | biggest genres | Action 429, Drama 392, Adventure 376, Comedy 331, Thriller 314, Sci-Fi 284 |
+> | duplicate `(movie_id, genre_id)` pairs in `fact_movie_metrics` | **7**, across **2** films |
+>
+> That last row is the one number that changes the code. `fact_movie_metrics`' PK is
+> `(movie_id, date_id, genre_id)` and `date_id` is derived from the *release* date — so a film
+> whose release date moved between ingestions keeps **both** rows. *Avatar Aang: The Last
+> Airbender* holds `date_id` 20260725 (from `2026-07-06`) **and** 20260724 (from `2026-08-29`)
+> for each of its 4 genres; *The Odyssey* the same for 3. So a genre join hands back that film
+> twice, and `.distinct()` is **load-bearing here, not defensive** — without it those two films
+> would appear twice in a filtered grid and be counted twice by the paginator.
+
+#### [x] Task 70 — Replace the country filter on `/movies/` with a genre filter
+- **Goal:** `/movies/` filters by genre, composing with all four existing sorts (newest / rated /
+  revenue / A–Z) and with `?q=`, surviving pagination. The country filter is removed from this
+  page. **Country data is not touched anywhere else** — `movie_detail`'s Countries /
+  Country-of-origin provenance rows (Task 62), `dim_country`, `bridge_movie_country` and the
+  "Films by production country" analytics panel all stay exactly as they are. This is a
+  read-side, app-layer change: **no DDL, no ETL, no pipeline re-run, no new TMDB calls.**
+- **Files:** `django_app/movies/views.py`,
+  `movies/templates/movies/{movie_list,_movie_grid}.html`, `tests/test_django_views.py`
+- **Steps:**
+  1. **Remove the country filter from `movie_list()` only** — the `country` param, the
+     `movie_countries__country_id` filter, `country_choices`, the `country` key in `base_query`,
+     the `Country` import (`MovieCountry` stays, `movie_detail` still reads it), and the country
+     paragraph in the view docstring. Drop the `<select>` from `movie_list.html`.
+  2. **Genre membership lives only in `fact_movie_metrics`** — there is no `bridge_movie_genre`.
+     Filter with `movies.filter(moviemetrics__genre_id=gid).distinct()`, the same join+`.distinct()`
+     shape the country filter used, and **comment the `.distinct()` with the real reason**: the 2
+     films above carry two `date_id` rows per genre. A comment saying "defensive" would be wrong
+     and would invite someone to delete it.
+  3. **URL shape: `?genre=science-fiction`, not `?genre=878`.** `dim_genre` has no slug column and
+     this task adds none (a warehouse migration for a read-side filter would mean DDL against Neon
+     *and* the replica, plus a loader change). Slugify the 19 names in the view instead —
+     `{slugify(name): genre_id}` built from the same `values_list` that feeds the `<select>` — so
+     the URL stays readable and consistent with every other slug-addressed page (Task 46), and no
+     raw surrogate key appears in a user-facing URL (the no-internals-in-the-UI rule).
+  4. **Validate against that map and fall back to no filter** on an unknown slug, exactly as
+     `sort` / `gender` / `known_for` already do — not a 404, and not an empty grid.
+  5. **Offer only genres that have at least one film.** `Documentary` has 0 and would be a choice
+     that can never return anything. Use `.annotate(film_count=Count("moviemetrics__movie",
+     distinct=True)).filter(film_count__gt=0)` so it compiles to `HAVING`, the Task 59 precedent.
+     `distinct=True` matters for the same duplicate-`date_id` reason as step 2.
+  6. `base_query` carries `genre` forward so the shared `_pager.html` keeps it across pages —
+     extend the existing `urlencode` call, don't rebuild it.
+  7. `_movie_grid.html`'s empty state: `{% elif country %}` → `{% elif genre %}`. Still reachable
+     (e.g. `?q=zzz&genre=horror`), so keep the message rather than dropping the branch.
+  8. `_sheet_header.html` sub copy on `movie_list.html` says "narrow by country" — say genre.
+  9. **Zero new CSS and zero new JS.** The genre `<select>` takes the country `<select>`'s slot in
+     the same `.field` wrapper inside the same `[data-live-filter]` form, so `initLiveFilter()`
+     picks it up with no change — it re-fetches on any field change and already swaps `#movies-grid`.
+- **Tests:** the 6 existing `movie_list` tests all mock `Country.objects` for `country_choices`
+  and must be repointed at `Genre.objects`; `test_movie_list_filters_by_country` and
+  `test_movie_list_country_survives_pagination` become their genre equivalents. Add: an unknown
+  `?genre=` slug falls back to unfiltered, and genre + `?sort=revenue` composes (the actual
+  feature — the filter must not disturb the ordering or the `imdb_rating` annotation).
+- **Verify (live, against the replica):** `/movies/?genre=horror&sort=release` returns horror
+  films newest-first; `/movies/?genre=action&sort=revenue` leads with the biggest action
+  grossers; `/movies/?genre=action` reports **429** films across its pages, matching the measured
+  count above, and *Avatar Aang* / *The Odyssey* each appear **once** (the `.distinct()` proof);
+  `genre=` survives the pager's Previous/Next; the `<select>` lists **18** options, not 19;
+  `?genre=nonsense` renders the full unfiltered catalog, 200; `/movies/` with no params is
+  unchanged; a film page still shows its Countries row; `/analytics/`'s country panel still 200s.
+- **Outcome:** Built exactly to spec, no deviations. `movie_list()` lost `country`,
+  `country_choices`, the `movie_countries__country_id` filter and the `Country` import
+  (`MovieCountry` kept — `movie_detail` still reads it); gained the genre `<select>` sourced from
+  `Genre.objects.using("warehouse").annotate(film_count=Count("moviemetrics__movie",
+  distinct=True)).filter(film_count__gt=0).order_by("genre_name")`, the exact `HAVING`-compiling
+  shape Task 59 already established for offering only non-empty choices — `Documentary` (0 films)
+  is correctly absent. The filter itself joins `fact_movie_metrics` directly
+  (`movies.filter(moviemetrics__genre_id=genre_ids[genre]).distinct()`), since there is no bridge
+  table for genre membership. `?genre=science-fiction` (never `?genre=878`) is built from
+  `{slugify(name): genre_id}` over the same `values_list`, so no raw `genre_id` reaches a URL. An
+  unknown slug resets to `""` before the filter runs — same fallback posture as `sort`/`gender`/
+  `known_for`, not a 404 or an empty grid. The `.distinct()` carries the real reason in its
+  comment rather than "defensive": `fact_movie_metrics`' PK is `(movie_id, date_id, genre_id)` and
+  `date_id` tracks the *release* date, so *Avatar Aang: The Last Airbender* and *The Odyssey* each
+  hold two `date_id` rows per genre from a release date that moved between ingestions (7 duplicate
+  `(movie, genre)` pairs total) — without `.distinct()` both would double-render and double-count
+  in a filtered, paginated grid. `movie_list.html`'s `<select>` reused the country one's exact
+  `.field` slot inside the same `[data-live-filter]` form, so `initLiveFilter()` needed no change;
+  `_movie_grid.html`'s empty state became `{% elif genre %}`, keeping the same message since it's
+  still reachable (`?q=zzz&genre=horror`); the sheet-header sub-copy now reads "narrow by genre".
+  **Zero new CSS/JS/template files** — confirmed via `git status`, which also shows
+  `theoria.css`/`theoria.js` untouched. **Live-verified against the replica**:
+  `/movies/?genre=horror&sort=release` 200, newest-first (Evil Dead Burn, Night of the Living
+  Dead, …); `/movies/?genre=action&sort=revenue` 200, biggest grossers first (Avatar, Avengers:
+  Endgame, Avatar: The Way of Water, …); `/movies/?genre=action` totals **429** films across
+  **18** pages (17×24 + a 21-film last page) — exactly the measured figure in the feature's
+  header table — with *Avatar Aang: The Last Airbender* and *The Odyssey* each landing on page 1
+  and appearing **exactly once**, the `.distinct()` proof; the pager's `page=3` link on page 2
+  carries `genre=action` forward (`?q=&sort=release&genre=action&page=3`); the `<select>` lists
+  **18** options (Action … Western, no Documentary) plus "Any genre"; `?genre=nonsense` 200s the
+  full unfiltered catalog (24 cards on page 1, same as no param at all); `/movies/` with no params
+  renders unchanged; `/movies/the-godfather/` still shows its Countries row (country provenance,
+  `dim_country`, `bridge_movie_country`, and the "Films by production country" analytics panel are
+  all untouched, as scoped); `/analytics/` still 200s with that panel present. `pytest` 314 →
+  **316** (+2 net: `test_movie_list_filters_by_country`/`test_movie_list_country_survives_pagination`
+  became their genre equivalents 1:1, plus 2 genuinely new tests —
+  `test_movie_list_unknown_genre_falls_back_to_unfiltered` and
+  `test_movie_list_genre_composes_with_revenue_sort`; every other `movie_list` test's
+  `Country.objects` mock was repointed at `Genre.objects`' longer
+  `.annotate().filter().order_by().values_list()` chain). No doc truth-up needed beyond this file
+  — grepped `README.md`/`docs/architecture.md` for the list-page country filter and found none;
+  the `?country=`/`country_choices` mentions there are all about the warehouse schema or
+  `movie_detail`'s provenance rows (Task 62), which this task doesn't touch.
 
 ---
 

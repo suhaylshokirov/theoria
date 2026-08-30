@@ -4,10 +4,11 @@ from django.core.paginator import Paginator
 from django.db.models import Avg, Count, F, Max, Min, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
+from django.utils.text import slugify
 
 
 from movies.models import (
-    Company, Country, Credit, Genre, Movie, MovieCompany,
+    Company, Credit, Genre, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieRating, Person,
 )
 
@@ -98,28 +99,55 @@ def home(request):
 def movie_list(request):
     """Browsable movie catalog: poster grid + title search + sort + pagination.
 
-    Country is a facet of a film, not an entity with its own biography
-    (Task 62) — so it's a plain filter on this list, the same shape as
-    `q`/`sort`, rather than a new /countries/ index and detail page.
-    Filtering by it matches any relation (a film's origin *or* production
-    country) — a browsing reader asking "what Japanese films are here"
-    doesn't want to have to pick which claim about "Japanese" they meant
-    first.
+    Genre is a facet of a film, filtered here rather than given its own
+    /genres/ index page (Task 70; a genre-browsing UI existed briefly and was
+    removed on 2026-08-14 — see the status block in CLAUDE.md). Genre
+    membership lives only in fact_movie_metrics — there is no bridge table
+    for it — so the URL carries a slugified genre *name*
+    (?genre=science-fiction), never the raw genre_id: dim_genre has no slug
+    column of its own, and a surrogate key has no business in a user-facing
+    URL.
     """
     q = request.GET.get("q", "").strip()
     sort = request.GET.get("sort", "release")
     if sort not in MOVIE_SORTS:
         sort = "release"
-    country = request.GET.get("country", "").strip()
+
+    # Only genres that actually have a film in the catalog are offered as a
+    # choice — Documentary currently has 0, and a choice that can never
+    # return anything is worse than not offering it. distinct=True matters
+    # for the same reason the .distinct() below does: fact_movie_metrics'
+    # PK is (movie_id, date_id, genre_id), and a film whose release date
+    # moved between ingestions holds two date_id rows per genre, which
+    # would otherwise double-count its film_count.
+    genre_rows = (
+        Genre.objects.using("warehouse")
+        .annotate(film_count=Count("moviemetrics__movie", distinct=True))
+        .filter(film_count__gt=0)
+        .order_by("genre_name")
+        .values_list("genre_id", "genre_name")
+    )
+    genre_slugs = {slugify(name): genre_id for genre_id, name in genre_rows}
+    genre_choices = [(slugify(name), name) for _, name in genre_rows]
+
+    genre = request.GET.get("genre", "").strip()
+    if genre not in genre_slugs:
+        # Silent fallback to unfiltered on an unknown slug, the same posture
+        # sort/gender/known_for already take elsewhere in this file — not a
+        # 404, and not an empty grid.
+        genre = ""
 
     movies = Movie.objects.using("warehouse").all()
     if q:
         movies = movies.filter(title__icontains=q)
-    if country:
-        # A film can carry two country rows for the same code (origin and
-        # production agreeing), so the join can hand back the same movie
-        # more than once.
-        movies = movies.filter(movie_countries__country_id=country).distinct()
+    if genre:
+        # fact_movie_metrics' PK is (movie_id, date_id, genre_id) and
+        # date_id is derived from the *release* date — so a film whose
+        # release date moved between ingestions keeps both rows. Two films
+        # in the catalog do (Avatar Aang: The Last Airbender, The Odyssey —
+        # 7 duplicate (movie, genre) pairs), and without this they would
+        # render twice in the grid and be counted twice by the paginator.
+        movies = movies.filter(moviemetrics__genre_id=genre_slugs[genre]).distinct()
     # Annotated unconditionally, not only when sort == "rating" — the cards
     # display this figure too, so it must exist whether or not the list is
     # being sorted by it (Task 68). MOVIE_SORTS["rating"] points at the same
@@ -131,19 +159,14 @@ def movie_list(request):
 
     page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
-    country_choices = list(
-        Country.objects.using("warehouse").order_by("name")
-        .values_list("country_code", "name")
-    )
-
     # Built here, not in the template, so the shared _pager.html partial
     # doesn't need to know which params any given page carries — see
     # _pager.html's docstring.
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
-        "country": country,
-        "country_choices": country_choices,
-        "base_query": urlencode({"q": q, "sort": sort, "country": country}),
+        "genre": genre,
+        "genre_choices": genre_choices,
+        "base_query": urlencode({"q": q, "sort": sort, "genre": genre}),
     }
     # See _person_list()'s identical branch: static/js/theoria.js's
     # initLiveFilter() re-requests this URL with this header on every filter

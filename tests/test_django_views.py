@@ -110,9 +110,10 @@ def test_movie_list_returns_200_with_pagination():
     movies = [_movie(movie_id=i, title=f"Movie {i}") for i in range(1, 4)]
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        Country, "objects", new=MagicMock()
-    ) as country_mgr:
-        country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.annotate.return_value = qs
@@ -130,9 +131,10 @@ def test_movie_list_search_and_sort():
     movie = _movie()
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        Country, "objects", new=MagicMock()
-    ) as country_mgr:
-        country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.annotate.return_value = qs
@@ -158,9 +160,10 @@ def test_movie_list_sort_by_rating_uses_the_imdb_annotation():
     movie = _movie()
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        Country, "objects", new=MagicMock()
-    ) as country_mgr:
-        country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.annotate.return_value = qs
         qs.order_by.return_value = [movie]
@@ -180,9 +183,10 @@ def test_movie_list_sort_by_rating_uses_the_imdb_annotation():
 
 def test_movie_list_invalid_sort_falls_back_to_release():
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        Country, "objects", new=MagicMock()
-    ) as country_mgr:
-        country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.annotate.return_value = qs
@@ -199,9 +203,10 @@ def test_movie_list_ajax_request_renders_results_fragment_only():
     not the full page — see _is_ajax() in views.py."""
     movie = _movie()
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        Country, "objects", new=MagicMock()
-    ) as country_mgr:
-        country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.annotate.return_value = qs
@@ -216,51 +221,107 @@ def test_movie_list_ajax_request_renders_results_fragment_only():
     assert "<!DOCTYPE" not in content
 
 
-def test_movie_list_filters_by_country():
-    """?country= narrows the catalog via bridge_movie_country (Task 62) —
-    matching either relation, since a browsing reader asking "what Japanese
-    films are here" isn't expected to pick origin vs. production first."""
+def test_movie_list_filters_by_genre():
+    """?genre= narrows the catalog via fact_movie_metrics (Task 70) — there is
+    no bridge table for genre, so the filter joins the fact table directly and
+    the URL carries a slugified genre name rather than the raw genre_id."""
     movie = _movie()
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        Country, "objects", new=MagicMock()
-    ) as country_mgr:
-        country_mgr.using.return_value.order_by.return_value.values_list.return_value = [
-            ("JP", "Japan")
-        ]
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Horror")]
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.distinct.return_value = qs
         qs.annotate.return_value = qs
         qs.order_by.return_value = [movie]
 
-        response = client.get("/movies/", {"country": "JP"})
+        response = client.get("/movies/", {"genre": "horror"})
 
     assert response.status_code == 200
-    qs.filter.assert_called_once_with(movie_countries__country_id="JP")
+    qs.filter.assert_called_once_with(moviemetrics__genre_id=27)
     qs.distinct.assert_called_once()
-    assert response.context["country"] == "JP"
-    assert response.context["country_choices"] == [("JP", "Japan")]
+    assert response.context["genre"] == "horror"
+    assert response.context["genre_choices"] == [("horror", "Horror")]
 
 
-def test_movie_list_country_survives_pagination():
-    """base_query (fed to the shared _pager.html) must carry country forward,
+def test_movie_list_unknown_genre_falls_back_to_unfiltered():
+    """An unknown slug is silently ignored, the same posture sort/gender/
+    known_for already take — not a 404, and not an empty grid."""
+    movie = _movie()
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Horror")]
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.distinct.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [movie]
+
+        response = client.get("/movies/", {"genre": "nonsense"})
+
+    assert response.status_code == 200
+    for _, kwargs in qs.filter.call_args_list:
+        assert "moviemetrics__genre_id" not in kwargs
+    qs.distinct.assert_not_called()
+    assert response.context["genre"] == ""
+
+
+def test_movie_list_genre_composes_with_revenue_sort():
+    """The genre filter and a non-default sort must both take effect at once —
+    the actual feature, not just that neither breaks alone."""
+    from django.db.models import Max, Q
+
+    movie = _movie()
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(28, "Action")]
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.distinct.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [movie]
+
+        response = client.get("/movies/", {"genre": "action", "sort": "revenue"})
+
+    assert response.status_code == 200
+    qs.filter.assert_called_once_with(moviemetrics__genre_id=28)
+    qs.distinct.assert_called_once()
+    (_, kwargs), = qs.annotate.call_args_list
+    assert isinstance(kwargs["imdb_rating"], Max)
+    assert kwargs["imdb_rating"].filter == Q(movierating__source="imdb")
+    (order_expr,), _ = qs.order_by.call_args
+    assert order_expr.expression.name == "revenue"
+    assert response.context["sort"] == "revenue"
+
+
+def test_movie_list_genre_survives_pagination():
+    """base_query (fed to the shared _pager.html) must carry genre forward,
     the same way it already carries q/sort — see _pager.html's docstring on
     why this is built in the view rather than the template."""
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
-        Country, "objects", new=MagicMock()
-    ) as country_mgr:
-        country_mgr.using.return_value.order_by.return_value.values_list.return_value = []
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Horror")]
         qs = movie_mgr.using.return_value.all.return_value
         qs.filter.return_value = qs
         qs.distinct.return_value = qs
         qs.annotate.return_value = qs
         qs.order_by.return_value = []
 
-        response = client.get("/movies/", {"country": "JP"})
+        response = client.get("/movies/", {"genre": "horror"})
 
     base_query = response.context["base_query"]
-    assert "country=JP" in base_query
+    assert "genre=horror" in base_query
 
 
 # ---------------------------------------------------------------------------
