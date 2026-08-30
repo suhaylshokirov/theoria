@@ -1503,3 +1503,24 @@ def test_tmdb_image_filter_builds_url_and_handles_empty():
     assert tmdb_image("", "w342") == ""
     assert tmdb_image(None) == ""
 
+
+# ---------------------------------------------------------------------------
+# 404 page
+# ---------------------------------------------------------------------------
+
+
+def test_custom_404_page_renders_message_and_home_link():
+    """An unmatched URL serves the custom 404.html (Django picks it up from
+    templates/404.html once DEBUG is off) with a plain message and a single
+    link back to the homepage."""
+    from django.test import override_settings
+
+    with override_settings(DEBUG=False):
+        response = client.get("/no/such/page/here/")
+
+    assert response.status_code == 404
+    body = response.content.decode()
+    assert "This page doesn’t exist." in body
+    assert 'href="/"' in body
+    assert "Back to homepage" in body
+

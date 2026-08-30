@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% comment %} Django serves this automatically for any unmatched URL (or a
+   view raising Http404) once DEBUG is off — no handler404 needed, since
+   settings.TEMPLATES DIRS already lists BASE_DIR / 'templates'. Deliberately
+   sparse: a line saying the page isn't there, and one way back. {% endcomment %}
+
+{% block title %}Page not found — Theoria{% endblock %}
+
+{% block content %}
+<section class="error-page">
+    <p class="error-code">404</p>
+    <h1 class="error-title">This page doesn’t exist.</h1>
+    <p class="error-lead">
+        The link may be broken, or the page may have been moved or removed.
+    </p>
+    <a class="btn" href="{% url 'movies:home' %}">Back to homepage</a>
+</section>
+{% endblock %}
