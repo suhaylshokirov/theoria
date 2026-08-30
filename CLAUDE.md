@@ -101,8 +101,10 @@ one line. Moved to `.poster-card.is-film .card-title`; `_movie_card.html`'s wrap
 `.mono { font-weight: 500 }` cap and the rating figure sat at 600, while the prose rows
 (Language, Countries, Directed by, Studios) were at the body 400 — three weights for one tier of
 fact. New `.record-list dd, .record-list dd.mono, .record-list .rating-badge-figure { font-weight:
-400 }` levels them; the mono face on numbers is untouched. Scoped to `.record-list` so table and
-card-sub-line `.mono` weights are unaffected. `pytest` 314/314.
+500 }` levels every fact value to 500 (the weight the numeric rows already had, and the heaviest
+Spline Sans Mono is loaded at — no synthesised bold); labels, title, tagline, synopsis and the
+poster-plate release year are untouched. Also lifts the studio-detail provenance `.record-list`
+values (same component) to match. `pytest` 314/314.
 Prior task: **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
 The Task 63 panels landed as "Films by production country" (ranked table off
 `bridge_movie_country`/`dim_country`) and "Non-English cinema over time" (Chart.js line + table

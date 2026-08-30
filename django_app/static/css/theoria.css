@@ -1350,15 +1350,15 @@ button:hover,
   font-size: var(--text-sm);
 }
 
-/* Every value in the record list reads at one weight, whatever face it uses.
-   Left alone, the numeric rows (.mono) inherit the global .mono weight of 500
-   and the rating figure sits at 600, while the prose rows (languages, people,
-   studios) stay at the body 400 — three weights for one tier of fact. The
-   mono face on numbers is kept; only the weight is levelled. */
+/* Every value in the record list reads at one weight, whatever face it uses:
+   500, which the numeric rows (.mono) already had and is the heaviest weight
+   Spline Sans Mono is actually loaded at, so mono and prose rows match with no
+   synthesised bold. The labels, title, tagline and synopsis are untouched —
+   only the fact values. The rating figure drops from 600 to sit in line. */
 .record-list dd,
 .record-list dd.mono,
 .record-list .rating-badge-figure {
-  font-weight: 400;
+  font-weight: 500;
 }
 
 .specimen .chips {
