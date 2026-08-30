@@ -3,12 +3,12 @@
 -- Restricted to directors with a real body of work (>= 3 films) and capped, because
 -- this returns one row per (director, year): at ~1,200 films that is well over a
 -- thousand rows, which is more than the dashboard panel can usefully show.
+--
+-- Rating is IMDb's, from fact_movie_rating at one row per film — the movie_ratings
+-- CTE that used to read fact_movie_metrics here existed only to undo that table's
+-- per-genre fan-out. LEFT JOIN so movie_count counts every film, not only rated ones.
 
-WITH movie_ratings AS (
-    SELECT DISTINCT movie_id, rating
-    FROM fact_movie_metrics
-),
-directing AS (
+WITH directing AS (
     SELECT person_id, movie_id
     FROM fact_credit
     WHERE job = 'Director'
@@ -24,13 +24,13 @@ SELECT
     p.name                          AS director_name,
     dd.year,
     COUNT(DISTINCT d.movie_id)      AS movie_count,
-    ROUND(AVG(mr.rating), 2)        AS avg_rating
+    ROUND(AVG(r.rating), 2)         AS avg_rating
 FROM directing d
 JOIN prolific pr      ON pr.person_id = d.person_id
 JOIN dim_person p     ON p.person_id = d.person_id
 JOIN dim_movie dm     ON dm.movie_id = d.movie_id
 JOIN dim_date dd      ON dd.full_date = dm.release_date
-JOIN movie_ratings mr ON mr.movie_id = d.movie_id
+LEFT JOIN fact_movie_rating r ON r.movie_id = d.movie_id AND r.source = 'imdb'
 GROUP BY p.person_id, p.name, dd.year
 ORDER BY p.name, dd.year
 LIMIT 300;

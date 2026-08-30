@@ -56,7 +56,23 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : **Task 64 — nightly cloud refresh: warehouse on Neon, pipeline on GitHub
+Last completed task   : **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
+The `/analytics/` dashboard went from 4 panels to **6** (new: "Films by production country" —
+ranked table off `bridge_movie_country`/`dim_country`; "Non-English cinema over time" — Chart.js
+line + table off `dim_movie.original_language`, 1970s 24.8% → 2010s 2.0%). All **four** rating
+`.sql` queries repointed `fact_movie_metrics` → `fact_movie_rating WHERE source='imdb'` and their
+`SELECT DISTINCT movie_id, rating` de-dup CTEs **deleted** (the payoff of Phase 15's grain, made
+visible) — `fact_movie_metrics.rating`/`.vote_count` now have zero readers, kept as a
+write-only path. The "full live re-run" both tasks called for was **skipped by user decision**:
+the Task 64 nightly cloud path already holds all 1,211 rateable films' IMDb ratings + the
+Phase 13–14 bridge data in one current partition (`2026-08-29`, verified Neon + replica), so a
+hand run would only re-prove `nightly-refresh` runs 3–4. Fresh-install check: a scratch DB from
+DDL `01`–`03` produces exactly the live **16-table** set. Silver DQ **32/32**, warehouse checks
+**39/39** — unchanged (no new entities/checks). `pytest` **298/298**. New query timings 6–25 ms.
+Docs trued up: `docs/architecture.md` §3 intro + new §3.7 (bridge tables) / §3.8
+(`fact_movie_rating`), `README.md` (16 tables, live figures, star schema), this file's Warehouse
+Schema section (9 → 16 tables) and Phase Map (14 & 15 → Complete). `for_learning.md` entry added.
+Prior task: **Task 64 — nightly cloud refresh: warehouse on Neon, pipeline on GitHub
 Actions. DONE and verified green end-to-end 2026-08-29** (`nightly-refresh` run 3, `success` in
 `ops/refresh-history.md` at 06:15:30Z, on commit `52b41e0`). All four verify gates pass: a
 `gold/metrics_snapshot/ingestion_date=2026-08-29/` Parquet landed beside the `2026-08-28` one;
@@ -153,22 +169,15 @@ could have caught this** — the test suite enters through the same directory th
 assumption; reproduced with a harness that loads the file by path from the repo root with
 `django_app/` absent from `sys.path` (old file → the exact production error, new file → 200s).
 `pytest` still 297/297.
-Currently on          : **Nothing active.** Next is **Task 63** (close Phase 14 — user decision
-2026-08-26: analytics panels for country/language, full live re-run, doc truth-up) then **Task 69**
-(close Phase 15 — repoint the four rating queries to `fact_movie_rating`, drop their
-`SELECT DISTINCT movie_id, rating` CTEs, full catalog-wide re-run, true up the stale Warehouse
-Schema section). Both call for a full live re-run + doc truth-up and **can now run on the nightly
-scheduled path** rather than by hand — that was the reason to do Task 64 first. Running Task 63
-before Task 69 avoids the ~25-min run twice, or merge the two closing tasks. **Task 65** (studio
-provenance page) is also outstanding and phase-independent.
-Current phase         : Phase 14 (Tasks 61–63): 61–62 complete, **63 still not started**. Phase 15
-(Tasks 66–69, added 2026-08-26 by user request): 66–68 complete, 69 not started. **Note the two
-phases are interleaved** — Phase 15 was started before Phase 14 was closed, because the user raised
-the ratings change directly. Task 63 and Task 69 both call for a full live pipeline re-run and a doc
-truth-up; **running Task 63 first would avoid doing that ~25-minute run twice**, or the two closing
-tasks can be merged. Decide before starting either.
+Currently on          : **Nothing active.** Phases 14 and 15 are both **closed** (Tasks 63 + 69,
+2026-08-30). The only outstanding work is **Task 65** (studio provenance page) — phase-independent,
+raised 2026-08-17.
+Current phase         : **None active.** Phase 14 (Tasks 61–63) and Phase 15 (Tasks 66–69) are both
+complete as of 2026-08-30 — Tasks 63 and 69 were merged into one commit (the two share a live
+route walk, a fresh-install check and a doc truth-up; splitting would have faked a boundary, the
+Task 66–67 precedent). Next phase is unplanned; **Task 65 is the only queued task**.
 Outstanding must-do   : **One phase-independent must-do, not started.** ~~Task 64~~ is **DONE**
-(2026-08-29, see above). Remaining: **Task 65 — studio provenance page** (description,
+(2026-08-29). Remaining: **Task 65 — studio provenance page** (description,
 headquarters, homepage, parent company on `/studios/<slug>/`, above the filmography); see "MUST
 DO — Studio Provenance Page", added 2026-08-17 by user request right after the Studios redesign.
 Needs one new TMDB endpoint (`/company/{id}`, ~1,383 calls, ≈5 min at Task 64's measured 4.76
@@ -178,13 +187,12 @@ measured yet.
 Blockers / open issues: **No blockers.** **Tasks 66–67 (2026-08-26) landed together in one commit**
 — they share `tests/test_etl.py` heavily enough that splitting the commit would have meant partial
 hunk staging, so the usual one-task-one-commit rule was knowingly relaxed here rather than faked.
-**The live warehouse is now 16 tables** (verified by querying `information_schema`, not by reading
-this file — the Warehouse Schema section below still claims 9 and is stale by seven; Task 69 trues
-it up). **`fact_movie_rating` currently covers only the `2026-07-29` partition's 1,139 films, not
-all 1,215** — by design, since the Silver transform filters IMDb's global snapshot against the
-partition's own `movies.parquet`; the catalog-wide fill happens on Task 69's full re-run, and
-backdating today's ratings into the two 2026-07 partitions was rejected because it would make
-`ingestion_date` lie. **A latent robustness gap found live, not by tests:** the Silver transform
+**The live warehouse is 16 tables** — the Warehouse Schema section below was trued up 9 → 16 at
+Task 63+69 (2026-08-30) and now matches `information_schema` and a fresh `01`–`03` bootstrap.
+**`fact_movie_rating` is now catalog-wide**: the Task 64 nightly path holds 1,211 IMDb + 1,215
+TMDB rows for all 1,215 films in one current partition (`2026-08-29`). The earlier per-partition
+limitation (a partition only got IMDb ratings for the films it contained) is moot now that the
+nightly refresh runs the whole catalog into a fresh partition every night. **A latent robustness gap found live, not by tests:** the Silver transform
 hung 4.5 minutes on a stalled S3 `StreamingBody.read()` with no read deadline; a retry took 9.2s.
 **Closed by Task 64 Step 8** — the boto3 client now sets `connect_timeout=10`/`read_timeout=30`
 + `retries`, so a stalled socket fails fast and retries instead of hanging the nightly job.
@@ -528,23 +536,35 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> The live shape as of Task 54 — 9 tables. `dim_actor`, `dim_director`, `fact_cast` and
-> `fact_crew` were **dropped** in Task 53 and are gone; `fact_casting` was replaced in Task 35.
-> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`11` are migrations for an existing DB.
+> The live shape as of Tasks 63 + 69 — **16 tables** (verified 2026-08-30 against
+> `information_schema`, and a fresh DB built from `01`–`03` produces exactly this set).
+> `dim_actor`, `dim_director`, `fact_cast` and `fact_crew` were dropped in Task 53; `fact_casting`
+> was replaced in Task 35. `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`15` are migrations
+> for an existing DB (once `11` drops tables, "run every file in order" ≠ "build the current
+> schema" — see README §2).
 
-**Dimensions:**
-- `dim_movie(movie_id PK, title, release_date, runtime, budget, revenue, original_language, status, overview, tagline, poster_path, backdrop_path, slug, collection_id FK)`
+**Dimensions (8):**
+- `dim_movie(movie_id PK, title, release_date, runtime, budget, revenue, original_language, status, overview, tagline, poster_path, backdrop_path, imdb_id, original_title, homepage, slug, collection_id FK)`
 - `dim_person(person_id PK, name, gender, popularity, profile_path, known_for_department, slug)`
 - `dim_genre(genre_id PK, genre_name)`
 - `dim_collection(collection_id PK, name, poster_path, slug)`
 - `dim_date(date_id PK, full_date, year, month, day, decade)`
+- `dim_company(company_id PK, name, logo_path, origin_country, slug)` — Task 58
+- `dim_country(country_code PK, name)` — Task 61, ISO code is the PK (no surrogate, no slug)
+- `dim_language(language_code PK, name, english_name)` — Task 61, ISO code is the PK
 
-**Facts:**
-- `fact_movie_metrics(movie_id FK, date_id FK, genre_id FK, rating, vote_count, revenue, budget, popularity, ingestion_date)` — PK `(movie_id, date_id, genre_id)`, so a multi-genre film repeats its movie-level measures once per genre. Every query aggregating one must collapse it with `SELECT DISTINCT movie_id, …` first.
+**Facts (4):**
+- `fact_movie_metrics(movie_id FK, date_id FK, genre_id FK, rating, vote_count, revenue, budget, popularity, ingestion_date)` — PK `(movie_id, date_id, genre_id)`, so a multi-genre film repeats its movie-level measures once per genre. Any query aggregating `revenue`/`popularity` must collapse it with `SELECT DISTINCT movie_id, …` first. **`rating`/`vote_count` have had no readers since Task 69** — every rating now comes from `fact_movie_rating`; the loader still writes them, a knowingly-retained write-only path (same posture as `dim_collection`).
 - `fact_credit(movie_id FK, person_id FK, department, job, character_name, ordering, ingestion_date)` — PK `(movie_id, person_id, department, job)`, the grain TMDB publishes.
 - `fact_collaboration(person_a_id FK, person_b_id FK, films_together, first_year, last_year)` — derived in Gold, `CHECK (person_a_id < person_b_id)`.
+- `fact_movie_rating(movie_id FK, source, rating, vote_count, ingestion_date)` — PK `(movie_id, source)`, `CHECK (source IN ('imdb','tmdb'))`. Task 67. One row per film per source, so `AVG(rating)` needs no de-dup guard. IMDb (from the daily `title.ratings.tsv.gz` bulk file) is the rating of record on the site; TMDB kept for comparison.
 
-**Operational:** `etl_watermarks(loader_name PK, last_ingestion_date, updated_at)`
+**Bridges (3):** factless join tables — `bridge_` not `fact_` because they carry no measure, only that a relationship exists.
+- `bridge_movie_company(movie_id FK, company_id FK, ingestion_date)` — PK `(movie_id, company_id)`. Task 58.
+- `bridge_movie_country(movie_id FK, country_code FK, relation, ingestion_date)` — PK `(movie_id, country_code, relation)`; `relation ∈ {origin, production}` is in the key because the two disagree on ~23% of films. Task 61.
+- `bridge_movie_language(movie_id FK, language_code FK, ingestion_date)` — PK `(movie_id, language_code)`. Task 61.
+
+**Operational (1):** `etl_watermarks(loader_name PK, last_ingestion_date, updated_at)`
 
 ---
 
@@ -582,8 +602,8 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 11    | Movie Page Legibility  | 54     | Complete |
 | 12    | Movie Provenance — the scalar fields | 55–56 | Complete |
 | 13    | Studios — `dim_company` + the first bridge table | 57–60 | Complete |
-| 14    | Where and in What Language | 61–63 | In progress (61–62 done, 63 not started) |
-| 15    | IMDb becomes the rating of record | 66–69 | In progress (66–68 done, 69 not started) |
+| 14    | Where and in What Language | 61–63 | Complete |
+| 15    | IMDb becomes the rating of record | 66–69 | Complete |
 
 ---
 
@@ -853,7 +873,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   either relation for country, with `base_query` extended so both survive pagination. No DDL/ETL
   change. Tests 243 → 250.
 
-#### [ ] Task 63 — Analytics, live re-run, verification, doc truth-up
+#### [x] Task 63 — Analytics, live re-run, verification, doc truth-up
 - **Goal:** The phase-closing task, following Tasks 44 and 53.
 - **Files:** new `warehouse/queries/*.sql`, `analytics/{views.py,dashboard.html}`, `README.md`, `docs/architecture.md`, `CLAUDE.md`, `for_learning.md`
 - **Steps:**
@@ -863,7 +883,33 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   4. Walk all routes live, including the new studio pages and both new filters.
   5. **Verify a fresh install empirically, not by reading the README** — a throwaway DB built from DDL `01`–`03` must produce exactly the live table list, per the Task 53 lesson that "run every DDL file in order" stopped being the same instruction as "build the current schema" once migration `11` dropped tables.
   6. Update `docs/architecture.md` with the bridge-table decision (why `bridge_` not `fact_`, and why a bridge is right for companies where a column was right for collections), and this file's Warehouse Schema section with the final table list.
-- **Outcome:**
+- **Outcome (2026-08-30, merged with Task 69 — one commit, the Task 66–67 "landed together"
+  precedent, because the two share this close-out too tightly to split without faking it):**
+  Two new panels on `/analytics/` (now **6 panels**): **"Films by production country"** (ranked
+  table off `bridge_movie_country WHERE relation='production'` → `dim_country`, with an
+  IMDb-sourced avg rating; US 1,050 / UK 202 / France 74 / Germany 52 / Japan 35 …) and
+  **"Non-English cinema over time"** (Chart.js line + table, `dim_movie.original_language <> 'en'`
+  share by decade — 1970s **24.8%** → 2010s **2.0%**, 2020s back to 8.7%; NULL language counted as
+  unknown, not non-English). Both queries carry an explicit `LIMIT` per the Task 42/60 rule even
+  though naturally bounded; timed **16.1 ms** / **6.6 ms** against the replica, full `/analytics/`
+  well under budget. `analytics.js` gained a third line chart (`#language-chart`) copied from the
+  decade-chart block; `analytics.css` untouched (its "only adds, never restyles" contract). The
+  sheet-header sub-copy now names country and language. **The "full live re-run" step was
+  deliberately skipped** — see the Task 69 outcome: the Task 64 nightly cloud path had already
+  brought all 1,211 rateable films' IMDb ratings and the Phase 13–14 bridge data into one current
+  partition (`2026-08-29`), so a hand re-run would only re-prove `nightly-refresh` runs 3–4.
+  **Fresh-install check: a scratch DB built from `01`–`03` produced exactly the live 16-table
+  set**, byte-for-byte (the bootstrap DDL was kept current at Tasks 58/61/67). Silver DQ **32/32**
+  and warehouse checks **39/39** against `2026-08-29` — **unchanged** (this task added no Silver
+  entities and no checks; the rise the step anticipated already happened at Tasks 61 and 66–67).
+  All routes walked live: `/`, `/movies/`, a film, `/people/`, a person, `/studios/`, a studio,
+  `/analytics/`, `/movies/?country=JP`, `?language=ja`, `?sort=rating` all 200; `/actors/<slug>/`
+  301; bad slug 404. Docs trued up: `docs/architecture.md` gained **§3.7** (bridge-table decision)
+  and **§3.8** (`fact_movie_rating` — bulk file vs API, long table vs two columns, licensing) plus
+  an updated §3 intro; `README.md`'s "warehouse, as it stands" table (16 tables, live figures) and
+  star-schema section; this file's Warehouse Schema section (9 → 16 tables) and Phase Map. Tests
+  **298/298** (the one dashboard test extended with the two new panels' fixtures, not duplicated —
+  Task 60 precedent; net 0 new tests).
 
 ---
 
@@ -985,11 +1031,36 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   absent** — correct behaviour that reads as a bug. Worth revisiting the default sort. Tests
   268 → **271**.
 
-#### [ ] Task 69 — Analytics, live re-run, doc truth-up
+#### [x] Task 69 — Analytics, live re-run, doc truth-up
 - **Goal:** The phase-closing task, following Tasks 44 and 53.
 - **Files:** `warehouse/queries/{movies_by_decade,top_rated_directors,top_studios_by_revenue,director_trend_over_time}.sql`, `django_app/analytics/views.py`, `README.md`, `docs/architecture.md`, `CLAUDE.md`, `for_learning.md`
 - **Key points:** repoint all four rating queries and **delete their `SELECT DISTINCT movie_id, rating` CTE** — that deletion is the phase's payoff made visible. Full live re-run for the current date across the whole catalog, which is also what gives all 1,215 films an IMDb rating (a partition only gets ratings for the films it contains, so the 1,139/1,140 above is per-partition, not catalog-wide). **`CLAUDE.md`'s Warehouse Schema section is stale** — it claims 9 tables "as of Task 54"; the live warehouse had **15** before this phase and **16** after (verified 2026-08-26). True up the whole section, not just this phase's addition. `fact_movie_metrics.rating`/`.vote_count` will have no readers after this phase — leave them and record them as a knowingly-accepted write-only path, the same posture already taken for `dim_collection`.
-- **Outcome:**
+- **Outcome (2026-08-30, merged with Task 63 — one commit):** All **four** rating queries
+  repointed from `fact_movie_metrics` to `fact_movie_rating WHERE source = 'imdb'`, and their
+  `WITH movie_ratings AS (SELECT DISTINCT movie_id, rating[, vote_count] FROM fact_movie_metrics)`
+  CTEs **deleted** — the guard existed only to undo the per-genre fan-out the new
+  one-row-per-film grain never creates, so its removal is the phase's payoff made visible. Two
+  (`movies_by_decade`, `top_studios_by_revenue`) feed live dashboard panels; two
+  (`top_rated_directors`, `director_trend_over_time`) are dormant `.sql` files fixed anyway so
+  they don't rot. All four moved to `LEFT JOIN` (`top_rated_directors` was an inner join through
+  its CTE — a LEFT JOIN keeps `movie_count` meaning "films directed", not "rated films directed";
+  it also gained `ORDER BY avg_rating DESC NULLS LAST` so an all-unrated director can't top the
+  chart). `analytics/views.py` needed no change for the repoint — the result columns kept their
+  names. Verified against the replica: `movies_by_decade` 11 ms, `top_studios_by_revenue` 11 ms,
+  `top_rated_directors` ~25 ms, `director_trend_over_time` 21 ms; the "Rating by decade" chart and
+  "Top studios by revenue" table now show IMDb averages (Warner Bros. ★7.29; decade line
+  `[7.20, 5.37, 7.27, 7.16, 7.33, 7.32, 7.33, 6.53]`). **The "full live re-run" was skipped by
+  user decision** — the Task 64 nightly cloud path (its whole reason for existing) had already
+  refreshed the entire catalog: `fact_movie_rating` holds **1,211 IMDb + 1,215 TMDB rows** in one
+  current partition (`2026-08-29`), verified on both Neon and the local replica, so all 1,215
+  films' ratings are catalog-wide *now* — a hand `run_pipeline.py` run would only re-prove
+  `nightly-refresh` runs 3–4. `fact_movie_metrics.rating`/`.vote_count` now have **zero readers**;
+  left in place, loader still writes them, recorded as a knowingly-accepted write-only path
+  (dropping them is a separate reversible one-commit follow-up). `CLAUDE.md`'s Warehouse Schema
+  section trued up **9 → 16 tables** (the whole section, not just this phase's addition — it also
+  still listed `dim_movie` without `imdb_id`/`original_title`/`homepage`). `docs/architecture.md`
+  §3 intro + new §3.8. Fresh-install check, DQ totals (32/32, 39/39 unchanged), route walk, test
+  count (**298/298**) — all in the Task 63 outcome above.
 
 ---
 

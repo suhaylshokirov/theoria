@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title="Analytics" sub="Revenue and output by decade, genre, and studio, run straight against the star schema. Every number here is measured, not estimated." only %}
+{% include "movies/_sheet_header.html" with title="Analytics" sub="Output and ratings by decade, genre, studio, country and language, run straight against the star schema. Every number here is measured, not estimated." only %}
 
 <div class="panel-grid">
     <section class="panel is-wide" aria-labelledby="decade-h">
@@ -129,6 +129,64 @@
         <p class="empty">No studios loaded yet. Run the pipeline to fill the warehouse.</p>
         {% endif %}
     </section>
+
+    <section class="panel is-wide" aria-labelledby="country-h">
+        <div class="section-head">
+            <h2 id="country-h">Films by production country</h2>
+            <span class="section-note">co-productions counted once each</span>
+        </div>
+        {% if films_by_production_country %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col">Country</th><th scope="col" class="num">Films</th><th scope="col" class="num">Avg rating</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in films_by_production_country %}
+                    <tr>
+                        <th scope="row">{{ row.country_name }}</th>
+                        <td class="num" data-meter>{{ row.film_count }}</td>
+                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:2 }}{% else %}—{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No films loaded yet. Run the pipeline to fill the warehouse.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel is-wide" aria-labelledby="language-h">
+        <div class="section-head">
+            <h2 id="language-h">Non-English cinema over time</h2>
+            <span class="section-note">share by decade</span>
+        </div>
+        {% if non_english_over_time %}
+        <div class="chart-stage">
+            <canvas id="language-chart" role="img" aria-label="Non-English share of films by decade, line chart"></canvas>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col">Decade</th><th scope="col" class="num">Films</th><th scope="col" class="num">Non-English</th><th scope="col" class="num">Share</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in non_english_over_time %}
+                    <tr>
+                        <th scope="row" class="mono">{{ row.decade }}</th>
+                        <td class="num">{{ row.film_count }}</td>
+                        <td class="num" data-meter>{{ row.non_english_count }}</td>
+                        <td class="num">{{ row.non_english_pct|floatformat:1 }}%</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No films loaded yet. Run the pipeline to fill the warehouse.</p>
+        {% endif %}
+    </section>
 </div>
 {% endblock %}
 
@@ -137,6 +195,8 @@
 {{ decade_avg_ratings|json_script:"decade-avg-ratings" }}
 {{ genre_labels|json_script:"genre-labels" }}
 {{ genre_revenue|json_script:"genre-revenue" }}
+{{ language_labels|json_script:"language-labels" }}
+{{ language_non_english_pct|json_script:"language-non-english-pct" }}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script src="{% static 'js/analytics.js' %}"></script>

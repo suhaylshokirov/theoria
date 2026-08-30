@@ -1460,6 +1460,13 @@ def test_analytics_dashboard_returns_200_with_expected_context():
             {"studio_slug": "test-studio", "studio_name": "Test Studio",
              "movie_count": 5, "total_revenue": Decimal("500"), "avg_rating": Decimal("7.1")}
         ],
+        "films_by_production_country.sql": [
+            {"country_name": "Japan", "film_count": 7, "avg_rating": Decimal("7.4")}
+        ],
+        "non_english_cinema_over_time.sql": [
+            {"decade": 1980, "film_count": 20, "non_english_count": 5,
+             "non_english_pct": Decimal("25.0")}
+        ],
     }
 
     with patch("analytics.views._run_query", side_effect=lambda fname: fake_rows[fname]):
@@ -1475,6 +1482,10 @@ def test_analytics_dashboard_returns_200_with_expected_context():
         "genre_revenue",
         "studio_output_by_decade",
         "top_studios_by_revenue",
+        "films_by_production_country",
+        "non_english_over_time",
+        "language_labels",
+        "language_non_english_pct",
     ):
         assert key in response.context
 
@@ -1484,11 +1495,17 @@ def test_analytics_dashboard_returns_200_with_expected_context():
     assert response.context["genre_revenue"] == [1000.0]
     assert response.context["studio_output_by_decade"][0]["studio_name"] == "Test Studio"
     assert response.context["top_studios_by_revenue"][0]["studio_slug"] == "test-studio"
+    assert response.context["films_by_production_country"][0]["country_name"] == "Japan"
+    assert response.context["language_labels"] == [1980]
+    # Decimal from the cursor is coerced to float for json_script
+    assert response.context["language_non_english_pct"] == [25.0]
 
     body = response.content.decode()
     assert "Studio output by decade" in body
     assert "Top studios by revenue" in body
     assert 'href="/studios/test-studio/"' in body
+    assert "Films by production country" in body
+    assert "Non-English cinema over time" in body
 
 
 # ---------------------------------------------------------------------------

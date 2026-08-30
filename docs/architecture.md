@@ -119,25 +119,34 @@ gives:
 ```
 
 **Dimensions** (`warehouse/ddl/01_dimensions.sql`): `dim_movie`, `dim_person`, `dim_collection`,
-`dim_genre`, `dim_date`. All use a natural TMDB integer ID as primary key, except `dim_date`,
-which uses a generated `YYYYMMDD` surrogate key and is populated as a full calendar table
-(1900–2035 by default) independent of any Silver data.
+`dim_genre`, `dim_date`, `dim_company` (Phase 13), `dim_country`, `dim_language` (Phase 14). Most
+use a natural TMDB integer ID as primary key; `dim_country`/`dim_language` use their ISO code
+directly (no surrogate, no slug — the code is already short, stable and URL-safe); `dim_date` uses
+a generated `YYYYMMDD` surrogate and is populated as a full calendar table (1900–2035 by default)
+independent of any Silver data.
+
+**Bridge tables** (`01_dimensions.sql`, added Phases 13–14): `bridge_movie_company`,
+`bridge_movie_country`, `bridge_movie_language` — see §3.7 for why `bridge_` and not `fact_`, and
+why a bridge is right here where a plain column was right for `dim_collection`.
 
 **Facts** (`warehouse/ddl/02_facts.sql`):
 - `fact_movie_metrics(movie_id, date_id, genre_id, rating, vote_count, revenue, budget,
   popularity, ingestion_date)` — one row per `(movie, genre)` pair, because a movie can belong to
   multiple genres and TMDB doesn't give per-genre metrics, so the same movie-level metrics are
   repeated once per genre. **This has one consequence every analytics query must account for**:
-  aggregating `rating`/`revenue`/`popularity` directly would double-count multi-genre movies. Every
-  query in `warehouse/queries/` that touches these columns first collapses to
-  `SELECT DISTINCT movie_id, ...` in a CTE before aggregating, and every Django view that reads a
-  movie-level measure off this table (`movie_detail`'s rating, `actor_detail`/`director_detail`'s
-  avg rating) applies the same `.values(...).distinct()` guard.
+  aggregating `revenue`/`popularity` directly would double-count multi-genre movies, so every
+  query in `warehouse/queries/` that touches those columns first collapses to
+  `SELECT DISTINCT movie_id, ...` in a CTE before aggregating. As of Phase 15 the `rating` and
+  `vote_count` columns here have **no readers** — every rating on the site now comes from
+  `fact_movie_rating` (§3.8) — but the loader still populates them, a knowingly-retained
+  write-only path kept reversible for one commit.
 - `fact_credit(movie_id, person_id, department, job, character_name, ordering, ingestion_date)` —
   one row per credit, at the grain TMDB actually publishes. A director who also wrote and produced
   a film is three rows, and the PK says so.
 - `fact_collaboration(person_a_id, person_b_id, films_together, first_year, last_year)` — derived
   in Gold rather than loaded from Silver; see §3.3.
+- `fact_movie_rating(movie_id, source, rating, vote_count, ingestion_date)` — one row per film per
+  rating source (`'imdb'` / `'tmdb'`), the rating of record; see §3.8.
 
 All fact tables carry named foreign keys to every dimension they reference, and an index on each
 FK column (PostgreSQL does not auto-index FKs). All also carry an `ingestion_date` column purely
@@ -265,6 +274,73 @@ Two things are worth noting beyond the one-line change:
   entity*, which is why 9,282 crew rows in and 9,282 out looked perfectly healthy while the wrong
   52 directors were missing among them. Catching this class of bug needs *reconciliation* controls
   that assert a conserved quantity across a layer boundary, not just internal consistency.
+
+### 3.7 Bridge tables: companies, countries, languages
+
+A production company, a country and a language are the first entities in this warehouse a film
+relates to *many* of. `dim_collection` (§3.4) was promoted to a dimension but the relationship
+itself stayed a plain nullable column on `dim_movie`, because a film belongs to exactly one
+collection. A film has **2.81 production companies on average**, is (co-)produced in one or more
+countries, and is spoken in several languages — none of which fits as a column without either
+inventing `company_1`/`company_2`/… slots or fanning the fact table out, the way
+`fact_movie_metrics` already fans out per genre (§3 intro).
+
+So Phases 13–14 added three join tables: `bridge_movie_company(movie_id, company_id,
+ingestion_date)`, `bridge_movie_country(movie_id, country_code, relation, ingestion_date)`, and
+`bridge_movie_language(movie_id, language_code, ingestion_date)`. Each is indexed on **both** FK
+columns — the join runs in both directions (a film's studios; a studio's films).
+
+**Why `bridge_` and not `fact_`.** These tables carry no measure. They record only that a
+relationship *exists* — a "factless fact table" in the dimensional-modelling literature. Reserving
+the `fact_` prefix for tables that actually have something to sum keeps the schema
+self-describing: a reader scanning the table list can tell at a glance which tables answer "how
+much / how many" and which answer "which things are related". `fact_movie_rating` (§3.8) carries
+`rating` and `vote_count`, so it *is* a `fact_` even though it, too, was a candidate for the
+bridge naming.
+
+**`relation` in `bridge_movie_country`'s primary key.** TMDB gives a film both an
+`origin_country` and a `production_countries` list, and they disagree on ~23% of films. Collapsing
+to a `(movie_id, country_code)` grain would silently let one relationship overwrite the other on
+upsert. Folding `relation ∈ {'origin', 'production'}` into the PK keeps both facts, and is the
+inverse of the Task 40 mistake (a key claiming a *finer* grain than the data supports) — here the
+key is exactly as fine as the two genuinely-distinct relationships require.
+
+### 3.8 `fact_movie_rating`: the rating of record
+
+Every rating the site showed through Phase 14 was TMDB's `vote_average`, read off
+`fact_movie_metrics`. Phase 15 made IMDb the number a reader sees, with IMDb's own mark beside it.
+
+**Why a bulk file beat an API.** IMDb publishes `title.ratings.tsv.gz` at `datasets.imdbws.com` —
+~8.6 MB, refreshed daily, three columns (`tconst`, `averageRating`, `numVotes`), **no auth, no
+key, no quota**. The warehouse has carried `imdb_id` since Task 55, so the whole feature is one
+HTTP GET and a join on `imdb_id` — zero per-movie API calls, no new secret, no new Python
+dependency. Measured before any code was written: **1,211 of 1,215 films match (99.7%)** — the
+four misses are two films with no `imdb_id` and two whose id sits below IMDb's ≥5-vote
+publication floor. This made the new ratings path *cheaper* than the TMDB one it replaced.
+(The IMDb datasets are licensed for personal and non-commercial use only, which this
+learning project is.)
+
+**Why a long table beat two more columns.** The obvious alternative was
+`fact_movie_metrics.imdb_rating` / `.imdb_vote_count`. But `fact_movie_metrics` is at
+`(movie_id, date_id, genre_id)` grain, so those columns would inherit the per-genre fan-out and
+every reader would still need the `SELECT DISTINCT movie_id` guard. A rating has nothing to do
+with a film's genres. `fact_movie_rating` is keyed `(movie_id, source)` with a
+`CHECK (source IN ('imdb', 'tmdb'))` — one row per film per source — so the de-dup guard is
+unnecessary **by construction** rather than something every caller must remember. *The Godfather*
+is the worked example: two rows in `fact_movie_metrics` (one rating, stored once for Crime and
+once for Drama) versus two rows in `fact_movie_rating` (two genuinely different facts, IMDb 9.20
+and TMDB 8.69). Both sources are loaded into the one table — `load_fact_movie_rating()` reads
+`silver/imdb_ratings/` for the `imdb` rows and `silver/movies/`'s existing `vote_average` /
+`vote_count` for the `tmdb` rows — so it is the single answer to "what is this film rated" rather
+than a second partial answer sitting beside `fact_movie_metrics`.
+
+A `dim_rating_source` table was considered and rejected: a two-row dimension whose only
+attributes (icon, label, outbound-URL template) are pure presentation is over-modelling. The
+`CHECK` enforces the vocabulary; Django owns the display metadata.
+
+As of Phase 15 both the four rating queries in `warehouse/queries/` and every Django view that
+shows a rating read this table; `fact_movie_metrics.rating` / `.vote_count` are retained as a
+write-only path (§3 intro).
 
 ## 4. Idempotency & incremental loads
 

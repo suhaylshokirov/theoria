@@ -18,12 +18,13 @@ TMDB API  →  Bronze (raw JSON)  →  Silver (typed Parquet)  →  Gold (aggreg
 | | |
 |---|---|
 | Films | **1,215** spanning 1930–2026 |
-| Credited people | **122,685** — every person in every department, not just cast and directors |
-| Credits | **237,454** across 13 departments and 858 distinct job titles |
-| Collaboration edges | **193,064** repeat working relationships, derived in Gold |
-| Film series | **358** |
-| Warehouse tables | **11** — 6 dimensions, 3 facts, 1 bridge, 1 operational |
-| Test suite | **225** tests, no network or live database required |
+| Credited people | **123,405** — every person in every department, not just cast and directors |
+| Credits | **239,089** across 13 departments and 858 distinct job titles |
+| Collaboration edges | **194,372** repeat working relationships, derived in Gold |
+| Film series | **365** |
+| Ratings | IMDb and TMDB, **1,211 / 1,215** films carry an IMDb score |
+| Warehouse tables | **16** — 8 dimensions, 4 facts, 3 bridges, 1 operational |
+| Test suite | **298** tests, no network or live database required |
 
 The corpus is deliberate rather than incidental. TMDB's `movie/popular` endpoint returns whatever
 is trending at call time, which produced a catalog that was 69% films from the 2020s. Switching
@@ -60,23 +61,27 @@ reprocessed in isolation without touching anything else.
 ### The star schema
 
 ```
-                  dim_genre        dim_date        dim_collection      dim_company
-                      │               │                  │                  │
-                      └───────┬───────┘                  │                  ▼
-                              ▼                          ▼         bridge_movie_company
-   dim_person ──► fact_credit ──► dim_movie ◄── fact_movie_metrics          │
-        │                                              (rating, revenue,   │
-        └──────► fact_collaboration                     budget, popularity)◄┘
-                 (derived in Gold)
+        dim_genre   dim_date   dim_collection   dim_company   dim_country   dim_language
+            │          │             │              │             │             │
+            └────┬─────┘             │              ▼             ▼             ▼
+                 ▼                   ▼      bridge_movie_company  bridge_movie_country
+ dim_person ─► fact_credit ─► dim_movie ◄─ fact_movie_metrics    bridge_movie_language
+      │                          ▲         (revenue, budget,             │
+      ├──► fact_collaboration    └── fact_movie_rating ◄────────────────┘
+      │    (derived in Gold)         (imdb / tmdb — the rating of record)
 ```
 
-**Dimensions** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`, `dim_company`
-**Facts** — `fact_movie_metrics`, `fact_credit`, `fact_collaboration`
-**Bridge** — `bridge_movie_company` (Phase 13) — a factless fact table (no measure, just the
-existence of a movie/company relationship), named `bridge_` rather than `fact_` to keep that
-distinction visible in the schema itself. It's the warehouse's first genuine many-to-many: a film
-has 2.81 companies on average, unlike `dim_collection` (one collection per film, so that
-relationship fits as a plain column on `dim_movie`).
+**Dimensions** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`,
+`dim_company`, `dim_country`, `dim_language`
+**Facts** — `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `fact_movie_rating`
+**Bridges** — `bridge_movie_company` (Phase 13), `bridge_movie_country`, `bridge_movie_language`
+(Phase 14). Factless join tables — no measure, just the existence of a relationship — named
+`bridge_` rather than `fact_` to keep that distinction visible in the schema itself. They are the
+warehouse's first genuine many-to-many relationships: a film has 2.81 production companies on
+average and is produced in / spoken in several countries and languages, unlike `dim_collection`
+(one collection per film, so *that* relationship fits as a plain column on `dim_movie`).
+`bridge_movie_country` carries `relation ∈ {origin, production}` in its primary key, because the
+two disagree on ~23% of films and a coarser key would let one overwrite the other.
 **Operational** — `etl_watermarks`
 
 Two grain decisions carry most of the weight:
@@ -86,9 +91,11 @@ Two grain decisions carry most of the weight:
   earlier in the project silently destroyed the "Director" row for 65 of 99 films, because those
   people were usually credited as producers too and the dedup key couldn't tell the jobs apart.
 - **`fact_movie_metrics` is keyed `(movie_id, date_id, genre_id)`**, so a multi-genre film repeats
-  its movie-level measures once per genre. Every query that aggregates one must collapse it with
-  `SELECT DISTINCT movie_id, …` first — a documented consequence of the schema, guarded in each of
-  the analytics queries and views that touch it.
+  its movie-level measures once per genre. Every query that aggregates `revenue` or `popularity`
+  off it must collapse it with `SELECT DISTINCT movie_id, …` first. Ratings used to live here too
+  and carried the same tax; **Phase 15 moved them to `fact_movie_rating`**, keyed `(movie_id,
+  source)` — one row per film per source (IMDb from a daily bulk file, TMDB from the movie
+  payload), so `AVG(rating)` needs no de-duplication and IMDb's mark is what the site shows.
 
 ### Data quality as a gate, not a report
 
@@ -151,7 +158,7 @@ missing one still stops the process before it does any work — it is just the r
 ### 2. Create the warehouse schema
 
 Apply the three bootstrap files in order against an empty database. Together they build the
-**current** schema; all statements are `IF NOT EXISTS`, so re-running is safe.
+**current** 16-table schema; all statements are `IF NOT EXISTS`, so re-running is safe.
 
 ```bash
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/01_dimensions.sql
@@ -159,11 +166,11 @@ psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/02_facts.sql
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/03_watermark.sql
 ```
 
-> **Do not run `04`–`13` on a fresh database.** Those are the historical migrations that brought an
+> **Do not run `04`–`15` on a fresh database.** Those are the historical migrations that brought an
 > already-live warehouse to this shape, and they are only correct applied in order to a database
 > that predates them — `11_drop_legacy_person_tables.sql` drops tables `01` no longer creates. Once
 > a migration drops something, "run every DDL file in order" stops being the same instruction as
-> "build the current schema". Use `04`–`13` only to migrate an existing Theoria warehouse.
+> "build the current schema". Use `04`–`15` only to migrate an existing Theoria warehouse.
 
 `slug` columns are declared empty by the DDL and populated by `load_dimensions()`.
 
@@ -328,7 +335,7 @@ etl/
 data_quality/             Silver and warehouse check suites; rejected/ holds quarantined rows
 warehouse/
   db.py                   engine and session management
-  ddl/                    01–03 bootstrap, 04–13 migrations
+  ddl/                    01–03 bootstrap, 04–15 migrations
   queries/                analytics SQL — never inline in application code
 django_app/               core (settings, router) · movies · analytics
 scripts/
