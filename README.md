@@ -24,7 +24,7 @@ TMDB API  →  Bronze (raw JSON)  →  Silver (typed Parquet)  →  Gold (aggreg
 | Film series | **365** |
 | Ratings | IMDb and TMDB, **1,211 / 1,215** films carry an IMDb score |
 | Warehouse tables | **16** — 8 dimensions, 4 facts, 3 bridges, 1 operational |
-| Test suite | **298** tests, no network or live database required |
+| Test suite | **313** tests, no network or live database required |
 
 The corpus is deliberate rather than incidental. TMDB's `movie/popular` endpoint returns whatever
 is trending at call time, which produced a catalog that was 69% films from the 2020s. Switching
@@ -263,6 +263,7 @@ cd django_app && python manage.py runserver
 | `/` | Catalog overview and the contact-sheet hero |
 | `/movies/` · `/movies/<slug>/` | Search, sort and paginate the catalog; per-film detail with full cast and crew |
 | `/people/` · `/people/<slug>/` | Everyone holding any credit; per-person filmography, credits by department, and repeat collaborators |
+| `/studios/` · `/studios/<slug>/` | Browsable studio index; per-studio provenance (description, headquarters, site, parent) above a filterable filmography |
 | `/actors/` · `/directors/` | Scopes of `/people/`, filtered by the credits someone holds — not separate tables |
 | `/analytics/` | Dashboard panels driven by the SQL in `warehouse/queries/` |
 

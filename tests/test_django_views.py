@@ -1442,6 +1442,88 @@ def test_studio_detail_404_when_missing():
     assert response.status_code == 404
 
 
+def _render_studio_detail(studio, *, parent=None):
+    """Drive studio_detail with the standard filmography mocks, returning the
+    response. `parent` (a Company or None) is what Company.objects...first()
+    yields when the view resolves company.parent_company_id."""
+    movie = _movie()
+    with patch("movies.views.get_object_or_404", return_value=studio), patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(Company, "objects", new=MagicMock()) as parent_mgr:
+        company_mgr.using.return_value.filter.return_value.values_list.return_value = [movie.movie_id]
+        all_movies_qs = movie_mgr.using.return_value.filter.return_value
+        all_movies_qs.aggregate.side_effect = [
+            {"film_count": 1, "total_revenue": 5000},
+            {"start": date(2020, 1, 1), "end": date(2020, 1, 1)},
+        ]
+        all_movies_qs.annotate.return_value = all_movies_qs
+        all_movies_qs.order_by.return_value = [movie]
+        rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
+            "avg_rating": Decimal("7.24")
+        }
+        parent_mgr.using.return_value.filter.return_value.first.return_value = parent
+        return client.get(f"/studios/{studio.slug}/")
+
+
+def test_studio_detail_renders_provenance_block():
+    """Task 65: headquarters as plain text, homepage as an outbound .ext-link,
+    description as prose — all above the filmography."""
+    studio = _company(name="Warner Bros. Pictures", slug="warner-bros-pictures")
+    studio.description = "An American film studio."
+    studio.headquarters = "Burbank, California"
+    studio.homepage = "https://www.warnerbros.com"
+
+    response = _render_studio_detail(studio)
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "An American film studio." in body
+    assert "Burbank, California" in body
+    assert 'class="ext-link"' in body
+    assert 'href="https://www.warnerbros.com"' in body
+    assert 'rel="noopener noreferrer"' in body
+
+
+def test_studio_detail_links_parent_when_it_resolves_to_a_studio():
+    studio = _company(name="Pixar", slug="pixar")
+    studio.parent_company_id = 2
+    studio.parent_company_name = "Walt Disney Pictures"
+    parent = _company(company_id=2, name="Walt Disney Pictures", slug="walt-disney-pictures")
+
+    response = _render_studio_detail(studio, parent=parent)
+
+    body = response.content.decode()
+    assert response.context["parent_company"] == parent
+    assert 'href="/studios/walt-disney-pictures/"' in body
+
+
+def test_studio_detail_parent_is_plain_text_when_unresolvable():
+    """A holding-company parent (Warner Bros. Entertainment) often has no
+    dim_company row — the name renders as text, not a dead link."""
+    studio = _company(name="Warner Bros. Pictures", slug="warner-bros-pictures")
+    studio.parent_company_id = 17
+    studio.parent_company_name = "Warner Bros. Entertainment"
+
+    response = _render_studio_detail(studio, parent=None)
+
+    body = response.content.decode()
+    assert response.context["parent_company"] is None
+    assert "Warner Bros. Entertainment" in body
+    assert 'href="/studios/warner-bros' not in body.split("Warner Bros. Entertainment")[0][-120:]
+
+
+def test_studio_detail_no_provenance_block_when_all_fields_empty():
+    studio = _company(name="Tiny Films", slug="tiny-films")
+
+    response = _render_studio_detail(studio)
+
+    body = response.content.decode()
+    assert "record-list" not in body
+    assert "specimen-synopsis" not in body
+
+
 # ---------------------------------------------------------------------------
 # analytics dashboard
 # ---------------------------------------------------------------------------

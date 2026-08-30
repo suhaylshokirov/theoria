@@ -19,6 +19,7 @@ S3 sources:
     silver/people/ingestion_date=YYYY-MM-DD/people.parquet
     silver/genres/ingestion_date=YYYY-MM-DD/genres.parquet
     silver/movie_companies/ingestion_date=YYYY-MM-DD/movie_companies.parquet
+    silver/company_details/ingestion_date=YYYY-MM-DD/company_details.parquet  (optional)
     silver/movie_countries/ingestion_date=YYYY-MM-DD/movie_countries.parquet
     silver/movie_languages/ingestion_date=YYYY-MM-DD/movie_languages.parquet
 
@@ -119,7 +120,17 @@ def load_dim_genre(session: Session, df: pd.DataFrame) -> int:
     return count
 
 
-def load_dim_company(session: Session, df: pd.DataFrame) -> int:
+_COMPANY_DETAIL_COLS = [
+    "description", "headquarters", "homepage",
+    "parent_company_id", "parent_company_name",
+]
+
+
+def load_dim_company(
+    session: Session,
+    df: pd.DataFrame,
+    details_df: pd.DataFrame | None = None,
+) -> int:
     """Upsert the distinct companies referenced by Silver movie_companies into dim_company.
 
     Mirrors load_dim_collection(): the dimension is the *distinct* set of
@@ -129,6 +140,14 @@ def load_dim_company(session: Session, df: pd.DataFrame) -> int:
     dim_collection — an id with a null name would violate dim_company's
     `name NOT NULL`, and the two nullability failures shouldn't be conflated.
     Must run before load_bridge_movie_company(), which has an FK to this table.
+
+    `details_df` (Task 65) is the second Silver source — one row per company
+    from `silver/company_details`, carrying description / headquarters /
+    homepage / parent. It is LEFT-joined on: a company with no company-details
+    row yet (freshly discovered this partition, enrichment pending, or a
+    company whose one API call failed) still upserts with its five original
+    columns and simply leaves the five new ones null. Passing None (a missing
+    Silver file) degrades the same way rather than blocking the load.
     """
     named = df[df["company_id"].notna() & df["company_name"].notna()]
     companies = (
@@ -136,10 +155,21 @@ def load_dim_company(session: Session, df: pd.DataFrame) -> int:
         .drop_duplicates(subset=["company_id"], keep="last")
         .rename(columns={"company_name": "name"})
     )
+
     columns = ["company_id", "name", "logo_path", "origin_country"]
+    if details_df is not None and not details_df.empty:
+        details = details_df[["company_id"] + _COMPANY_DETAIL_COLS].drop_duplicates(
+            subset=["company_id"], keep="last"
+        )
+        companies = companies.merge(details, on="company_id", how="left")
+        columns = columns + _COMPANY_DETAIL_COLS
+
     records = _records(companies, columns)
     count = _upsert(session, "dim_company", ["company_id"], columns, records)
-    logger.info("dim_company: upserted %d row(s)", count)
+    logger.info(
+        "dim_company: upserted %d row(s)%s", count,
+        "" if details_df is None else f" ({len(records)} with detail join)",
+    )
     return count
 
 
@@ -326,6 +356,21 @@ def load_dimensions(
     companies_df = _read_silver_parquet(
         bucket, "movie_companies", ingestion_date, "movie_companies.parquet"
     )
+    # Task 65: the company-detail enrichment. Optional — a partition written
+    # before this Silver transform existed, or a transform that failed, must
+    # degrade to "load dim_company with null detail columns", never crash the
+    # whole dimension load. load_dim_company() treats None the same as an
+    # un-joined company.
+    try:
+        company_details_df = _read_silver_parquet(
+            bucket, "company_details", ingestion_date, "company_details.parquet"
+        )
+    except Exception as exc:
+        logger.warning(
+            "No Silver company_details for %s (%s) — loading dim_company "
+            "without detail columns", ingestion_date, exc,
+        )
+        company_details_df = None
     countries_df = _read_silver_parquet(
         bucket, "movie_countries", ingestion_date, "movie_countries.parquet"
     )
@@ -341,7 +386,9 @@ def load_dimensions(
         counts["dim_person"] = load_dim_person(session, people_df)
         counts["dim_genre"] = load_dim_genre(session, genres_df)
         # Before load_facts.load_bridge_movie_company(), which has an FK here.
-        counts["dim_company"] = load_dim_company(session, companies_df)
+        counts["dim_company"] = load_dim_company(
+            session, companies_df, company_details_df
+        )
         # Before load_facts.load_bridge_movie_country/language(), same reason.
         counts["dim_country"] = load_dim_country(session, countries_df)
         counts["dim_language"] = load_dim_language(session, languages_df)

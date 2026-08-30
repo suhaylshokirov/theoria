@@ -38,11 +38,13 @@ import time
 import config
 from data_quality.silver_checks import run_silver_checks
 from data_quality.warehouse_checks import run_warehouse_checks
+from etl.bronze.ingest_companies import ingest_companies
 from etl.bronze.ingest_genres import ingest_genres
 from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
 from etl.bronze.refresh_movies import refresh_movies
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.gold.build_metrics_snapshot import build_metrics_snapshot
+from etl.silver.transform_companies import transform_companies
 from etl.silver.transform_credits_bridge import transform_credits_bridge
 from etl.silver.transform_genres import transform_genres
 from etl.silver.transform_imdb_ratings import transform_imdb_ratings
@@ -52,6 +54,7 @@ from etl.silver.transform_people import transform_people
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
 from etl.warehouse_loader.load_gold import load_gold
+from scripts.run_pipeline import _extract_company_ids
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +77,20 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
     )
     ingest_imdb_ratings(ingestion_date=ingestion_date)
 
+    # A refreshed film can gain a production company that isn't enriched yet.
+    # ingest_companies() skips every already-enriched id, so on a steady-state
+    # nightly run this fetches nothing; transform_companies() below still has
+    # to run so the loader has a company_details Silver file for this
+    # partition and the cumulative enrichment survives the Neon write (Task 65).
+    company_ids = _extract_company_ids(succeeded, ingestion_date, config.S3_BUCKET)
+    ingest_companies(company_ids, ingestion_date=ingestion_date)
+
     transform_movies(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date)
     transform_credits_bridge(ingestion_date=ingestion_date)
     transform_movie_links(ingestion_date=ingestion_date)
+    transform_companies(ingestion_date=ingestion_date)
     transform_imdb_ratings(ingestion_date=ingestion_date)
 
     silver_results = run_silver_checks(ingestion_date=ingestion_date)

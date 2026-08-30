@@ -66,11 +66,19 @@ CREATE TABLE IF NOT EXISTS dim_genre (
 -- dim_collection above (one per film, so it fit as a column). See
 -- 13_companies.sql for the bridge_ vs fact_ naming rationale.
 CREATE TABLE IF NOT EXISTS dim_company (
-    company_id     INTEGER      NOT NULL,
-    name           TEXT         NOT NULL,
-    logo_path      TEXT,
-    origin_country VARCHAR(10),
-    slug           VARCHAR(300),
+    company_id          INTEGER      NOT NULL,
+    name                TEXT         NOT NULL,
+    logo_path           TEXT,
+    origin_country      VARCHAR(10),
+    slug                VARCHAR(300),
+    -- Task 65: from GET /company/{id}. parent_company_id is a soft, unenforced
+    -- reference (a holding-company parent often has no dim_company row) —
+    -- see 16_company_details.sql.
+    description         TEXT,
+    headquarters        TEXT,
+    homepage            TEXT,
+    parent_company_id   INTEGER,
+    parent_company_name TEXT,
     CONSTRAINT pk_dim_company PRIMARY KEY (company_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_company_slug ON dim_company (slug);

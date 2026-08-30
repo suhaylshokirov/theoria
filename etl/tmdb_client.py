@@ -174,3 +174,14 @@ class TMDBClient:
     def get_movie_credits(self, movie_id: int) -> dict[str, Any]:
         """Cast and crew for a single movie."""
         return self.get(f"movie/{movie_id}/credits")
+
+    def get_company_details(self, company_id: int) -> dict[str, Any]:
+        """Full detail record for a single production company.
+
+        The `production_companies` stub embedded in a movie's detail payload
+        carries only id/name/logo_path/origin_country. This endpoint adds
+        `description`, `headquarters`, `homepage` and `parent_company` (a
+        nested {id, name, logo_path} or null). Same shape as
+        get_movie_details() — a thin wrapper over one GET.
+        """
+        return self.get(f"company/{company_id}")

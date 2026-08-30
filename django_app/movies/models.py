@@ -222,6 +222,15 @@ class Company(models.Model):
     logo_path = models.TextField(null=True)
     origin_country = models.CharField(max_length=10, null=True)
     slug = models.SlugField(max_length=300, unique=True, null=True)
+    # Task 65: from GET /company/{id}. Sparse — description ~1% of studios,
+    # headquarters ~53%, homepage ~29%, a parent ~10% of the ones people open.
+    # parent_company_id is a soft reference (its target often has no
+    # dim_company row); studio_detail() resolves it at read time.
+    description = models.TextField(null=True)
+    headquarters = models.TextField(null=True)
+    homepage = models.TextField(null=True)
+    parent_company_id = models.IntegerField(null=True)
+    parent_company_name = models.TextField(null=True)
 
     class Meta:
         managed = False

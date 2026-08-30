@@ -25,6 +25,42 @@
     </div>
 </div>
 
+{% comment %} Studio provenance (Task 65): what the studio *is*, above its films.
+   Every field is sparse on TMDB (description ~1%, headquarters ~53%, homepage
+   ~29%, a parent ~10%), so the whole block disappears when a studio has none
+   of them — the same "render only when there's something to say" restraint the
+   movie page applies to original_title and its outbound links. A .sheet-section
+   wrapper so the existing vertical-rhythm rules space it; no new CSS. {% endcomment %}
+{% if company.description or company.headquarters or company.homepage or company.parent_company_name %}
+<section class="sheet-section">
+    {% if company.description %}
+    <p class="specimen-synopsis">{{ company.description }}</p>
+    {% endif %}
+    {% if company.headquarters or company.homepage or company.parent_company_name %}
+    <dl class="record-list">
+        {% if company.headquarters %}
+        <div class="record-row">
+            <dt class="label">Headquarters</dt>
+            <dd>{{ company.headquarters }}</dd>
+        </div>
+        {% endif %}
+        {% if company.homepage %}
+        <div class="record-row">
+            <dt class="label">Official site</dt>
+            <dd><a class="ext-link" href="{{ company.homepage }}" target="_blank" rel="noopener noreferrer">{{ company.homepage }}</a></dd>
+        </div>
+        {% endif %}
+        {% if company.parent_company_name %}
+        <div class="record-row">
+            <dt class="label">Parent company</dt>
+            <dd>{% if parent_company %}<a href="{% url 'movies:studio_detail' parent_company.slug %}">{{ parent_company.name }}</a>{% else %}{{ company.parent_company_name }}{% endif %}</dd>
+        </div>
+        {% endif %}
+    </dl>
+    {% endif %}
+</section>
+{% endif %}
+
 <section class="sheet-section">
     <div class="toolbar">
         {% comment %} Same live-filter contract as movie_list.html, scoped to this

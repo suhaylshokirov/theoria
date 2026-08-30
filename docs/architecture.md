@@ -119,7 +119,8 @@ gives:
 ```
 
 **Dimensions** (`warehouse/ddl/01_dimensions.sql`): `dim_movie`, `dim_person`, `dim_collection`,
-`dim_genre`, `dim_date`, `dim_company` (Phase 13), `dim_country`, `dim_language` (Phase 14). Most
+`dim_genre`, `dim_date`, `dim_company` (Phase 13; its detail columns — description, headquarters,
+homepage, parent — added Task 65, see §3.9), `dim_country`, `dim_language` (Phase 14). Most
 use a natural TMDB integer ID as primary key; `dim_country`/`dim_language` use their ISO code
 directly (no surrogate, no slug — the code is already short, stable and URL-safe); `dim_date` uses
 a generated `YYYYMMDD` surrogate and is populated as a full calendar table (1900–2035 by default)
@@ -341,6 +342,40 @@ attributes (icon, label, outbound-URL template) are pure presentation is over-mo
 As of Phase 15 both the four rating queries in `warehouse/queries/` and every Django view that
 shows a rating read this table; `fact_movie_metrics.rating` / `.vote_count` are retained as a
 write-only path (§3 intro).
+
+### 3.9 Studio provenance: `dim_company`'s detail columns and their odd ingestion
+
+`dim_company`'s original five columns (`company_id`, `name`, `logo_path`, `origin_country`,
+`slug`) all come from the thin `production_companies` stub TMDB embeds in a *movie's* detail
+payload. Task 65 added `description`, `headquarters`, `homepage`, `parent_company_id`,
+`parent_company_name` from `GET /company/{id}` — an endpoint this project had never called.
+
+**No FK on `parent_company_id`.** A parent is very often a holding company (Warner Bros.
+Entertainment #17, Viacom International) that is never itself credited on a film, so it has no
+`bridge_movie_company` row and therefore no `dim_company` row — that dimension is, by §3.7's
+design, the distinct set of companies actually linked to a movie. A real FK would force either
+rejecting a legitimate parent link or fabricating a dimension row for a company that was never
+linked to a film. `parent_company_id` is a *soft* reference: `studio_detail` resolves it at read
+time and links to the parent only when a row for it happens to exist, otherwise rendering
+`parent_company_name` as plain text — the same "render only when it resolves" judgement §3.5's
+outbound links use.
+
+**The one Bronze source that isn't re-fetched every partition.** Every other Bronze ingest
+module re-pulls its entity each run because films' ratings/votes/status genuinely drift. A
+studio's description or headquarters essentially never changes, so `ingest_companies()` skips any
+`company_id` that already has a JSON file under `bronze/company_details/` in *any* prior
+partition, and only calls the API for genuinely new companies. The cumulative enriched set is
+therefore spread across partitions, so `transform_companies()` is also the one Silver transform
+that sweeps **every** `bronze/company_details/` partition rather than a single date — it still
+writes one dated Silver file, so the warehouse loader's job is unchanged. `load_dim_company()`
+left-joins that file: a company with no detail row yet (new this partition, or a failed call)
+still upserts its five original columns and leaves the five new ones null.
+
+Coverage is low and that is a property of TMDB, not a bug: measured across the 50 studios with
+the most films — the ones a reader actually opens — headquarters 96%, homepage 64%, a parent
+10%, description 4% (catalog-wide description is ~1%). The provenance block on the studio page is
+really "where they are / their site / their parent", and it disappears entirely when a studio
+has none of the four.
 
 ## 4. Idempotency & incremental loads
 

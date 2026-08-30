@@ -127,6 +127,21 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         ],
         "ranges": {},
     },
+    # Written from the measured shape of TMDB's GET /company/{id} payload
+    # (live probe, 2026-08-30), not by mirroring transform_companies.py — the
+    # Task 40 lesson. Every field but `id` is sparse (description ~1%,
+    # headquarters ~53%, homepage ~29% catalog-wide), so only company_id is
+    # required; parent_company_id/name are null together or set together.
+    "company_details": {
+        "parquet": "company_details.parquet",
+        "pk_cols": ["company_id"],
+        "required_cols": ["company_id"],
+        "expected_cols": [
+            "company_id", "description", "headquarters", "homepage",
+            "parent_company_id", "parent_company_name",
+        ],
+        "ranges": {},
+    },
     # Written from IMDb's *published* schema (tconst/averageRating/numVotes,
     # `\N` for null) rather than by mirroring transform_imdb_ratings.py — the
     # Task 40 lesson again: a check copying the transform's own assumptions

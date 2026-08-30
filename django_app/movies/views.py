@@ -456,6 +456,20 @@ def studio_detail(request, company_slug):
     """
     company = get_object_or_404(Company.objects.using("warehouse"), slug=company_slug)
 
+    # Task 65: resolve the parent company for a link, if it has one *and* that
+    # parent is itself in the catalog. A holding-company parent (Warner Bros.
+    # Entertainment, Viacom International) is often never directly credited on
+    # a film, so it has no dim_company row — the template then falls back to
+    # company.parent_company_name as plain text. One extra query, and only on
+    # a single studio page, never the list.
+    parent_company = None
+    if company.parent_company_id:
+        parent_company = (
+            Company.objects.using("warehouse")
+            .filter(company_id=company.parent_company_id)
+            .first()
+        )
+
     movie_ids = list(
         MovieCompany.objects.using("warehouse")
         .filter(company_id=company.company_id)
@@ -500,6 +514,7 @@ def studio_detail(request, company_slug):
 
     context = {
         "company": company,
+        "parent_company": parent_company,
         "page_obj": page_obj,
         "q": q,
         "sort": sort,

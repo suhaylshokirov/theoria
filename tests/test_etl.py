@@ -3395,3 +3395,215 @@ def test_build_metrics_snapshot_reads_silver_movies_for_the_date():
     assert mock_s3.get_object.call_args[1]["Key"] == (
         "silver/movies/ingestion_date=2026-07-29/movies.parquet"
     )
+
+
+# --- Task 65: studio provenance (company details) --------------------------
+
+from etl.bronze.ingest_companies import ingest_companies
+from etl.silver.transform_companies import transform_companies
+
+
+def _company_payload(company_id: int, **overrides) -> dict:
+    """A GET /company/{id} payload. Every key is always present in the real
+    response (measured 2026-08-30): "" for an empty string field, null for an
+    absent parent."""
+    base = {
+        "id": company_id,
+        "name": f"Studio {company_id}",
+        "description": "",
+        "headquarters": "Burbank, California",
+        "homepage": "https://example.com",
+        "logo_path": "/logo.png",
+        "origin_country": "US",
+        "parent_company": None,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_get_company_details_calls_the_company_endpoint():
+    client = _client()
+    with patch.object(
+        client.session, "get", return_value=_fake_response(200, {"id": 174})
+    ) as mock_get:
+        client.get_company_details(174)
+
+    url = mock_get.call_args[0][0]
+    assert url.endswith("/company/174")
+
+
+def test_ingest_companies_writes_one_file_per_company():
+    mock_client = MagicMock()
+    mock_client.get_company_details.side_effect = [
+        _company_payload(174), _company_payload(2),
+    ]
+    # No prior partitions: the list paginator returns nothing.
+    mock_s3 = _make_s3_mock_with_files({})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_companies(
+            [174, 2], ingestion_date=dt.date(2026, 6, 22), client=mock_client,
+        )
+
+    assert succeeded == [174, 2]
+    assert failed == []
+    keys = [c[1]["Key"] for c in mock_s3.put_object.call_args_list]
+    assert "bronze/company_details/ingestion_date=2026-06-22/174.json" in keys
+    assert "bronze/company_details/ingestion_date=2026-06-22/2.json" in keys
+
+
+def test_ingest_companies_skips_ids_enriched_in_a_prior_partition():
+    """The deliberate exception to fetch-fresh-every-partition: a company that
+    already has a Bronze file in *any* earlier partition is left alone."""
+    mock_client = MagicMock()
+    mock_client.get_company_details.side_effect = [_company_payload(2)]
+    # 174 was enriched on an earlier date; 2 is new.
+    mock_s3 = _make_s3_mock_with_files({
+        "bronze/company_details/ingestion_date=2026-05-01/174.json": _company_payload(174),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_companies(
+            [174, 2], ingestion_date=dt.date(2026, 6, 22), client=mock_client,
+        )
+
+    assert succeeded == [2]
+    assert mock_client.get_company_details.call_count == 1
+    keys = [c[1]["Key"] for c in mock_s3.put_object.call_args_list]
+    assert keys == ["bronze/company_details/ingestion_date=2026-06-22/2.json"]
+
+
+def test_ingest_companies_continues_after_a_failed_company():
+    mock_client = MagicMock()
+    mock_client.get_company_details.side_effect = [
+        _company_payload(1), RuntimeError("500"), _company_payload(3),
+    ]
+    mock_s3 = _make_s3_mock_with_files({})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_companies(
+            [1, 2, 3], ingestion_date=dt.date(2026, 6, 22), client=mock_client,
+        )
+
+    assert succeeded == [1, 3]
+    assert failed == [2]
+    assert mock_s3.put_object.call_count == 2  # the failed one writes nothing
+
+
+def test_transform_companies_normalises_empty_strings_and_splits_parent():
+    payloads = {
+        "bronze/company_details/ingestion_date=2026-06-22/174.json": _company_payload(
+            174, description="", homepage="",
+            parent_company={"id": 17, "name": "Warner Bros. Entertainment", "logo_path": "/p.png"},
+        ),
+        "bronze/company_details/ingestion_date=2026-06-22/2.json": _company_payload(
+            2, description="A studio.", headquarters="", parent_company=None,
+        ),
+    }
+    mock_s3 = _make_s3_mock_with_files(payloads)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_companies(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    put = mock_s3.put_object.call_args
+    assert put[1]["Key"] == (
+        "silver/company_details/ingestion_date=2026-06-22/company_details.parquet"
+    )
+    df = pd.read_parquet(io.BytesIO(put[1]["Body"])).set_index("company_id")
+    assert pd.isna(df.loc[174, "description"])       # "" -> None
+    assert pd.isna(df.loc[174, "homepage"])
+    assert df.loc[174, "parent_company_id"] == 17
+    assert df.loc[174, "parent_company_name"] == "Warner Bros. Entertainment"
+    assert df.loc[2, "description"] == "A studio."
+    assert pd.isna(df.loc[2, "headquarters"])
+    assert pd.isna(df.loc[2, "parent_company_id"])   # parent_company null -> None
+
+
+def test_transform_companies_sweeps_every_bronze_partition():
+    """The enriched set is spread across partitions (each company is written
+    only into the partition that first saw it), so the transform must read all
+    of bronze/company_details/, not one date."""
+    payloads = {
+        "bronze/company_details/ingestion_date=2026-05-01/174.json": _company_payload(174),
+        "bronze/company_details/ingestion_date=2026-06-22/2.json": _company_payload(2),
+    }
+    mock_s3 = _make_s3_mock_with_files(payloads)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_companies(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    df = pd.read_parquet(io.BytesIO(mock_s3.put_object.call_args[1]["Body"]))
+    assert set(df["company_id"]) == {174, 2}
+
+
+def test_transform_companies_drops_null_company_id(caplog):
+    payloads = {
+        "bronze/company_details/ingestion_date=2026-06-22/good.json": _company_payload(5),
+        "bronze/company_details/ingestion_date=2026-06-22/bad.json": _company_payload(5, id=None),
+    }
+    mock_s3 = _make_s3_mock_with_files(payloads)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3), \
+         caplog.at_level(logging.WARNING):
+        transform_companies(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    df = pd.read_parquet(io.BytesIO(mock_s3.put_object.call_args[1]["Body"]))
+    assert list(df["company_id"]) == [5]
+    assert "null company_id" in caplog.text
+
+
+def _company_details_df():
+    return pd.DataFrame({
+        "company_id": pd.array([900], dtype="Int64"),
+        "description": ["A major studio."],
+        "headquarters": ["Burbank, California"],
+        "homepage": ["https://wb.com"],
+        "parent_company_id": pd.array([17], dtype="Int64"),
+        "parent_company_name": ["Warner Bros. Entertainment"],
+    })
+
+
+def test_load_dim_company_left_joins_detail_columns():
+    mock_session = MagicMock()
+    count = load_dim_company(mock_session, _dim_companies_df(), _company_details_df())
+
+    assert count == 1
+    (_, params), _ = mock_session.execute.call_args
+    assert params == [{
+        "company_id": 900, "name": "Warner Bros.", "logo_path": "/wb.png",
+        "origin_country": "US", "description": "A major studio.",
+        "headquarters": "Burbank, California", "homepage": "https://wb.com",
+        "parent_company_id": 17, "parent_company_name": "Warner Bros. Entertainment",
+    }]
+
+
+def test_load_dim_company_without_details_upserts_only_original_columns():
+    """A missing company_details Silver file (None) must not blank the detail
+    columns — the upsert simply doesn't name them, so ON CONFLICT leaves any
+    previously-loaded values in place."""
+    mock_session = MagicMock()
+    count = load_dim_company(mock_session, _dim_companies_df(), None)
+
+    assert count == 1
+    (_, params), _ = mock_session.execute.call_args
+    assert set(params[0]) == {"company_id", "name", "logo_path", "origin_country"}
+
+
+def test_load_dim_company_details_left_join_keeps_unenriched_company():
+    """A company present in movie_companies but absent from company_details
+    still upserts, with null detail columns."""
+    companies = pd.DataFrame({
+        "movie_id": pd.array([1, 2], dtype="Int64"),
+        "company_id": pd.array([900, 901], dtype="Int64"),
+        "company_name": ["Warner Bros.", "Tiny Films"],
+        "logo_path": ["/wb.png", None],
+        "origin_country": ["US", None],
+    })
+    mock_session = MagicMock()
+    count = load_dim_company(mock_session, companies, _company_details_df())
+
+    assert count == 2
+    (_, params), _ = mock_session.execute.call_args
+    tiny = next(p for p in params if p["company_id"] == 901)
+    assert tiny["description"] is None
+    assert tiny["parent_company_id"] is None

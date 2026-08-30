@@ -26,6 +26,8 @@ import time
 import config
 from data_quality.silver_checks import run_silver_checks
 from data_quality.warehouse_checks import run_warehouse_checks
+from etl import s3_utils
+from etl.bronze.ingest_companies import ingest_companies
 from etl.bronze.ingest_credits import ingest_credits
 from etl.bronze.ingest_discover import ingest_discover
 from etl.bronze.ingest_genres import ingest_genres
@@ -33,6 +35,7 @@ from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
 from etl.bronze.ingest_movie_details import ingest_movie_details
 from etl.bronze.ingest_movies import ingest_movies
 from etl.gold.build_gold_datasets import build_gold_datasets
+from etl.silver.transform_companies import transform_companies
 from etl.silver.transform_credits_bridge import transform_credits_bridge
 from etl.silver.transform_genres import transform_genres
 from etl.silver.transform_imdb_ratings import transform_imdb_ratings
@@ -44,6 +47,33 @@ from etl.warehouse_loader.load_facts import load_facts
 from etl.warehouse_loader.load_gold import load_gold
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_company_ids(
+    movie_ids: list[int], ingestion_date: dt.date, bucket: str
+) -> list[int]:
+    """Re-read the Bronze movie-detail files just written and return the
+    deduplicated set of production_companies[].id across all of them.
+
+    TMDB has no "list all companies" endpoint, and the company ids aren't in
+    the discovery listing — they live inside each movie's detail payload. This
+    is the company-id equivalent of the movie_ids that ingest_movies() threads
+    into ingest_movie_details(): the input to ingest_companies().
+    """
+    keys = [
+        s3_utils.build_path("bronze", "movie_details", ingestion_date, f"{mid}.json")
+        for mid in movie_ids
+    ]
+    company_ids: set[int] = set()
+    for key, raw, err in s3_utils.read_json_objects(bucket, keys):
+        if err is not None or not raw:
+            logger.warning("Could not read %s for company-id extraction: %s", key, err)
+            continue
+        for company in raw.get("production_companies") or []:
+            cid = company.get("id")
+            if cid is not None:
+                company_ids.add(cid)
+    return sorted(company_ids)
 
 
 def run_pipeline(
@@ -102,11 +132,24 @@ def run_pipeline(
     # transform_movies()'s output below, so it must run after that.
     ingest_imdb_ratings(ingestion_date=ingestion_date)
 
+    # Company ids only exist inside the movie-detail payloads just written.
+    # ingest_companies() then skips any already enriched in a prior partition,
+    # so this is cheap on every run after the first (Task 65).
+    company_ids = _extract_company_ids(movie_ids, ingestion_date, config.S3_BUCKET)
+    succeeded_companies, failed_companies = ingest_companies(
+        company_ids, ingestion_date=ingestion_date
+    )
+    logger.info(
+        "Bronze company details: %d/%d new companies fetched",
+        len(succeeded_companies), len(company_ids),
+    )
+
     transform_movies(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date)
     transform_credits_bridge(ingestion_date=ingestion_date)
     transform_movie_links(ingestion_date=ingestion_date)
+    transform_companies(ingestion_date=ingestion_date)
     transform_imdb_ratings(ingestion_date=ingestion_date)
 
     silver_results = run_silver_checks(ingestion_date=ingestion_date)

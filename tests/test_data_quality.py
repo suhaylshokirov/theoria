@@ -307,6 +307,13 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
     imdb_ratings_df = pd.DataFrame([{
         "movie_id": 550, "imdb_id": "tt0110912", "rating": 8.9, "vote_count": 2_150_000,
     }])
+    company_details_df = pd.DataFrame([
+        {"company_id": 711, "description": None, "headquarters": "Los Angeles, California",
+         "homepage": None, "parent_company_id": 25, "parent_company_name": "20th Century Fox"},
+        {"company_id": 25, "description": "A film studio.", "headquarters": None,
+         "homepage": "https://example.com", "parent_company_id": None,
+         "parent_company_name": None},
+    ])
     return {
         "movies": _movies_df(),
         "people": people_df,
@@ -315,6 +322,7 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
         "genres": genres_df,
         "credits_bridge": _bridge_df(),
         "movie_companies": companies_df,
+        "company_details": company_details_df,
         "movie_countries": countries_df,
         "movie_languages": languages_df,
         "imdb_ratings": imdb_ratings_df,
@@ -406,3 +414,25 @@ def test_run_silver_checks_imdb_ratings_rating_out_of_range_fails(tmp_path):
 
     ratings_range = next(r for r in results if r.entity == "imdb_ratings" and r.check == "ranges")
     assert not ratings_range.passed
+
+
+def test_run_silver_checks_company_details_only_company_id_is_required(tmp_path):
+    """description/headquarters/homepage/parent are all sparse on TMDB (~1-53%
+    coverage), so a company row with every one of them null must still pass —
+    only company_id is required (Task 65)."""
+    dfs = _all_entity_dfs()
+    dfs["company_details"] = pd.DataFrame([{
+        "company_id": 711, "description": None, "headquarters": None,
+        "homepage": None, "parent_company_id": None, "parent_company_name": None,
+    }])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    company_checks = [r for r in results if r.entity == "company_details"]
+    assert company_checks and all(r.passed for r in company_checks)

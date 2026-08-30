@@ -56,7 +56,25 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
+Last completed task   : **Task 65 — studio provenance page (2026-08-30).** `dim_company` gained
+`description`/`headquarters`/`homepage`/`parent_company_id`/`parent_company_name` from
+`GET /company/{id}` (first call to that endpoint), surfaced above the filmography on
+`/studios/<slug>/`. New `etl/bronze/ingest_companies.py` (skips any company already enriched in
+any prior partition — the one Bronze source not re-fetched every run), `etl/silver/transform_companies.py`
+(sweeps *every* `bronze/company_details/` partition — cumulative enriched set), `16_company_details.sql`
+(no FK on `parent_company_id` — a holding-company parent often has no `dim_company` row, so it's a
+soft read-time reference). `load_dim_company()` gained an optional LEFT-joined second Silver source;
+wired into **both** `run_pipeline.py` and `run_refresh.py`. Django: 5 nullable fields on `Company`,
+`studio_detail()` resolves the parent for a link only when it lands on a real row, provenance block
+disappears when a studio has none of the four (Task 56 restraint), **zero new CSS**. Live-verified:
+Bronze **1,397/1,398** (id 67681 is a TMDB 404), backfilled to Neon **and** replica —
+`dim_company` description 6 / HQ 672 / homepage 426 / parent 8 (5 of 8 parents resolve to a link).
+Coverage is genuinely low and that's TMDB, not a bug — among the top 50 studios by film count:
+HQ 96%, homepage 64%, parent 10%, **description 4%** (catalog-wide ~1%). Fresh-install check: scratch
+DB from `01`–`03` → exactly 16 tables, `dim_company` 10 columns. `pytest` **313/313** (+15).
+Silver DQ `company_details` 4/4; warehouse checks unchanged (Task 65 adds none). Full detail in the
+Task 65 Outcome block below. Docs: `architecture.md` §3.9, `README.md`.
+Prior task: **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
 The Task 63 panels landed as "Films by production country" (ranked table off
 `bridge_movie_country`/`dim_country`) and "Non-English cinema over time" (Chart.js line + table
 off `dim_movie.original_language`), taking `/analytics/` to 6 panels. **Ad-hoc follow-up same day
@@ -175,26 +193,28 @@ could have caught this** — the test suite enters through the same directory th
 assumption; reproduced with a harness that loads the file by path from the repo root with
 `django_app/` absent from `sys.path` (old file → the exact production error, new file → 200s).
 `pytest` still 297/297.
-Currently on          : **Nothing active.** Phases 14 and 15 are both **closed** (Tasks 63 + 69,
-2026-08-30). The only outstanding work is **Task 65** (studio provenance page) — phase-independent,
-raised 2026-08-17.
-Current phase         : **None active.** Phase 14 (Tasks 61–63) and Phase 15 (Tasks 66–69) are both
-complete as of 2026-08-30 — Tasks 63 and 69 were merged into one commit (the two share a live
-route walk, a fresh-install check and a doc truth-up; splitting would have faked a boundary, the
-Task 66–67 precedent). Next phase is unplanned; **Task 65 is the only queued task**.
-Outstanding must-do   : **One phase-independent must-do, not started.** ~~Task 64~~ is **DONE**
-(2026-08-29). Remaining: **Task 65 — studio provenance page** (description,
-headquarters, homepage, parent company on `/studios/<slug>/`, above the filmography); see "MUST
-DO — Studio Provenance Page", added 2026-08-17 by user request right after the Studios redesign.
-Needs one new TMDB endpoint (`/company/{id}`, ~1,383 calls, ≈5 min at Task 64's measured 4.76
-req/s) never called before in this project — the plan's own first step is a live payload-shape +
-coverage check before any code is written, since nothing about that endpoint's response has been
-measured yet.
+Currently on          : **Nothing active.** Phases 14 and 15 are closed (Tasks 63 + 69) and
+**Task 65 (studio provenance page) is DONE** (2026-08-30). No queued tasks remain.
+Current phase         : **None active.** Phases 12–15 all complete; Tasks 64 and 65 (both
+phase-independent must-dos) both done. Next phase is unplanned.
+Outstanding must-do   : **None.** ~~Task 64~~ (nightly cloud refresh) DONE 2026-08-29;
+~~Task 65~~ (studio provenance page) DONE 2026-08-30. Both phase-independent must-dos are closed.
+A possible follow-up, not scheduled: ~10 companies linked only in pre-`2026-08-29` `movie_companies`
+partitions still have null detail columns (they were absent from the partition the backfill joined
+against); their Silver rows exist, so the next nightly run that includes them self-heals.
+Another standing candidate: drop `fact_movie_metrics.rating`/`.vote_count` (zero readers since
+Task 69) as its own reversible one-commit task.
 Blockers / open issues: **No blockers.** **Tasks 66–67 (2026-08-26) landed together in one commit**
 — they share `tests/test_etl.py` heavily enough that splitting the commit would have meant partial
 hunk staging, so the usual one-task-one-commit rule was knowingly relaxed here rather than faked.
 **The live warehouse is 16 tables** — the Warehouse Schema section below was trued up 9 → 16 at
 Task 63+69 (2026-08-30) and now matches `information_schema` and a fresh `01`–`03` bootstrap.
+**Task 65 (2026-08-30) added 5 columns to `dim_company`** (`description`, `headquarters`,
+`homepage`, `parent_company_id`, `parent_company_name`) via `16_company_details.sql` — applied to
+Neon **and** the local replica (the replica sync is data-only, so schema changes need both), and
+folded into `01_dimensions.sql`. Table count unchanged. `parent_company_id` has **no FK** on
+purpose (a holding-company parent often has no `dim_company` row) — it's resolved at read time in
+`studio_detail()`.
 **`fact_movie_rating` is now catalog-wide**: the Task 64 nightly path holds 1,211 IMDb + 1,215
 TMDB rows for all 1,215 films in one current partition (`2026-08-29`). The earlier per-partition
 limitation (a partition only got IMDb ratings for the films it contained) is moot now that the
@@ -456,7 +476,7 @@ still sit in S3 though Task 53 stopped writing them; 2 films have no `fact_movie
 All cleanup rather than capability — recorded so they aren't rediscovered as if new. The **stale
 Warehouse Schema section in this file was also fixed** (it still listed `dim_actor`,
 `dim_director` and `fact_casting`, all dropped in Tasks 35/53). Prior-phase notes follow. Task 54 is a read-side-only fix (no DDL, no ETL, no pipeline re-run, no new TMDB calls) for a movie page that `fact_credit` (Task 48) had made unreadable at scale: a person holding several jobs on one film rendered once per job across several department sections (Christopher Nolan on *The Dark Knight* was 4 rows in 3 sections), and every credit — 47–139 cast, up to ~980 crew on the worst film — rendered as a headshot card with no limit. Two complaints, two fixes, and the measurement that separates them: merging collapses 143.8 crew rows/film to 138.1 distinct people (~4%), so **merging fixes duplication, not volume**. `_merge_crew()` in `movies/views.py` groups a person's non-Acting credits by `person_id`, files them under their single most senior department via `_department_rank()` (extracted from the sort key that was duplicated in `movie_detail` and `person_detail`), and joins the jobs in department order — Nolan now reads "Director / Screenplay / Story / Producer", once. Volume is fixed by **paging cast and crew in the browser**, ten at a time: the view sends every credit and `initPagedSection()` in `static/js/theoria.js` shows a window of them, so Next is a repaint rather than a round-trip. This replaced a first, server-side implementation (`?cast_page=`/`?crew_page=`/`?crew=all` + `#cast`/`#crew` anchors) that the user judged not smooth enough; `BILLED_CREW_JOBS` went with it, since paging ten at a time makes the first page short whatever it holds. `[data-page-group]` wrappers (one per crew department) hide themselves when none of their people are on the current page; the pager is `<button>`s that ship `hidden` and are revealed only when there's more than one page, so with JS off the reader gets the whole list and no dead controls. **The two pagers are a deliberate split, documented in both partials:** `_pager.html` stays server-side for `/movies/` and `/people/` (1,215 and 122,685 rows — not a payload to hand a browser), `_pager_client.html` serves one film's ~1,200-credit maximum, which is. Crew renders as a list rather than a poster grid because crew photo coverage measured 23.8% against cast's 70.1%. **Crew rows carry faces too, after user review:** a headshot where one exists, and the same `.placeholder-person` silhouette the cast cards use where it doesn't (55 photos / 87 silhouettes on The Dark Knight) — an initials monogram was tried first and rejected, since two placeholder vocabularies on one page is one more than a reader should have to learn. That review also surfaced a **real CSS bug**: `.credit-list` never zeroed the `<ul>`'s UA-default 40px `padding-inline-start`, and because these lists paint their own background to draw the 1px gaps as hairlines, that padding rendered as an unexplained grey column down the left of every crew list — invisible on white, obvious on the dark surface. `.collab-list` (person pages) had the identical defect since Task 51; both fixed. Live-verified: `/movies/the-dark-knight/` ships **139 cast cards and 142 crew rows across 11 department groups** in one response, no server-paging params in the markup, Nolan merged and once; the paging algorithm was **executed under Node against a stub DOM** (page 1: 10 items/3 departments; page 2: 2 items collapsing to 1 heading; buttons disable at both ends). Tests 210 → 214. Prior phase's notes: Full test suite is 210/210 passing (down from 225 because Task 53 deleted the legacy actor/director tests, not because anything regressed); Silver DQ 16/16 on all three partitions, warehouse checks 20/20 — both counts dropped for the same reason (the `actors`/`directors` Silver entities and the `fact_cast`/`fact_crew` FK + load-sanity checks no longer exist). **Phase 10 is done: Tasks 47–53 all complete.** The warehouse is now exactly **9 tables** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`, `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `etl_watermarks` — and `dim_actor`/`dim_director`/`fact_cast`/`fact_crew` are **dropped** (`warehouse/ddl/11_drop_legacy_person_tables.sql`, facts before dimensions). `/people/<slug>/` is the single person page; `/actors/<slug>/` and `/directors/<slug>/` now 301 to it via a single `dim_person` slug lookup with no legacy table involved (the 381 slugs that moved during the Task 48 namespace unification are consequently **404 rather than redirected** — accepted, the site isn't public). 16 routes, 10 analytics panels, **zero empty panels**. **Gold is no longer a write-only dead end** (Task 49) — `load_gold.py` reads `gold/collaboration_edges` into `fact_collaboration`; the other four Gold datasets are still unread, and deliberately so (they're cheap enough to recompute in SQL, which the Django views already do). Caveat that remains open: `fact_collaboration` is a *derived* table, so nothing outside the pipeline can tell it's stale, and re-running Gold for an older partition overwrites counts computed from a newer one — worth revisiting as a materialized view. **Two bugs only the live runs could find, both fixed:** `assign_slugs()`'s batched `executemany` hit a `UniqueViolation` on a slug *permutation* because Postgres checks a unique index per row, not per statement (latent since Task 46; fixed by clearing the column first, in the same transaction); and `/connect/` returned a different — equally short, equally valid — path after every reload, because the adjacency query had no `ORDER BY` while Python dicts preserve insertion order (fixed; verified stable, so **Task 52's outcome line below cites a path that is no longer the one returned** — the current answer for Tom Hanks → Thelma Schoonmaker is *Philadelphia* → Tony Devon → *The King of Comedy*). **Every one of the 122,685 `dim_person` rows has at least one credit**, since the dimension is built from the credits themselves — which retires the long-standing "orphan dimension members" gap outright, now that the legacy tables it applied to are gone. **Fresh-install verification is now empirical, not assumed:** a throwaway database built from DDL `01`–`03` produces exactly the 9 live tables. Note that once `11` *drops* things, "run every DDL file in order" no longer equals "build the current schema" — README documents `01`–`03` (bootstrap) and `04`–`11` (migrations for an existing DB) as two separate paths. Task 43 (person enrichment — bios/birthdays) remains deferred by user decision on cost grounds, and unifying to `dim_person` made it *more* expensive (122,685 people, not 45k). Remaining known gaps, still open: `dim_date` rebuilds ~49,700 rows every load; `*_incremental()` is tested but never called by `run_pipeline.py`; the Silver transforms read Bronze one S3 object at a time (~16 min per full rebuild pass). Older notes: Task 45 restyled the actor/director stat row (removed ruled dividers, added lime measure ticks), removed the eyebrow/accession kicker line from every page, and fixed the Active-period stat so an ongoing career reads "<start>–Active" instead of a closed range ending this year. Task 46 added a `slug` column (+ unique index) to `dim_movie`/`dim_actor`/`dim_director`, populated by `assign_slugs()` in `load_dimensions.py` (recomputes the whole table's slugs every run, collision-numbered in ascending id order, so reruns never reassign an existing row's slug); `/movies/`, `/actors/`, `/directors/` detail routes are now slug-addressed (`/actors/tom-holland/`) and the old numeric-id URLs 404. Genres are still id-addressed (only ~19 rows), as are collections' underlying ids behind their slugs.
-Last updated          : 2026-08-29
+Last updated          : 2026-08-30
 ```
 
 **After finishing any task, in this order:**
@@ -558,7 +578,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - `dim_genre(genre_id PK, genre_name)`
 - `dim_collection(collection_id PK, name, poster_path, slug)`
 - `dim_date(date_id PK, full_date, year, month, day, decade)`
-- `dim_company(company_id PK, name, logo_path, origin_country, slug)` — Task 58
+- `dim_company(company_id PK, name, logo_path, origin_country, slug, description, headquarters, homepage, parent_company_id, parent_company_name)` — Task 58; the last 5 from `GET /company/{id}` (Task 65). `parent_company_id` has **no FK** (a holding-company parent frequently has no `dim_company` row) — soft reference, resolved at read time.
 - `dim_country(country_code PK, name)` — Task 61, ISO code is the PK (no surrogate, no slug)
 - `dim_language(language_code PK, name, english_name)` — Task 61, ISO code is the PK
 
@@ -1302,7 +1322,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > logo/origin only). The richer fields live on a company's **own** detail endpoint, which this
 > project has never called.
 
-#### [ ] Task 65 — Bronze → Silver → warehouse → Django: studio bios, headquarters, homepage, parent company
+#### [x] Task 65 — Bronze → Silver → warehouse → Django: studio bios, headquarters, homepage, parent company
 - **Goal:** `GET /company/{company_id}` on TMDB returns `description`, `headquarters`, `homepage`,
   and `parent_company` (nested `{id, name, logo_path}` or `null`) alongside the fields already
   collected. Surface all four on the studio page, above the filmography, the way `movie_detail`
@@ -1396,7 +1416,70 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   `dim_company` row) links to it; a studio with an *unresolvable* parent shows the name as plain
   text, not a dead link; a studio with none of the four fields renders no provenance block; Silver
   DQ and warehouse checks both pass; full test suite green.
-- **Outcome:**
+- **Outcome (2026-08-30):** Shipped end to end. **Pre-work probe (live TMDB, no code):**
+  `GET /company/{id}` returns exactly 8 keys, *all always present* — `description`/`headquarters`/
+  `homepage` are `""` when empty (never omitted), `parent_company` is `null` or a 3-key
+  `{id,name,logo_path}` stub. **Coverage is far lower than "studio bio" implies** — random sample
+  of 90 of 1,398: description **1.1%**, headquarters 53%, homepage 29%, parent 0%; top 50 studios
+  by film count (where page views land): description **4%**, headquarters **96%**, homepage 64%,
+  parent 10%. User decision: carry all four anyway (one nullable column + a `{% if %}` costs
+  nothing). Throughput ~2.5 req/s → the 1,398-company backfill took **~13 min**.
+  **Bronze:** new `etl/bronze/ingest_companies.py` — `get_company_details()` one-line wrapper on
+  `TMDBClient`; `ingest_companies()` mirrors `ingest_movie_details` (one JSON/id, write-as-you-go)
+  but with the **deliberate exception** that it skips any `company_id` already present under
+  `bronze/company_details/` in *any* prior partition (`_already_enriched_ids()` lists the whole
+  prefix) — a studio's HQ/description essentially never drifts, unlike a film's votes. **Silver:**
+  new `etl/silver/transform_companies.py` sweeps **every** `bronze/company_details/` partition
+  (not one date — the cumulative enriched set is spread across them), normalises `""`→`None`,
+  splits `parent_company` into `parent_company_id`/`_name`, writes one dated
+  `silver/company_details/…/company_details.parquet`. **DDL:** new `16_company_details.sql`
+  (idempotent `ADD COLUMN IF NOT EXISTS` ×5 on `dim_company`; folded into `01_dimensions.sql`);
+  **no FK on `parent_company_id`** — a holding-company parent (Warner Bros. Entertainment #17,
+  Viacom International #5308) often has no `dim_company` row, so it's a *soft* reference resolved
+  at read time. **Loader:** `load_dim_company(session, df, details_df=None)` gained an optional
+  second Silver source, **LEFT-joined** — an un-enriched company still upserts its 5 original
+  columns; `load_dimensions()` reads `company_details` in a `try/except` (a partition written
+  before this transform existed degrades to null detail columns, never crashes). Wired into
+  **both** `run_pipeline.py` (new `_extract_company_ids()` re-reads the just-written movie-detail
+  payloads for `production_companies[].id`) **and** `run_refresh.py` (the plan predates the
+  Task 64 nightly path — `transform_companies` must run there too or the cumulative enrichment is
+  wiped on every Neon write). **Django:** 5 `TextField/IntegerField(null=True)` on `Company`;
+  `studio_detail()` resolves the parent with one extra query *only when* `parent_company_id` is
+  set; new provenance block in `studio_detail.html` above the filmography — `description` as
+  `.specimen-synopsis` prose, then a `.record-list` of Headquarters / Official site
+  (`.ext-link`, reused) / Parent company (link when it resolves to a `dim_company` row, plain
+  text otherwise). **Zero new CSS** — the block is a `<section class="sheet-section">` so the
+  existing vertical-rhythm rules space it. Whole block disappears when a studio has none of the
+  four (the Task 56 "render only when there's something to say" rule).
+  **One bug found live:** the first backfill did a partial-column upsert (`company_id` + 5
+  details only) and hit `NotNullViolation` on `dim_company.name` — Postgres checks NOT NULL on
+  the *proposed* row **before** `ON CONFLICT` can rescue it, so any upsert omitting `name` fails
+  even for a row that exists. Fixed by backfilling through the real
+  `load_dim_company(conn, movie_companies_df, company_details_df)` path (includes `name`), which
+  is also the exact code the nightly job now runs. **Live-verified:** Bronze **1,397/1,398**
+  companies written (1 is TMDB id 67681, a 404 — deleted/merged; keeps null detail columns);
+  Silver DQ `company_details` **4/4**; backfilled to **Neon and the replica** (DDL applied to
+  both — the replica sync is data-only). `dim_company` on both: total **1,398**, null slugs
+  **0** (slugs untouched), description **6**, headquarters **672**, homepage **426**, parent
+  **8**. Of the 8 parents, 5 resolve to a `dim_company` row and link (Pixar→Walt Disney
+  Pictures, MGM→Sony Pictures, United Artists→MGM, Paramount Vantage→Paramount, Sony Pictures
+  Animation→Sony Pictures); 3 are plain text (Warner Bros. Pictures & Castle Rock → "Warner
+  Bros. Entertainment"; Paramount → "Viacom International"). Route walk: `/`, `/movies/`,
+  `/people/`, `/studios/`, `/analytics/`, `/movies/the-godfather/` and four studio pages all
+  **200**, bad slug **404**; `/studios/warner-bros-pictures/` renders HQ + `↗` site link +
+  "Warner Bros. Entertainment" as text; `/studios/pixar/` links its parent;
+  `/studios/columbia-pictures/` shows the prose description; `/studios/will-vinton-studios/`
+  (no data) renders no block. **Fresh-install check:** a scratch DB from `01`–`03` produces
+  exactly the live 16 tables and `dim_company` with all 10 columns. Warehouse checks unchanged
+  (Task 65 adds none — `company_details` feeds an existing dimension, not a new table).
+  `pytest` **298 → 313** (+15: test_etl +12 — client wrapper, `ingest_companies` skip/continue,
+  `transform_companies` normalise/sweep/null-drop, `load_dim_company` left-join/None/unenriched;
+  test_data_quality +1 — all-null detail row still passes; test_django_views +4 — provenance
+  render, parent link, parent plain-text, no-block). Docs: `docs/architecture.md` new **§3.9** +
+  §3 intro; `README.md` (313 tests, `/studios/` route row). **Small known gap:** the backfill
+  joined against the `2026-08-29` `movie_companies` partition (1,388 distinct companies), so ~10
+  companies linked only in older partitions have null detail columns until a nightly run that
+  includes them; `transform_companies` already has their Silver rows, so it self-heals.
 
 ---
 
