@@ -5,7 +5,7 @@
                 more useful fact when the same film appears under several
                 departments. Named to match _person_card.html's param. {% endcomment %}
 {% load tmdb_images %}
-<div class="poster-card">
+<div class="poster-card is-film">
     <a href="{% url 'movies:movie_detail' movie.slug %}">
         {% if movie.poster_path %}
         <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster" loading="lazy">

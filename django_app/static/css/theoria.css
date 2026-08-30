@@ -741,18 +741,25 @@ main.container {
 }
 
 .poster-card .card-title {
-  /* Reserve two lines whether the title fills them or not, so the sub-line
-     and the rating badge below it sit at the same height on every card in a
-     row. Without this a one-line title pulls its badge up above the badges
-     of neighbours whose titles wrapped. Longer titles clamp at two lines. */
+  /* Clamp at two lines everywhere, so a stray long name can't shove a card's
+     layout around — but this is only a max: the title takes just the height
+     it needs. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  min-height: calc(2 * 1.3em);
   font-size: var(--text-sm);
   font-weight: 600;
   line-height: 1.3;
+}
+
+/* Only film cards reserve the second title line whether the title fills it or
+   not, so the sub-line and rating badge below sit at the same height across a
+   row even when some titles wrapped and some didn't. Person and studio names
+   are nearly always one line, so reserving it there just opens a gap above
+   the sub-line. */
+.poster-card.is-film .card-title {
+  min-height: calc(2 * 1.3em);
 }
 
 /* The numeric sub-line: a release year, or a "Pop 8.4" fallback. Mono suits a

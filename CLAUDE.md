@@ -89,6 +89,13 @@ card sub-line devices, so every card sub-line site-wide now reads at one strengt
 `.specimen-plate .plate-caption` (the release year under the poster on the movie detail page —
 not a card, a lone plate caption) given the same `font-weight: 500` + `--ink-muted` in the same
 pass, size left at `--text-3xs`.
+**Ad-hoc follow-up 3 (2026-08-30, user request):** `.card-title`'s `min-height: calc(2 * 1.3em)`
+(reserves the second title line so sub-lines/rating badges align across a row) was applying to
+every `.poster-card`, opening a gap above the sub-line on person and studio cards whose names are
+one line. Moved to `.poster-card.is-film .card-title`; `_movie_card.html`'s wrapper gained the
+`is-film` class. The `-webkit-line-clamp: 2` stays on the base rule as a harmless max. `pytest`
+314/314 (person-card count test at `test_django_views.py:792` unaffected — cast renders
+`_person_card`).
 Prior task: **Tasks 63 + 69 — closed Phases 14 and 15 in one commit (2026-08-30).**
 The Task 63 panels landed as "Films by production country" (ranked table off
 `bridge_movie_country`/`dim_country`) and "Non-English cinema over time" (Chart.js line + table
