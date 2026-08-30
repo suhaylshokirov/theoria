@@ -762,7 +762,10 @@ main.container {
   margin-top: var(--space-1);
   font-family: var(--font-mono);
   font-size: var(--text-2xs);
-  color: var(--ink-faint);
+  /* Medium (not bold) + one step up from --ink-faint: the sub-line was
+     easy to miss against the title above it. */
+  font-weight: 500;
+  color: var(--ink-muted);
 }
 
 /* A performance's role/character. Personnel face (Work Sans), same size and
