@@ -10,3 +10,4 @@ Format: `<UTC timestamp>  <status>  <run label>  (<trigger>)`
 2026-08-29T06:15:30Z  success  run 3  (workflow_dispatch)
 2026-08-29T10:10:55Z  success  run 4  (schedule)
 2026-08-30T09:26:40Z  success  run 5  (schedule)
+2026-08-31T08:14:25Z  success  discovery run 1  (workflow_dispatch)
