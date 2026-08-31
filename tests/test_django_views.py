@@ -1645,6 +1645,35 @@ def test_studio_detail_no_provenance_block_when_all_fields_empty():
     assert "specimen-synopsis" not in body
 
 
+def test_studio_detail_renders_logo_when_present():
+    """The header opens with the studio's logo as its identity plate."""
+    studio = _company(name="Warner Bros. Pictures", slug="warner-bros-pictures")
+    studio.logo_path = "/wb.png"
+
+    response = _render_studio_detail(studio)
+
+    body = response.content.decode()
+    assert 'class="studio-head"' in body
+    assert 'class="logo"' in body
+    assert "/w300/wb.png" in body
+    assert 'alt="Warner Bros. Pictures logo"' in body
+    assert "placeholder-studio" not in body
+
+
+def test_studio_detail_shows_initial_monogram_when_no_logo():
+    """~46% of studios have no TMDB logo — the plate falls back to an
+    initial-letter monogram, not a broken image."""
+    studio = _company(name="Tiny Films", slug="tiny-films")
+
+    response = _render_studio_detail(studio)
+
+    body = response.content.decode()
+    assert 'class="studio-head"' in body
+    assert "placeholder-studio" in body
+    assert ">T</span>" in body
+    assert 'class="logo"' not in body
+
+
 # ---------------------------------------------------------------------------
 # analytics dashboard
 # ---------------------------------------------------------------------------

@@ -4,26 +4,7 @@
 {% block description %}{{ company.name }}: {{ film_count }} film{{ film_count|pluralize }} in the Theoria catalog.{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title=company.name sub="Search this studio's filmography, or reorder by what was measured." only %}
-
-<div class="stats">
-    <div class="stat">
-        <span class="stat-value" data-count="{{ film_count }}">{{ film_count }}</span>
-        <span class="stat-label">Films</span>
-    </div>
-    <div class="stat">
-        <span class="stat-value">{% if avg_rating %}★ {{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
-        <span class="stat-label">Avg rating</span>
-    </div>
-    <div class="stat">
-        <span class="stat-value">{{ period }}</span>
-        <span class="stat-label">Active</span>
-    </div>
-    <div class="stat">
-        <span class="stat-value">{% if total_revenue %}${{ total_revenue|floatformat:"0g" }}{% else %}—{% endif %}</span>
-        <span class="stat-label">Revenue</span>
-    </div>
-</div>
+{% include "movies/_studio_header.html" with company=company film_count=film_count avg_rating=avg_rating period=period total_revenue=total_revenue only %}
 
 {% comment %} Studio provenance (Task 65): what the studio *is*, above its films.
    Every field is sparse on TMDB (description ~1%, headquarters ~53%, homepage

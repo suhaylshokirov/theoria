@@ -1460,6 +1460,58 @@ button:hover,
   }
 }
 
+/* --- Studio record header ------------------------------------------------
+   Same shape as .person-head, but the plate is landscape: a studio's mark is
+   a wordmark, so it gets the same padded, contained frame the grid cards use
+   (.poster-card .logo) rather than the 2:3 portrait crop the poster and
+   headshot plates use — cropping a wordmark cuts letters off. The plate stays
+   on the fixed --logo-plate (never theme-swapped) so a dark wordmark can't go
+   illegible in dark mode, and shares that surface with the initial-letter
+   monogram shown for the ~46% of studios TMDB has no logo for. */
+
+.studio-head {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--space-7);
+  align-items: start;
+  padding-bottom: var(--space-6);
+}
+
+.studio-plate .logo,
+.studio-plate .placeholder-studio {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: var(--logo-plate);
+  border: var(--hairline);
+}
+
+.studio-plate .logo {
+  object-fit: contain;
+  object-position: center;
+  padding: var(--space-6);
+}
+
+.studio-plate .placeholder-studio {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.studio-record .stats {
+  margin-top: var(--space-6);
+}
+
+@media (max-width: 720px) {
+  .studio-head {
+    grid-template-columns: 132px 1fr;
+    gap: var(--space-5);
+  }
+
+  .studio-plate .logo {
+    padding: var(--space-4);
+  }
+}
+
 /* --- Scope switch ----------------------------------------------------------
    Sibling of .segmented, but each option is its own URL rather than a radio,
    so it's links. Matches .segmented's condensed label treatment; the current

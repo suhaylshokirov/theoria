@@ -70,9 +70,13 @@ order). Live-verified: Godfather → `?genre=drama`/`?genre=crime`, Inception �
 `?genre=science-fiction` (multi-word slug round-trips); each lands 200 with the `<select>`
 preselected and results newest-first; `?genre=tv-movie` returns its 2 films. `pytest` **317**.
 Full detail in the Task 71 block below.
+Since then (ad-hoc, 2026-08-31): **the studio detail page now opens with the studio's logo** —
+new `_studio_header.html` partial mirroring `_person_header.html` (landscape logo plate + title +
+stats), reusing the card's `--logo-plate`/`contain`/monogram-fallback treatment. Template + CSS
+only, no view change. `pytest` **319**. Full detail in `for_learning.md`.
 Prior task: **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).
-Last updated          : 2026-08-30
+Last updated          : 2026-08-31
 ```
 
 **After finishing any task, in this order:**

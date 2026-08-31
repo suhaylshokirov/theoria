@@ -1,0 +1,48 @@
+{% comment %} The studio record header — the studio's logo as its identity
+   plate, the counterpart to _person_header.html's headshot and the movie
+   specimen's poster. Before this, the studio page was the one detail page
+   that opened with no mark of the thing it describes.
+
+   Params (pass with `only`):
+     company : a Company
+     film_count, avg_rating, period, total_revenue : the measured stats
+
+   The plate reuses _studio_card.html's logo treatment (a padded, contained
+   wordmark on the fixed --logo-plate, an initial-letter monogram when TMDB
+   has no logo — ~46% do not), so a studio with a logo and one without read
+   as the same kind of tile. {% endcomment %}
+{% load tmdb_images %}
+<header class="studio-head">
+    <div class="studio-plate">
+        {% if company.logo_path %}
+        <img class="logo" src="{{ company.logo_path|tmdb_image:'w300' }}" alt="{{ company.name }} logo">
+        {% else %}
+        <div class="placeholder placeholder-studio" aria-hidden="true">
+            <span class="studio-initial">{{ company.name|first|upper }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="studio-record">
+        <h1 class="sheet-title">{{ company.name }}</h1>
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-value" data-count="{{ film_count }}">{{ film_count }}</span>
+                <span class="stat-label">Films</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{% if avg_rating %}★ {{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
+                <span class="stat-label">Avg rating</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ period }}</span>
+                <span class="stat-label">Active</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{% if total_revenue %}${{ total_revenue|floatformat:"0g" }}{% else %}—{% endif %}</span>
+                <span class="stat-label">Revenue</span>
+            </div>
+        </div>
+    </div>
+</header>
