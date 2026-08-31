@@ -1,28 +1,19 @@
-{% comment %} The studio record header — the studio's logo as its identity
-   plate, the counterpart to _person_header.html's headshot and the movie
-   specimen's poster. Before this, the studio page was the one detail page
-   that opened with no mark of the thing it describes.
+{% comment %} The studio record header — the record leads, the studio's logo
+   sits to its right as a brand mark, the way a letterhead carries its mark in
+   the corner. (An earlier pass put the plate on the left, mirroring
+   _person_header.html's headshot, but a landscape wordmark that close to the
+   display-size title read as a collision.)
 
    Params (pass with `only`):
      company : a Company
      film_count, avg_rating, period, total_revenue : the measured stats
 
-   The plate reuses _studio_card.html's logo treatment (a padded, contained
-   wordmark on the fixed --logo-plate, an initial-letter monogram when TMDB
-   has no logo — ~46% do not), so a studio with a logo and one without read
-   as the same kind of tile. {% endcomment %}
+   The plate reuses the /studios/ grid card's logo treatment: a padded,
+   contained wordmark on the fixed --logo-plate (a light backing that never
+   swaps with the theme, so a dark wordmark stays legible in dark mode), with
+   an initial-letter monogram when TMDB has no logo — ~46% do not. {% endcomment %}
 {% load tmdb_images %}
 <header class="studio-head">
-    <div class="studio-plate">
-        {% if company.logo_path %}
-        <img class="logo" src="{{ company.logo_path|tmdb_image:'w300' }}" alt="{{ company.name }} logo">
-        {% else %}
-        <div class="placeholder placeholder-studio" aria-hidden="true">
-            <span class="studio-initial">{{ company.name|first|upper }}</span>
-        </div>
-        {% endif %}
-    </div>
-
     <div class="studio-record">
         <h1 class="sheet-title">{{ company.name }}</h1>
 
@@ -44,5 +35,15 @@
                 <span class="stat-label">Revenue</span>
             </div>
         </div>
+    </div>
+
+    <div class="studio-plate">
+        {% if company.logo_path %}
+        <img class="logo" src="{{ company.logo_path|tmdb_image:'w300' }}" alt="{{ company.name }} logo">
+        {% else %}
+        <div class="placeholder placeholder-studio" aria-hidden="true">
+            <span class="studio-initial">{{ company.name|first|upper }}</span>
+        </div>
+        {% endif %}
     </div>
 </header>

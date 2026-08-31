@@ -1461,18 +1461,19 @@ button:hover,
 }
 
 /* --- Studio record header ------------------------------------------------
-   Same shape as .person-head, but the plate is landscape: a studio's mark is
-   a wordmark, so it gets the same padded, contained frame the grid cards use
-   (.poster-card .logo) rather than the 2:3 portrait crop the poster and
-   headshot plates use — cropping a wordmark cuts letters off. The plate stays
-   on the fixed --logo-plate (never theme-swapped) so a dark wordmark can't go
-   illegible in dark mode, and shares that surface with the initial-letter
-   monogram shown for the ~46% of studios TMDB has no logo for. */
+   The record leads; the logo sits to its right as a brand mark. The plate is
+   landscape — a studio's mark is a wordmark, framed the padded, contained way
+   the /studios/ grid cards frame it (.poster-card .logo), not the 2:3 portrait
+   crop the poster and headshot plates use, which would clip letters. The plate
+   stays on the fixed --logo-plate: a light backing that is never redefined
+   under [data-theme], so a dark-on-transparent wordmark — most of what TMDB
+   serves — keeps its contrast when the site is in dark mode. The initial-letter
+   monogram fallback (~46% of studios have no logo) shares that surface. */
 
 .studio-head {
   display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: var(--space-7);
+  grid-template-columns: 1fr minmax(0, 200px);
+  gap: var(--space-8);
   align-items: start;
   padding-bottom: var(--space-6);
 }
@@ -1488,7 +1489,7 @@ button:hover,
 .studio-plate .logo {
   object-fit: contain;
   object-position: center;
-  padding: var(--space-6);
+  padding: var(--space-5);
 }
 
 .studio-plate .placeholder-studio {
@@ -1503,12 +1504,14 @@ button:hover,
 
 @media (max-width: 720px) {
   .studio-head {
-    grid-template-columns: 132px 1fr;
+    grid-template-columns: 1fr;
     gap: var(--space-5);
   }
 
-  .studio-plate .logo {
-    padding: var(--space-4);
+  /* Lead with the mark on a narrow screen, then the name and stats. */
+  .studio-plate {
+    order: -1;
+    max-width: 160px;
   }
 }
 
