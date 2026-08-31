@@ -1472,7 +1472,7 @@ button:hover,
 
 .studio-head {
   display: grid;
-  grid-template-columns: 1fr minmax(0, 200px);
+  grid-template-columns: 1fr minmax(0, 224px);
   gap: var(--space-8);
   align-items: start;
   padding-bottom: var(--space-6);
@@ -1498,8 +1498,10 @@ button:hover,
   justify-content: center;
 }
 
+/* Stats sit above the studio name here (not below, as on the person page) —
+   this margin is the gap down to the title. */
 .studio-record .stats {
-  margin-top: var(--space-6);
+  margin-bottom: var(--space-6);
 }
 
 @media (max-width: 720px) {
@@ -1508,10 +1510,10 @@ button:hover,
     gap: var(--space-5);
   }
 
-  /* Lead with the mark on a narrow screen, then the name and stats. */
+  /* Lead with the mark on a narrow screen, then the stats and name. */
   .studio-plate {
     order: -1;
-    max-width: 160px;
+    max-width: 176px;
   }
 }
 
