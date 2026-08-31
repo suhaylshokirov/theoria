@@ -1461,18 +1461,19 @@ button:hover,
 }
 
 /* --- Studio record header ------------------------------------------------
-   The record leads; the logo sits to its right as a brand mark. The plate is
-   landscape — a studio's mark is a wordmark, framed the padded, contained way
-   the /studios/ grid cards frame it (.poster-card .logo), not the 2:3 portrait
-   crop the poster and headshot plates use, which would clip letters. The plate
-   stays on the fixed --logo-plate: a light backing that is never redefined
-   under [data-theme], so a dark-on-transparent wordmark — most of what TMDB
-   serves — keeps its contrast when the site is in dark mode. The initial-letter
-   monogram fallback (~46% of studios have no logo) shares that surface. */
+   The logo plate on the left, the record to its right — the same shape as
+   .person-head. The plate is landscape: a studio's mark is a wordmark, framed
+   the padded, contained way the /studios/ grid cards frame it (.poster-card
+   .logo), not the 2:3 portrait crop the poster and headshot plates use, which
+   would clip letters. The plate stays on the fixed --logo-plate: a light
+   backing that is never redefined under [data-theme], so a dark-on-transparent
+   wordmark — most of what TMDB serves — keeps its contrast when the site is in
+   dark mode. The initial-letter monogram fallback (~46% of studios have no
+   logo) shares that surface. */
 
 .studio-head {
   display: grid;
-  grid-template-columns: 1fr minmax(0, 224px);
+  grid-template-columns: minmax(0, 224px) 1fr;
   gap: var(--space-8);
   align-items: start;
   padding-bottom: var(--space-6);
@@ -1498,10 +1499,8 @@ button:hover,
   justify-content: center;
 }
 
-/* Stats sit above the studio name here (not below, as on the person page) —
-   this margin is the gap down to the title. */
 .studio-record .stats {
-  margin-bottom: var(--space-6);
+  margin-top: var(--space-6);
 }
 
 @media (max-width: 720px) {
@@ -1510,9 +1509,7 @@ button:hover,
     gap: var(--space-5);
   }
 
-  /* Lead with the mark on a narrow screen, then the stats and name. */
   .studio-plate {
-    order: -1;
     max-width: 176px;
   }
 }

@@ -1,8 +1,6 @@
-{% comment %} The studio record header — the record leads, the studio's logo
-   sits to its right as a brand mark, the way a letterhead carries its mark in
-   the corner. (An earlier pass put the plate on the left, mirroring
-   _person_header.html's headshot, but a landscape wordmark that close to the
-   display-size title read as a collision.)
+{% comment %} The studio record header — the studio's logo as its identity
+   plate on the left, the record (name + the four measured stats) to its right,
+   the same shape as _person_header.html's headshot beside its record.
 
    Params (pass with `only`):
      company : a Company
@@ -14,7 +12,19 @@
    an initial-letter monogram when TMDB has no logo — ~46% do not. {% endcomment %}
 {% load tmdb_images %}
 <header class="studio-head">
+    <div class="studio-plate">
+        {% if company.logo_path %}
+        <img class="logo" src="{{ company.logo_path|tmdb_image:'w300' }}" alt="{{ company.name }} logo">
+        {% else %}
+        <div class="placeholder placeholder-studio" aria-hidden="true">
+            <span class="studio-initial">{{ company.name|first|upper }}</span>
+        </div>
+        {% endif %}
+    </div>
+
     <div class="studio-record">
+        <h1 class="sheet-title">{{ company.name }}</h1>
+
         <div class="stats">
             <div class="stat">
                 <span class="stat-value" data-count="{{ film_count }}">{{ film_count }}</span>
@@ -33,17 +43,5 @@
                 <span class="stat-label">Revenue</span>
             </div>
         </div>
-
-        <h1 class="sheet-title">{{ company.name }}</h1>
-    </div>
-
-    <div class="studio-plate">
-        {% if company.logo_path %}
-        <img class="logo" src="{{ company.logo_path|tmdb_image:'w300' }}" alt="{{ company.name }} logo">
-        {% else %}
-        <div class="placeholder placeholder-studio" aria-hidden="true">
-            <span class="studio-initial">{{ company.name|first|upper }}</span>
-        </div>
-        {% endif %}
     </div>
 </header>

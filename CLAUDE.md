@@ -71,11 +71,11 @@ order). Live-verified: Godfather → `?genre=drama`/`?genre=crime`, Inception �
 preselected and results newest-first; `?genre=tv-movie` returns its 2 films. `pytest` **317**.
 Full detail in the Task 71 block below.
 Since then (ad-hoc, 2026-08-31): **the studio detail page now opens with the studio's logo** —
-new `_studio_header.html` partial: the record (name + the four stats) leads, the logo sits to its
-right as a brand mark. Reuses the `/studios/` grid card's `--logo-plate`/`contain`/monogram-
-fallback treatment, incl. the fixed light plate that is never redefined under `[data-theme]` so
-dark-on-transparent wordmarks stay legible in dark mode. Template + CSS only, no view change.
-`pytest` **319**. Full detail in `for_learning.md`.
+new `_studio_header.html` partial, same shape as `_person_header.html`: a ~224px logo plate on the
+left, the record (name, then the four stats) on the right. Reuses the `/studios/` grid card's
+`--logo-plate`/`contain`/monogram-fallback treatment, incl. the fixed light plate that is never
+redefined under `[data-theme]` so dark-on-transparent wordmarks stay legible in dark mode.
+Template + CSS only, no view change. `pytest` **319**. Full detail in `for_learning.md`.
 Prior task: **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).
 Last updated          : 2026-08-31
