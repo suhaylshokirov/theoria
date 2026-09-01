@@ -59,6 +59,7 @@ WAREHOUSE_TABLES = [
     "bridge_movie_company",
     "bridge_movie_country",
     "bridge_movie_language",
+    "person_alias",
     "etl_watermarks",
 ]
 
