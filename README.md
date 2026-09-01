@@ -36,11 +36,11 @@ extraction step never collected it.
 
 | Home | Analytics |
 |---|---|
-| ![Home — catalog totals over a poster wall of the collection](docs/screenshots/homepage.png) | ![Analytics — total revenue by genre, charted and ranked](docs/screenshots/analytics_new.png) |
+| ![Home — catalog totals over a poster wall of the collection](docs/screenshots/Homepage.png) | ![Analytics — total revenue by genre, charted and ranked](docs/screenshots/Analytics.png) |
 
 | Film catalog | Film detail |
 |---|---|
-| ![Film list — search and sort by newest, rating, revenue or title](docs/screenshots/films.png) | ![Film detail — poster plate and the record list of measures and links](docs/screenshots/movie_detail.png) |
+| ![Film list — search and sort by newest, rating, revenue or title](docs/screenshots/Film_Catalog.png) | ![Film detail — poster plate and the record list of measures and links](docs/screenshots/Movie_detail.png) |
 
 ---
 
