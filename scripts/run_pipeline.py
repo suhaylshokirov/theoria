@@ -34,6 +34,7 @@ from etl.bronze.ingest_genres import ingest_genres
 from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
 from etl.bronze.ingest_movie_details import ingest_movie_details
 from etl.bronze.ingest_movies import ingest_movies
+from etl.bronze.ingest_people import ingest_people
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.silver.transform_companies import transform_companies
 from etl.silver.transform_credits_bridge import transform_credits_bridge
@@ -42,6 +43,7 @@ from etl.silver.transform_imdb_ratings import transform_imdb_ratings
 from etl.silver.transform_movie_links import transform_movie_links
 from etl.silver.transform_movies import transform_movies
 from etl.silver.transform_people import transform_people
+from etl.silver.transform_people_details import transform_people_details
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
 from etl.warehouse_loader.load_gold import load_gold
@@ -74,6 +76,48 @@ def _extract_company_ids(
             if cid is not None:
                 company_ids.add(cid)
     return sorted(company_ids)
+
+
+def _extract_person_ids(
+    movie_ids: list[int], ingestion_date: dt.date, bucket: str
+) -> list[int]:
+    """Re-read the Bronze credits files just written and return the person ids
+    worth enriching, most-reachable first.
+
+    Only people with a `profile_path` are kept — `profile_path` predicts a bio
+    sharply (62% vs 7%), so a photo is the cheap free filter that spends the
+    per-run cap on people who actually have something to fetch (Task 72).
+
+    Ordering: billed cast (`order < 10`) and directors/writers lead, then
+    everyone else with a photo. ingest_people()'s max_new cap truncates the
+    tail, so the people a reader reaches first are always fetched first, and
+    the long tail fills in over subsequent nightly runs. Within a priority
+    band ids are sorted so two runs process in the same order.
+    """
+    keys = [
+        s3_utils.build_path("bronze", "credits", ingestion_date, f"{mid}.json")
+        for mid in movie_ids
+    ]
+    lead: set[int] = set()
+    rest: set[int] = set()
+    _LEAD_JOBS = {"Director", "Writer", "Screenplay", "Story"}
+    for key, raw, err in s3_utils.read_json_objects(bucket, keys):
+        if err is not None or not raw:
+            logger.warning("Could not read %s for person-id extraction: %s", key, err)
+            continue
+        for member in raw.get("cast") or []:
+            pid = member.get("id")
+            if pid is None or not member.get("profile_path"):
+                continue
+            order = member.get("order")
+            (lead if order is not None and order < 10 else rest).add(pid)
+        for member in raw.get("crew") or []:
+            pid = member.get("id")
+            if pid is None or not member.get("profile_path"):
+                continue
+            (lead if member.get("job") in _LEAD_JOBS else rest).add(pid)
+    rest -= lead
+    return sorted(lead) + sorted(rest)
 
 
 def run_pipeline(
@@ -144,8 +188,22 @@ def run_pipeline(
         len(succeeded_companies), len(company_ids),
     )
 
+    # Person ids likewise only exist inside the credits payloads just written.
+    # ingest_people() skips anyone already enriched in a prior partition and
+    # caps how many new people it fetches per run (Task 72), so on a
+    # steady-state run this is cheap.
+    person_ids = _extract_person_ids(movie_ids, ingestion_date, config.S3_BUCKET)
+    succeeded_people, failed_people = ingest_people(
+        person_ids, ingestion_date=ingestion_date
+    )
+    logger.info(
+        "Bronze person details: %d new people fetched (of %d photo-having candidates)",
+        len(succeeded_people), len(person_ids),
+    )
+
     transform_movies(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date)
+    transform_people_details(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date)
     transform_credits_bridge(ingestion_date=ingestion_date)
     transform_movie_links(ingestion_date=ingestion_date)

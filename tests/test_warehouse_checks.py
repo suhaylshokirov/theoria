@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 14
+    assert len(results) == 15
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
     results = check_fk_integrity(mock_session)
 
@@ -350,6 +350,82 @@ def test_check_row_count_sanity_companies_fails_when_warehouse_shrinks(monkeypat
 
     s2w = next(r for r in results if r.check == "rowcount:companies:silver_to_warehouse")
     assert s2w.passed is False
+
+
+def test_check_row_count_sanity_person_aliases_pass_and_fail(monkeypatch):
+    """person_alias is one row per (person_id, alias) — same grain as Silver —
+    so a healthy load has warehouse >= Silver, and Bronze here is the whole
+    person_details prefix, not one date (Task 72). The companies/countries/
+    languages link-table blocks run first and abort on a bad read, so they get
+    just enough shape to pass quietly."""
+    def to_bytes(df):
+        buf = io.BytesIO()
+        df.to_parquet(buf, engine="pyarrow", index=False)
+        return buf.getvalue()
+
+    movies_bytes = to_bytes(_silver_movies_df(0))
+    aliases_bytes = to_bytes(pd.DataFrame([
+        {"person_id": 10, "alias": "Tom Hanks", "ordering": 0},
+        {"person_id": 10, "alias": "Thomas Jeffrey Hanks", "ordering": 1},
+    ]))
+    companies_bytes = to_bytes(pd.DataFrame([{
+        "movie_id": 0, "company_id": 900, "company_name": "Studio",
+        "logo_path": None, "origin_country": "US",
+    }]))
+    countries_bytes = to_bytes(pd.DataFrame([
+        {"movie_id": 0, "country_code": "US", "country_name": "United States", "relation": "production"},
+    ]))
+    languages_bytes = to_bytes(pd.DataFrame([
+        {"movie_id": 0, "language_code": "en", "language_name": "English", "english_name": "English"},
+    ]))
+    ratings_bytes = to_bytes(pd.DataFrame([
+        {"movie_id": 0, "imdb_id": "tt0000000", "rating": 8.0, "vote_count": 100},
+    ]))
+    genre_bytes = json.dumps({"genres": []}).encode()
+
+    mock_s3 = MagicMock()
+    mock_s3.exceptions.NoSuchKey = KeyError
+
+    def fake_get_object(Bucket, Key):
+        body = MagicMock()
+        if "genres.json" in Key:
+            body.read.return_value = genre_bytes
+        elif "person_aliases" in Key:
+            body.read.return_value = aliases_bytes
+        elif "movie_companies" in Key:
+            body.read.return_value = companies_bytes
+        elif "movie_countries" in Key:
+            body.read.return_value = countries_bytes
+        elif "movie_languages" in Key:
+            body.read.return_value = languages_bytes
+        elif "silver/imdb_ratings" in Key:
+            body.read.return_value = ratings_bytes
+        else:
+            body.read.return_value = movies_bytes
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = fake_get_object
+    paginator = MagicMock()
+    # one Bronze person-detail file present -> the "Bronze provided nothing" guard is not tripped
+    paginator.paginate.return_value = [{"Contents": [
+        {"Key": "bronze/person_details/ingestion_date=2026-05-01/31.json"},
+    ]}]
+    mock_s3.get_paginator.return_value = paginator
+
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 5  # >= silver 2
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ok = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 6, 22))
+    assert next(r for r in ok if r.check == "rowcount:person_aliases:bronze_to_silver").passed
+    assert next(r for r in ok if r.check == "rowcount:person_aliases:silver_to_warehouse").passed
+
+    mock_session.execute.return_value.scalar.return_value = 1  # fewer than silver 2
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        shrunk = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 6, 22))
+    assert not next(
+        r for r in shrunk if r.check == "rowcount:person_aliases:silver_to_warehouse"
+    ).passed
 
 
 def test_check_row_count_sanity_countries_and_languages_compare_distinct_ids(monkeypatch):

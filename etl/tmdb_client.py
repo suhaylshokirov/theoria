@@ -185,3 +185,15 @@ class TMDBClient:
         get_movie_details() — a thin wrapper over one GET.
         """
         return self.get(f"company/{company_id}")
+
+    def get_person_details(self, person_id: int) -> dict[str, Any]:
+        """Full detail record for a single person.
+
+        The cast/crew member objects embedded in a movie's credits payload
+        carry only id/name/gender/popularity/profile_path/known_for_department.
+        This endpoint adds `biography`, `birthday`, `deathday`,
+        `place_of_birth`, `homepage`, `imdb_id` and `also_known_as` (a list of
+        aliases). Same shape as get_company_details() — a thin wrapper over one
+        GET.
+        """
+        return self.get(f"person/{person_id}")

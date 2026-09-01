@@ -2833,6 +2833,12 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
             return _fact_languages_df()
         if entity == "imdb_ratings":
             return _fact_ratings_df()
+        if entity == "person_aliases":
+            return pd.DataFrame({
+                "person_id": pd.array([10, 999], dtype="Int64"),
+                "alias": ["Tomás", "Ghost"],
+                "ordering": pd.array([0, 1], dtype="Int64"),
+            })
         raise AssertionError(f"unexpected entity {entity}")
 
     import etl.warehouse_loader.load_facts as load_facts_module
@@ -2860,6 +2866,7 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
 
     assert counts == {
         "fact_movie_metrics": 1, "fact_movie_rating": 5, "fact_credit": 5,
+        "person_alias": 1,
         "bridge_movie_company": 1, "bridge_movie_country": 1, "bridge_movie_language": 1,
     }
     rejected_files = sorted(p.name for p in tmp_path.iterdir())
@@ -2870,6 +2877,7 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
         "fact_credit_rejected_2026-06-26.parquet",
         "fact_movie_metrics_rejected_2026-06-26.parquet",
         "fact_movie_rating_rejected_2026-06-26.parquet",
+        "person_alias_rejected_2026-06-26.parquet",
     ]
 
 
@@ -3607,3 +3615,309 @@ def test_load_dim_company_details_left_join_keeps_unenriched_company():
     tiny = next(p for p in params if p["company_id"] == 901)
     assert tiny["description"] is None
     assert tiny["parent_company_id"] is None
+
+
+# --- Task 72: people bios (person details + aliases) ----------------------
+
+from etl.bronze.ingest_people import ingest_people
+from etl.silver.transform_people_details import transform_people_details
+from etl.warehouse_loader.load_dimensions import load_dim_person
+from etl.warehouse_loader.load_facts import _build_person_alias_rows, load_person_alias
+from scripts.run_pipeline import _extract_person_ids
+
+
+def _person_payload(person_id: int, **overrides) -> dict:
+    """A GET /person/{id} payload. Every key is always present in the real
+    response (measured 2026-09-01): "" for empty biography/homepage, null for
+    birthday/deathday/place_of_birth/imdb_id, a list for also_known_as."""
+    base = {
+        "id": person_id,
+        "name": f"Person {person_id}",
+        "biography": "A performer.",
+        "birthday": "1956-07-09",
+        "deathday": None,
+        "place_of_birth": "Concord, California, USA",
+        "homepage": "",
+        "imdb_id": "nm0000158",
+        "also_known_as": ["Tom", "Thomas Jeffrey Hanks"],
+        "adult": False,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_get_person_details_calls_the_person_endpoint():
+    client = _client()
+    with patch.object(
+        client.session, "get", return_value=_fake_response(200, {"id": 31})
+    ) as mock_get:
+        client.get_person_details(31)
+
+    assert mock_get.call_args[0][0].endswith("/person/31")
+
+
+def test_ingest_people_writes_one_file_per_person():
+    mock_client = MagicMock()
+    mock_client.get_person_details.side_effect = [_person_payload(31), _person_payload(2)]
+    mock_s3 = _make_s3_mock_with_files({})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_people(
+            [31, 2], ingestion_date=dt.date(2026, 6, 22), client=mock_client,
+        )
+
+    assert (succeeded, failed) == ([31, 2], [])
+    keys = [c[1]["Key"] for c in mock_s3.put_object.call_args_list]
+    assert "bronze/person_details/ingestion_date=2026-06-22/31.json" in keys
+    assert "bronze/person_details/ingestion_date=2026-06-22/2.json" in keys
+
+
+def test_ingest_people_skips_ids_enriched_in_a_prior_partition():
+    mock_client = MagicMock()
+    mock_client.get_person_details.side_effect = [_person_payload(2)]
+    mock_s3 = _make_s3_mock_with_files({
+        "bronze/person_details/ingestion_date=2026-05-01/31.json": _person_payload(31),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_people(
+            [31, 2], ingestion_date=dt.date(2026, 6, 22), client=mock_client,
+        )
+
+    assert succeeded == [2]
+    assert mock_client.get_person_details.call_count == 1
+
+
+def test_ingest_people_caps_new_ids_at_max_new():
+    """The per-run cap: with 5 new photo-having candidates and max_new=2, only
+    the first 2 (already in the caller's priority order) are fetched."""
+    mock_client = MagicMock()
+    mock_client.get_person_details.side_effect = [_person_payload(1), _person_payload(2)]
+    mock_s3 = _make_s3_mock_with_files({})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_people(
+            [1, 2, 3, 4, 5], ingestion_date=dt.date(2026, 6, 22),
+            client=mock_client, max_new=2,
+        )
+
+    assert succeeded == [1, 2]
+    assert mock_client.get_person_details.call_count == 2
+
+
+def test_ingest_people_continues_after_a_failed_person():
+    mock_client = MagicMock()
+    mock_client.get_person_details.side_effect = [
+        _person_payload(1), RuntimeError("500"), _person_payload(3),
+    ]
+    mock_s3 = _make_s3_mock_with_files({})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_people(
+            [1, 2, 3], ingestion_date=dt.date(2026, 6, 22), client=mock_client,
+        )
+
+    assert (succeeded, failed) == ([1, 3], [2])
+    assert mock_s3.put_object.call_count == 2
+
+
+def test_transform_people_details_normalises_empties_and_splits_aliases():
+    payloads = {
+        "bronze/person_details/ingestion_date=2026-06-22/31.json": _person_payload(
+            31, biography="", homepage="", place_of_birth=None,
+            also_known_as=["Tom Hanks", "  ", "T. Hanks"],
+        ),
+        "bronze/person_details/ingestion_date=2026-06-22/2.json": _person_payload(
+            2, imdb_id=None, also_known_as=[],
+        ),
+    }
+    mock_s3 = _make_s3_mock_with_files(payloads)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_people_details(
+            ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
+        )
+
+    puts = {c[1]["Key"]: c[1]["Body"] for c in mock_s3.put_object.call_args_list}
+    details = pd.read_parquet(io.BytesIO(
+        puts["silver/person_details/ingestion_date=2026-06-22/person_details.parquet"]
+    )).set_index("person_id")
+    assert pd.isna(details.loc[31, "biography"])       # "" -> None
+    assert pd.isna(details.loc[31, "homepage"])
+    assert pd.isna(details.loc[31, "place_of_birth"])
+    assert str(details.loc[31, "birthday"]) == "1956-07-09"
+    assert pd.isna(details.loc[2, "imdb_id"])
+
+    aliases = pd.read_parquet(io.BytesIO(
+        puts["silver/person_aliases/ingestion_date=2026-06-22/person_aliases.parquet"]
+    ))
+    # blank alias dropped; ordering keeps the payload index
+    p31 = aliases[aliases["person_id"] == 31].sort_values("ordering")
+    assert list(p31["alias"]) == ["Tom Hanks", "T. Hanks"]
+    assert list(p31["ordering"]) == [0, 2]
+    assert (aliases["person_id"] == 2).sum() == 0
+
+
+def test_transform_people_details_coerces_unparseable_date_to_null(caplog):
+    payloads = {
+        "bronze/person_details/ingestion_date=2026-06-22/31.json": _person_payload(
+            31, birthday="c. 1960",
+        ),
+    }
+    mock_s3 = _make_s3_mock_with_files(payloads)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3), \
+         caplog.at_level(logging.WARNING):
+        transform_people_details(
+            ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
+        )
+
+    details = pd.read_parquet(io.BytesIO(
+        {c[1]["Key"]: c[1]["Body"] for c in mock_s3.put_object.call_args_list}
+        ["silver/person_details/ingestion_date=2026-06-22/person_details.parquet"]
+    )).set_index("person_id")
+    assert pd.isna(details.loc[31, "birthday"])
+    assert details.loc[31, "biography"] == "A performer."  # row kept
+    assert "did not parse as a date" in caplog.text
+
+
+def test_transform_people_details_sweeps_every_bronze_partition():
+    payloads = {
+        "bronze/person_details/ingestion_date=2026-05-01/31.json": _person_payload(31),
+        "bronze/person_details/ingestion_date=2026-06-22/2.json": _person_payload(2),
+    }
+    mock_s3 = _make_s3_mock_with_files(payloads)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_people_details(
+            ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
+        )
+
+    details = pd.read_parquet(io.BytesIO(
+        {c[1]["Key"]: c[1]["Body"] for c in mock_s3.put_object.call_args_list}
+        ["silver/person_details/ingestion_date=2026-06-22/person_details.parquet"]
+    ))
+    assert set(details["person_id"]) == {31, 2}
+
+
+def test_transform_people_details_drops_null_person_id(caplog):
+    payloads = {
+        "bronze/person_details/ingestion_date=2026-06-22/good.json": _person_payload(5),
+        "bronze/person_details/ingestion_date=2026-06-22/bad.json": _person_payload(5, id=None),
+    }
+    mock_s3 = _make_s3_mock_with_files(payloads)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3), \
+         caplog.at_level(logging.WARNING):
+        transform_people_details(
+            ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
+        )
+
+    details = pd.read_parquet(io.BytesIO(
+        {c[1]["Key"]: c[1]["Body"] for c in mock_s3.put_object.call_args_list}
+        ["silver/person_details/ingestion_date=2026-06-22/person_details.parquet"]
+    ))
+    assert list(details["person_id"]) == [5]
+    assert "null person_id" in caplog.text
+
+
+def _person_details_df():
+    return pd.DataFrame({
+        "person_id": pd.array([10], dtype="Int64"),
+        "biography": ["An actor."],
+        "birthday": [dt.date(1956, 7, 9)],
+        "deathday": [None],
+        "place_of_birth": ["Concord, California"],
+        "homepage": [None],
+        "imdb_id": ["nm0000158"],
+    })
+
+
+def test_load_dim_person_left_joins_detail_columns():
+    mock_session = MagicMock()
+    count = load_dim_person(mock_session, _dim_people_df(), _person_details_df())
+
+    assert count == 2
+    (_, params), _ = mock_session.execute.call_args
+    p10 = next(p for p in params if p["person_id"] == 10)
+    assert p10["biography"] == "An actor."
+    assert p10["imdb_id"] == "nm0000158"
+    # person 20 has no detail row — still upserts, detail columns null
+    p20 = next(p for p in params if p["person_id"] == 20)
+    assert p20["biography"] is None
+    assert p20["birthday"] is None
+
+
+def test_load_dim_person_without_details_upserts_only_original_columns():
+    mock_session = MagicMock()
+    count = load_dim_person(mock_session, _dim_people_df(), None)
+
+    assert count == 2
+    (_, params), _ = mock_session.execute.call_args
+    assert set(params[0]) == {
+        "person_id", "name", "gender", "popularity", "profile_path",
+        "known_for_department",
+    }
+
+
+def test_build_person_alias_rows_resolves_and_rejects():
+    df = pd.DataFrame({
+        "person_id": pd.array([10, 999], dtype="Int64"),
+        "alias": ["Tomás", "Ghost"],
+        "ordering": pd.array([0, 1], dtype="Int64"),
+    })
+    rows, rejects = _build_person_alias_rows(
+        df, valid_person_ids={10}, ingestion_date=dt.date(2026, 6, 26),
+    )
+    assert rows == [{
+        "person_id": 10, "alias": "Tomás", "ordering": 0,
+        "ingestion_date": dt.date(2026, 6, 26),
+    }]
+    assert len(rejects) == 1
+    assert rejects[0]["rejection_reason"] == "unknown person_id"
+
+
+def test_load_person_alias_upserts_and_returns_rejects():
+    df = pd.DataFrame({
+        "person_id": pd.array([10], dtype="Int64"),
+        "alias": ["Tomás"],
+        "ordering": pd.array([0], dtype="Int64"),
+    })
+    mock_session = MagicMock()
+    with patch(
+        "etl.warehouse_loader.load_facts._existing_ids", return_value={10}
+    ):
+        count, rejects = load_person_alias(mock_session, df, dt.date(2026, 6, 26))
+
+    assert count == 1
+    assert rejects == []
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO person_alias" in str(stmt)
+    assert params == [{
+        "person_id": 10, "alias": "Tomás", "ordering": 0,
+        "ingestion_date": dt.date(2026, 6, 26),
+    }]
+
+
+def test_extract_person_ids_leads_billed_cast_and_directors_and_filters_photoless():
+    credits = {
+        "id": 550,
+        "cast": [
+            {"id": 1, "order": 0, "profile_path": "/1.jpg"},   # billed -> lead
+            {"id": 2, "order": 25, "profile_path": "/2.jpg"},   # unbilled -> rest
+            {"id": 3, "order": 1, "profile_path": None},        # no photo -> dropped
+        ],
+        "crew": [
+            {"id": 4, "job": "Director", "profile_path": "/4.jpg"},   # lead
+            {"id": 5, "job": "Gaffer", "profile_path": "/5.jpg"},     # rest
+            {"id": 6, "job": "Writer", "profile_path": None},         # no photo -> dropped
+        ],
+    }
+    key = s3_utils.build_path("bronze", "credits", dt.date(2026, 6, 22), "550.json")
+    with patch.object(
+        s3_utils, "read_json_objects", return_value=[(key, credits, None)]
+    ):
+        ids = _extract_person_ids([550], dt.date(2026, 6, 22), "theoria-datalake")
+
+    assert ids[:2] == [1, 4]        # leads first, sorted
+    assert ids[2:] == [2, 5]        # rest after, sorted

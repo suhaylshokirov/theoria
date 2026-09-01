@@ -87,6 +87,16 @@ class Person(models.Model):
     profile_path = models.TextField(null=True)
     known_for_department = models.TextField(null=True)
     slug = models.SlugField(max_length=300, unique=True, null=True)
+    # Task 72: from GET /person/{id}. Sparse even among people with a photo
+    # (imdb_id 94%, birthday 66%, biography 64%, place_of_birth 64%,
+    # homepage 16%, deathday 14%); person_detail() renders only the pieces
+    # that resolve. also_known_as is a list, so it lives in Alias, not here.
+    biography = models.TextField(null=True)
+    birthday = models.DateField(null=True)
+    deathday = models.DateField(null=True)
+    place_of_birth = models.TextField(null=True)
+    homepage = models.TextField(null=True)
+    imdb_id = models.CharField(max_length=20, null=True)
 
     class Meta:
         managed = False
@@ -94,6 +104,31 @@ class Person(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Alias(models.Model):
+    """person_alias: a person's also_known_as entries (Task 72).
+
+    Neither a fact nor a bridge — repeating text attached to one dimension.
+    Same fake-single-PK workaround as the composite-PK fact models: `person`
+    carries primary_key=True purely to satisfy Django's one-pk rule; the real
+    PK is the composite (person_id, alias) in Postgres.
+    """
+
+    person = models.ForeignKey(
+        Person, on_delete=models.DO_NOTHING, db_column="person_id",
+        primary_key=True, related_name="aliases",
+    )
+    alias = models.TextField()
+    ordering = models.IntegerField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "person_alias"
+
+    def __str__(self):
+        return self.alias
 
 
 class Credit(models.Model):

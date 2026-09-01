@@ -43,12 +43,19 @@ vote_count columns (source='tmdb'). Both land in the same table at the same
 (movie_id, source) grain — one row per film per source, never fanned out by
 genre the way fact_movie_metrics is.
 
+person_alias (Task 72) is neither a fact nor a bridge — it attaches one
+dimension's repeating text (a person's also_known_as entries) to it. It is
+loaded here, alongside the facts, because it follows the same
+resolve-FK-against-a-loaded-dimension / quarantine-the-misses shape every
+loader in this module uses.
+
 S3 sources:
     silver/movies/ingestion_date=YYYY-MM-DD/movies.parquet
     silver/movie_companies/ingestion_date=YYYY-MM-DD/movie_companies.parquet
     silver/movie_countries/ingestion_date=YYYY-MM-DD/movie_countries.parquet
     silver/movie_languages/ingestion_date=YYYY-MM-DD/movie_languages.parquet
     silver/imdb_ratings/ingestion_date=YYYY-MM-DD/imdb_ratings.parquet
+    silver/person_aliases/ingestion_date=YYYY-MM-DD/person_aliases.parquet
     silver/credits_bridge/ingestion_date=YYYY-MM-DD/credits_bridge.parquet
 
 All fact tables carry an ingestion_date column recording which Silver
@@ -349,6 +356,63 @@ def _build_bridge_language_rows(
     return rows, rejects
 
 
+def _build_person_alias_rows(
+    aliases_df: pd.DataFrame,
+    valid_person_ids: set[int],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Resolve every Silver person_aliases row into a person_alias row.
+
+    person_alias is neither a fact nor a bridge — it attaches repeating text
+    (also_known_as entries) to one dimension. It still follows the same
+    resolve-FK-or-quarantine convention as every other loader here: an alias
+    whose person_id has no dim_person row is quarantined, never dropped.
+
+    Returns (rows, rejects).
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+
+    for record in aliases_df.to_dict("records"):
+        person_id = record.get("person_id")
+        if pd.isna(person_id) or int(person_id) not in valid_person_ids:
+            rejects.append({**record, "rejection_reason": "unknown person_id"})
+            continue
+
+        alias = record.get("alias")
+        if alias is None or pd.isna(alias) or not str(alias).strip():
+            rejects.append({**record, "rejection_reason": "missing alias"})
+            continue
+
+        rows.append({
+            "person_id": int(person_id),
+            "alias": str(alias),
+            "ordering": None if pd.isna(record.get("ordering")) else int(record["ordering"]),
+            "ingestion_date": ingestion_date,
+        })
+
+    return rows, rejects
+
+
+def load_person_alias(
+    session: Session, aliases_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert Silver person_aliases into person_alias.
+
+    Must run after load_dim_person() has committed, since person_id is
+    resolved against the live dimension. Returns (count, rejects).
+    """
+    valid_person_ids = _existing_ids(session, "dim_person", "person_id")
+
+    rows, rejects = _build_person_alias_rows(
+        aliases_df, valid_person_ids, ingestion_date
+    )
+    columns = ["person_id", "alias", "ordering", "ingestion_date"]
+    count = _upsert(session, "person_alias", ["person_id", "alias"], columns, _records(rows))
+    logger.info("person_alias: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
 def load_bridge_movie_country(
     session: Session, countries_df: pd.DataFrame, ingestion_date: dt.date,
 ) -> tuple[int, list[dict[str, Any]]]:
@@ -566,6 +630,21 @@ def load_facts(
     ratings_df = _read_silver_parquet(
         bucket, "imdb_ratings", ingestion_date, "imdb_ratings.parquet"
     )
+    # Task 72: person aliases. Optional — a partition written before this
+    # Silver transform existed degrades to "no alias rows for this date",
+    # never crashes the fact load.
+    try:
+        aliases_df = _read_silver_parquet(
+            bucket, "person_aliases", ingestion_date, "person_aliases.parquet"
+        )
+    except Exception as exc:
+        logger.warning(
+            "No Silver person_aliases for %s (%s) — skipping person_alias load",
+            ingestion_date, exc,
+        )
+        aliases_df = pd.DataFrame(
+            columns=["person_id", "alias", "ordering"]
+        )
 
     counts: dict[str, int] = {}
     with get_session() as session:
@@ -574,6 +653,9 @@ def load_facts(
             session, ratings_df, movies_df, ingestion_date
         )
         counts["fact_credit"], credit_rejects = load_fact_credit(session, bridge_df, ingestion_date)
+        counts["person_alias"], alias_rejects = load_person_alias(
+            session, aliases_df, ingestion_date
+        )
         counts["bridge_movie_company"], company_rejects = load_bridge_movie_company(
             session, companies_df, ingestion_date
         )
@@ -587,6 +669,7 @@ def load_facts(
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)
     _write_rejects(rating_rejects, "fact_movie_rating", ingestion_date, rejected_dir)
     _write_rejects(credit_rejects, "fact_credit", ingestion_date, rejected_dir)
+    _write_rejects(alias_rejects, "person_alias", ingestion_date, rejected_dir)
     _write_rejects(company_rejects, "bridge_movie_company", ingestion_date, rejected_dir)
     _write_rejects(country_rejects, "bridge_movie_country", ingestion_date, rejected_dir)
     _write_rejects(language_rejects, "bridge_movie_language", ingestion_date, rejected_dir)

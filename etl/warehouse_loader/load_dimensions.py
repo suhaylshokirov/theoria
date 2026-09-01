@@ -96,18 +96,47 @@ def load_dim_movie(session: Session, df: pd.DataFrame) -> int:
     return count
 
 
-def load_dim_person(session: Session, df: pd.DataFrame) -> int:
+_PERSON_DETAIL_COLS = [
+    "biography", "birthday", "deathday", "place_of_birth", "homepage", "imdb_id",
+]
+
+
+def load_dim_person(
+    session: Session,
+    df: pd.DataFrame,
+    details_df: pd.DataFrame | None = None,
+) -> int:
     """Upsert Silver people into dim_person.
 
     No rename: person_id is the natural key here, unlike dim_actor/dim_director,
     which had to relabel the same TMDB id twice because the same person could be
     two rows in two tables.
+
+    `details_df` (Task 72) is the optional second Silver source — one row per
+    person from `silver/person_details`, carrying biography / birthday /
+    deathday / place_of_birth / homepage / imdb_id. LEFT-joined exactly like
+    load_dim_company()'s detail join: a person with no detail row yet (no
+    photo, enrichment pending, or a failed call) still upserts their six
+    original columns and leaves the six new ones null. Passing None (a missing
+    Silver file) degrades the same way.
     """
     columns = ["person_id", "name", "gender", "popularity", "profile_path",
                "known_for_department"]
-    records = _records(df, columns)
+    people = df
+
+    if details_df is not None and not details_df.empty:
+        details = details_df[["person_id"] + _PERSON_DETAIL_COLS].drop_duplicates(
+            subset=["person_id"], keep="last"
+        )
+        people = people.merge(details, on="person_id", how="left")
+        columns = columns + _PERSON_DETAIL_COLS
+
+    records = _records(people, columns)
     count = _upsert(session, "dim_person", ["person_id"], columns, records)
-    logger.info("dim_person: upserted %d row(s)", count)
+    logger.info(
+        "dim_person: upserted %d row(s)%s", count,
+        "" if details_df is None else " (with detail join)",
+    )
     return count
 
 
@@ -377,13 +406,26 @@ def load_dimensions(
     languages_df = _read_silver_parquet(
         bucket, "movie_languages", ingestion_date, "movie_languages.parquet"
     )
+    # Task 72: person bios/vitals. Optional, same as company_details above —
+    # a partition written before this Silver transform existed, or a failed
+    # transform, degrades to "load dim_person with null detail columns".
+    try:
+        person_details_df = _read_silver_parquet(
+            bucket, "person_details", ingestion_date, "person_details.parquet"
+        )
+    except Exception as exc:
+        logger.warning(
+            "No Silver person_details for %s (%s) — loading dim_person "
+            "without detail columns", ingestion_date, exc,
+        )
+        person_details_df = None
 
     counts: dict[str, int] = {}
     with get_session() as session:
         # Before dim_movie: dim_movie.collection_id is an FK to this table.
         counts["dim_collection"] = load_dim_collection(session, movies_df)
         counts["dim_movie"] = load_dim_movie(session, movies_df)
-        counts["dim_person"] = load_dim_person(session, people_df)
+        counts["dim_person"] = load_dim_person(session, people_df, person_details_df)
         counts["dim_genre"] = load_dim_genre(session, genres_df)
         # Before load_facts.load_bridge_movie_company(), which has an FK here.
         counts["dim_company"] = load_dim_company(

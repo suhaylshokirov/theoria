@@ -52,9 +52,32 @@ CREATE TABLE IF NOT EXISTS dim_person (
     profile_path         TEXT,
     known_for_department TEXT,
     slug                 VARCHAR(300),
+    -- Task 72: from GET /person/{id}. All nullable and sparse even among
+    -- people with a photo — see 17_person_details.sql.
+    biography            TEXT,
+    birthday             DATE,
+    deathday             DATE,
+    place_of_birth       TEXT,
+    homepage             TEXT,
+    imdb_id              VARCHAR(20),
     CONSTRAINT pk_dim_person PRIMARY KEY (person_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_person_slug ON dim_person (slug);
+CREATE INDEX IF NOT EXISTS idx_dim_person_imdb_id ON dim_person (imdb_id);
+
+-- also_known_as is a list, so it can't be a column on dim_person without
+-- breaking 1NF. Named plainly — not fact_ (no measure), not bridge_ (attaches
+-- repeating text to one dimension, doesn't join two). See 17_person_details.sql.
+CREATE TABLE IF NOT EXISTS person_alias (
+    person_id      INTEGER      NOT NULL,
+    alias          TEXT         NOT NULL,
+    ordering       INTEGER,
+    ingestion_date DATE         NOT NULL,
+    CONSTRAINT pk_person_alias PRIMARY KEY (person_id, alias),
+    CONSTRAINT fk_person_alias_person
+        FOREIGN KEY (person_id) REFERENCES dim_person (person_id)
+);
+CREATE INDEX IF NOT EXISTS idx_person_alias_person_id ON person_alias (person_id);
 
 CREATE TABLE IF NOT EXISTS dim_genre (
     genre_id    INTEGER  NOT NULL,

@@ -142,6 +142,34 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         ],
         "ranges": {},
     },
+    # Written from the measured shape of TMDB's GET /person/{id} payload
+    # (live probe, 2026-09-01: 14 keys, always all present), not by mirroring
+    # transform_people_details.py — the Task 40 lesson. Every field but `id`
+    # is sparse among photo-havers (imdb_id 94%, birthday 66%, biography 64%,
+    # place_of_birth 64%, homepage 16%, deathday 14%), so only person_id is
+    # required. birthday/deathday are dates by the time they reach Silver.
+    "person_details": {
+        "parquet": "person_details.parquet",
+        "pk_cols": ["person_id"],
+        "required_cols": ["person_id"],
+        "expected_cols": [
+            "person_id", "biography", "birthday", "deathday",
+            "place_of_birth", "homepage", "imdb_id",
+        ],
+        "ranges": {},
+    },
+    # also_known_as is a list on the payload; Silver explodes it to one row
+    # per (person_id, alias). ordering is the alias's index in that list, so
+    # it is >= 0.
+    "person_aliases": {
+        "parquet": "person_aliases.parquet",
+        "pk_cols": ["person_id", "alias"],
+        "required_cols": ["person_id", "alias"],
+        "expected_cols": ["person_id", "alias", "ordering"],
+        "ranges": {
+            "ordering": (0, None),
+        },
+    },
     # Written from IMDb's *published* schema (tconst/averageRating/numVotes,
     # `\N` for null) rather than by mirroring transform_imdb_ratings.py — the
     # Task 40 lesson again: a check copying the transform's own assumptions

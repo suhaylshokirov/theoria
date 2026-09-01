@@ -1465,6 +1465,51 @@ def test_person_detail_404_when_missing():
     assert response.status_code == 404
 
 
+def test_person_detail_renders_bio_vitals_and_outbound_links():
+    """Task 72: a person with a bio + vitals + IMDb/homepage shows the bio
+    block, a Born row, and one combined Elsewhere row of outbound links."""
+    person = _person()
+    person.biography = "An American actor and filmmaker."
+    person.birthday = date(1956, 7, 9)
+    person.place_of_birth = "Concord, California, USA"
+    person.homepage = "https://example.com"
+    person.imdb_id = "nm0000158"
+    movie = _movie()
+    credits = [Credit(movie=movie, person=person, department="Acting", job="Actor",
+                      character_name="Hero", ordering=0)]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {movie.movie_id: Decimal("7.0")}):
+        response = client.get("/people/test-person/")
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "An American actor and filmmaker." in html
+    assert "Born" in html and "9 Jul 1956" in html
+    assert "Concord, California, USA" in html
+    assert 'href="https://www.imdb.com/name/nm0000158/"' in html
+    assert 'href="https://example.com"' in html
+    assert "Elsewhere" in html
+
+
+def test_person_detail_no_extra_block_when_person_has_no_bio_or_links():
+    """A single-credit crew member with none of the six fields renders no bio
+    block and no Elsewhere row — 200, not an error (Task 72)."""
+    person = _person()  # no biography / birthday / imdb_id / homepage set
+    movie = _movie()
+    credits = [Credit(movie=movie, person=person, department="Sound", job="Mixer")]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {movie.movie_id: Decimal("7.0")}):
+        response = client.get("/people/test-person/")
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "specimen-synopsis" not in html
+    assert "Elsewhere" not in html
+    assert "Born" not in html
+
+
 # ---------------------------------------------------------------------------
 # studio_list, studio_detail
 # ---------------------------------------------------------------------------

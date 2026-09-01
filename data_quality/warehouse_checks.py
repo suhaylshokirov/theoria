@@ -84,6 +84,7 @@ _FK_CHECKS = [
     ("bridge_movie_language", "movie_id", "dim_movie", "movie_id"),
     ("bridge_movie_language", "language_code", "dim_language", "language_code"),
     ("fact_movie_rating", "movie_id", "dim_movie", "movie_id"),
+    ("person_alias", "person_id", "dim_person", "person_id"),
 ]
 
 
@@ -141,6 +142,17 @@ def _bronze_credits_file_count(bucket: str, ingestion_date: dt.date) -> int:
     """Count Bronze credits files (one per movie) for a date."""
     prefix = s3_utils.build_path("bronze", "credits", ingestion_date, "")
     return _count_s3_objects(bucket, prefix)
+
+
+def _bronze_person_details_file_count(bucket: str) -> int:
+    """Count Bronze person-detail files across *every* partition.
+
+    Task 72 enrichment is written once per person, into whichever partition
+    first saw them, and the Silver transform sweeps all of them — so "did
+    Bronze provide anything" is a question about the whole prefix, not one
+    date (same shape as company details).
+    """
+    return _count_s3_objects(bucket, "bronze/person_details/")
 
 
 def _bronze_imdb_ratings_row_count(bucket: str, ingestion_date: dt.date) -> int:
@@ -361,6 +373,48 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
         else:
             results.append(CheckResult(s2w_name, True,
                 f"Silver distinct={distinct_count}, {warehouse_table}={warehouse_count} (cumulative)"))
+            logger.info("[%s] OK", s2w_name)
+
+    # person_alias (Task 72): silver/person_aliases is one row per
+    # (person_id, alias) — the same grain person_alias holds — and the
+    # warehouse table accumulates across partitions via upsert, so it can
+    # only be >= the Silver count. Bronze here is the person_details prefix
+    # (swept across every partition), not one date, so "Bronze provided
+    # nothing" means the whole prefix is empty.
+    try:
+        aliases_df = _read_silver_parquet(
+            bucket, "person_aliases", ingestion_date, "person_aliases.parquet"
+        )
+    except Exception as exc:
+        results.append(CheckResult("rowcount:person_aliases:bronze_to_silver", False,
+            f"Could not read Silver person_aliases: {exc}"))
+        logger.error("[rowcount:person_aliases] could not read Silver: %s", exc)
+    else:
+        bronze_person_files = _bronze_person_details_file_count(bucket)
+        b2s_name = "rowcount:person_aliases:bronze_to_silver"
+        if bronze_person_files == 0 and len(aliases_df) > 0:
+            results.append(CheckResult(b2s_name, False,
+                f"Silver has {len(aliases_df)} person_aliases row(s) but no Bronze "
+                f"person-detail files were found"))
+            logger.error("[%s] FAIL — silver=%d but bronze person files=0",
+                          b2s_name, len(aliases_df))
+        else:
+            results.append(CheckResult(b2s_name, True,
+                f"Bronze person-detail files={bronze_person_files}, "
+                f"Silver person_aliases={len(aliases_df)} row(s)"))
+            logger.info("[%s] OK", b2s_name)
+
+        s2w_name = "rowcount:person_aliases:silver_to_warehouse"
+        warehouse_count = _table_row_count(session, "person_alias")
+        if warehouse_count < len(aliases_df):
+            results.append(CheckResult(s2w_name, False,
+                f"person_alias has only {warehouse_count} row(s), fewer than the "
+                f"{len(aliases_df)} just loaded from Silver"))
+            logger.error("[%s] FAIL — warehouse=%d < silver=%d",
+                          s2w_name, warehouse_count, len(aliases_df))
+        else:
+            results.append(CheckResult(s2w_name, True,
+                f"Silver={len(aliases_df)}, person_alias={warehouse_count} (cumulative)"))
             logger.info("[%s] OK", s2w_name)
 
     # fact_movie_rating (Phase 15): Bronze is a single bulk file rather than

@@ -42,5 +42,33 @@
             </div>
             {% endif %}
         </div>
+
+        {% comment %} Vitals (Task 72). Every field is sparse and nullable, so
+           each row is guarded on its own — a living person has a Born row and
+           no Died row — and the whole list disappears for someone with none
+           of them, the same "only when there's something to say" restraint the
+           movie and studio pages use. Reuses .record-list; no new CSS. {% endcomment %}
+        {% if person.birthday or person.deathday or person.place_of_birth %}
+        <dl class="record-list">
+            {% if person.birthday %}
+            <div class="record-row">
+                <dt class="label">Born</dt>
+                <dd class="mono">{{ person.birthday|date:"j M Y" }}</dd>
+            </div>
+            {% endif %}
+            {% if person.deathday %}
+            <div class="record-row">
+                <dt class="label">Died</dt>
+                <dd class="mono">{{ person.deathday|date:"j M Y" }}</dd>
+            </div>
+            {% endif %}
+            {% if person.place_of_birth %}
+            <div class="record-row">
+                <dt class="label">Born in</dt>
+                <dd>{{ person.place_of_birth }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+        {% endif %}
     </div>
 </header>

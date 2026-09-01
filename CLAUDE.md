@@ -85,6 +85,17 @@ a search box + Newest/Rated/Revenue/A–Z sort segments above the filmography gr
 `_person_filmography_grid.html` / `_person_filmography_results.html` partials mirror the studio
 pair. Header stats stay computed over the whole filmography. **Zero new CSS/JS.** `pytest`
 **324**. Full detail in `for_learning.md`.
+Since then (2026-09-01): **Task 72 — People bios — code complete, tests green, live backfill
+pending.** `dim_person` grew 7 → 13 columns (biography, birthday, deathday, place_of_birth,
+homepage, imdb_id from a new `GET /person/{id}` Bronze source) plus a new `person_alias` table
+for `also_known_as`. New `ingest_people.py` (with a `max_new` per-run cap the company path didn't
+need) + `transform_people_details.py` (two Parquets, sweeps every partition) + `17_person_details.sql`
++ `load_dim_person(details_df=)` LEFT-join + `load_person_alias()` + `_extract_person_ids()` wired
+into both orchestrators. Person page gained a bio block, a Born/Died/Born-in header row and an
+"Elsewhere" IMDb/homepage row — **no `views.py` change, zero new CSS**. DDL on the local replica;
+`pytest` **324 → 343**. **Left to run (needs live TMDB+AWS+Neon, ~2.3h):** DDL on Neon, the
+priority-ordered ~35.8k-call backfill, Silver + `load_dimensions()` on Neon, replica re-sync.
+Nothing renders a real bio until then. Full detail in the Task 72 block + `for_learning.md`.
 Prior task: **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).
 Last updated          : 2026-09-01
@@ -176,16 +187,18 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> The live shape as of Tasks 63 + 69 — **16 tables** (verified 2026-08-30 against
-> `information_schema`, and a fresh DB built from `01`–`03` produces exactly this set).
+> The live shape as of Tasks 63 + 69 was **16 tables** (verified 2026-08-30 against
+> `information_schema`). Task 72 adds a 17th, `person_alias` — its DDL is in `01_dimensions.sql`
+> and `17_person_details.sql` and is applied to the local replica, but the live Neon warehouse
+> stays at 16 until Task 72's backfill runs there.
 > `dim_actor`, `dim_director`, `fact_cast` and `fact_crew` were dropped in Task 53; `fact_casting`
-> was replaced in Task 35. `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`15` are migrations
+> was replaced in Task 35. `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`17` are migrations
 > for an existing DB (once `11` drops tables, "run every file in order" ≠ "build the current
 > schema" — see README §2).
 
 **Dimensions (8):**
 - `dim_movie(movie_id PK, title, release_date, runtime, budget, revenue, original_language, status, overview, tagline, poster_path, backdrop_path, imdb_id, original_title, homepage, slug, collection_id FK)`
-- `dim_person(person_id PK, name, gender, popularity, profile_path, known_for_department, slug)`
+- `dim_person(person_id PK, name, gender, popularity, profile_path, known_for_department, slug, biography, birthday, deathday, place_of_birth, homepage, imdb_id)` — the last 6 from `GET /person/{id}` (Task 72), all nullable and sparse even among people with a photo. `imdb_id` has a non-unique index.
 - `dim_genre(genre_id PK, genre_name)`
 - `dim_collection(collection_id PK, name, poster_path, slug)`
 - `dim_date(date_id PK, full_date, year, month, day, decade)`
@@ -203,6 +216,9 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - `bridge_movie_company(movie_id FK, company_id FK, ingestion_date)` — PK `(movie_id, company_id)`. Task 58.
 - `bridge_movie_country(movie_id FK, country_code FK, relation, ingestion_date)` — PK `(movie_id, country_code, relation)`; `relation ∈ {origin, production}` is in the key because the two disagree on ~23% of films. Task 61.
 - `bridge_movie_language(movie_id FK, language_code FK, ingestion_date)` — PK `(movie_id, language_code)`. Task 61.
+
+**Repeating-attribute (1):** neither `dim_`, `fact_` nor `bridge_` — it attaches one dimension's repeating text to it (doesn't join two dimensions, carries no measure).
+- `person_alias(person_id FK, alias, ordering, ingestion_date)` — PK `(person_id, alias)`. Task 72; `also_known_as` from `GET /person/{id}`, which is a list and so can't be a `dim_person` column without breaking 1NF.
 
 **Operational (1):** `etl_watermarks(loader_name PK, last_ingestion_date, updated_at)`
 
@@ -1093,6 +1109,37 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   `name.basics` birth/death years in (TMDB's own dates cover the same ground more precisely for
   the people that matter here); a dedicated `/people/<slug>/aliases` view or any new page — the
   aliases live only in the warehouse for now, with no UI consumer specified.
+- **Outcome (2026-09-01) — code complete, tests green; the live backfill is the one step left.**
+  Built end to end as a near-copy of Task 65 (studio provenance), which was the point.
+  **Bronze:** `TMDBClient.get_person_details()` (one-line wrapper); new `etl/bronze/ingest_people.py`
+  — one JSON per person under `bronze/person_details/`, write-as-you-go, skips anyone enriched in
+  *any* prior partition (the birthday-doesn't-drift exception `ingest_companies` established), and
+  **the one thing companies didn't need: `max_new`** — callers pass ids already in priority order
+  and the cap truncates the tail, so a 35.8k backfill self-completes over several nights instead of
+  blowing the 90-min nightly budget. **Silver:** new `etl/silver/transform_people_details.py` sweeps
+  **every** `bronze/person_details/` partition and writes two Parquets — `person_details.parquet`
+  (one row/person: biography, birthday, deathday, place_of_birth, homepage, imdb_id — `""`→None,
+  dates `errors="coerce"` then kept-with-a-null on the outlier rather than dropping the row) and
+  `person_aliases.parquet` (one row per `(person_id, alias)` exploded from `also_known_as`, its list
+  index kept as `ordering`). **Warehouse:** `17_person_details.sql` — six `ADD COLUMN IF NOT EXISTS`
+  on `dim_person` + non-unique `imdb_id` index + new `person_alias(person_id FK, alias, ordering,
+  ingestion_date, PK (person_id, alias))`; folded into `01_dimensions.sql`. `load_dim_person(df,
+  details_df=None)` gained the optional LEFT-joined second source (exact `load_dim_company` shape);
+  new `load_person_alias()` in `load_facts.py` beside the bridge loaders, FK-resolves against
+  `dim_person` and quarantines misses. `warehouse_checks.py` +1 FK check + a row-count-sanity pair.
+  Wired into **both** `run_pipeline.py` (new `_extract_person_ids()` — billed cast `order<10` +
+  directors/writers lead, photo-havers only) and `run_refresh.py`. **Django:** six nullable fields
+  on `Person` + a new `Alias` model; `_person_header.html` gained a Born/Died/Born-in `.record-list`
+  (each row guarded on its own); `person_detail.html` gained a `.specimen-synopsis` bio + one
+  combined "Elsewhere" row (IMDb `name/…` + homepage, `·`-separated). **No `views.py` change** — the
+  `Person` the view already fetches carries the fields; the template reads them. **Zero new CSS.**
+  `17_person_details.sql` applied to the **local replica** (verified: `dim_person` 13 cols,
+  `person_alias` exists); ORM + Django `check` clean. `pytest` **324 → 343** (+19). **Still to run
+  (needs live TMDB + AWS + Neon, ~2.3h, not doable from this session):** `17_person_details.sql` on
+  Neon; the priority-ordered Bronze backfill (`python -m etl.bronze.ingest_people` via a
+  `run_refresh` pass, or a `nightly-refresh` `workflow_dispatch` that now carries it); then Silver +
+  `load_dimensions()` against Neon and re-sync the replica. Record the real coverage figures (not
+  the n=200 estimates) here once it runs. Nothing renders a real bio until then.
 
 ---
 

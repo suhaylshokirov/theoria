@@ -7,6 +7,33 @@
 {% block content %}
 {% include "movies/_person_header.html" with person=person film_count=film_count avg_rating=avg_rating career_period=career_period credit_count=credit_count only %}
 
+{% comment %} Person bio (Task 72): who they are, above their films — the same
+   slot and treatment studio_detail.html gives a studio's description. Every
+   field is sparse on TMDB even among people with a photo (biography 64%,
+   imdb_id 94%, homepage 16%), so the whole block disappears when a person has
+   neither a bio nor an outbound link. IMDb + homepage share one row rather
+   than two near-empty ones — the Task 56 "Elsewhere" pattern. A .sheet-section
+   wrapper so the existing vertical-rhythm rules space it; no new CSS. {% endcomment %}
+{% if person.biography or person.imdb_id or person.homepage %}
+<section class="sheet-section">
+    {% if person.biography %}
+    <p class="specimen-synopsis">{{ person.biography }}</p>
+    {% endif %}
+    {% if person.imdb_id or person.homepage %}
+    <dl class="record-list">
+        <div class="record-row">
+            <dt class="label">Elsewhere</dt>
+            <dd>
+                {% if person.imdb_id %}<a class="ext-link" href="https://www.imdb.com/name/{{ person.imdb_id }}/" target="_blank" rel="noopener noreferrer">IMDb</a>{% endif %}
+                {% if person.imdb_id and person.homepage %} &middot; {% endif %}
+                {% if person.homepage %}<a class="ext-link" href="{{ person.homepage }}" target="_blank" rel="noopener noreferrer">Official site</a>{% endif %}
+            </dd>
+        </div>
+    </dl>
+    {% endif %}
+</section>
+{% endif %}
+
 <section class="sheet-section">
     <div class="toolbar">
         {% comment %} The same live-filter toolbar as /studios/<slug>/, scoped to

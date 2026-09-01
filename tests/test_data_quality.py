@@ -314,6 +314,17 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
          "homepage": "https://example.com", "parent_company_id": None,
          "parent_company_name": None},
     ])
+    person_details_df = pd.DataFrame([
+        {"person_id": 10, "biography": "An actor.", "birthday": dt.date(1956, 7, 9),
+         "deathday": None, "place_of_birth": "Concord, California",
+         "homepage": None, "imdb_id": "nm0000158"},
+        {"person_id": 30, "biography": None, "birthday": None, "deathday": None,
+         "place_of_birth": None, "homepage": None, "imdb_id": None},
+    ])
+    person_aliases_df = pd.DataFrame([
+        {"person_id": 10, "alias": "Tom Hanks", "ordering": 0},
+        {"person_id": 10, "alias": "Thomas Jeffrey Hanks", "ordering": 1},
+    ])
     return {
         "movies": _movies_df(),
         "people": people_df,
@@ -323,6 +334,8 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
         "credits_bridge": _bridge_df(),
         "movie_companies": companies_df,
         "company_details": company_details_df,
+        "person_details": person_details_df,
+        "person_aliases": person_aliases_df,
         "movie_countries": countries_df,
         "movie_languages": languages_df,
         "imdb_ratings": imdb_ratings_df,
@@ -436,3 +449,46 @@ def test_run_silver_checks_company_details_only_company_id_is_required(tmp_path)
 
     company_checks = [r for r in results if r.entity == "company_details"]
     assert company_checks and all(r.passed for r in company_checks)
+
+
+def test_run_silver_checks_person_details_only_person_id_is_required(tmp_path):
+    """biography/birthday/deathday/place_of_birth/homepage/imdb_id are all
+    sparse even among people with a photo, so a person row with every one of
+    them null must still pass — only person_id is required (Task 72)."""
+    dfs = _all_entity_dfs()
+    dfs["person_details"] = pd.DataFrame([{
+        "person_id": 10, "biography": None, "birthday": None, "deathday": None,
+        "place_of_birth": None, "homepage": None, "imdb_id": None,
+    }])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    person_checks = [r for r in results if r.entity == "person_details"]
+    assert person_checks and all(r.passed for r in person_checks)
+
+
+def test_run_silver_checks_person_aliases_negative_ordering_fails(tmp_path):
+    """ordering is the alias's index in also_known_as, so it is >= 0 (Task 72)."""
+    dfs = _all_entity_dfs()
+    dfs["person_aliases"] = pd.DataFrame([
+        {"person_id": 10, "alias": "Tom Hanks", "ordering": -1},
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    aliases_range = next(
+        r for r in results if r.entity == "person_aliases" and r.check == "ranges"
+    )
+    assert not aliases_range.passed

@@ -41,6 +41,7 @@ from data_quality.warehouse_checks import run_warehouse_checks
 from etl.bronze.ingest_companies import ingest_companies
 from etl.bronze.ingest_genres import ingest_genres
 from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
+from etl.bronze.ingest_people import ingest_people
 from etl.bronze.refresh_movies import refresh_movies
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.gold.build_metrics_snapshot import build_metrics_snapshot
@@ -51,10 +52,11 @@ from etl.silver.transform_imdb_ratings import transform_imdb_ratings
 from etl.silver.transform_movie_links import transform_movie_links
 from etl.silver.transform_movies import transform_movies
 from etl.silver.transform_people import transform_people
+from etl.silver.transform_people_details import transform_people_details
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
 from etl.warehouse_loader.load_gold import load_gold
-from scripts.run_pipeline import _extract_company_ids
+from scripts.run_pipeline import _extract_company_ids, _extract_person_ids
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +87,17 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
     company_ids = _extract_company_ids(succeeded, ingestion_date, config.S3_BUCKET)
     ingest_companies(company_ids, ingestion_date=ingestion_date)
 
+    # Same as companies: a refreshed film can gain a new billed cast member,
+    # ingest_people() skips everyone already enriched and caps new fetches per
+    # run, and transform_people_details() below still has to run so the loader
+    # has a person_details Silver file for this partition and the cumulative
+    # enrichment survives the Neon write (Task 65's lesson, applied to Task 72).
+    person_ids = _extract_person_ids(succeeded, ingestion_date, config.S3_BUCKET)
+    ingest_people(person_ids, ingestion_date=ingestion_date)
+
     transform_movies(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date)
+    transform_people_details(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date)
     transform_credits_bridge(ingestion_date=ingestion_date)
     transform_movie_links(ingestion_date=ingestion_date)
