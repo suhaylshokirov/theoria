@@ -76,9 +76,18 @@ left, the record (name, then the four stats) on the right. Reuses the `/studios/
 `--logo-plate`/`contain`/monogram-fallback treatment, incl. the fixed light plate that is never
 redefined under `[data-theme]` so dark-on-transparent wordmarks stay legible in dark mode.
 Template + CSS only, no view change. `pytest` **319**. Full detail in `for_learning.md`.
+Since then (ad-hoc, 2026-09-01): **the person page filmography got the `/movies/` toolbar** —
+a search box + Newest/Rated/Revenue/A–Z sort segments above the filmography grid on
+`/people/<slug>/`, live-filtered by `initLiveFilter()` and server-paged, the same shape
+`/studios/<slug>/` already had (Task 62). `person_detail()` filters/sorts the merged
+`{"movie","job_display"}` filmography list in Python (it's already materialised and small; a
+`GROUP BY` can't return those rows) via new `_sorted_filmography()` + `FILMOGRAPHY_SORTS`; new
+`_person_filmography_grid.html` / `_person_filmography_results.html` partials mirror the studio
+pair. Header stats stay computed over the whole filmography. **Zero new CSS/JS.** `pytest`
+**324**. Full detail in `for_learning.md`.
 Prior task: **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).
-Last updated          : 2026-08-31
+Last updated          : 2026-09-01
 ```
 
 **After finishing any task, in this order:**

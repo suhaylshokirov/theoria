@@ -1,0 +1,22 @@
+{% comment %} The filmography poster grid + pager on person_detail.html, below
+   .toolbar and the section-head. The half static/js/theoria.js's
+   initLiveFilter() swaps as the toolbar changes — mirrors
+   _studio_movies_grid.html. Its own id/partial rather than a reuse of
+   _movie_grid.html because the empty states differ: with a search term
+   active an empty result means "no film matches", otherwise it means the
+   person has no credits recorded yet. aria-live so the swap is announced to
+   screen readers. {% endcomment %}
+<div id="person-filmography-grid" aria-live="polite">
+    <div class="poster-grid is-tight">
+        {% for row in page_obj %}
+        {% include "movies/_movie_card.html" with movie=row.movie card_sub=row.job_display only %}
+        {% empty %}
+        <p class="empty">
+            {% if q %}No films match “{{ q }}”. Try a shorter title.
+            {% else %}No credits recorded for this person yet.{% endif %}
+        </p>
+        {% endfor %}
+    </div>
+
+    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query=base_query only %}
+</div>

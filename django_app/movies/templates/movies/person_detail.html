@@ -8,18 +8,38 @@
 {% include "movies/_person_header.html" with person=person film_count=film_count avg_rating=avg_rating career_period=career_period credit_count=credit_count only %}
 
 <section class="sheet-section">
+    <div class="toolbar">
+        {% comment %} The same live-filter toolbar as /studios/<slug>/, scoped to
+           this person's filmography. data-live-targets names only the grid
+           below — the record header's stats describe the whole career and
+           don't change as the filmography is filtered. Sits above the
+           section-head so the "Filmography" label stays right against the
+           grid it names. Plain GET form underneath, so it still works with
+           no JS — see _person_filmography_results.html's docstring. {% endcomment %}
+        <form method="get" action="" data-live-filter data-live-targets="#person-filmography-grid">
+            <div class="field">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search this filmography" aria-label="Search {{ person.name }}'s films by title">
+            </div>
+            <fieldset class="segmented">
+                <legend class="visually-hidden">Order by</legend>
+                <input type="radio" name="sort" id="sort-release" value="release" {% if sort == "release" %}checked{% endif %}>
+                <label for="sort-release">Newest</label>
+                <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
+                <label for="sort-rating">Rated</label>
+                <input type="radio" name="sort" id="sort-revenue" value="revenue" {% if sort == "revenue" %}checked{% endif %}>
+                <label for="sort-revenue">Revenue</label>
+                <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
+                <label for="sort-title">A–Z</label>
+            </fieldset>
+            <button type="submit" class="apply-btn">Apply</button>
+        </form>
+    </div>
+
     <div class="section-head">
         <h2>Filmography</h2>
         <span class="section-note">{{ film_count }} film{{ film_count|pluralize }}</span>
     </div>
-    {% if filmography %}
-    <div class="poster-grid is-tight">
-        {% for row in filmography %}
-        {% include "movies/_movie_card.html" with movie=row.movie card_sub=row.job_display only %}
-        {% endfor %}
-    </div>
-    {% else %}
-    <p class="empty">No credits recorded for this person yet.</p>
-    {% endif %}
+
+    {% include "movies/_person_filmography_grid.html" %}
 </section>
 {% endblock %}

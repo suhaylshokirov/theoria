@@ -9,6 +9,7 @@ real, unsaved ORM objects — constructing one never touches the database, so
 they're used as plain fixtures rather than mocked.
 """
 
+import contextlib
 import os
 import sys
 from datetime import date
@@ -1325,6 +1326,134 @@ def test_person_detail_filmography_ratings_use_constant_number_of_queries():
         row["movie"].imdb_rating == Decimal("7.00")
         for row in response.context["filmography"]
     )
+
+
+def _person_detail_mocks(credits, ratings, span=None):
+    """Wire the four mocked managers person_detail() reads, given a credit list
+    and a {movie_id: Decimal} rating map. Returns a contextlib.ExitStack the
+    caller uses as a `with` block; get_object_or_404 is patched separately."""
+    span = span or {"earliest": date(2020, 1, 1), "latest": date(2020, 1, 1)}
+    stack = contextlib.ExitStack()
+    credit_mgr = stack.enter_context(patch.object(Credit, "objects", new=MagicMock()))
+    movie_mgr = stack.enter_context(patch.object(Movie, "objects", new=MagicMock()))
+    rating_mgr = stack.enter_context(patch.object(MovieRating, "objects", new=MagicMock()))
+    credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
+    rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
+        "avg_rating": Decimal("7.00")
+    }
+    rating_mgr.using.return_value.filter.return_value.values_list.return_value = list(
+        ratings.items()
+    )
+    movie_mgr.using.return_value.filter.return_value.aggregate.return_value = span
+    return stack
+
+
+def test_person_detail_filters_filmography_by_search():
+    """?q= narrows the grid; the header stats still describe the whole career."""
+    person = _person()
+    movies = [_movie(movie_id=1, title="Alpha"), _movie(movie_id=2, title="Beta")]
+    credits = [
+        Credit(movie=m, person=person, department="Acting", job="Actor",
+               character_name="Role", ordering=0)
+        for m in movies
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {1: Decimal("7.0"), 2: Decimal("8.0")}):
+        response = client.get("/people/test-person/", {"q": "alph"})
+
+    assert response.status_code == 200
+    page = list(response.context["page_obj"])
+    assert [row["movie"].title for row in page] == ["Alpha"]
+    # Stats unchanged — both films still counted.
+    assert response.context["film_count"] == 2
+    assert response.context["q"] == "alph"
+    assert response.context["base_query"] == "q=alph&sort=release"
+
+
+def test_person_detail_sorts_filmography_by_title():
+    person = _person()
+    movies = [
+        _movie(movie_id=1, title="Zodiac"),
+        _movie(movie_id=2, title="Amadeus"),
+        _movie(movie_id=3, title="Milk"),
+    ]
+    credits = [
+        Credit(movie=m, person=person, department="Acting", job="Actor",
+               character_name="Role", ordering=0)
+        for m in movies
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {1: Decimal("7"), 2: Decimal("8"), 3: Decimal("6")}):
+        response = client.get("/people/test-person/", {"sort": "title"})
+
+    assert response.status_code == 200
+    assert response.context["sort"] == "title"
+    assert [row["movie"].title for row in response.context["page_obj"]] == [
+        "Amadeus", "Milk", "Zodiac",
+    ]
+
+
+def test_person_detail_sort_by_rating_puts_unrated_films_last():
+    """FILMOGRAPHY_SORTS mirrors MOVIE_SORTS' nulls_last=True — a film with no
+    IMDb rating never leads a descending sort."""
+    person = _person()
+    movies = [_movie(movie_id=i, title=f"Film {i}") for i in (1, 2, 3)]
+    credits = [
+        Credit(movie=m, person=person, department="Acting", job="Actor",
+               character_name="Role", ordering=0)
+        for m in movies
+    ]
+
+    # Film 2 has no rating row at all.
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {1: Decimal("6.5"), 3: Decimal("9.1")}):
+        response = client.get("/people/test-person/", {"sort": "rating"})
+
+    assert response.status_code == 200
+    titles = [row["movie"].title for row in response.context["page_obj"]]
+    assert titles == ["Film 3", "Film 1", "Film 2"]
+
+
+def test_person_detail_invalid_sort_falls_back_to_release():
+    person = _person()
+    movie = _movie()
+    credits = [
+        Credit(movie=movie, person=person, department="Acting", job="Actor",
+               character_name="Role", ordering=0)
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {1: Decimal("7.0")}):
+        response = client.get("/people/test-person/", {"sort": "bogus"})
+
+    assert response.status_code == 200
+    assert response.context["sort"] == "release"
+
+
+def test_person_detail_ajax_request_renders_filmography_fragment_only():
+    """initLiveFilter()'s fetch() sets this header and wants just the grid,
+    not the record header — see _is_ajax() in views.py."""
+    person = _person(name="Greta Gerwig")
+    movie = _movie()
+    credits = [
+        Credit(movie=movie, person=person, department="Directing", job="Director")
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {1: Decimal("7.0")}):
+        response = client.get(
+            "/people/test-person/", HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+        )
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "person-filmography-grid" in content
+    assert "<html" not in content
+    assert "<!DOCTYPE" not in content
+    # The record header isn't part of the AJAX fragment — only the grid+pager.
+    assert "Greta Gerwig" not in content
 
 
 def test_person_detail_404_when_missing():

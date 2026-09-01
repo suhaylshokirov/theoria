@@ -1,0 +1,9 @@
+{% comment %} AJAX-only response for the person page's live filmography
+   filtering (see _is_ajax() and person_detail() in views.py).
+   static/js/theoria.js's initLiveFilter() locates #person-filmography-grid
+   in this response and copies its innerHTML onto the live element — the
+   record header above it is never part of the swap, since it describes the
+   person's whole career and doesn't change as the grid is filtered. Also
+   included directly by person_detail.html for a normal page load, so the
+   live and no-JS paths render from the same source and can't drift. {% endcomment %}
+{% include "movies/_person_filmography_grid.html" %}

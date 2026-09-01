@@ -633,6 +633,38 @@ def _merge_crew(credits):
     return merged
 
 
+# ?sort= values accepted by person_detail's filmography toolbar, each mapped to
+# (Movie attribute, descending?). The same four segments as the /movies/ and
+# studio-page toolbars (MOVIE_SORTS), but applied in Python rather than the ORM:
+# a person's filmography is a merged list of {"movie", "job_display"} dicts —
+# one row per film, carrying every job held on it — not a queryset, so it can't
+# be reordered with .order_by().
+FILMOGRAPHY_SORTS = {
+    "release": ("release_date", True),
+    "rating": ("imdb_rating", True),
+    "revenue": ("revenue", True),
+    "title": ("title", False),
+}
+
+
+def _sorted_filmography(rows, sort):
+    """Order merged filmography rows by one Movie attribute, nulls always last.
+
+    Mirrors MOVIE_SORTS' nulls_last=True: a film missing the sort field (no
+    IMDb rating yet, no revenue figure) sorts after every film that has one,
+    whichever direction the sort runs — rather than a null leading a
+    descending list. `imdb_rating` is the attribute person_detail() attaches
+    to each row's Movie just below _merge_person_credits().
+    """
+    attr, descending = FILMOGRAPHY_SORTS[sort]
+    if attr == "title":
+        return sorted(rows, key=lambda r: (r["movie"].title or "").lower())
+    present = [r for r in rows if getattr(r["movie"], attr) is not None]
+    missing = [r for r in rows if getattr(r["movie"], attr) is None]
+    present.sort(key=lambda r: getattr(r["movie"], attr), reverse=descending)
+    return present + missing
+
+
 def _merge_person_credits(credits):
     """Collapse a person's several credits on one film into one filmography row.
 
@@ -727,14 +759,41 @@ def person_detail(request, person_slug):
         earliest=Min("release_date"), latest=Max("release_date")
     )
 
+    # Search + reorder the filmography, the same toolbar /studios/<slug>/ puts
+    # over its filmography (Task 62). Done in Python: the list above is already
+    # merged one-row-per-film and fully in memory, and a filmography is small
+    # (a few hundred rows for the most prolific person here). The header stats
+    # are computed over the whole filmography above and never move as this
+    # narrows — the same contract the studio page keeps.
+    q = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "release")
+    if sort not in FILMOGRAPHY_SORTS:
+        sort = "release"
+
+    rows = filmography
+    if q:
+        rows = [r for r in rows if q.lower() in r["movie"].title.lower()]
+    rows = _sorted_filmography(rows, sort)
+
+    page_obj = Paginator(rows, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
+
     context = {
         "person": person,
         "filmography": filmography,
+        "page_obj": page_obj,
+        "q": q,
+        "sort": sort,
+        "base_query": urlencode({"q": q, "sort": sort}),
         "film_count": len(movie_ids),
         "credit_count": len(credits),
         "avg_rating": avg_rating,
         "career_period": _career_period(span["earliest"], span["latest"]),
     }
+    # Same live-filter contract as movie_list()/studio_detail(): the record
+    # header is never part of the swap, so only the grid+pager fragment comes
+    # back for an AJAX refetch.
+    if _is_ajax(request):
+        return render(request, "movies/_person_filmography_results.html", context)
     return render(request, "movies/person_detail.html", context)
 
 
