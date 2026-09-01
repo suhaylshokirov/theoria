@@ -1251,7 +1251,372 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ---
 
+### Feature — People bios
+
+> Raised by user request on 2026-09-01: give every actor, director and crew member a bio on
+> their page, plus everything else TMDB carries about them as a person. `dim_person` has held
+> only `name, gender, popularity, profile_path, known_for_department` since Task 53 — nothing
+> biographical has ever been fetched for a person.
+>
+> **Source check, done before any planning:**
+> - **TMDB `GET /person/{id}`** — probed live (Tom Hanks, id 31). Returns 14 keys, always all
+>   present across a 200-person sample (one distinct key set) — `biography`/`homepage` are `""`
+>   when empty (never omitted), `birthday`/`deathday`/`place_of_birth`/`imdb_id` are `null`,
+>   `also_known_as` is always a list (possibly empty). Every `birthday`/`deathday` in the sample
+>   parses as a clean ISO date — no partial dates, and `deathday` never appears without
+>   `birthday`. `adult` was `False` on all 200 sampled — the same Phase 12 finding
+>   ("always null/false, carries nothing") applies here too.
+> - **IMDb's free bulk dataset has no biography field.** `name.basics.tsv.gz`
+>   (`datasets.imdbws.com`, the same source Phase 15 already uses for ratings) is
+>   `nconst, primaryName, birthYear, deathYear, primaryProfession, knownForTitles` — confirmed by
+>   downloading and reading its header. Bios exist only on IMDb's rendered web pages (scraping is
+>   against their ToS) or the paid enterprise API. Not a source for this feature; the one thing it
+>   could add later is coarser birth/death *years* for people TMDB doesn't cover, joinable on the
+>   `imdb_id` TMDB already returns — not worth its own task.
+> - **TMDB is therefore the only source.** Availability was never the blocker — cost is, which is
+>   why this was deferred at Task 43 (45k+ calls estimated there).
+>
+> **The cost problem, and the free fix — measured, not estimated:** `dim_person` holds
+> **123,590** people; at the measured **4.35 req/s**, calling every one is **~7.9 hours**, and
+> ~82% come back with nothing. `profile_path` — already stored, free — predicts a bio sharply
+> (n=60 each side, so ±~13pp at 95%; direction is unambiguous):
+>
+> | group | rows | bio | birthday | place of birth |
+> |---|---|---|---|---|
+> | has `profile_path` | 35,782 | **62%** | 63% | 65% |
+> | no `profile_path` | 87,808 | **7%** | 10% | 12% |
+>
+> The 29% of `dim_person` with a photo holds an estimated ~78% of every bio that exists. **User
+> decision (2026-09-01): enrich everyone with a photo** (35,782 calls, ~2.3h), fetched in priority
+> order — billed cast (`order < 10`) + directors/writers first, then the rest — capped per
+> nightly run so it self-completes over several nights with no hand-run required, though the
+> initial backfill runs live and in full rather than trickling in over a week.
+>
+> **Field coverage among the 35,782 photo-havers (n=200 sample), and where each lands:**
+>
+> | TMDB field | coverage | destination |
+> |---|---|---|
+> | `imdb_id` | 94% | `dim_person.imdb_id VARCHAR(20)` |
+> | `birthday` | 66% | `dim_person.birthday DATE` |
+> | `biography` | 64% | `dim_person.biography TEXT` |
+> | `place_of_birth` | 64% | `dim_person.place_of_birth TEXT` |
+> | `also_known_as` | 50% (205 aliases / 200 people, median 1, p90 3, max 7) | new `person_alias` table |
+> | `homepage` | 16% | `dim_person.homepage TEXT` |
+> | `deathday` | 14% | `dim_person.deathday DATE` |
+>
+> `also_known_as` is a list, not a scalar — folding it into a delimited string would break first
+> normal form, so it gets its own table: `person_alias(person_id FK, alias, ordering,
+> ingestion_date)`, PK `(person_id, alias)`. Neither `fact_` (no measure) nor `bridge_` (it
+> doesn't join two dimensions, it attaches repeating text to one) — name it plainly and note why
+> in the DDL header. `adult` is measured at 0% true and deliberately **not** carried, matching the
+> Phase 12 precedent. `gender`, `popularity`, `known_for_department`, `name`, `profile_path` are
+> already owned by `transform_people` from the credits pass — enrichment must not re-write them
+> from this second source, or the column has two writers.
+>
+> `profile_path`/`order`/`job`/`department` are already present in the Bronze credits payload
+> (verified: `GET /movie/{id}/credits`), so both the candidate set and the fetch priority can be
+> derived from Bronze alone — the same shape as `_extract_company_ids()` in Task 65, no layer
+> inversion, no warehouse read.
+
+#### [ ] Task 72 — Bronze → Silver → warehouse → Django: person bios and vitals
+- **Goal:** Every person with a `profile_path` gets a bio, birth/death dates, place of birth,
+  aliases, IMDb link and homepage where TMDB has them; a person page with none of it renders no
+  extra block, the same "only when there's something to say" rule as Tasks 56/65.
+- **Files:** `etl/tmdb_client.py`, new `etl/bronze/ingest_people.py`, new
+  `etl/silver/transform_people_details.py`, `data_quality/silver_checks.py`,
+  `warehouse/ddl/01_dimensions.sql` + new `17_person_details.sql`,
+  `etl/warehouse_loader/load_dimensions.py`, `data_quality/warehouse_checks.py`,
+  `scripts/{run_pipeline,run_refresh}.py`, `django_app/movies/{models,views}.py`,
+  `movies/templates/movies/_person_header.html`, `person_detail.html`,
+  `tests/{test_etl,test_data_quality,test_warehouse_checks,test_django_views}.py`
+- **Steps:**
+  1. `TMDBClient.get_person_details(person_id)` — one-line wrapper on `self.get(f"person/{person_id}")`,
+     identical shape to `get_company_details()`.
+  2. `ingest_people(person_ids, ingestion_date, *, max_new=5000)` in a new
+     `etl/bronze/ingest_people.py`, mirroring `ingest_companies()` exactly: one JSON per id under
+     `bronze/person_details/ingestion_date=YYYY-MM-DD/<person_id>.json`, write-as-you-go,
+     returns `(succeeded, failed)`. Same **deliberate exception** as company details — skip any
+     `person_id` already enriched in *any* prior partition (a birthday doesn't drift). New here
+     (companies had no cap): **`max_new`** caps how many new ids are fetched in one call, so a
+     large backfill can never blow the 90-minute nightly job budget — callers pass ids already in
+     priority order and the cap just truncates the list.
+  3. `_extract_person_ids(movie_ids, ingestion_date, bucket)` in `run_pipeline.py`, beside
+     `_extract_company_ids()`: re-reads the just-written Bronze credits files, keeps only
+     `id`s with a non-null `profile_path`, and orders them — billed cast (`order < 10`) and
+     directors/writers first, everything else with a photo after — so the per-run cap always
+     spends itself on the people readers actually reach first. Wire into **both**
+     `run_pipeline.py` and `run_refresh.py` (the Task 65 lesson: miss the refresh path and the
+     nightly Neon write never enriches anyone new).
+  4. New `etl/silver/transform_people_details.py`, sweeping **every** `bronze/person_details/`
+     partition (the Task 65 `transform_companies` pattern — enrichment accumulates across
+     partitions, not just today's). Writes two Parquets:
+     `silver/person_details/person_details.parquet` (`person_id, biography, birthday, deathday,
+     place_of_birth, homepage, imdb_id`) and `silver/person_aliases/person_aliases.parquet`
+     (`person_id, alias, ordering`). Normalise TMDB's `""` to `None`; parse `birthday`/`deathday`
+     with `errors="coerce"`, log and drop rows that don't parse rather than trusting the sample.
+     Drop null-`person_id` rows with a warning, never crash.
+  5. Two new `ENTITY_CONFIGS` entries in `silver_checks.py`, written from the **measured** payload
+     shape above, not copied from the transform (the Task 40 lesson).
+  6. `17_person_details.sql`: idempotent `ADD COLUMN IF NOT EXISTS biography TEXT, birthday DATE,
+     deathday DATE, place_of_birth TEXT, homepage TEXT, imdb_id VARCHAR(20)` on `dim_person`
+     (non-unique index on `imdb_id`, same reasoning as Task 55 — external key, not guaranteed
+     unique) + `CREATE TABLE person_alias(person_id FK, alias, ordering, ingestion_date, PK
+     (person_id, alias))` with an index on `person_id`. Fold the same into `01_dimensions.sql` for
+     a fresh bootstrap.
+  7. `load_dim_person()` gains an optional `details_df` **LEFT-joined** onto the existing
+     credits-derived frame, exactly the `load_dim_company()` shape from Task 65 — an un-enriched
+     person still upserts their five original columns and leaves the six new ones null. New
+     `load_person_alias()` in `load_facts.py`-or-`load_dimensions.py` (match wherever
+     `load_bridge_movie_company()` lives), FK-resolved against `dim_person`, quarantining misses.
+  8. New FK check + row-count-sanity check for `person_alias` in `warehouse_checks.py`.
+  9. Django: six fields on `Person` (`TextField(null=True)` / `DateField(null=True)` ×2) + a new
+     `Alias` model (`managed=False`, `person_alias`). `_person_header.html` gains a Born / Died /
+     Born in record row (only the pieces that resolve — the Task 56 "print only when there's
+     something to say" rule, e.g. Born-only with no Died for the living). New
+     `.specimen-synopsis` bio block on `person_detail.html`, same slot/treatment as
+     `studio_detail.html`'s description, positioned above the toolbar+filmography. IMDb/homepage
+     as an "Elsewhere" row reusing `.ext-link` verbatim from Task 56/65 — **no new CSS**. A person
+     with none of the six fields renders no extra block at all.
+  10. Backfill: run the Bronze pass live and in full (priority-ordered, resumable for free since
+      re-running skips what's already enriched), then Silver + `load_dimensions()` against **both**
+      Neon and the local replica (the Task 65 two-target precedent).
+- **Verify:** live payload-shape + coverage figures already measured above (record final backfill
+  numbers in the Outcome, not the sample estimates); `dim_person` gains all six columns with 0
+  rows lost; `person_alias` populated, 0 rejects; Tom Hanks' page shows a real bio + Born row +
+  IMDb link; a single-credit crew member with no photo shows no extra block, 200 not an error; a
+  person with `deathday` but no `birthday` never occurs (matches the sample); Silver DQ and
+  warehouse checks both pass; full test suite green; the nightly job's per-run cap is confirmed
+  not to blow its time budget on a steady-state run (should fetch ~0 new people once the backfill
+  is done, same as `ingest_companies()` today).
+- **Not in scope:** re-fetching `adult` (measured 0% true, no destination); folding IMDb's bulk
+  `name.basics` birth/death years in (TMDB's own dates cover the same ground more precisely for
+  the people that matter here); a dedicated `/people/<slug>/aliases` view or any new page — the
+  aliases live only in the warehouse for now, with no UI consumer specified.
+
+---
+
 ## Additional Reference
 
 Full design rationale and original architecture decisions: `docs/architecture.md`
 Learning log (updated after every task): `for_learning.md`
+
+---
+
+### Feature — Trailers and clips on the movie page
+
+> Raised by user request on 2026-09-01. A film page shows a poster, a backdrop strip, prose and
+> records, but nothing moving. TMDB carries video metadata for effectively the whole catalog and
+> **it arrives inside a payload we already fetch**, so this is the rare feature that costs no new
+> API calls, no new secret and no new dependency — the same shape as the Phase 15 IMDb finding.
+>
+> **Measured live before planning (2026-09-01), so nothing here is assumed:**
+>
+> | fact | value |
+> |---|---|
+> | endpoint | `GET /movie/{id}/videos` → `{id, results[]}` |
+> | payload keys | 10, **all always present** across 2,434 sampled rows (no optional fields) |
+> | `append_to_response=credits,videos` | returns a `videos` block **byte-identical** to the standalone call (verified on Inception) — so **zero extra API calls** |
+> | sample | 150 of 1,217 catalog films, 30.9s (~4.9 req/s) |
+> | ≥1 video of any type | 148 / 150 (**98.7%**) |
+> | ≥1 `type=Trailer` on YouTube | 148 / 150 (**98.7%**), of which `official:true` on 114 (76.0%) |
+> | ≥1 Clip/Featurette/BTS/Bloopers | 123 / 150 (**82.0%**) |
+> | films with zero videos | 2 — *365 Days* (664413), *On the Beach* (405871) |
+> | avg videos per film | **16.2** → ~19,700 rows catalog-wide |
+> | extras per film that has any | median **7**, mean 12.8, **max 89** |
+> | types | Featurette 784, Teaser 546, Clip 539, **Trailer 317**, Behind the Scenes 238, Bloopers 10 |
+> | sites | YouTube 2,431, **Vimeo 3** (all unofficial, all pre-2020) |
+> | `size` | video **resolution** (1080/2160/720/480/360), *not* duration — TMDB publishes no duration |
+> | `id` | 24-char hex, **2,434/2,434 distinct**; `key` also 2,434/2,434 distinct |
+> | result ordering | **newest-first by `published_at`**, 132/132 multi-video films (none ascending, none unordered) |
+>
+> **IMDb was checked and has nothing to offer here.** Its bulk datasets are exactly seven files
+> (`title.basics`, `title.akas`, `title.crew`, `title.principals`, `title.episode`,
+> `title.ratings`, `name.basics`) — listed live, **none carries video data**. There is no public
+> IMDb API, and the `vi…` id behind an IMDb trailer appears in none of the datasets, so there is
+> no join key even in principle. IMDb stays what Phase 15 made it: the rating of record, nothing
+> more. Recorded here so it is not re-researched.
+>
+> **Backfill is not possible and does not need to be.** Bronze is immutable, and every existing
+> `movie_details` partition was written before `videos` was appended — those payloads have no
+> `videos` key and will never gain one. The Silver transform must therefore treat a missing
+> `videos` key as **zero rows plus a warning, never a crash**, and the feature lights up on the
+> first partition written after Task 73 lands (the nightly `run_refresh` does this unattended).
+> This ordering is real: **Task 75 cannot be live-verified until a post-Task-73 partition exists.**
+
+#### [ ] Task 73 — Bronze + Silver: carry `videos` through the payload we already fetch
+- **Goal:** Get the video metadata into Silver without a single new TMDB call.
+- **Files:** `etl/tmdb_client.py` (no change expected — verify), `etl/bronze/ingest_movie_details.py`,
+  `etl/bronze/refresh_movies.py`, new `etl/silver/transform_movie_videos.py`,
+  `data_quality/silver_checks.py`, `scripts/{run_pipeline,run_refresh}.py`,
+  `tests/{test_etl,test_data_quality}.py`
+- **Steps:**
+  1. **Both Bronze paths append `videos`, and they are currently asymmetric — check both.**
+     `ingest_movie_details()` calls `client.get_movie_details(movie_id)` with **no**
+     `append_to_response` (it makes a second call to `/credits` via `ingest_credits`), while
+     `refresh_movies()` already passes `"credits"`. So: ingest passes `"videos"`, refresh passes
+     `"credits,videos"`. Neither adds a request — both already make that exact call.
+  2. **`videos` stays inline in the `movie_details` JSON; it does not become its own Bronze
+     entity.** This is deliberate and differs from `credits`, so write down why: `credits` is
+     split out by `refresh_movies._split_payload()` only because a standalone `bronze/credits/`
+     entity already existed from `ingest_credits()` and the two paths must produce the same
+     layout. Videos has no prior entity, and a nested array inside a movie payload is exactly
+     what `production_companies`/`spoken_languages` already are — `transform_movie_links.py`
+     reads them straight out of `bronze/movie_details`. Follow that precedent, not the credits
+     one. `_split_payload()` therefore keeps `videos` on the details file and strips only
+     `credits`, exactly as today.
+  3. New `etl/silver/transform_movie_videos.py`, modelled on `transform_movie_links.py`: one
+     pass over `bronze/movie_details` for the date (via `s3_utils.read_json_objects()`, the
+     Task 64 Step 8 threaded reader — **not** a serial `get_object` loop), writing
+     `silver/movie_videos/movie_videos.parquet` with
+     `(movie_id, video_id, name, key, site, type, official, size, iso_639_1, iso_3166_1, published_at)`.
+     Dedup key `(movie_id, video_id)` — its true grain, per Task 40 do not widen it "to be safe".
+  4. **A payload with no `videos` key yields zero rows and one warning, never an exception** —
+     every partition written before this task is in that state permanently (Bronze is immutable).
+     A partition where *no* file has the key must still produce a valid empty Parquet with the
+     right columns, so the loader downstream has something well-formed to read.
+  5. Drop null-`movie_id`/null-`video_id` rows with a warning, same as `_write_link_table()`.
+  6. New `ENTITY_CONFIGS["movie_videos"]` in `silver_checks.py`, **written from the measured
+     payload shape in the table above** — all 10 keys always present, `site` and `type` from the
+     observed vocabularies — not by mirroring the transform. That is the Task 40 lesson: a check
+     copied from the transform confirms its bugs instead of catching them.
+  7. Wire `transform_movie_videos()` into **both** `run_pipeline.py` and `run_refresh.py`, after
+     `transform_movies`. Task 65's gap is the warning here: a transform wired into only one
+     orchestrator is silently absent from the nightly path that actually keeps the site current.
+- **Verify:** on a fresh partition — ~19,700 Silver rows across ~1,215 films, ~16/film; every
+  `video_id` 24 hex chars; `site` ∈ {YouTube, Vimeo}; ~98.7% of films have ≥1 `type='Trailer'`;
+  Silver DQ rises 32/32 → 36/36. Re-running the transform on an **old** partition (no `videos`
+  key) writes an empty, well-formed Parquet and logs a warning rather than raising.
+- **Outcome:**
+
+#### [ ] Task 74 — Warehouse: `dim_movie_video`, and the project's first replace-on-load table
+- **Goal:** Land the videos in Postgres with a load strategy that lets a film's video set *shrink*.
+- **Files:** new `warehouse/ddl/18_movie_videos.sql`, `warehouse/ddl/01_dimensions.sql`,
+  `etl/warehouse_loader/{common,load_dimensions}.py`, `data_quality/warehouse_checks.py`,
+  `tests/{test_etl,test_warehouse_checks}.py`
+- **Steps:**
+  1. **The naming call, and it is not the one the last three tables used.** This table is neither
+     a `fact_` (no measure — `size` is a resolution attribute, not something you sum or average)
+     nor a `bridge_` (a bridge joins *two* dimensions; there is no `dim_video` and nothing will
+     ever join to one). It is a **multi-valued attribute of `dim_movie`**: one film, many videos,
+     each carrying only descriptive columns, read exclusively by joining down from `dim_movie`.
+     That is dimension-shaped, so **`dim_movie_video`**. Record the rejected alternatives in the
+     DDL header the way `15_movie_ratings.sql` does, so the choice reads as reasoned rather than
+     careless: `bridge_` would assert a second dimension that does not exist, `fact_` would
+     promise a measure that is not there.
+  2. `dim_movie_video(movie_id FK, video_id VARCHAR(24), name TEXT, key TEXT, site TEXT, type TEXT,
+     official BOOLEAN, size INTEGER, iso_639_1 VARCHAR(8), iso_3166_1 VARCHAR(8),
+     published_at TIMESTAMPTZ, ingestion_date DATE)`, PK `(movie_id, video_id)`.
+     **PK on TMDB's `video_id`, not on `key`** — both measured 2,434/2,434 distinct, but `key` is
+     only unique *within a site* (a YouTube id and a Vimeo id share no namespace), while
+     `video_id` is TMDB's own stable identifier for the row. Index on `(movie_id, type)`: every
+     read is "this film's trailers" or "this film's clips".
+     Same five columns added to `01_dimensions.sql` for a fresh bootstrap (Task 58/61/67 kept the
+     bootstrap current; the fresh-install check in Task 76 depends on that habit holding).
+  3. **`load_dim_movie_video()` must replace, not upsert, and this is the one genuinely new
+     loader pattern in the feature.** Every existing loader calls `common._upsert()`, which can
+     add and update but never delete. Videos are the first entity here that *shrinks*: TMDB
+     removes videos, and YouTube keys rot when an upload is deleted or made private — a pure
+     upsert would leave a dead embed on the page forever, silently, with no failing check.
+     Add `_replace_by_parent(session, table, parent_col, parent_ids, columns, records)` to
+     `etl/warehouse_loader/common.py`: `DELETE FROM <table> WHERE <parent_col> = ANY(:ids)`
+     for **only the movie_ids present in this partition**, then a batched insert.
+     **Scoped delete, never a blanket `TRUNCATE`** — a partition covers the films it ingested, and
+     wiping films absent from it would destroy data the run knows nothing about.
+  4. Resolve `movie_id` against `dim_movie` and **quarantine** unresolvable rows to
+     `data_quality/rejected/`, never drop them — the standing rule since Task 58.
+  5. Load from `load_dimensions.py` (it is a `dim_`), reading `silver/movie_videos` in a
+     `try/except` so a partition written before Task 73 degrades to "no videos loaded" instead of
+     crashing the nightly job — exactly the posture `load_dimensions()` already takes for
+     `company_details`.
+  6. `warehouse_checks.py`: one `_FK_CHECKS` entry (`dim_movie_video.movie_id → dim_movie`), a
+     row-count-sanity check comparing against Silver's `nunique(movie_id)` (the Task 58 fix —
+     this is a one-to-many table, so a raw row-count comparison would fail on every film with more
+     than one video), and a load-sanity check.
+  7. **Add a replace-semantics regression test.** Load a film with 3 videos, then load the same
+     film with 2, and assert the warehouse holds **2** — not 3, and not 5. The whole reason this
+     table does not use `_upsert` is invisible in the code once written, so it needs a test that
+     names it, the same way Task 67 tested its grain.
+- **Verify:** ~19,700 rows, 0 rejects; `SELECT COUNT(DISTINCT movie_id)` ≈ 1,215; The Godfather
+  holds 26 rows; the 2 zero-video films hold 0 rows and are not errors; warehouse checks
+  39/39 → 42/42. Apply the DDL to **both Neon and the local replica** before the loader runs
+  (the replica sync is data-only — the Task 65 lesson).
+- **Outcome:**
+
+#### [ ] Task 75 — Django: the trailer, and a Clips section
+- **Goal:** One trailer playing on the film page, and a Clips section under it for the 82% of
+  films that have extras.
+- **Files:** `django_app/movies/{models,views}.py`,
+  new `movies/templates/movies/_video_embed.html`, `movie_detail.html`,
+  `django_app/static/css/theoria.css`, `django_app/static/js/theoria.js`,
+  `tests/test_django_views.py`
+- **Steps:**
+  1. `MovieVideo` model, `managed = False`, fake single PK on `movie` — the same treatment every
+     composite-PK table here gets, with the comment explaining why.
+  2. **The trailer pick is a 3-step ladder, and it lives in the view, not the loader.** Official
+     YouTube Trailer → any YouTube Trailer → any YouTube Teaser, **newest `published_at` first**
+     at each step. Measured: this resolves for **148/150** films — it never does worse than raw
+     trailer coverage, and the two misses are the two films with no videos at all. TMDB already
+     returns newest-first, but **order by `published_at DESC` explicitly rather than trusting
+     insertion order** — nothing in the warehouse preserves array position, and "it happened to
+     come back sorted" is not a guarantee. Picking in the view (one query, ~16 rows, chosen in
+     Python) rather than the loader is the Task 56 judgment: which trailer to *show* is a
+     rendering decision, and freezing it into a column would mean a re-load to change it.
+  3. **The Clips section is everything that is not the chosen trailer**, filtered to
+     `site='YouTube'`, ordered newest-first. Coverage 82%; median 7 per film but **max 89**, so it
+     must page — reuse `_pager_client.html`, the same in-browser pager the Cast and Crew sections
+     already use. Group by `type` or show flat? Show flat, newest-first: the four extra types
+     (Clip / Featurette / Behind the Scenes / Bloopers) are a TMDB taxonomy, not something a
+     reader is shopping by, and four sub-headings on a film with two videos is chrome.
+     Render each video's `type` as a small label on the card so the distinction is still visible.
+  4. **The 3 Vimeo rows are stored but not rendered.** A second embed path for 0.1% of rows that
+     are all unofficial and all pre-2020 is not worth the template branch; the `site` column is in
+     the warehouse so a later task can change its mind. Say this in the view, or someone will read
+     the `site='YouTube'` filter as an accident.
+  5. **Embeds are click-to-play, not 20 live iframes.** Ship a YouTube thumbnail
+     (`https://img.youtube.com/vi/<key>/hqdefault.jpg` — verified live, 200, 11.7 KB) inside a
+     `<button>`, and swap in a `<iframe src="https://www.youtube-nocookie.com/embed/<key>?autoplay=1">`
+     on click. `youtube-nocookie.com` verified live (200). This keeps the page weight flat
+     regardless of clip count, the same reasoning `_pager_client.html` already applies to cast
+     headshots. **This is the feature's only new JS** — a small `initVideoEmbeds()` in
+     `theoria.js`, in the same delegated-listener style as `initLiveFilter()`/`initMeters()`.
+  6. New `_video_embed.html` partial shared by the trailer and the clip cards, rendering
+     **nothing** when there is no video — the Task 56/68 "render only when there's something to
+     say" rule. A film with no trailer shows no trailer block, no empty frame and no placeholder;
+     a film with no extras shows no Clips section at all.
+  7. **CSS is additive only** (Task 38's contract): a `.video-frame` with `aspect-ratio: 16/9`
+     and a play affordance, plus clip-card rules. `.backdrop-strip` is the closest existing
+     precedent (`aspect-ratio: 32/9`) — match its idiom, do not restyle it. Decide where the
+     trailer sits relative to the backdrop strip: a trailer and a backdrop are two big pieces of
+     art competing for the same slot, so **the trailer takes that position and the backdrop stays
+     only when there is no trailer** is the likely right answer — confirm it against a rendered
+     page, not in the abstract.
+  8. Accessibility: the play button needs an accessible name naming the video
+     (`aria-label="Play trailer: <name>"`), the thumbnail `alt=""`, and the swapped-in iframe a
+     `title`. A bare thumbnail with a play triangle is silent to a screen reader — the same gap
+     Task 68 fixed for the IMDb badge.
+- **Verify:** `/movies/the-godfather/` plays a trailer and lists its extras;
+  `/movies/365-days/` (zero videos, id 664413) renders neither block and 200s, not an error;
+  the film with 89 extras pages in-browser without shipping 89 iframes; **query count is flat** —
+  one extra query on `movie_detail`, verified by counting, not by inspection (the Task 68
+  standard); all routes 200, bad slug 404; both themes checked.
+- **Outcome:**
+
+#### [ ] Task 76 — Live run, verification, doc truth-up
+- **Goal:** The closing task, following Tasks 44, 53, 63 and 69.
+- **Files:** `README.md`, `docs/architecture.md`, `CLAUDE.md`, `for_learning.md`
+- **Steps:**
+  1. **This phase's live run is not optional, unlike Task 69's.** Task 73 changes what Bronze
+     contains, and no existing partition has it — so a real `run_refresh.py` (or a green
+     `nightly-refresh` `workflow_dispatch`) is the *only* way videos reach the warehouse at all.
+     Run it, against Neon, then sync the replica.
+  2. Confirm the nightly path carries it unattended: a second run must **replace** a film's video
+     set, not accumulate it (the Task 74 delete). Check one film's row count across two runs.
+  3. Fresh-install check, empirically: a scratch DB from `01`–`03` must produce the live table
+     list — now **18 tables** (17 if Task 72's `person_alias` has not landed yet). Per the Task 53 lesson, do not infer this from the README.
+  4. Record the new DQ totals (Silver 32→36, warehouse 39→42) so a future reader does not misread
+     the rise as drift.
+  5. Full route walk, then docs: `docs/architecture.md` gets a new §3.10 (why videos ride the
+     existing payload; why `dim_movie_video` is neither `fact_` nor `bridge_`; why this table
+     replaces where every other one upserts), `README.md`'s warehouse table (+1 table) and test
+     count, this file's Warehouse Schema section and Phase Map, and `for_learning.md`.
+- **Outcome:**
