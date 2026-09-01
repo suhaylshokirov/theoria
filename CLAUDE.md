@@ -56,7 +56,7 @@ Rules:
 ## Current Status — UPDATE AFTER EVERY TASK
 
 ```
-Last completed task   : **Task 71 — genre chips on the movie page link to the filtered index
+Earlier this week     : **Task 71 — genre chips on the movie page link to the filtered index
 (2026-08-30).** One template line and one test: `<span class="chip">` → `<a class="chip"
 href="/movies/?genre={{ genre.genre_name|slugify }}">`. No view change and no `?sort=` in the
 href — `/movies/` already defaults to newest-first, which is where a reader clicking a genre wants
@@ -85,17 +85,20 @@ a search box + Newest/Rated/Revenue/A–Z sort segments above the filmography gr
 `_person_filmography_grid.html` / `_person_filmography_results.html` partials mirror the studio
 pair. Header stats stay computed over the whole filmography. **Zero new CSS/JS.** `pytest`
 **324**. Full detail in `for_learning.md`.
-Since then (2026-09-01): **Task 72 — People bios — code complete, tests green, live backfill
-pending.** `dim_person` grew 7 → 13 columns (biography, birthday, deathday, place_of_birth,
-homepage, imdb_id from a new `GET /person/{id}` Bronze source) plus a new `person_alias` table
-for `also_known_as`. New `ingest_people.py` (with a `max_new` per-run cap the company path didn't
-need) + `transform_people_details.py` (two Parquets, sweeps every partition) + `17_person_details.sql`
-+ `load_dim_person(details_df=)` LEFT-join + `load_person_alias()` + `_extract_person_ids()` wired
-into both orchestrators. Person page gained a bio block, a Born/Died/Born-in header row and an
-"Elsewhere" IMDb/homepage row — **no `views.py` change, zero new CSS**. DDL on the local replica;
-`pytest` **324 → 343**. **Left to run (needs live TMDB+AWS+Neon, ~2.3h):** DDL on Neon, the
-priority-ordered ~35.8k-call backfill, Silver + `load_dimensions()` on Neon, replica re-sync.
-Nothing renders a real bio until then. Full detail in the Task 72 block + `for_learning.md`.
+Last completed task   : **Task 72 — People bios (2026-09-01).** `dim_person` grew 7 → 13 columns
+(biography, birthday, deathday, place_of_birth, homepage, imdb_id from a new `GET /person/{id}`
+Bronze source) + a new `person_alias` table for `also_known_as`. New `ingest_people.py` (with a
+`max_new` per-run cap the company path didn't need) + `transform_people_details.py` (two Parquets,
+sweeps every partition) + `17_person_details.sql` + `load_dim_person(details_df=)` LEFT-join +
+`load_person_alias()` + `_extract_person_ids()` wired into both orchestrators. Person page gained a
+bio block, a Born/Died/Born-in header row and an "Elsewhere" IMDb/homepage row — **no `views.py`
+change, zero new CSS**. `pytest` **324 → 343**; Silver DQ 36→44, warehouse DQ 39→42.
+**Live run done (Option A):** DDL on Neon; Bronze backfill stopped at **16,743/35,732** photo-having
+people (priority-ordered — the ~19k tail fills over ~4 nightly runs via the `max_new` cap); merged
+across partitions to **16,788** people / **24,218** aliases; loaded to Neon + replica synced.
+Neon `dim_person`: bio 12,860 / birthday 14,225 / imdb_id 16,706. `/people/george-lucas/` &c.
+render bios live. Gotcha: WSL2→Frankfurt drops big payloads — Neon load + sync needed keepalives
++ retry. Full detail in the Task 72 block + `for_learning.md`.
 Prior task: **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).
 Last updated          : 2026-09-01
@@ -1035,7 +1038,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > derived from Bronze alone — the same shape as `_extract_company_ids()` in Task 65, no layer
 > inversion, no warehouse read.
 
-#### [ ] Task 72 — Bronze → Silver → warehouse → Django: person bios and vitals
+#### [x] Task 72 — Bronze → Silver → warehouse → Django: person bios and vitals
 - **Goal:** Every person with a `profile_path` gets a bio, birth/death dates, place of birth,
   aliases, IMDb link and homepage where TMDB has them; a person page with none of it renders no
   extra block, the same "only when there's something to say" rule as Tasks 56/65.
@@ -1133,13 +1136,32 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
   (each row guarded on its own); `person_detail.html` gained a `.specimen-synopsis` bio + one
   combined "Elsewhere" row (IMDb `name/…` + homepage, `·`-separated). **No `views.py` change** — the
   `Person` the view already fetches carries the fields; the template reads them. **Zero new CSS.**
-  `17_person_details.sql` applied to the **local replica** (verified: `dim_person` 13 cols,
-  `person_alias` exists); ORM + Django `check` clean. `pytest` **324 → 343** (+19). **Still to run
-  (needs live TMDB + AWS + Neon, ~2.3h, not doable from this session):** `17_person_details.sql` on
-  Neon; the priority-ordered Bronze backfill (`python -m etl.bronze.ingest_people` via a
-  `run_refresh` pass, or a `nightly-refresh` `workflow_dispatch` that now carries it); then Silver +
-  `load_dimensions()` against Neon and re-sync the replica. Record the real coverage figures (not
-  the n=200 estimates) here once it runs. Nothing renders a real bio until then.
+  `pytest` **324 → 343** (+19); Silver DQ **36 → 44** (+8: person_details ×4, person_aliases ×4),
+  warehouse DQ **39 → 42** (+3: 1 FK + 2 row-count for `person_alias`).
+- **Live run (2026-09-01) — DONE, via Option A (partial backfill, tail fills over nights).** DDL
+  applied to Neon (6 cols + `person_alias` + indexes). `_extract_person_ids()` over the
+  `2026-08-31` credits partition returned **35,732** photo-having people, priority-ordered.
+  The Bronze backfill was **stopped at 16,743 of 35,732 (~47%)** by user decision after the
+  WSL2→`eu-central-1` link turned out to write at ~1.5/s (not the 4.35/s the plan assumed — the
+  serial cross-region S3 PUT per person is the bottleneck, not TMDB); the ~18,900 not-yet-fetched
+  are the lowest-priority deep-crew/bit-part people, and the nightly `run_refresh` on GitHub
+  Actions (stable link, `max_new=5000`/night) fills them over ~4 nights — the `max_new` cap doing
+  exactly its job. A concurrent scheduled Action also wrote a 5,000-capped `2026-09-01` partition;
+  `transform_people_details` swept **all** partitions (21,788 Bronze files) → **16,788** unique
+  people, **24,218** aliases across **10,186** people, 3 birthdays + 2 deathdays coerced to null
+  (the outlier path). Loaded to **Neon** for `2026-09-01` (full `load_dimensions` + `load_facts`),
+  then synced to the local replica. **Neon `dim_person` now: bio 12,860 (77% of the 16,788
+  enriched), birthday 14,225 (85%), imdb_id 16,706 (99.5%)** — higher than the n=200 sample
+  estimates because priority ordering front-loaded well-documented people. Silver DQ **44/44**,
+  warehouse DQ **42/42** (incl. all 3 new `person_alias` checks). Live-verified on the replica:
+  `/people/george-lucas/` (and Hanks, Nolan, Reeves, Scorsese) render the bio, the Born row, and
+  the `imdb.com/name/…` link. **Operational gotcha:** the local WSL2→Frankfurt link drops large
+  payloads mid-transfer (S3 read timeouts; Neon `insertmanyvalues`/`COPY` closing mid-batch) —
+  the Neon load and the replica sync both needed **TCP keepalives in the libpq connection string
+  + a retry loop** to get through. All three targets (`17_person_details.sql`,
+  `load_dimensions`/`load_facts`, `sync_warehouse_from_neon`) are idempotent, so retry-to-success
+  is safe. GitHub Actions (US→`eu-central-1`) is stable; this is a local-run-only hazard.
+  `sync_warehouse_from_neon.py` also gained `person_alias` in `WAREHOUSE_TABLES` (separate commit).
 
 ---
 
