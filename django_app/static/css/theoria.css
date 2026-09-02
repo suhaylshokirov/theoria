@@ -1335,6 +1335,48 @@ button:hover,
   max-width: 62ch;
 }
 
+/* --- Expandable person bio -----------------------------------------------
+   TMDB biographies run to several paragraphs; left full they push the
+   filmography far down the page. Clamp to six lines with a See more / See
+   less toggle. Progressive enhancement, the same shape as the client pager
+   and the mobile nav: the clamp is gated on html.has-js, and .bio-toggle
+   ships `hidden` — initBioToggle() unhides it only when the text overflows
+   the clamp, so with JS off or on a short bio the full text shows with no
+   dead control. .bio-body is an additive class on .specimen-synopsis; the
+   shared rule is untouched (stylesheet contract at the top of this file). */
+html.has-js .bio-body.is-collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+}
+
+/* An outlined pill matching .pagination.is-client .page-btn — a control that
+   changes nothing about the document's address, so a button not a link. */
+.bio-toggle {
+  margin-top: var(--space-4);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  background: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-5);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+
+.bio-toggle:hover {
+  background: var(--lime-wash);
+  border-color: var(--lime-mark);
+  color: var(--ink);
+}
+
 .specimen-original-title {
   margin-top: var(--space-1);
   font-size: var(--text-xs);

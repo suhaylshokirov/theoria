@@ -1490,6 +1490,29 @@ def test_person_detail_renders_bio_vitals_and_outbound_links():
     assert 'href="https://www.imdb.com/name/nm0000158/"' in html
     assert 'href="https://example.com"' in html
     assert "Elsewhere" in html
+    # The bio ships clamped with a hidden See more / See less toggle;
+    # theoria.js reveals the button only when the text overflows the clamp.
+    assert 'class="specimen-synopsis bio-body is-collapsed"' in html
+    assert 'data-bio-toggle' in html and 'See more' in html
+
+
+def test_person_detail_no_bio_toggle_when_person_has_no_biography():
+    """The clamp/toggle markup lives inside the biography guard — a person
+    with only outbound links gets the Elsewhere row and no bio control."""
+    person = _person()
+    person.homepage = "https://example.com"
+    movie = _movie()
+    credits = [Credit(movie=movie, person=person, department="Sound", job="Mixer")]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {movie.movie_id: Decimal("7.0")}):
+        response = client.get("/people/test-person/")
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert "bio-body" not in html
+    assert "data-bio-toggle" not in html
+    assert "Elsewhere" in html
 
 
 def test_person_detail_no_extra_block_when_person_has_no_bio_or_links():

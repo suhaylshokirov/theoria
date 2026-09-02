@@ -385,6 +385,34 @@
     });
   }
 
+  /* --- Expandable bio ------------------------------------------------------
+     The person page bio is clamped by CSS (.bio-body.is-collapsed, gated on
+     html.has-js). This reveals the See more / See less button — but only
+     when the bio is actually taller than the clamp, since a two-line bio
+     needs no control, the same "no dead buttons" rule initPagedSection
+     follows. Toggling .is-collapsed is all the button does; the height
+     change is left to the browser's default repaint. */
+
+  function initBioToggle() {
+    var root = document.querySelector("[data-bio]");
+    if (!root) return;
+    var body = root.querySelector(".bio-body");
+    var btn = root.querySelector("[data-bio-toggle]");
+    if (!body || !btn) return;
+
+    // scrollHeight is the full text height, clientHeight the clamped box; a
+    // few px of tolerance absorbs sub-pixel rounding so a bio that exactly
+    // fills the clamp doesn't get a pointless toggle.
+    if (body.scrollHeight - body.clientHeight < 4) return;
+
+    btn.hidden = false;
+    btn.addEventListener("click", function () {
+      var collapsed = body.classList.toggle("is-collapsed");
+      btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      btn.textContent = collapsed ? "See more" : "See less";
+    });
+  }
+
   function init() {
     initMeters();
     initCounters();
@@ -392,6 +420,7 @@
     initNavToggle();
     initPagedSections();
     initLiveFilter();
+    initBioToggle();
   }
 
   if (document.readyState === "loading") {

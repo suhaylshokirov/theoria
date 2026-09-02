@@ -16,8 +16,18 @@
    wrapper so the existing vertical-rhythm rules space it; no new CSS. {% endcomment %}
 {% if person.biography or person.imdb_id or person.homepage %}
 <section class="sheet-section">
+    {% comment %} A TMDB bio runs to several paragraphs and shoves the
+       filmography down the page. Clamp it to a few lines with a See more /
+       See less toggle. Progressive enhancement, the same shape as the
+       client pager: the clamp is a has-js-gated CSS rule on .is-collapsed,
+       and the button ships `hidden` — initBioToggle() reveals it only when
+       the text actually overflows the clamp, so with JS off (or a short
+       bio) the full text renders with no dead control. {% endcomment %}
     {% if person.biography %}
-    <p class="specimen-synopsis">{{ person.biography }}</p>
+    <div class="bio" data-bio>
+        <p class="specimen-synopsis bio-body is-collapsed" id="person-bio">{{ person.biography }}</p>
+        <button type="button" class="bio-toggle" data-bio-toggle aria-expanded="false" aria-controls="person-bio" hidden>See more</button>
+    </div>
     {% endif %}
     {% if person.imdb_id or person.homepage %}
     <dl class="record-list">

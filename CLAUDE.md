@@ -99,9 +99,17 @@ across partitions to **16,788** people / **24,218** aliases; loaded to Neon + re
 Neon `dim_person`: bio 12,860 / birthday 14,225 / imdb_id 16,706. `/people/george-lucas/` &c.
 render bios live. Gotcha: WSL2→Frankfurt drops big payloads — Neon load + sync needed keepalives
 + retry. Full detail in the Task 72 block + `for_learning.md`.
+Since then (ad-hoc, 2026-09-02): **the person bio is now clamped with a See more / See less
+toggle** — a TMDB bio runs several paragraphs and buried the filmography. `person_detail.html`'s
+`<p>` gained additive `bio-body is-collapsed` classes; new `html.has-js .bio-body.is-collapsed`
+six-line `-webkit-line-clamp` + a `.bio-toggle` pill (a near-copy of `.pagination.is-client
+.page-btn`); new `initBioToggle()` in `theoria.js` reveals the button only when the text actually
+overflows the clamp (`scrollHeight - clientHeight >= 4`), same "no dead buttons" rule as the
+client pager. `.specimen-synopsis` (shared with the movie + studio pages) untouched; **no
+`views.py` change**. `pytest` **344**. Full detail in `for_learning.md`.
 Prior task: **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).
-Last updated          : 2026-09-01
+Last updated          : 2026-09-02
 ```
 
 **After finishing any task, in this order:**
