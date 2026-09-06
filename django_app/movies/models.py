@@ -249,6 +249,44 @@ class MovieRating(models.Model):
         return f"{self.movie_id}/{self.source}"
 
 
+class MovieVideo(models.Model):
+    """dim_movie_video: a film's trailers and clips (Task 74).
+
+    Not a fact (no measure — `size` is a resolution) and not a bridge (there
+    is no dim_video to join to); it's a multi-valued attribute of dim_movie.
+    Same fake-single-PK workaround as the composite-PK fact models: `movie`
+    carries primary_key=True purely to satisfy Django's one-pk rule; the real
+    PK is the composite (movie_id, video_id) in Postgres.
+
+    The loader REPLACES a film's rows rather than upserting them (a video can
+    vanish upstream), so the ORM never sees a stale row — see
+    warehouse/ddl/18_movie_videos.sql.
+    """
+
+    movie = models.ForeignKey(
+        Movie, on_delete=models.DO_NOTHING, db_column="movie_id",
+        primary_key=True, related_name="videos",
+    )
+    video_id = models.CharField(max_length=24)
+    name = models.TextField(null=True)
+    key = models.TextField(null=True)
+    site = models.TextField(null=True)
+    type = models.TextField(null=True)
+    official = models.BooleanField(null=True)
+    size = models.IntegerField(null=True)
+    iso_639_1 = models.CharField(max_length=8, null=True)
+    iso_3166_1 = models.CharField(max_length=8, null=True)
+    published_at = models.DateTimeField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "dim_movie_video"
+
+    def __str__(self):
+        return f"{self.movie_id}/{self.video_id}"
+
+
 class Company(models.Model):
     """A production company (Task 58). Films have 2.81 companies on average."""
 

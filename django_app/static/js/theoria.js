@@ -413,6 +413,37 @@
     });
   }
 
+  /* --- Click-to-play video embeds ---------------------------------------
+     The movie page ships trailer/clip thumbnails as links to YouTube, not
+     live iframes — see movies/_video_embed.html. One delegated listener
+     upgrades a click into an inline youtube-nocookie iframe, so a film with
+     dozens of clips still loads no players until one is actually asked for,
+     and a no-JS reader just follows the link. */
+
+  function initVideoEmbeds() {
+    document.addEventListener("click", function (e) {
+      var play = e.target.closest("[data-video-play]");
+      if (!play) return;
+      var frame = play.closest("[data-video-embed]");
+      var key = play.getAttribute("data-video-key");
+      if (!frame || !key) return; // no key -> let the link navigate
+
+      e.preventDefault();
+      var iframe = document.createElement("iframe");
+      iframe.className = "video-iframe";
+      iframe.src =
+        "https://www.youtube-nocookie.com/embed/" +
+        encodeURIComponent(key) +
+        "?autoplay=1";
+      iframe.title = play.getAttribute("data-video-name") || "Video";
+      iframe.allow =
+        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+      iframe.setAttribute("allowfullscreen", "");
+      frame.innerHTML = "";
+      frame.appendChild(iframe);
+    });
+  }
+
   function init() {
     initMeters();
     initCounters();
@@ -421,6 +452,7 @@
     initPagedSections();
     initLiveFilter();
     initBioToggle();
+    initVideoEmbeds();
   }
 
   if (document.readyState === "loading") {

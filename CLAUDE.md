@@ -121,7 +121,7 @@ still writes a well-formed empty Parquet + **one aggregate warning**, never rais
 `ENTITY_CONFIGS["movie_videos"]` from the measured 10-key shape. Wired into **both**
 orchestrators after `transform_movie_links`. `pytest` **344 → 356** (+12). Full detail in the
 Task 73 block + `for_learning.md`.
-Last completed task   : **Task 74 — Warehouse: `dim_movie_video`, the first replace-on-load table
+Prior task            : **Task 74 — Warehouse: `dim_movie_video`, the first replace-on-load table
 (2026-09-06).** New `dim_movie_video(movie_id, video_id, name, key, site, type, official, size,
 iso_639_1, iso_3166_1, published_at, ingestion_date)`, PK `(movie_id, video_id)` on TMDB's
 `video_id` (not `key` — unique only within a site); `18_movie_videos.sql` + folded into `01`.
@@ -133,13 +133,27 @@ film's video set can *shrink* when TMDB drops a video or a YouTube key rots, whi
 `load_dim_movie_video()` in `load_dimensions.py` (it's a `dim_`), FK-resolves `movie_id` against
 `dim_movie` and quarantines misses (`load_dimensions()` gained a `rejected_dir` param); reads
 `silver/movie_videos` in `try/except` so a pre-Task-73 partition degrades to "no videos loaded".
-DQ: `_FK_CHECKS` 15→16; two new `check_row_count_sanity` results — `silver_to_warehouse` vs
-Silver's `nunique(movie_id)` (one-to-many, Task 58 fix) and a `load` "wrote 0 from real input"
-guard. `pytest` **356 → 363** (+7, incl. the replace-semantics regression: load 3 videos then 2,
-assert the 2nd load DELETEs then inserts exactly 2). **DDL not yet applied to Neon/replica and no
-live load — Task 76 owns this phase's mandatory run** (no real `silver/movie_videos` partition
-exists until a post-Task-73 `run_refresh`); `sync_warehouse_from_neon.py`'s `WAREHOUSE_TABLES`
-also needs `dim_movie_video` then. Full detail in the Task 74 block + `for_learning.md`.
+DQ: `_FK_CHECKS` 15→16; two new `check_row_count_sanity` results. `pytest` **356 → 363** (+7,
+incl. the replace-semantics regression). Full detail in the Task 74 block + `for_learning.md`.
+Last completed task   : **Task 75 — Django: the trailer, and a Clips section (2026-09-06).**
+New `MovieVideo` model (`managed=False`, `dim_movie_video`, fake single PK). `movie_detail()`
+gained **one query** for the film's YouTube videos, then `_pick_trailer()` runs the 3-step ladder
+in Python (official Trailer → any Trailer → any Teaser, newest first) and `clips` is the rest;
+picking the trailer in the view (not the loader) is the Task 56 judgment. New shared
+`_video_embed.html` — click-to-play: a `hqdefault.jpg` thumbnail inside an `<a>` to the watch
+page (deliberate deviation from the plan's `<button>` — a no-JS dead control violates the site's
+PE ethos), upgraded to a `youtube-nocookie` iframe by the one new JS fn `initVideoEmbeds()` (a
+document-delegated click listener). Template: the trailer takes the backdrop's slot, backdrop
+stays only without a trailer; new `#clips` section, flat + newest-first, `.clip-type` label per
+card, paged 6-at-a-time via the existing `_pager_client.html`. **CSS additive only** (Task 38) —
+`.video-strip`/`.video-frame` mirror the `.backdrop-strip` idiom, `.video-play-icon` is a
+`--lime` disc, `.clip-grid`/`.clip-*`; every value a theme token. `pytest` **363 → 370** (+7);
+all 17 `movie_detail` tests gained a `MovieVideo` mock. Live-verified against the replica (with
+`18_movie_videos.sql` applied to it, empty): all routes 200, bad slug 404, **exactly 1**
+`dim_movie_video` query, and with no rows the zero-video path renders (backdrop kept, no video
+blocks). **The trailer-actually-plays check waits on Task 76's live video load** (the phase
+header's ordering); Neon DDL + `sync_warehouse_from_neon.WAREHOUSE_TABLES` also deferred there.
+Full detail in the Task 75 block + `for_learning.md`.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-06
@@ -1425,7 +1439,7 @@ Learning log (updated after every task): `for_learning.md`
   `sync_warehouse_from_neon.py`'s `WAREHOUSE_TABLES` will also need `dim_movie_video` added then
   (same as the Task 72 `person_alias` follow-up commit). `graphify update` skipped — not installed.
 
-#### [ ] Task 75 — Django: the trailer, and a Clips section
+#### [x] Task 75 — Django: the trailer, and a Clips section
 - **Goal:** One trailer playing on the film page, and a Clips section under it for the 82% of
   films that have extras.
 - **Files:** `django_app/movies/{models,views}.py`,
@@ -1482,7 +1496,49 @@ Learning log (updated after every task): `for_learning.md`
   the film with 89 extras pages in-browser without shipping 89 iframes; **query count is flat** —
   one extra query on `movie_detail`, verified by counting, not by inspection (the Task 68
   standard); all routes 200, bad slug 404; both themes checked.
-- **Outcome:**
+- **Outcome (2026-09-06) — built to spec; the trailer-actually-plays check waits on Task 76's
+  live video load (the phase header's stated ordering).** New `MovieVideo` model
+  (`managed = False`, `db_table = "dim_movie_video"`, fake single PK on `movie` — the standard
+  composite-PK workaround, comment included). `movie_detail()` gained **one query** —
+  `MovieVideo.objects.filter(movie_id=…, site="YouTube").order_by(F("published_at").desc(nulls_last=True), "video_id")`
+  — then `_pick_trailer()` runs the 3-step ladder in Python (official YT Trailer → any YT Trailer
+  → any YT Teaser, first match wins on an already-newest-first list) and `clips` is every other
+  video (`v is not trailer`). Picking the trailer in the view, not the loader, is the Task 56
+  judgment — which video to *feature* is a rendering decision. `published_at DESC` is ordered
+  **explicitly** (nothing in the warehouse preserves TMDB's array order). The `site="YouTube"`
+  filter has a comment saying the ~3 Vimeo rows are deliberately unrendered, not an accident.
+  New `_video_embed.html` — the project's shared click-to-play partial: renders **nothing**
+  without a video (Task 56/68), else a YouTube `hqdefault.jpg` thumbnail inside an **`<a>` to the
+  watch page** (a deliberate deviation from the plan's literal `<button>` — a button that does
+  nothing with JS off is a dead control, which the site's whole PE ethos forbids; the `<a>` is
+  the graceful fallback), with `data-video-play`/`data-video-key`/`data-video-name` hooks and an
+  `aria-label="Play {trailer|clip}: <name>"`. `movie_detail.html`: the trailer takes the
+  backdrop's slot (`<figure class="video-strip">`), the backdrop stays **only** when there's no
+  trailer (`{% elif movie.backdrop_path %}`); a new `#clips` `sheet-section` shows the rest flat,
+  newest-first, each card with a small `.clip-type` label, paged 6-at-a-time via the existing
+  `_pager_client.html` (the max-89 film). New `initVideoEmbeds()` in `theoria.js` — **the
+  feature's only new JS** — one document-delegated `click` listener: `e.target.closest("[data-video-play]")`,
+  `preventDefault()`, swap the frame's contents for a `youtube-nocookie.com/embed/…?autoplay=1`
+  iframe with a `title`. **CSS is additive only** (Task 38): new `.video-strip`/`.video-frame`
+  (`aspect-ratio: 16/9`, hairline frame — the `.backdrop-strip` idiom, not a restyle of it),
+  `.video-play`/`.video-play-icon` (a `--lime` disc + `--ink-on-lime` triangle — a fill on a
+  photo, never a bare mark), `.video-iframe`, `.clip-grid`/`.clip-card`/`.clip-meta`/`.clip-type`
+  — every value a theme-aware token, so both themes adapt by construction.
+  **Tests:** every one of the 17 `movie_detail` tests gained a `MovieVideo` manager patch (via
+  one `replace_all` on `) as language_mgr:`); 7 new tests — `_pick_trailer` ladder (official →
+  trailer → teaser → None), trailer-takes-backdrop-slot, backdrop-kept-without-trailer,
+  clips-exclude-the-trailer (+ the per-card type label), no-`#clips`-when-trailer-is-the-only-video,
+  the 365 Days zero-video case (both blocks absent, still 200), and **flat query cost** (30
+  videos → still `filter.call_count == 1`). `pytest` **363 → 370** (+7).
+  **Live-verified against the replica** (with `18_movie_videos.sql` applied to it — empty table):
+  all 6 routes 200, bad slug 404; `movie_detail` issues **exactly 1** `dim_movie_video` query (8
+  warehouse queries total, was 7); with the table empty, `trailer=None` / `clips=[]` / no
+  `video-strip` / no `#clips` and the **backdrop still renders** — i.e. the zero-video path is
+  correct against a real DB. `manage.py check` clean; `node --check theoria.js` clean.
+  **Deferred to Task 76:** the live `run_refresh` that actually loads videos, then re-verify a
+  real trailer plays on `/movies/the-godfather/`, the 89-clip film pages in-browser, and both
+  themes on a rendered page; applying `18_movie_videos.sql` to **Neon**; adding `dim_movie_video`
+  to `sync_warehouse_from_neon.py`'s `WAREHOUSE_TABLES`.
 
 #### [ ] Task 76 — Live run, verification, doc truth-up
 - **Goal:** The closing task, following Tasks 44, 53, 63 and 69.

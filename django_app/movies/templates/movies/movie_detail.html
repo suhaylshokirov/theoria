@@ -107,10 +107,45 @@
     </div>
 </article>
 
-{% if movie.backdrop_path %}
+{% comment %} A trailer and a backdrop are two large pieces of art competing for
+   the same slot below the record, so the trailer takes it when there is one and
+   the backdrop stays only otherwise (Task 75). {% endcomment %}
+{% if trailer %}
+<figure class="video-strip">
+    {% include "movies/_video_embed.html" with video=trailer kind="trailer" only %}
+</figure>
+{% elif movie.backdrop_path %}
 <figure class="backdrop-strip">
     <img src="{{ movie.backdrop_path|tmdb_image:'w1280' }}" alt="" loading="lazy">
 </figure>
+{% endif %}
+
+{% comment %} Clips: every other YouTube video, newest first, shown flat rather
+   than grouped by TMDB's Clip/Featurette/BTS/Bloopers taxonomy — a reader isn't
+   shopping by type, and four sub-headings on a two-video film is chrome. The
+   type still shows as a small label per card. Paged in the browser (max 89 on
+   one film) the same way Cast and Crew are. {% endcomment %}
+{% if clips %}
+<section class="sheet-section" id="clips">
+    <div class="section-head">
+        <h2>Clips</h2>
+        <span class="section-note">{{ clips|length }} video{{ clips|length|pluralize }}</span>
+    </div>
+    <div data-paged data-page-size="6" data-page-items=".clip-card">
+        <div class="clip-grid">
+            {% for video in clips %}
+            <figure class="clip-card">
+                {% include "movies/_video_embed.html" with video=video kind="clip" only %}
+                <figcaption class="clip-meta">
+                    {% if video.type %}<span class="clip-type">{{ video.type }}</span>{% endif %}
+                    <span class="clip-name">{{ video.name }}</span>
+                </figcaption>
+            </figure>
+            {% endfor %}
+        </div>
+        {% include "movies/_pager_client.html" with label="clips" only %}
+    </div>
+</section>
 {% endif %}
 
 <section class="sheet-section" id="cast">

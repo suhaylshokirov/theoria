@@ -9,7 +9,7 @@ from django.utils.text import slugify
 
 from movies.models import (
     Company, Credit, Genre, Movie, MovieCompany,
-    MovieCountry, MovieLanguage, MovieRating, Person,
+    MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person,
 )
 
 MOVIES_PER_PAGE = 24
@@ -368,6 +368,24 @@ def movie_detail(request, movie_slug):
         .first()
     )
 
+    # dim_movie_video (Task 74-75): one query for every YouTube video on the
+    # film (~16 rows), then the trailer and the clip list are chosen here in
+    # Python. Which trailer to *show* is a rendering decision, not a stored
+    # one (the Task 56 judgment) — freezing it into a column would mean a
+    # re-load to change it. The `site='YouTube'` filter is deliberate: the ~3
+    # Vimeo rows in the catalogue are all unofficial and pre-2020, not worth a
+    # second embed path; the column stays so a later task can revisit that.
+    # Ordered published_at DESC explicitly — nothing in the warehouse
+    # preserves TMDB's array order, so "it came back newest-first" is not a
+    # guarantee to lean on.
+    videos = list(
+        MovieVideo.objects.using("warehouse")
+        .filter(movie_id=movie_id, site="YouTube")
+        .order_by(F("published_at").desc(nulls_last=True), "video_id")
+    )
+    trailer = _pick_trailer(videos)
+    clips = [v for v in videos if v is not trailer]
+
     context = {
         "movie": movie,
         "genres": genres,
@@ -381,8 +399,32 @@ def movie_detail(request, movie_slug):
         "countries": countries,
         "languages": languages,
         "movie_rating": movie_rating,
+        "trailer": trailer,
+        "clips": clips,
     }
     return render(request, "movies/movie_detail.html", context)
+
+
+def _pick_trailer(videos):
+    """Choose one video to feature, from a list already ordered newest-first.
+
+    A 3-step ladder, each step taking the first (newest) match:
+        1. an official YouTube Trailer
+        2. any YouTube Trailer
+        3. any YouTube Teaser
+    Measured to resolve for 148/150 films — the two misses are the films with
+    no videos at all. Returns None when nothing matches (a trailer block that
+    renders nothing rather than an empty frame — the Task 56/68 rule).
+    """
+    for match in (
+        lambda v: v.type == "Trailer" and v.official,
+        lambda v: v.type == "Trailer",
+        lambda v: v.type == "Teaser",
+    ):
+        for video in videos:
+            if match(video):
+                return video
+    return None
 
 
 def _country_provenance(country_rows):

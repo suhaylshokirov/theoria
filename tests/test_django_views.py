@@ -31,7 +31,7 @@ from django.test.utils import setup_test_environment, teardown_test_environment 
 
 from movies.models import (  # noqa: E402
     Company, Country, Credit, Genre, Language, Movie, MovieCompany,
-    MovieCountry, MovieLanguage, MovieRating, Person,
+    MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person,
 )
 
 client = Client()
@@ -476,7 +476,10 @@ def test_movie_detail_returns_200_with_expected_context():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -519,7 +522,10 @@ def test_movie_detail_renders_studios_as_links():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = [link]
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -557,7 +563,10 @@ def test_movie_detail_renders_genres_as_links_to_the_filtered_index():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -596,7 +605,10 @@ def test_movie_detail_renders_rating_badge_with_vote_count_and_synopsis():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -634,7 +646,10 @@ def test_movie_detail_renders_no_badge_when_no_imdb_rating():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -669,7 +684,10 @@ def test_movie_detail_renders_original_title_when_differs():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -701,7 +719,10 @@ def test_movie_detail_hides_original_title_when_same_as_title():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -736,7 +757,10 @@ def test_movie_detail_cast_present_when_no_director_credited():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -776,7 +800,10 @@ def test_movie_detail_merges_multi_job_crew_person():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -821,7 +848,10 @@ def test_movie_detail_person_appears_in_cast_and_crew():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -871,7 +901,10 @@ def test_movie_detail_sends_every_credit_for_client_side_paging():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -929,7 +962,10 @@ def test_movie_detail_crew_grouped_in_department_order():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -975,7 +1011,10 @@ def test_movie_detail_crew_rows_carry_a_face_or_silhouette():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -1024,7 +1063,10 @@ def test_movie_detail_shows_one_countries_row_when_origin_and_production_agree()
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = rows
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -1062,7 +1104,10 @@ def test_movie_detail_splits_origin_and_production_when_they_disagree():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = rows
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
@@ -1105,7 +1150,10 @@ def test_movie_detail_reconciles_original_language_with_spoken_languages():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = rows
@@ -1139,7 +1187,10 @@ def test_movie_detail_singular_language_label_for_one_language():
         MovieCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         MovieLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = []
         company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = rows
@@ -1152,6 +1203,147 @@ def test_movie_detail_singular_language_label_for_one_language():
     body = response.content.decode()
     assert '<dt class="label">Language</dt>' in body
     assert '<dt class="label">Languages</dt>' not in body
+
+
+# ---------------------------------------------------------------------------
+# movie_detail — trailer + clips (Task 75)
+# ---------------------------------------------------------------------------
+
+
+def _video(video_id, *, type="Trailer", official=True, name=None, key=None):
+    return MovieVideo(
+        movie=_movie(), video_id=video_id, name=name or f"{type} {video_id}",
+        key=key or f"key_{video_id}", site="YouTube", type=type,
+        official=official, size=1080, ingestion_date=date(2026, 9, 6),
+    )
+
+
+@contextlib.contextmanager
+def _movie_detail_video_mocks(movie, videos):
+    """Mock every manager movie_detail() reads, with MovieVideo returning
+    `videos` and everything else empty. Yields the MovieVideo manager mock."""
+    with patch("movies.views.get_object_or_404", return_value=movie), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
+        MovieCompany, "objects", new=MagicMock()
+    ) as company_mgr, patch.object(
+        MovieCountry, "objects", new=MagicMock()
+    ) as country_mgr, patch.object(
+        MovieLanguage, "objects", new=MagicMock()
+    ) as language_mgr, patch.object(
+        MovieVideo, "objects", new=MagicMock()
+    ) as video_mgr:
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = videos
+        company_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        country_mgr.using.return_value.filter.return_value.select_related.return_value = []
+        language_mgr.using.return_value.filter.return_value.select_related.return_value = []
+        genre_mgr.using.return_value.filter.return_value.distinct.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = []
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
+        yield video_mgr
+
+
+def test_pick_trailer_prefers_official_then_trailer_then_teaser():
+    from movies.views import _pick_trailer
+
+    official = _video("a", type="Trailer", official=True)
+    plain = _video("b", type="Trailer", official=False)
+    teaser = _video("c", type="Teaser", official=False)
+
+    assert _pick_trailer([plain, teaser, official]) is official
+    assert _pick_trailer([teaser, plain]) is plain
+    assert _pick_trailer([teaser]) is teaser
+    assert _pick_trailer([_video("d", type="Clip", official=False)]) is None
+    assert _pick_trailer([]) is None
+
+
+def test_movie_detail_trailer_takes_the_backdrop_slot():
+    movie = _movie()
+    movie.backdrop_path = "/bd.jpg"
+    trailer = _video("t1", key="TRAILERKEY")
+
+    with _movie_detail_video_mocks(movie, [trailer]):
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    assert response.status_code == 200
+    assert response.context["trailer"] is trailer
+    body = response.content.decode()
+    assert 'class="video-strip"' in body
+    assert "img.youtube.com/vi/TRAILERKEY/hqdefault.jpg" in body
+    assert 'class="backdrop-strip"' not in body
+
+
+def test_movie_detail_keeps_backdrop_when_there_is_no_trailer():
+    movie = _movie()
+    movie.backdrop_path = "/bd.jpg"
+
+    with _movie_detail_video_mocks(movie, []):
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    assert response.context["trailer"] is None
+    body = response.content.decode()
+    assert 'class="backdrop-strip"' in body
+    assert 'class="video-strip"' not in body
+
+
+def test_movie_detail_clips_section_excludes_the_chosen_trailer():
+    movie = _movie()
+    trailer = _video("t1", type="Trailer", official=True, key="TKEY")
+    clip1 = _video("c1", type="Clip", official=False, key="CKEY1")
+    clip2 = _video("c2", type="Featurette", official=False, key="CKEY2")
+
+    with _movie_detail_video_mocks(movie, [trailer, clip1, clip2]):
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    assert list(response.context["clips"]) == [clip1, clip2]
+    body = response.content.decode()
+    assert 'id="clips"' in body
+    assert "2 videos" in body
+    assert "img.youtube.com/vi/CKEY1/hqdefault.jpg" in body
+    assert "img.youtube.com/vi/CKEY2/hqdefault.jpg" in body
+    assert body.count("img.youtube.com/vi/TKEY/hqdefault.jpg") == 1
+    assert "Featurette" in body
+
+
+def test_movie_detail_no_clips_section_when_trailer_is_the_only_video():
+    movie = _movie()
+
+    with _movie_detail_video_mocks(movie, [_video("t1")]):
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    assert response.context["clips"] == []
+    assert 'id="clips"' not in response.content.decode()
+
+
+def test_movie_detail_no_video_blocks_when_film_has_no_videos():
+    """The 365 Days case (TMDB 664413, zero videos): neither block renders and
+    the page is a 200, not an error."""
+    movie = _movie()
+    movie.backdrop_path = None
+
+    with _movie_detail_video_mocks(movie, []):
+        response = client.get(f"/movies/{movie.movie_id}/")
+
+    assert response.status_code == 200
+    assert response.context["trailer"] is None
+    assert response.context["clips"] == []
+    body = response.content.decode()
+    assert 'class="video-strip"' not in body
+    assert 'id="clips"' not in body
+
+
+def test_movie_detail_reads_movie_videos_in_one_query():
+    """Flat query cost: one filter against MovieVideo whatever the video count
+    — the trailer/clip split happens in Python (Task 68 standard)."""
+    movie = _movie()
+    videos = [_video(f"v{i}", type="Clip", official=False) for i in range(30)]
+
+    with _movie_detail_video_mocks(movie, videos) as video_mgr:
+        client.get(f"/movies/{movie.movie_id}/")
+
+    assert video_mgr.using.return_value.filter.call_count == 1
 
 
 # ---------------------------------------------------------------------------
