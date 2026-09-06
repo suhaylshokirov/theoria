@@ -1,0 +1,28 @@
+{
+  "Rules": [
+    {
+      "ID": "expire-bronze-credits-30d",
+      "Status": "Enabled",
+      "Filter": {"Prefix": "bronze/credits/"},
+      "Expiration": {"Days": 30}
+    },
+    {
+      "ID": "expire-bronze-movie-details-30d",
+      "Status": "Enabled",
+      "Filter": {"Prefix": "bronze/movie_details/"},
+      "Expiration": {"Days": 30}
+    },
+    {
+      "ID": "expire-bronze-imdb-ratings-30d",
+      "Status": "Enabled",
+      "Filter": {"Prefix": "bronze/imdb_ratings/"},
+      "Expiration": {"Days": 30}
+    },
+    {
+      "ID": "abort-incomplete-multipart-7d",
+      "Status": "Enabled",
+      "Filter": {"Prefix": ""},
+      "AbortIncompleteMultipartUpload": {"DaysAfterInitiation": 7}
+    }
+  ]
+}
