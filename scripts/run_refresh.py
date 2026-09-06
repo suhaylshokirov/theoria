@@ -50,6 +50,7 @@ from etl.silver.transform_credits_bridge import transform_credits_bridge
 from etl.silver.transform_genres import transform_genres
 from etl.silver.transform_imdb_ratings import transform_imdb_ratings
 from etl.silver.transform_movie_links import transform_movie_links
+from etl.silver.transform_movie_videos import transform_movie_videos
 from etl.silver.transform_movies import transform_movies
 from etl.silver.transform_people import transform_people
 from etl.silver.transform_people_details import transform_people_details
@@ -101,6 +102,7 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
     transform_genres(ingestion_date=ingestion_date)
     transform_credits_bridge(ingestion_date=ingestion_date)
     transform_movie_links(ingestion_date=ingestion_date)
+    transform_movie_videos(ingestion_date=ingestion_date)
     transform_companies(ingestion_date=ingestion_date)
     transform_imdb_ratings(ingestion_date=ingestion_date)
 

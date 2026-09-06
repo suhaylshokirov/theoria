@@ -12,9 +12,13 @@ input and writes an ordinary Bronze partition — the *same* two key shapes that
 warehouse stage downstream runs unchanged. Bronze stays append-only: a refresh
 writes a new ``ingestion_date=`` partition, it never edits an existing one.
 
-One TMDB call per film, not two: ``append_to_response=credits`` returns the
-detail payload with credits folded in, and this module splits it back into the
-two files the existing transforms expect.
+One TMDB call per film, not two: ``append_to_response=credits,videos`` returns
+the detail payload with credits *and* the trailer/clip metadata folded in, and
+this module splits it back into the two files the existing transforms expect.
+``credits`` is stripped onto its own Bronze file (a standalone ``bronze/credits``
+entity already exists); ``videos`` stays inline on the details file, exactly as
+the ingest path leaves it, because there is no separate ``bronze/videos`` entity
+and ``transform_movie_videos`` reads it straight out of ``movie_details``.
 
 S3 layout (identical to the ingest path):
     bronze/movie_details/ingestion_date=YYYY-MM-DD/<movie_id>.json
@@ -60,13 +64,16 @@ def _movie_ids_from_warehouse(engine: Engine) -> list[int]:
 
 
 def _split_payload(movie_id: int, payload: dict) -> tuple[dict, dict]:
-    """Separate one append_to_response=credits payload into (details, credits).
+    """Separate one append_to_response=credits,videos payload into (details, credits).
 
-    ``details`` is the movie object with the ``credits`` key removed, so it is
-    byte-comparable to what ``ingest_movie_details`` writes. ``credits`` is
-    rebuilt into the ``{"id", "cast", "crew"}`` shape the standalone
-    ``movie/{id}/credits`` endpoint returns, which is what ``ingest_credits``
-    writes and what ``transform_credits_bridge`` / ``transform_people`` read.
+    ``details`` is the movie object with only the ``credits`` key removed, so it
+    is byte-comparable to what ``ingest_movie_details`` writes — the ``videos``
+    block is left inline, since it has no standalone Bronze entity and
+    ``transform_movie_videos`` reads it from ``movie_details`` directly.
+    ``credits`` is rebuilt into the ``{"id", "cast", "crew"}`` shape the
+    standalone ``movie/{id}/credits`` endpoint returns, which is what
+    ``ingest_credits`` writes and ``transform_credits_bridge`` /
+    ``transform_people`` read.
     """
     details = {k: v for k, v in payload.items() if k != "credits"}
     raw_credits = payload.get("credits")
@@ -122,7 +129,7 @@ def refresh_movies(
     for movie_id in movie_ids:
         try:
             payload = client.get_movie_details(
-                movie_id, append_to_response="credits"
+                movie_id, append_to_response="credits,videos"
             )
             details, credits = _split_payload(movie_id, payload)
 

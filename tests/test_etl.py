@@ -1372,6 +1372,173 @@ def test_transform_movie_links_raises_when_no_bronze_files():
             )
 
 
+# --- transform_movie_videos --------------------------------------------------
+
+from etl.silver.transform_movie_videos import (
+    _extract_video_rows,
+    transform_movie_videos,
+)
+
+_VIDEO_COLUMNS = {
+    "movie_id", "video_id", "name", "key", "site", "type", "official",
+    "size", "iso_639_1", "iso_3166_1", "published_at",
+}
+
+
+def _video(video_id, **overrides) -> dict:
+    """One entry shaped like a TMDB /movie/{id}/videos result (10 keys)."""
+    base = {
+        "id": video_id,
+        "name": "Official Trailer",
+        "key": "abc123",
+        "site": "YouTube",
+        "type": "Trailer",
+        "official": True,
+        "size": 1080,
+        "iso_639_1": "en",
+        "iso_3166_1": "US",
+        "published_at": "2016-07-19T16:29:00.000Z",
+    }
+    base.update(overrides)
+    return base
+
+
+def _raw_movie_with_videos(movie_id: int, results: list[dict] | None = None) -> dict:
+    """A movie-detail payload with the append_to_response=videos block folded in."""
+    raw = _raw_movie(movie_id)
+    raw["videos"] = {
+        "id": movie_id,
+        "results": results if results is not None else [
+            _video("v1", type="Trailer"),
+            _video("v2", type="Clip", key="def456", official=False),
+        ],
+    }
+    return raw
+
+
+def test_extract_video_rows_one_row_per_video():
+    rows = _extract_video_rows(_raw_movie_with_videos(550))
+    assert len(rows) == 2
+    assert {r["video_id"] for r in rows} == {"v1", "v2"}
+    assert all(r["movie_id"] == 550 for r in rows)
+
+
+def test_extract_video_rows_none_when_videos_key_absent():
+    """Every movie_details payload written before Task 73 is in this state —
+    a missing key must be distinguishable from a film with zero videos."""
+    assert _extract_video_rows(_raw_movie(550)) is None
+
+
+def test_extract_video_rows_empty_list_when_film_has_no_videos():
+    assert _extract_video_rows(_raw_movie_with_videos(550, results=[])) == []
+
+
+def test_transform_movie_videos_writes_silver_parquet():
+    key = "bronze/movie_details/ingestion_date=2026-09-06/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_movie_with_videos(550)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uri = transform_movie_videos(
+            ingestion_date=dt.date(2026, 9, 6), bucket="theoria-datalake"
+        )
+
+    assert uri == (
+        "s3://theoria-datalake/silver/movie_videos/"
+        "ingestion_date=2026-09-06/movie_videos.parquet"
+    )
+    mock_s3.put_object.assert_called_once()
+    _, kwargs = mock_s3.put_object.call_args
+    assert kwargs["Key"] == "silver/movie_videos/ingestion_date=2026-09-06/movie_videos.parquet"
+    df = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert set(df.columns) == _VIDEO_COLUMNS
+    assert set(df["video_id"]) == {"v1", "v2"}
+    assert df["movie_id"].dtype.name == "Int64"
+    assert df["size"].dtype.name == "Int64"
+
+
+def test_transform_movie_videos_deduplicates_on_true_grain():
+    """Same (movie_id, video_id) across two files -> one row (Task 40's lesson)."""
+    key1 = "bronze/movie_details/ingestion_date=2026-09-06/550.json"
+    key2 = "bronze/movie_details/ingestion_date=2026-09-06/550_dup.json"
+    payload = _raw_movie_with_videos(550)
+    mock_s3 = _make_s3_mock_with_files({key1: payload, key2: dict(payload)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_movie_videos(ingestion_date=dt.date(2026, 9, 6), bucket="theoria-datalake")
+
+    _, kwargs = mock_s3.put_object.call_args
+    df = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df) == 2  # still 2, not 4
+
+
+def test_transform_movie_videos_drops_null_video_id_with_warning(caplog):
+    import logging
+    raw = _raw_movie_with_videos(550, results=[_video(None), _video("v2")])
+    key = "bronze/movie_details/ingestion_date=2026-09-06/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: raw})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.WARNING):
+            transform_movie_videos(ingestion_date=dt.date(2026, 9, 6), bucket="theoria-datalake")
+
+    assert any("null video_id" in r.message for r in caplog.records)
+    _, kwargs = mock_s3.put_object.call_args
+    df = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert list(df["video_id"]) == ["v2"]
+
+
+def test_transform_movie_videos_old_partition_writes_empty_wellformed_parquet(caplog):
+    """A partition where no payload carries a videos key (everything pre-Task-73)
+    still writes a valid empty Parquet with every column, plus one aggregate
+    warning — never an exception."""
+    import logging
+    payloads = {
+        f"bronze/movie_details/ingestion_date=2026-06-22/{mid}.json": _raw_movie(mid)
+        for mid in (550, 551, 552)
+    }
+    mock_s3 = _make_s3_mock_with_files(payloads)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.WARNING):
+            transform_movie_videos(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    _, kwargs = mock_s3.put_object.call_args
+    df = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df) == 0
+    assert set(df.columns) == _VIDEO_COLUMNS
+    assert any("no `videos` key" in r.message for r in caplog.records)
+
+
+def test_transform_movie_videos_raises_when_no_bronze_files():
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            transform_movie_videos(
+                ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
+            )
+
+
+def test_ingest_movie_details_appends_videos():
+    """Task 73: the one detail call now folds in the videos block — no extra request."""
+    mock_client = MagicMock()
+    mock_client.get_movie_details.return_value = _raw_movie_with_videos(550)
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ingest_movie_details(
+            movie_ids=[550], ingestion_date=dt.date(2026, 9, 6), client=mock_client
+        )
+
+    _, kwargs = mock_client.get_movie_details.call_args
+    assert kwargs["append_to_response"] == "videos"
+    assert mock_client.get_movie_credits.call_count == 0  # still no second call
+
+
 # --- transform_imdb_ratings -----------------------------------------------------
 
 import gzip
@@ -3242,11 +3409,12 @@ def test_refresh_movies_writes_details_and_credits_per_film():
         )
 
     assert (succeeded, failed) == ([550, 551], [])
-    # One append_to_response=credits call per film — never a separate /credits call.
+    # One append_to_response=credits,videos call per film — never a separate
+    # /credits call, and the videos block rides along for free (Task 73).
     assert mock_client.get_movie_details.call_count == 2
     assert mock_client.get_movie_credits.call_count == 0
     for _, kwargs in mock_client.get_movie_details.call_args_list:
-        assert kwargs["append_to_response"] == "credits"
+        assert kwargs["append_to_response"] == "credits,videos"
 
     bodies = _bodies_by_key(mock_s3)
     assert set(bodies) == {
@@ -3338,6 +3506,36 @@ def test_refresh_movies_tolerates_a_payload_with_no_credits(caplog):
     ]
     assert credits == {"id": 42, "cast": [], "crew": []}
     assert "no credits" in caplog.text.lower()
+
+
+def test_refresh_movies_appends_credits_and_videos_keeping_videos_inline():
+    """Task 73: refresh asks for credits,videos in one call; the split strips
+    only credits onto its own file and leaves videos on the details file."""
+    payload = {
+        "id": 550,
+        "title": "Movie 550",
+        "credits": {"cast": [{"id": 1}], "crew": [{"id": 2, "job": "Director"}]},
+        "videos": {"id": 550, "results": [{"id": "v1", "type": "Trailer"}]},
+    }
+    mock_client = MagicMock()
+    mock_client.get_movie_details.return_value = payload
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        refresh_movies(
+            movie_ids=[550], ingestion_date=dt.date(2026, 7, 29), client=mock_client
+        )
+
+    _, kwargs = mock_client.get_movie_details.call_args
+    assert kwargs["append_to_response"] == "credits,videos"
+
+    bodies = _bodies_by_key(mock_s3)
+    details = bodies["bronze/movie_details/ingestion_date=2026-07-29/550.json"]
+    assert "credits" not in details              # stripped onto its own file
+    assert details["videos"]["results"][0]["id"] == "v1"  # left inline
+    credits = bodies["bronze/credits/ingestion_date=2026-07-29/550.json"]
+    assert credits == {"id": 550, "cast": [{"id": 1}], "crew": [{"id": 2, "job": "Director"}]}
 
 
 # --- Task 64: etl/gold/build_metrics_snapshot.py --------------------------------

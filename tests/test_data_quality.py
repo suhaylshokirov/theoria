@@ -325,6 +325,12 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
         {"person_id": 10, "alias": "Tom Hanks", "ordering": 0},
         {"person_id": 10, "alias": "Thomas Jeffrey Hanks", "ordering": 1},
     ])
+    movie_videos_df = pd.DataFrame([
+        {"movie_id": 550, "video_id": "533ec654c3a36854480003eb", "name": "Trailer",
+         "key": "6JnN1DmbqoU", "site": "YouTube", "type": "Trailer", "official": True,
+         "size": 1080, "iso_639_1": "en", "iso_3166_1": "US",
+         "published_at": "2013-10-08T19:15:32.000Z"},
+    ])
     return {
         "movies": _movies_df(),
         "people": people_df,
@@ -338,6 +344,7 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
         "person_aliases": person_aliases_df,
         "movie_countries": countries_df,
         "movie_languages": languages_df,
+        "movie_videos": movie_videos_df,
         "imdb_ratings": imdb_ratings_df,
     }
 
@@ -492,3 +499,50 @@ def test_run_silver_checks_person_aliases_negative_ordering_fails(tmp_path):
         r for r in results if r.entity == "person_aliases" and r.check == "ranges"
     )
     assert not aliases_range.passed
+
+
+def test_run_silver_checks_movie_videos_negative_size_fails(tmp_path):
+    """size is a video resolution (1080/720/...), never negative (Task 73)."""
+    dfs = _all_entity_dfs()
+    dfs["movie_videos"] = pd.DataFrame([
+        {"movie_id": 550, "video_id": "abc", "name": "T", "key": "k", "site": "YouTube",
+         "type": "Trailer", "official": True, "size": -1, "iso_639_1": "en",
+         "iso_3166_1": "US", "published_at": "2013-10-08T19:15:32.000Z"},
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    videos_range = next(
+        r for r in results if r.entity == "movie_videos" and r.check == "ranges"
+    )
+    assert not videos_range.passed
+
+
+def test_run_silver_checks_movie_videos_empty_partition_passes(tmp_path):
+    """Every movie_details payload written before Task 73 has no videos key, so
+    that partition's movie_videos Parquet is legitimately empty — an empty but
+    well-formed frame must pass every check, not fail nulls/schema."""
+    dfs = _all_entity_dfs()
+    dfs["movie_videos"] = pd.DataFrame(
+        {c: pd.Series(dtype="object")
+         for c in ENTITY_CONFIGS["movie_videos"]["expected_cols"]}
+    )
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 6, 22),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    videos_checks = [r for r in results if r.entity == "movie_videos"]
+    assert videos_checks and all(r.passed for r in videos_checks), [
+        r for r in videos_checks if not r.passed
+    ]

@@ -127,6 +127,26 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         ],
         "ranges": {},
     },
+    # Written from the measured shape of TMDB's /movie/{id}/videos results
+    # (live probe, 2026-09-01: 10 keys, always all present), not by mirroring
+    # transform_movie_videos.py — the Task 40 lesson. site is one of
+    # {YouTube, Vimeo}; type is one of {Trailer, Teaser, Clip, Featurette,
+    # Behind the Scenes, Bloopers}. Only the grain columns are required —
+    # every payload written before Task 73 has no videos key and contributes
+    # zero rows, so a partition can legitimately be empty. `size` is a video
+    # resolution (2160/1080/720/480/360), hence >= 0.
+    "movie_videos": {
+        "parquet": "movie_videos.parquet",
+        "pk_cols": ["movie_id", "video_id"],
+        "required_cols": ["movie_id", "video_id"],
+        "expected_cols": [
+            "movie_id", "video_id", "name", "key", "site", "type", "official",
+            "size", "iso_639_1", "iso_3166_1", "published_at",
+        ],
+        "ranges": {
+            "size": (0, None),
+        },
+    },
     # Written from the measured shape of TMDB's GET /company/{id} payload
     # (live probe, 2026-08-30), not by mirroring transform_companies.py — the
     # Task 40 lesson. Every field but `id` is sparse (description ~1%,

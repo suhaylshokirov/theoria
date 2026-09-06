@@ -85,7 +85,7 @@ a search box + Newest/Rated/Revenue/A–Z sort segments above the filmography gr
 `_person_filmography_grid.html` / `_person_filmography_results.html` partials mirror the studio
 pair. Header stats stay computed over the whole filmography. **Zero new CSS/JS.** `pytest`
 **324**. Full detail in `for_learning.md`.
-Last completed task   : **Task 72 — People bios (2026-09-01).** `dim_person` grew 7 → 13 columns
+Prior task            : **Task 72 — People bios (2026-09-01).** `dim_person` grew 7 → 13 columns
 (biography, birthday, deathday, place_of_birth, homepage, imdb_id from a new `GET /person/{id}`
 Bronze source) + a new `person_alias` table for `also_known_as`. New `ingest_people.py` (with a
 `max_new` per-run cap the company path didn't need) + `transform_people_details.py` (two Parquets,
@@ -107,9 +107,25 @@ six-line `-webkit-line-clamp` + a `.bio-toggle` pill (a near-copy of `.paginatio
 overflows the clamp (`scrollHeight - clientHeight >= 4`), same "no dead buttons" rule as the
 client pager. `.specimen-synopsis` (shared with the movie + studio pages) untouched; **no
 `views.py` change**. `pytest` **344**. Full detail in `for_learning.md`.
-Prior task: **Task 70 — replaced the `/movies/` country filter with a genre filter
-(2026-08-30).
-Last updated          : 2026-09-02
+Last completed task   : **Task 73 — carry `videos` through the payload we already fetch
+(2026-09-06).** First task of the Trailers & clips feature (73–76). Zero new TMDB calls:
+`ingest_movie_details()` now passes `append_to_response="videos"`, `refresh_movies()` passes
+`"credits,videos"` — both already made that one call. `etl/tmdb_client.py` unchanged. `videos`
+stays **inline** in `bronze/movie_details` (the `production_companies` precedent, not the
+`credits` split); `_split_payload()` still strips only `credits`. New
+`etl/silver/transform_movie_videos.py` (modelled on `transform_movie_links.py`): threaded Bronze
+pass → `silver/movie_videos/movie_videos.parquet` at grain `(movie_id, video_id)`.
+`_extract_video_rows()` signals `None` for a pre-Task-73 payload with no `videos` key (every
+existing partition — permanent), `[]` for a genuinely video-less film; an all-`None` partition
+still writes a well-formed empty Parquet + **one aggregate warning**, never raises. New
+`ENTITY_CONFIGS["movie_videos"]` from the measured 10-key shape. Wired into **both**
+orchestrators after `transform_movie_links`. `pytest` **344 → 356** (+12). **Not yet run on real
+data** — Task 76's live `run_refresh` writes the first `movie_details` partition carrying
+`videos`, so the ~19,700-row verification and real Silver DQ total land there. Full detail in the
+Task 73 block + `for_learning.md`.
+Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
+(2026-08-30).**
+Last updated          : 2026-09-06
 ```
 
 **After finishing any task, in this order:**
@@ -1221,7 +1237,7 @@ Learning log (updated after every task): `for_learning.md`
 > first partition written after Task 73 lands (the nightly `run_refresh` does this unattended).
 > This ordering is real: **Task 75 cannot be live-verified until a post-Task-73 partition exists.**
 
-#### [ ] Task 73 — Bronze + Silver: carry `videos` through the payload we already fetch
+#### [x] Task 73 — Bronze + Silver: carry `videos` through the payload we already fetch
 - **Goal:** Get the video metadata into Silver without a single new TMDB call.
 - **Files:** `etl/tmdb_client.py` (no change expected — verify), `etl/bronze/ingest_movie_details.py`,
   `etl/bronze/refresh_movies.py`, new `etl/silver/transform_movie_videos.py`,
@@ -1264,7 +1280,40 @@ Learning log (updated after every task): `for_learning.md`
   `video_id` 24 hex chars; `site` ∈ {YouTube, Vimeo}; ~98.7% of films have ≥1 `type='Trailer'`;
   Silver DQ rises 32/32 → 36/36. Re-running the transform on an **old** partition (no `videos`
   key) writes an empty, well-formed Parquet and logs a warning rather than raising.
-- **Outcome:**
+- **Outcome (2026-09-06) — code complete; live verification waits on a post-Task-73 partition
+  (as the phase header predicted).** No new TMDB call anywhere: `ingest_movie_details()` now
+  passes `append_to_response="videos"` on its single detail call (it makes no `/videos` call and
+  still no second `/credits` call — `ingest_credits` covers that), and `refresh_movies()` moved
+  `"credits"` → `"credits,videos"`. `etl/tmdb_client.py` needed **no change** — `get_movie_details`
+  already forwards any `append_to_response` string verbatim (verified). `videos` **stays inline**
+  in the `movie_details` JSON: `_split_payload()` strips only `credits` onto its own Bronze file
+  (a standalone `bronze/credits` entity already exists), exactly as before, and leaves `videos`
+  for `transform_movie_videos` to read straight out of `movie_details` — the
+  `production_companies` / `spoken_languages` precedent, not the credits one. New
+  `etl/silver/transform_movie_videos.py` is modelled on `transform_movie_links.py`: one threaded
+  `s3_utils.read_json_objects()` pass over `bronze/movie_details` for the date → one dated
+  `silver/movie_videos/movie_videos.parquet` at grain `(movie_id, video_id)` — PK on TMDB's
+  `video_id`, not `key` (`key` is unique only within a site). `_extract_video_rows()` returns a
+  three-way signal: `None` when the payload has **no `videos` key** (every pre-Task-73 partition —
+  Bronze is immutable, so this is permanent), `[]` when a film genuinely has zero videos (e.g.
+  TMDB 664413), else the rows. A partition where every payload lacks the key still writes a
+  **valid empty Parquet with all 11 columns** (via `pd.DataFrame(rows, columns=_COLUMNS)`) plus
+  **one aggregate warning** — "N of M Bronze payload(s) had no `videos` key" — never an
+  exception, never one warning per file. Null-`movie_id`/`video_id` rows dropped with a warning;
+  `(movie_id, video_id)` deduped `keep="last"`. New `ENTITY_CONFIGS["movie_videos"]` in
+  `silver_checks.py` written from the **measured** 10-key payload shape (live probe 2026-09-01),
+  not by mirroring the transform (Task 40) — only the grain columns required (a partition can be
+  legitimately empty), `size` range `(0, None)` since it's a resolution. Wired into **both**
+  `run_pipeline.py` and `run_refresh.py` after `transform_movie_links` (Task 65's gap: a transform
+  in only one orchestrator is absent from the nightly path). **`pytest` 344 → 356** (+12: 10 in
+  test_etl — `_extract_video_rows` three-way, transform write/dedupe/null-drop/empty-partition/
+  no-files, `ingest_movie_details` appends `videos`, `refresh_movies` appends `credits,videos`
+  and keeps `videos` inline; 2 in test_data_quality — negative `size` fails ranges, empty
+  partition passes every check; 1 existing refresh test updated for the new `append_to_response`
+  string). **Not yet run against real data** — Task 76's live `run_refresh` is the only path that
+  writes a `movie_details` partition carrying `videos`, so the ~19,700-row / 24-hex-`video_id` /
+  98.7%-have-a-Trailer verification and the real Silver DQ total land there. `graphify update`
+  skipped — `graphify` is not installed in this environment.
 
 #### [ ] Task 74 — Warehouse: `dim_movie_video`, and the project's first replace-on-load table
 - **Goal:** Land the videos in Postgres with a load strategy that lets a film's video set *shrink*.

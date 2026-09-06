@@ -3,6 +3,12 @@
 Fetches the TMDB movie-detail endpoint for every supplied movie_id and writes
 each response as a separate raw JSON file to the Bronze layer on S3.
 
+`append_to_response=videos` folds the trailer/clip metadata into the same
+payload (Task 73) — no extra request, since this path already makes exactly
+one call per movie. The `videos` block stays inline in the JSON, read straight
+out of it by `transform_movie_videos` the way the other nested arrays
+(`production_companies`, `spoken_languages`) already are.
+
 Each movie is written individually as it completes — a failure on one movie
 never loses details already written. Failures are logged with the specific
 movie_id so failed IDs can be retried without re-fetching the whole catalogue.
@@ -61,7 +67,7 @@ def ingest_movie_details(
 
     for movie_id in movie_ids:
         try:
-            payload = client.get_movie_details(movie_id)
+            payload = client.get_movie_details(movie_id, append_to_response="videos")
 
             key = s3_utils.build_path(
                 "bronze", "movie_details", ingestion_date, f"{movie_id}.json"
