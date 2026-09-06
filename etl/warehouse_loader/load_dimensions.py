@@ -22,6 +22,8 @@ S3 sources:
     silver/company_details/ingestion_date=YYYY-MM-DD/company_details.parquet  (optional)
     silver/movie_countries/ingestion_date=YYYY-MM-DD/movie_countries.parquet
     silver/movie_languages/ingestion_date=YYYY-MM-DD/movie_languages.parquet
+    silver/person_details/ingestion_date=YYYY-MM-DD/person_details.parquet  (optional)
+    silver/movie_videos/ingestion_date=YYYY-MM-DD/movie_videos.parquet  (optional)
 
 Usage:
     python -m etl.warehouse_loader.load_dimensions
@@ -37,6 +39,7 @@ import logging
 import re
 import time
 import unicodedata
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -45,7 +48,13 @@ from sqlalchemy.orm import Session
 
 import config
 from etl.incremental import pending_partitions, set_watermark
-from etl.warehouse_loader.common import _read_silver_parquet, _upsert
+from etl.warehouse_loader.common import (
+    _existing_ids,
+    _read_silver_parquet,
+    _replace_by_parent,
+    _upsert,
+    _write_rejects,
+)
 from warehouse.db import get_session
 
 logger = logging.getLogger(__name__)
@@ -252,6 +261,65 @@ def load_dim_language(session: Session, df: pd.DataFrame) -> int:
     return count
 
 
+_MOVIE_VIDEO_COLS = [
+    "movie_id", "video_id", "name", "key", "site", "type", "official",
+    "size", "iso_639_1", "iso_3166_1", "published_at",
+]
+
+
+def load_dim_movie_video(
+    session: Session, videos_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Replace (not upsert) every video row for the films in this Silver partition.
+
+    dim_movie_video is the first table here that must be able to *shrink*: TMDB
+    removes videos and YouTube keys rot, so a pure upsert would leave a dead
+    embed on the page forever, with no failing check. _replace_by_parent()
+    deletes every existing row for the movie_ids present in this partition,
+    then inserts the current set — scoped to those movie_ids, never a blanket
+    wipe (a partition covers only the films it ingested).
+
+    movie_id is resolved against dim_movie; a row whose movie_id has no
+    dimension row is quarantined, never dropped (the standing rule since
+    Task 58). Returns (count, rejects).
+    """
+    valid_movie_ids = _existing_ids(session, "dim_movie", "movie_id")
+
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+    for record in videos_df.to_dict("records"):
+        movie_id = record.get("movie_id")
+        if pd.isna(movie_id) or int(movie_id) not in valid_movie_ids:
+            rejects.append({**record, "rejection_reason": "unknown movie_id"})
+            continue
+
+        video_id = record.get("video_id")
+        if video_id is None or pd.isna(video_id) or not str(video_id).strip():
+            rejects.append({**record, "rejection_reason": "missing video_id"})
+            continue
+
+        row = {col: record.get(col) for col in _MOVIE_VIDEO_COLS}
+        row["movie_id"] = int(movie_id)
+        row["video_id"] = str(video_id)
+        row["official"] = None if pd.isna(record.get("official")) else bool(record.get("official"))
+        row["size"] = None if pd.isna(record.get("size")) else int(record.get("size"))
+        row["ingestion_date"] = ingestion_date
+        # NA -> None for psycopg2, the same scrub _records() does for the
+        # upsert loaders (every value here is a scalar).
+        rows.append({k: (None if pd.isna(v) else v) for k, v in row.items()})
+
+    parent_ids = sorted({r["movie_id"] for r in rows})
+    columns = _MOVIE_VIDEO_COLS + ["ingestion_date"]
+    count = _replace_by_parent(
+        session, "dim_movie_video", "movie_id", parent_ids, columns, rows
+    )
+    logger.info(
+        "dim_movie_video: replaced %d row(s) across %d film(s), rejected %d row(s)",
+        count, len(parent_ids), len(rejects),
+    )
+    return count, rejects
+
+
 def _slugify(name: str) -> str:
     """Lowercase, ASCII, hyphenated form of a name/title for use in a URL.
 
@@ -366,15 +434,24 @@ def load_dimensions(
     bucket: str | None = None,
     calendar_start: dt.date = _DEFAULT_CALENDAR_START,
     calendar_end: dt.date = _DEFAULT_CALENDAR_END,
+    rejected_dir: Path | None = None,
 ) -> dict[str, int]:
     """Read Silver Parquet for `ingestion_date` and upsert all dimension tables.
 
     Returns a dict of table name -> row count upserted.
+
+    Most dimensions are derived by drop_duplicates from FK-clean Silver and so
+    can't produce rejects. dim_movie_video (Task 74) is the exception: it
+    resolves movie_id against dim_movie and quarantines the misses to
+    `rejected_dir` (default config.REJECTED_DIR), the same posture the fact
+    loaders take.
     """
     if ingestion_date is None:
         ingestion_date = dt.date.today()
     if bucket is None:
         bucket = config.S3_BUCKET
+    if rejected_dir is None:
+        rejected_dir = config.REJECTED_DIR
 
     t0 = time.monotonic()
     logger.info("Starting dimension load for ingestion_date=%s", ingestion_date)
@@ -419,12 +496,34 @@ def load_dimensions(
             "without detail columns", ingestion_date, exc,
         )
         person_details_df = None
+    # Task 74: movie trailers/clips. Optional in the same way — a partition
+    # written before Task 73 appended `videos` has an empty (or absent)
+    # movie_videos file and degrades to "no videos loaded", never crashes.
+    try:
+        videos_df = _read_silver_parquet(
+            bucket, "movie_videos", ingestion_date, "movie_videos.parquet"
+        )
+    except Exception as exc:
+        logger.warning(
+            "No Silver movie_videos for %s (%s) — skipping dim_movie_video load",
+            ingestion_date, exc,
+        )
+        videos_df = None
 
     counts: dict[str, int] = {}
+    video_rejects: list[dict[str, Any]] = []
     with get_session() as session:
         # Before dim_movie: dim_movie.collection_id is an FK to this table.
         counts["dim_collection"] = load_dim_collection(session, movies_df)
         counts["dim_movie"] = load_dim_movie(session, movies_df)
+        # After dim_movie: dim_movie_video has an FK to it. Replace-on-load,
+        # not upsert — a film's video set can shrink (18_movie_videos.sql).
+        if videos_df is not None and not videos_df.empty:
+            counts["dim_movie_video"], video_rejects = load_dim_movie_video(
+                session, videos_df, ingestion_date
+            )
+        else:
+            counts["dim_movie_video"] = 0
         counts["dim_person"] = load_dim_person(session, people_df, person_details_df)
         counts["dim_genre"] = load_dim_genre(session, genres_df)
         # Before load_facts.load_bridge_movie_company(), which has an FK here.
@@ -439,6 +538,8 @@ def load_dimensions(
         counts["dim_person_slugs"] = assign_slugs(session, "dim_person", "person_id", "name")
         counts["dim_collection_slugs"] = assign_slugs(session, "dim_collection", "collection_id", "name")
         counts["dim_company_slugs"] = assign_slugs(session, "dim_company", "company_id", "name")
+
+    _write_rejects(video_rejects, "dim_movie_video", ingestion_date, rejected_dir)
 
     elapsed = time.monotonic() - t0
     logger.info(

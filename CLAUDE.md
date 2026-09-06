@@ -107,7 +107,7 @@ six-line `-webkit-line-clamp` + a `.bio-toggle` pill (a near-copy of `.paginatio
 overflows the clamp (`scrollHeight - clientHeight >= 4`), same "no dead buttons" rule as the
 client pager. `.specimen-synopsis` (shared with the movie + studio pages) untouched; **no
 `views.py` change**. `pytest` **344**. Full detail in `for_learning.md`.
-Last completed task   : **Task 73 — carry `videos` through the payload we already fetch
+Prior task            : **Task 73 — carry `videos` through the payload we already fetch
 (2026-09-06).** First task of the Trailers & clips feature (73–76). Zero new TMDB calls:
 `ingest_movie_details()` now passes `append_to_response="videos"`, `refresh_movies()` passes
 `"credits,videos"` — both already made that one call. `etl/tmdb_client.py` unchanged. `videos`
@@ -119,10 +119,27 @@ pass → `silver/movie_videos/movie_videos.parquet` at grain `(movie_id, video_i
 existing partition — permanent), `[]` for a genuinely video-less film; an all-`None` partition
 still writes a well-formed empty Parquet + **one aggregate warning**, never raises. New
 `ENTITY_CONFIGS["movie_videos"]` from the measured 10-key shape. Wired into **both**
-orchestrators after `transform_movie_links`. `pytest` **344 → 356** (+12). **Not yet run on real
-data** — Task 76's live `run_refresh` writes the first `movie_details` partition carrying
-`videos`, so the ~19,700-row verification and real Silver DQ total land there. Full detail in the
+orchestrators after `transform_movie_links`. `pytest` **344 → 356** (+12). Full detail in the
 Task 73 block + `for_learning.md`.
+Last completed task   : **Task 74 — Warehouse: `dim_movie_video`, the first replace-on-load table
+(2026-09-06).** New `dim_movie_video(movie_id, video_id, name, key, site, type, official, size,
+iso_639_1, iso_3166_1, published_at, ingestion_date)`, PK `(movie_id, video_id)` on TMDB's
+`video_id` (not `key` — unique only within a site); `18_movie_videos.sql` + folded into `01`.
+Named `dim_` not `fact_`/`bridge_` (rejected alternatives recorded in the DDL header). **New
+loader pattern:** `_replace_by_parent()` in `common.py` — scoped `DELETE ... WHERE movie_id =
+ANY(:ids)` for only this partition's films (never `TRUNCATE`), then a plain batched insert — so a
+film's video set can *shrink* when TMDB drops a video or a YouTube key rots, which a pure
+`_upsert` never allows. `_write_rejects()` moved into `common.py` (shared by both loaders).
+`load_dim_movie_video()` in `load_dimensions.py` (it's a `dim_`), FK-resolves `movie_id` against
+`dim_movie` and quarantines misses (`load_dimensions()` gained a `rejected_dir` param); reads
+`silver/movie_videos` in `try/except` so a pre-Task-73 partition degrades to "no videos loaded".
+DQ: `_FK_CHECKS` 15→16; two new `check_row_count_sanity` results — `silver_to_warehouse` vs
+Silver's `nunique(movie_id)` (one-to-many, Task 58 fix) and a `load` "wrote 0 from real input"
+guard. `pytest` **356 → 363** (+7, incl. the replace-semantics regression: load 3 videos then 2,
+assert the 2nd load DELETEs then inserts exactly 2). **DDL not yet applied to Neon/replica and no
+live load — Task 76 owns this phase's mandatory run** (no real `silver/movie_videos` partition
+exists until a post-Task-73 `run_refresh`); `sync_warehouse_from_neon.py`'s `WAREHOUSE_TABLES`
+also needs `dim_movie_video` then. Full detail in the Task 74 block + `for_learning.md`.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-06
@@ -1315,7 +1332,7 @@ Learning log (updated after every task): `for_learning.md`
   98.7%-have-a-Trailer verification and the real Silver DQ total land there. `graphify update`
   skipped — `graphify` is not installed in this environment.
 
-#### [ ] Task 74 — Warehouse: `dim_movie_video`, and the project's first replace-on-load table
+#### [x] Task 74 — Warehouse: `dim_movie_video`, and the project's first replace-on-load table
 - **Goal:** Land the videos in Postgres with a load strategy that lets a film's video set *shrink*.
 - **Files:** new `warehouse/ddl/18_movie_videos.sql`, `warehouse/ddl/01_dimensions.sql`,
   `etl/warehouse_loader/{common,load_dimensions}.py`, `data_quality/warehouse_checks.py`,
@@ -1367,7 +1384,46 @@ Learning log (updated after every task): `for_learning.md`
   holds 26 rows; the 2 zero-video films hold 0 rows and are not errors; warehouse checks
   39/39 → 42/42. Apply the DDL to **both Neon and the local replica** before the loader runs
   (the replica sync is data-only — the Task 65 lesson).
-- **Outcome:**
+- **Outcome (2026-09-06) — code + DDL + tests complete; DDL not yet applied to a live DB and no
+  live load (that's Task 76, which owns this phase's mandatory run).**
+  **Naming:** `dim_movie_video`, not `fact_`/`bridge_` — the rejected alternatives are recorded in
+  `18_movie_videos.sql`'s header (`fact_` promises a measure that isn't there — `size` is a
+  resolution; `bridge_` asserts a second dimension — there is no `dim_video`). It's a multi-valued
+  attribute of `dim_movie`. PK `(movie_id, video_id)` on TMDB's `video_id`, **not `key`** (`key`
+  is unique only within a site). Index `(movie_id, type)`. Folded into `01_dimensions.sql` too.
+  **`_replace_by_parent()` in `common.py` — the one genuinely new loader pattern.** Every other
+  loader calls `_upsert()`, which never deletes; `dim_movie_video` is the first table that must
+  *shrink* (TMDB removes videos; YouTube keys rot). It does `DELETE FROM <table> WHERE
+  <parent_col> = ANY(:parent_ids)` scoped to **only the movie_ids in this partition** (never a
+  blanket `TRUNCATE` — a partition covers only the films it ingested), then a plain batched
+  `pg_insert` Core construct (no `ON CONFLICT` — the rows were just deleted). `_write_rejects()`
+  moved from `load_facts.py` into `common.py` so both loaders share it; `load_facts` re-imports it
+  (its own tests still resolve `load_facts._write_rejects`).
+  **`load_dim_movie_video()` lives in `load_dimensions.py`** (it's a `dim_`). Resolves `movie_id`
+  against `dim_movie`, quarantines misses to `data_quality/rejected/` (the Task 58 rule — so
+  `load_dimensions()` gained a `rejected_dir` param defaulting to `config.REJECTED_DIR` and now
+  calls `_write_rejects`). `silver/movie_videos` is read in a `try/except` — a pre-Task-73
+  partition (empty or absent file) degrades to "no videos loaded", the exact posture already used
+  for `company_details`/`person_details`. Runs right after `load_dim_movie` (the FK parent).
+  **DQ:** `_FK_CHECKS` += `dim_movie_video.movie_id → dim_movie` (15 → 16). Two new results in
+  `check_row_count_sanity` (kept out of `check_fact_load_sanity` to avoid churning its 8 tests):
+  `rowcount:movie_videos:silver_to_warehouse` compares `dim_movie_video` count against Silver's
+  **`nunique(movie_id)`** (Task 58 fix — one-to-many, so a raw row-count would fail on every
+  multi-video film), and `rowcount:movie_videos:load` is the "loader silently wrote 0 rows from
+  real input is a bug" guard (`dim_movie_video` carries `ingestion_date`). Both pass quietly on a
+  pre-Task-73 empty partition.
+  **`pytest` 356 → 363** (+7: 3 for `_replace_by_parent` — scoped-DELETE-then-INSERT, no-op on
+  empty parent_ids, DELETE-fires-even-with-no-records; 2 for `load_dim_movie_video` — FK
+  resolve/replace/quarantine, and the **replace-semantics regression** (load 3 videos then 2,
+  assert the 2nd load DELETEs then inserts exactly 2, never 3 or 5) — the Task 67 grain-test
+  precedent; 2 in `test_warehouse_checks` — distinct-`movie_id` comparison, and load-produced-0
+  fails; plus the FK-count test 15→16 and `test_load_dimensions_reads_all_silver_entities` updated
+  for the new entity + its DELETE/INSERT).
+  **Deferred to Task 75/76:** applying `18_movie_videos.sql` to Neon + the local replica, and any
+  live load — no `silver/movie_videos` partition with real rows exists until a post-Task-73
+  `run_refresh`, so the ~19,700-row / Godfather-26 / 39→42 checks all land in Task 76.
+  `sync_warehouse_from_neon.py`'s `WAREHOUSE_TABLES` will also need `dim_movie_video` added then
+  (same as the Task 72 `person_alias` follow-up commit). `graphify update` skipped — not installed.
 
 #### [ ] Task 75 — Django: the trailer, and a Clips section
 - **Goal:** One trailer playing on the film page, and a Clips section under it for the 82% of

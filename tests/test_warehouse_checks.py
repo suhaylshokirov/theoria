@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 15
+    assert len(results) == 16
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 15
 
     results = check_fk_integrity(mock_session)
 
@@ -634,6 +634,106 @@ def test_check_row_count_sanity_imdb_ratings_fails_when_warehouse_shrinks():
 
     s2w = next(r for r in results if r.check == "rowcount:imdb_ratings:silver_to_warehouse")
     assert s2w.passed is False
+
+
+def _mock_s3_for_full_row_count_sanity(extra_branches: dict[str, bytes]) -> MagicMock:
+    """S3 mock giving every pre-movie_videos block enough shape to pass quietly,
+    plus caller-supplied branches (keyed by a substring of the S3 key)."""
+    def to_bytes(df):
+        buf = io.BytesIO()
+        df.to_parquet(buf, engine="pyarrow", index=False)
+        return buf.getvalue()
+
+    movies_bytes = to_bytes(_silver_movies_df(3))
+    branches = {
+        "movie_companies": to_bytes(pd.DataFrame([{
+            "movie_id": 0, "company_id": 900, "company_name": "Studio",
+            "logo_path": None, "origin_country": "US",
+        }])),
+        "movie_countries": to_bytes(pd.DataFrame([
+            {"movie_id": 0, "country_code": "US", "country_name": "United States", "relation": "production"},
+        ])),
+        "movie_languages": to_bytes(pd.DataFrame([
+            {"movie_id": 0, "language_code": "en", "language_name": "English", "english_name": "English"},
+        ])),
+        "person_aliases": to_bytes(pd.DataFrame([{"person_id": 10, "alias": "A", "ordering": 0}])),
+        "silver/imdb_ratings": to_bytes(pd.DataFrame([
+            {"movie_id": 0, "imdb_id": "tt0", "rating": 8.0, "vote_count": 100},
+        ])),
+    }
+    branches.update(extra_branches)
+    genre_bytes = json.dumps({"genres": []}).encode()
+
+    mock_s3 = MagicMock()
+    mock_s3.exceptions.NoSuchKey = KeyError
+
+    def fake_get_object(Bucket, Key):
+        body = MagicMock()
+        if "genres.json" in Key:
+            body.read.return_value = genre_bytes
+        else:
+            body.read.return_value = next(
+                (v for k, v in branches.items() if k in Key), movies_bytes
+            )
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = fake_get_object
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": [
+        {"Key": "bronze/person_details/ingestion_date=2026-05-01/1.json"},
+    ]}]
+    mock_s3.get_paginator.return_value = paginator
+    return mock_s3
+
+
+def _silver_videos_df(movie_ids):
+    n = len(movie_ids)
+    return pd.DataFrame({
+        "movie_id": list(movie_ids),
+        "video_id": [f"v{i}" for i in range(n)],
+        "name": ["x"] * n, "key": ["k"] * n, "site": ["YouTube"] * n,
+        "type": ["Trailer"] * n, "official": [True] * n, "size": [1080] * n,
+        "iso_639_1": ["en"] * n, "iso_3166_1": ["US"] * n,
+        "published_at": ["2016-01-01T00:00:00Z"] * n,
+    })
+
+
+def test_check_row_count_sanity_movie_videos_compares_distinct_movie_ids():
+    """silver/movie_videos is one row per (movie_id, video_id) — a film with 8
+    clips is 8 Silver rows but must compare against nunique(movie_id)."""
+    videos_bytes = io.BytesIO()
+    _silver_videos_df([1, 1, 1, 2]).to_parquet(videos_bytes, engine="pyarrow", index=False)
+    mock_s3 = _mock_s3_for_full_row_count_sanity({"movie_videos": videos_bytes.getvalue()})
+
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 4  # >= 2 distinct movie_ids, > 0 loaded
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 6, 22))
+
+    s2w = next(r for r in results if r.check == "rowcount:movie_videos:silver_to_warehouse")
+    load = next(r for r in results if r.check == "rowcount:movie_videos:load")
+    assert s2w.passed is True
+    assert "Silver distinct movie_id=2" in s2w.detail
+    assert load.passed is True
+
+
+def test_check_row_count_sanity_movie_videos_fails_when_load_produced_nothing():
+    """Silver had video rows but dim_movie_video has 0 for this date — a loader
+    that silently wrote nothing from real input is a bug, not clean data."""
+    videos_bytes = io.BytesIO()
+    _silver_videos_df([1, 2]).to_parquet(videos_bytes, engine="pyarrow", index=False)
+    mock_s3 = _mock_s3_for_full_row_count_sanity({"movie_videos": videos_bytes.getvalue()})
+
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 0  # nothing loaded
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 6, 22))
+
+    load = next(r for r in results if r.check == "rowcount:movie_videos:load")
+    assert load.passed is False
+    assert "0 row(s)" in load.detail
 
 
 # ---------------------------------------------------------------------------

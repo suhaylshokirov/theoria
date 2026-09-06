@@ -85,7 +85,13 @@ from sqlalchemy.orm import Session
 
 import config
 from etl.incremental import pending_partitions, set_watermark
-from etl.warehouse_loader.common import _existing_ids, _existing_str_ids, _read_silver_parquet, _upsert
+from etl.warehouse_loader.common import (
+    _existing_ids,
+    _existing_str_ids,
+    _read_silver_parquet,
+    _upsert,
+    _write_rejects,
+)
 from warehouse.db import get_session
 
 logger = logging.getLogger(__name__)
@@ -97,19 +103,6 @@ _WATERMARK_ENTITY = "movies"  # reference entity used to discover new Silver par
 def _records(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert NaN/NaT-bearing values in a list of dicts to None."""
     return [{k: (None if pd.isna(v) else v) for k, v in row.items()} for row in rows]
-
-
-def _write_rejects(rejects: list[dict[str, Any]], entity: str, ingestion_date: dt.date,
-                    rejected_dir: Path) -> Path | None:
-    """Write quarantined rows to a local Parquet file. Returns the path, or None if empty."""
-    if not rejects:
-        return None
-    df = pd.DataFrame(rejects)
-    rejected_dir.mkdir(parents=True, exist_ok=True)
-    path = rejected_dir / f"{entity}_rejected_{ingestion_date.isoformat()}.parquet"
-    df.to_parquet(path, engine="pyarrow", index=False)
-    logger.warning("Wrote %d rejected row(s) for entity=%s to %s", len(df), entity, path)
-    return path
 
 
 def _build_movie_metrics_rows(

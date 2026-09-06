@@ -85,6 +85,7 @@ _FK_CHECKS = [
     ("bridge_movie_language", "language_code", "dim_language", "language_code"),
     ("fact_movie_rating", "movie_id", "dim_movie", "movie_id"),
     ("person_alias", "person_id", "dim_person", "person_id"),
+    ("dim_movie_video", "movie_id", "dim_movie", "movie_id"),
 ]
 
 
@@ -430,6 +431,54 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
         silver_entity="imdb_ratings", silver_filename="imdb_ratings.parquet",
         warehouse_table="fact_movie_rating",
     ))
+
+    # dim_movie_video (Task 74): loaded by load_dimensions, but checked here
+    # beside the other dimension-backed link entities. silver/movie_videos is
+    # one row per (movie_id, video_id) — a one-to-many table, so the
+    # silver_to_warehouse comparison uses nunique(movie_id), not len(df)
+    # (the Task 58 fix). A pre-Task-73 partition has an empty movie_videos
+    # file: nunique is 0 and both checks pass quietly. The load check is the
+    # "a loader that silently wrote zero rows from real input is a bug" guard —
+    # dim_movie_video carries ingestion_date, so it works the same way as the
+    # fact-load checks.
+    try:
+        videos_df = _read_silver_parquet(
+            bucket, "movie_videos", ingestion_date, "movie_videos.parquet"
+        )
+    except Exception as exc:
+        logger.info(
+            "[rowcount:movie_videos] no Silver movie_videos for %s (%s) — skipped",
+            ingestion_date, exc,
+        )
+    else:
+        distinct_video_movies = (
+            videos_df["movie_id"].nunique() if "movie_id" in videos_df.columns else 0
+        )
+        s2w_name = "rowcount:movie_videos:silver_to_warehouse"
+        warehouse_count = _table_row_count(session, "dim_movie_video")
+        if warehouse_count < distinct_video_movies:
+            results.append(CheckResult(s2w_name, False,
+                f"dim_movie_video has only {warehouse_count} row(s), fewer than the "
+                f"{distinct_video_movies} distinct movie_id(s) just loaded from Silver"))
+            logger.error("[%s] FAIL — warehouse=%d < silver_distinct=%d",
+                          s2w_name, warehouse_count, distinct_video_movies)
+        else:
+            results.append(CheckResult(s2w_name, True,
+                f"Silver distinct movie_id={distinct_video_movies}, "
+                f"dim_movie_video={warehouse_count}"))
+            logger.info("[%s] OK", s2w_name)
+
+        load_name = "rowcount:movie_videos:load"
+        loaded = _fact_ingestion_date_count(session, "dim_movie_video", ingestion_date)
+        if len(videos_df) > 0 and loaded == 0:
+            results.append(CheckResult(load_name, False,
+                f"dim_movie_video has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"{len(videos_df)} Silver movie_videos row(s)"))
+            logger.error("[%s] FAIL — 0 rows loaded", load_name)
+        else:
+            results.append(CheckResult(load_name, True,
+                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+            logger.info("[%s] OK (%d rows)", load_name, loaded)
 
     return results
 

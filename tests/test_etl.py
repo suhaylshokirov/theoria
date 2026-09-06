@@ -2104,6 +2104,7 @@ def test_reset_engine_disposes_and_clears():
 from etl.warehouse_loader.load_dimensions import (
     _build_calendar,
     _records,
+    _replace_by_parent,
     _slugify,
     _upsert,
     assign_slugs,
@@ -2114,6 +2115,7 @@ from etl.warehouse_loader.load_dimensions import (
     load_dim_genre,
     load_dim_language,
     load_dim_movie,
+    load_dim_movie_video,
     load_dimensions,
 )
 
@@ -2192,6 +2194,23 @@ def _dim_languages_df():
         "language_code": ["en", "en"],
         "language_name": ["English", "English"],
         "english_name": ["English", "English"],
+    })
+
+
+def _dim_videos_df():
+    """Silver movie_videos shape — one row per (movie_id, video_id)."""
+    return pd.DataFrame({
+        "movie_id": pd.array([1, 1], dtype="Int64"),
+        "video_id": ["vA", "vB"],
+        "name": ["Trailer", "Clip"],
+        "key": ["k1", "k2"],
+        "site": ["YouTube", "YouTube"],
+        "type": ["Trailer", "Clip"],
+        "official": pd.array([True, False], dtype="boolean"),
+        "size": pd.array([1080, 720], dtype="Int64"),
+        "iso_639_1": ["en", "en"],
+        "iso_3166_1": ["US", "US"],
+        "published_at": ["2016-07-19T16:29:00.000Z", "2016-08-01T00:00:00.000Z"],
     })
 
 
@@ -2339,6 +2358,121 @@ def test_load_dim_genre_upserts_expected_columns():
     assert set(params[0].keys()) == {"genre_id", "genre_name"}
 
 
+# --- Task 74: _replace_by_parent + load_dim_movie_video ----------------------
+
+
+def test_replace_by_parent_deletes_scoped_then_inserts():
+    """Scoped DELETE (never TRUNCATE) followed by a plain batched INSERT."""
+    mock_session = MagicMock()
+    records = [
+        {"movie_id": 1, "video_id": "a", "ingestion_date": dt.date(2026, 9, 6)},
+        {"movie_id": 1, "video_id": "b", "ingestion_date": dt.date(2026, 9, 6)},
+    ]
+
+    count = _replace_by_parent(
+        mock_session, "dim_movie_video", "movie_id", [1],
+        ["movie_id", "video_id", "ingestion_date"], records,
+    )
+
+    assert count == 2
+    assert mock_session.execute.call_count == 2
+    (del_stmt, del_params), _ = mock_session.execute.call_args_list[0]
+    assert "DELETE FROM dim_movie_video WHERE movie_id = ANY(:parent_ids)" in str(del_stmt)
+    assert del_params == {"parent_ids": [1]}
+    (ins_stmt, ins_params), _ = mock_session.execute.call_args_list[1]
+    assert "INSERT INTO dim_movie_video" in str(ins_stmt)
+    assert ins_params == records
+
+
+def test_replace_by_parent_noop_when_no_parent_ids():
+    mock_session = MagicMock()
+    count = _replace_by_parent(mock_session, "t", "p", [], ["p"], [{"p": 1}])
+    assert count == 0
+    mock_session.execute.assert_not_called()
+
+
+def test_replace_by_parent_deletes_even_with_no_records():
+    """A parent present in the partition but carrying no current rows still has
+    its old rows cleared — that's how a child set shrinks to empty."""
+    mock_session = MagicMock()
+    count = _replace_by_parent(mock_session, "dim_movie_video", "movie_id", [7], ["movie_id"], [])
+    assert count == 0
+    mock_session.execute.assert_called_once()
+    (del_stmt, del_params), _ = mock_session.execute.call_args
+    assert "DELETE FROM dim_movie_video" in str(del_stmt)
+    assert del_params == {"parent_ids": [7]}
+
+
+def test_load_dim_movie_video_resolves_fk_replaces_and_quarantines(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_dimensions as load_dimensions_module
+    monkeypatch.setattr(
+        load_dimensions_module, "_existing_ids", lambda session, table, pk_col: {1}
+    )
+
+    df = pd.DataFrame({
+        "movie_id": pd.array([1, 1, 999], dtype="Int64"),
+        "video_id": ["a", "b", "c"],
+        "name": ["T", "C", "X"],
+        "key": ["k1", "k2", "k3"],
+        "site": ["YouTube", "YouTube", "YouTube"],
+        "type": ["Trailer", "Clip", "Trailer"],
+        "official": pd.array([True, False, True], dtype="boolean"),
+        "size": pd.array([1080, 720, 480], dtype="Int64"),
+        "iso_639_1": ["en", "en", "en"],
+        "iso_3166_1": ["US", "US", "US"],
+        "published_at": ["2016-07-19T16:29:00Z", "2016-08-01T00:00:00Z", "2016-09-01T00:00:00Z"],
+    })
+
+    count, rejects = load_dim_movie_video(mock_session, df, dt.date(2026, 9, 6))
+
+    assert count == 2                       # movie 999 has no dim_movie row
+    assert [r["rejection_reason"] for r in rejects] == ["unknown movie_id"]
+    calls = mock_session.execute.call_args_list
+    assert "DELETE FROM dim_movie_video WHERE movie_id = ANY(:parent_ids)" in str(calls[0][0][0])
+    assert calls[0][0][1] == {"parent_ids": [1]}
+    (ins_stmt, ins_params), _ = calls[1]
+    assert "INSERT INTO dim_movie_video" in str(ins_stmt)
+    assert [r["video_id"] for r in ins_params] == ["a", "b"]
+    assert ins_params[0]["official"] is True and ins_params[0]["size"] == 1080
+    assert all(r["ingestion_date"] == dt.date(2026, 9, 6) for r in ins_params)
+
+
+def test_load_dim_movie_video_replace_semantics_a_film_can_shrink(monkeypatch):
+    """The reason this table doesn't use _upsert: load 3 videos, then 2 for the
+    same film, and the second load must DELETE the film's rows before inserting
+    — so it ends at 2, never 3 and never 5 (Task 74, tested like Task 67's grain)."""
+    import etl.warehouse_loader.load_dimensions as load_dimensions_module
+    monkeypatch.setattr(
+        load_dimensions_module, "_existing_ids", lambda session, table, pk_col: {1}
+    )
+
+    def videos(video_ids):
+        n = len(video_ids)
+        return pd.DataFrame({
+            "movie_id": pd.array([1] * n, dtype="Int64"),
+            "video_id": list(video_ids),
+            "name": ["v"] * n, "key": ["k"] * n, "site": ["YouTube"] * n,
+            "type": ["Clip"] * n, "official": pd.array([False] * n, dtype="boolean"),
+            "size": pd.array([1080] * n, dtype="Int64"),
+            "iso_639_1": ["en"] * n, "iso_3166_1": ["US"] * n,
+            "published_at": ["2016-01-01T00:00:00Z"] * n,
+        })
+
+    session = MagicMock()
+    load_dim_movie_video(session, videos(["a", "b", "c"]), dt.date(2026, 9, 6))
+    session.reset_mock()
+    count, _ = load_dim_movie_video(session, videos(["a", "b"]), dt.date(2026, 9, 7))
+
+    assert count == 2
+    calls = session.execute.call_args_list
+    assert len(calls) == 2                                  # one DELETE, one INSERT
+    assert "DELETE FROM dim_movie_video" in str(calls[0][0][0])
+    assert calls[0][0][1] == {"parent_ids": [1]}
+    (_, ins_params), _ = calls[1]
+    assert [r["video_id"] for r in ins_params] == ["a", "b"]   # exactly 2
+
+
 def test_slugify_lowercases_and_hyphenates():
     """_slugify() must produce a lowercase, hyphenated, ASCII-only slug."""
     assert _slugify("Tom Holland") == "tom-holland"
@@ -2453,6 +2587,8 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
             return _dim_countries_df()
         if entity == "movie_languages":
             return _dim_languages_df()
+        if entity == "movie_videos":
+            return _dim_videos_df()
         raise AssertionError(f"unexpected entity {entity}")
 
     mock_session = MagicMock()
@@ -2460,6 +2596,12 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
     import etl.warehouse_loader.load_dimensions as load_dimensions_module
 
     monkeypatch.setattr(load_dimensions_module, "_read_silver_parquet", fake_read)
+    # load_dim_movie_video resolves movie_id against dim_movie; both test movies
+    # exist, so nothing is quarantined.
+    monkeypatch.setattr(
+        load_dimensions_module, "_existing_ids",
+        lambda session, table, pk_col: {1, 2},
+    )
     monkeypatch.setattr(
         load_dimensions_module, "get_session",
         lambda: MagicMock(__enter__=MagicMock(return_value=mock_session), __exit__=MagicMock(return_value=False)),
@@ -2471,15 +2613,15 @@ def test_load_dimensions_reads_all_silver_entities_and_upserts(monkeypatch):
     )
 
     assert counts == {
-        "dim_collection": 1, "dim_movie": 2, "dim_person": 2,
+        "dim_collection": 1, "dim_movie": 2, "dim_movie_video": 2, "dim_person": 2,
         "dim_genre": 2, "dim_company": 1, "dim_country": 1, "dim_language": 1,
         "dim_date": 2,
         "dim_movie_slugs": 0, "dim_person_slugs": 0, "dim_collection_slugs": 0,
         "dim_company_slugs": 0,
     }
-    # 8 upserts + 4 slug SELECTs (the mocked session's empty fetchall() means
-    # no matching UPDATE is issued for any of the four slugged tables).
-    assert mock_session.execute.call_count == 12
+    # 8 upserts + 4 slug SELECTs (empty fetchall() -> no UPDATE) + dim_movie_video's
+    # scoped DELETE and INSERT (replace-on-load, not upsert).
+    assert mock_session.execute.call_count == 14
 
 
 # ---------------------------------------------------------------------------

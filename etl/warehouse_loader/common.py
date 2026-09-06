@@ -1,14 +1,17 @@
 """Shared plumbing for the warehouse loaders (dimensions and facts).
 
-Houses the S3 read helper and the generic upsert builder that both
-load_dimensions.py and load_facts.py depend on, so the ON CONFLICT SQL and
-the Silver Parquet read path only need to change in one place.
+Houses the S3 read helper, the generic upsert builder, the replace-by-parent
+writer, and the reject-quarantine writer that both load_dimensions.py and
+load_facts.py depend on, so the ON CONFLICT SQL, the Silver Parquet read path,
+and the "never drop a bad row" convention only need to change in one place.
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import io
+import logging
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -17,6 +20,8 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from etl import s3_utils
+
+logger = logging.getLogger(__name__)
 
 
 def _read_silver_parquet(bucket: str, entity: str, ingestion_date: dt.date, filename: str) -> pd.DataFrame:
@@ -49,6 +54,63 @@ def _upsert(session: Session, table: str, pk_cols: list[str], columns: list[str]
     )
     session.execute(stmt, records)
     return len(records)
+
+
+def _replace_by_parent(
+    session: Session,
+    table: str,
+    parent_col: str,
+    parent_ids: list[Any],
+    columns: list[str],
+    records: list[dict[str, Any]],
+) -> int:
+    """Replace every row of `table` for the given parent ids: scoped DELETE then insert.
+
+    The one loader pattern here that lets a parent's child set *shrink*. Every
+    other loader calls _upsert(), which can add and update but never delete —
+    fine for tables that only accumulate. dim_movie_video is different: TMDB
+    removes videos and YouTube keys rot, so a pure upsert would leave a dead
+    embed on the page forever, with no failing check. This deletes the parent's
+    existing rows first, so a video that vanished upstream vanishes here too.
+
+    The delete is scoped to `parent_ids` — the parents present in *this*
+    partition — via ``WHERE parent_col = ANY(:ids)``, never a blanket TRUNCATE.
+    A partition only knows about the films it ingested; wiping rows for films
+    absent from it would destroy data this run has no knowledge of.
+
+    The insert is a Core construct (batched by insertmanyvalues) with no
+    ON CONFLICT — the matching rows were just deleted, so there is nothing to
+    conflict with.
+    """
+    if not parent_ids:
+        return 0
+    session.execute(
+        text(f"DELETE FROM {table} WHERE {parent_col} = ANY(:parent_ids)"),
+        {"parent_ids": list(parent_ids)},
+    )
+    if records:
+        tbl = Table(table, MetaData(), *(Column(c) for c in columns))
+        session.execute(pg_insert(tbl), records)
+    return len(records)
+
+
+def _write_rejects(
+    rejects: list[dict[str, Any]], entity: str, ingestion_date: dt.date,
+    rejected_dir: Path,
+) -> Path | None:
+    """Write quarantined rows to a local Parquet file. Returns the path, or None if empty.
+
+    The standing "quarantine bad rows, never silently drop them" rule (since
+    Task 58). Shared by both loaders so the reject-file layout is defined once.
+    """
+    if not rejects:
+        return None
+    df = pd.DataFrame(rejects)
+    rejected_dir.mkdir(parents=True, exist_ok=True)
+    path = rejected_dir / f"{entity}_rejected_{ingestion_date.isoformat()}.parquet"
+    df.to_parquet(path, engine="pyarrow", index=False)
+    logger.warning("Wrote %d rejected row(s) for entity=%s to %s", len(df), entity, path)
+    return path
 
 
 def _existing_ids(session: Session, table: str, pk_col: str) -> set[int]:
