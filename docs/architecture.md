@@ -126,6 +126,10 @@ directly (no surrogate, no slug — the code is already short, stable and URL-sa
 a generated `YYYYMMDD` surrogate and is populated as a full calendar table (1900–2035 by default)
 independent of any Silver data.
 
+`dim_movie_video` (`01_dimensions.sql`, added Task 74) is also a dimension table but an unusual
+one: a multi-valued attribute of `dim_movie` (a film's trailers and clips), loaded by *replace*
+rather than upsert. See §3.10.
+
 **Bridge tables** (`01_dimensions.sql`, added Phases 13–14): `bridge_movie_company`,
 `bridge_movie_country`, `bridge_movie_language` — see §3.7 for why `bridge_` and not `fact_`, and
 why a bridge is right here where a plain column was right for `dim_collection`.
@@ -376,6 +380,46 @@ the most films — the ones a reader actually opens — headquarters 96%, homepa
 10%, description 4% (catalog-wide description is ~1%). The provenance block on the studio page is
 really "where they are / their site / their parent", and it disappears entirely when a studio
 has none of the four.
+
+### 3.10 Trailers and clips: `dim_movie_video`, and the first table that replaces on load
+
+**Videos ride a payload we already fetch.** `GET /movie/{id}` returns a nested
+`"videos": {"results": [...]}` block when called with `append_to_response=videos` — the same
+mechanism §4.2's refresh path already uses for `credits`. Both Bronze paths that fetch movie
+details (`ingest_movie_details`, `refresh_movies`) make exactly one call per film, so adding
+`videos` to the `append_to_response` string costs **no new request, no new secret, no new
+dependency** — the Phase 15 IMDb-ratings shape again. The `videos` block stays *inline* in
+`bronze/movie_details` (not split into its own entity the way `credits` is): a nested array
+inside a movie payload is exactly what `production_companies` / `spoken_languages` already are,
+and `transform_movie_videos` reads it straight out of `bronze/movie_details`, following
+`transform_movie_links`'s precedent rather than the credits split (which only exists because a
+standalone `bronze/credits` entity predated it). Backfill is impossible — every partition written
+before this feature has no `videos` key and Bronze is immutable — so the Silver transform treats
+a missing key as zero rows plus one aggregate warning, and the feature only lights up on the
+first partition written afterward.
+
+**`dim_movie_video` is neither `fact_` nor `bridge_`.** Not a fact: it carries no measure —
+`size` is a video resolution (2160/1080/720…), not a quantity you sum or average. Not a bridge:
+§3.7's bridges join *two* dimensions, and there is no `dim_video` — a video row carries only
+descriptive columns and is only ever read by joining down from `dim_movie`. What is left is a
+multi-valued attribute of one dimension, which is dimension-shaped: `dim_movie_video`, PK
+`(movie_id, video_id)`. The PK is on TMDB's own `video_id`, not the site-specific `key` (a
+YouTube watch id and a Vimeo id share no namespace and could in principle collide).
+
+**It replaces on load; every other table upserts.** `dim_movie_video` is the first entity in the
+warehouse whose child set can *shrink*: TMDB removes videos, and a YouTube key stops resolving
+the moment an upload is deleted or made private. A pure `ON CONFLICT DO UPDATE` upsert — what
+every other loader uses — can add and update but never delete, so a dead embed would sit on the
+page forever with no failing check. `load_dim_movie_video()` instead calls a new
+`common._replace_by_parent()`: `DELETE FROM dim_movie_video WHERE movie_id = ANY(:ids)` for
+**only the movie_ids in the current Silver partition** (never a blanket `TRUNCATE` — a partition
+covers only the films it ingested), then a plain batched insert. The loader lives in
+`load_dimensions.py` (it is a `dim_`) and reads `silver/movie_videos` in a `try/except`, so a
+pre-feature partition degrades to "no videos loaded" rather than crashing the nightly job — the
+same posture `load_dim_company` takes for the optional `company_details` source. Which *trailer*
+to feature on the page is chosen in the Django view, not frozen into a column (an official
+YouTube Trailer → any Trailer → any Teaser ladder, newest first) — a rendering decision, per
+§3.5's judgement, kept out of the warehouse so changing it needs no re-load.
 
 ## 4. Idempotency & incremental loads
 

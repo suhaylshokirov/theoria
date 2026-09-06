@@ -23,8 +23,8 @@ TMDB API  →  Bronze (raw JSON)  →  Silver (typed Parquet)  →  Gold (aggreg
 | Collaboration edges | **194,372** repeat working relationships, derived in Gold |
 | Film series | **365** |
 | Ratings | IMDb and TMDB, **1,211 / 1,215** films carry an IMDb score |
-| Warehouse tables | **16** — 8 dimensions, 4 facts, 3 bridges, 1 operational |
-| Test suite | **313** tests, no network or live database required |
+| Warehouse tables | **18** — 9 dimensions, 4 facts, 3 bridges, 1 repeating-attribute, 1 operational |
+| Test suite | **370** tests, no network or live database required |
 
 The corpus is deliberate rather than incidental. TMDB's `movie/popular` endpoint returns whatever
 is trending at call time, which produced a catalog that was 69% films from the 2020s. Switching
@@ -72,7 +72,8 @@ reprocessed in isolation without touching anything else.
 ```
 
 **Dimensions** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`,
-`dim_company`, `dim_country`, `dim_language`
+`dim_company`, `dim_country`, `dim_language`, `dim_movie_video` (a film's trailers/clips —
+a multi-valued attribute of `dim_movie`, loaded by *replace* not upsert; Phase "Trailers & clips")
 **Facts** — `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `fact_movie_rating`
 **Bridges** — `bridge_movie_company` (Phase 13), `bridge_movie_country`, `bridge_movie_language`
 (Phase 14). Factless join tables — no measure, just the existence of a relationship — named
@@ -82,6 +83,8 @@ average and is produced in / spoken in several countries and languages, unlike `
 (one collection per film, so *that* relationship fits as a plain column on `dim_movie`).
 `bridge_movie_country` carries `relation ∈ {origin, production}` in its primary key, because the
 two disagree on ~23% of films and a coarser key would let one overwrite the other.
+**Repeating-attribute** — `person_alias` (a person's `also_known_as` entries; neither `dim_`,
+`fact_` nor `bridge_` — it attaches one dimension's repeating text to it; Phase "People bios")
 **Operational** — `etl_watermarks`
 
 Two grain decisions carry most of the weight:
@@ -213,9 +216,9 @@ different population.
 
 `run_pipeline.py` *discovers* films — it can't refetch the ones already stored, so a film's
 rating and vote count go stale the moment its partition is written. `run_refresh.py` is the
-counterpart: it reads every `movie_id` from `dim_movie`, refetches each film's TMDB details and
-credits in **one** call (`append_to_response=credits`) plus today's IMDb ratings snapshot, then
-runs the same Silver → Gold → warehouse stages.
+counterpart: it reads every `movie_id` from `dim_movie`, refetches each film's TMDB details,
+credits **and trailer/clip metadata** in **one** call (`append_to_response=credits,videos`) plus
+today's IMDb ratings snapshot, then runs the same Silver → Gold → warehouse stages.
 
 ```bash
 python -m scripts.run_refresh                 # refresh every film in the warehouse for today
@@ -261,7 +264,7 @@ cd django_app && python manage.py runserver
 | Route | What it serves |
 |---|---|
 | `/` | Catalog overview and the contact-sheet hero |
-| `/movies/` · `/movies/<slug>/` | Search, sort and paginate the catalog; per-film detail with full cast and crew |
+| `/movies/` · `/movies/<slug>/` | Search, sort and paginate the catalog; per-film detail with trailer, clips, full cast and crew |
 | `/people/` · `/people/<slug>/` | Everyone holding any credit; per-person filmography, credits by department, and repeat collaborators |
 | `/studios/` · `/studios/<slug>/` | Browsable studio index; per-studio provenance (description, headquarters, site, parent) above a filterable filmography |
 | `/actors/` · `/directors/` | Scopes of `/people/`, filtered by the credits someone holds — not separate tables |
@@ -319,7 +322,7 @@ requests, and `/admin/` is not routed at all rather than 500-ing on a public URL
 pytest
 ```
 
-278 tests covering the ETL transforms, data quality checks, warehouse loaders and Django views.
+370 tests covering the ETL transforms, data quality checks, warehouse loaders and Django views.
 The suite mocks S3, TMDB and PostgreSQL **at the boundary** — no live infrastructure, no fixtures
 loaded into a real database, no network. Django views are driven through their real URLs with the
 managers patched, so routing and template rendering are genuinely exercised.

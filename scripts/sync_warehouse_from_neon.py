@@ -52,6 +52,7 @@ WAREHOUSE_TABLES = [
     "dim_country",
     "dim_language",
     "dim_date",
+    "dim_movie_video",
     "fact_movie_metrics",
     "fact_movie_rating",
     "fact_credit",

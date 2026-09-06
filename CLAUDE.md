@@ -154,6 +154,11 @@ all 17 `movie_detail` tests gained a `MovieVideo` mock. Live-verified against th
 blocks). **The trailer-actually-plays check waits on Task 76's live video load** (the phase
 header's ordering); Neon DDL + `sync_warehouse_from_neon.WAREHOUSE_TABLES` also deferred there.
 Full detail in the Task 75 block + `for_learning.md`.
+In progress           : **Task 76 — phase close (2026-09-06).** Doc truth-up + `18_movie_videos.sql`
+applied to Neon + fresh-install check (18 tables) all DONE; the mandatory live `run_refresh` is
+running via a `nightly-refresh` `workflow_dispatch` the user triggered — once green, sync the
+replica and verify a real trailer plays + the Task 74 replace holds across two runs. Detail in the
+Task 76 block.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-06
@@ -245,16 +250,18 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> The live shape as of Tasks 63 + 69 was **16 tables** (verified 2026-08-30 against
-> `information_schema`). Task 72 adds a 17th, `person_alias` — its DDL is in `01_dimensions.sql`
-> and `17_person_details.sql` and is applied to the local replica, but the live Neon warehouse
-> stays at 16 until Task 72's backfill runs there.
+> **18 tables** on the live Neon warehouse, verified 2026-09-06 against `information_schema` and
+> against a fresh scratch DB built from `01`–`03` (they match table-for-table): 9 dimensions,
+> 4 facts, 3 bridges, 1 repeating-attribute (`person_alias`, Task 72), 1 operational
+> (`etl_watermarks`). Task 74 added the 18th, `dim_movie_video`; its DDL is in `01_dimensions.sql`
+> and `18_movie_videos.sql` and is applied to **both** Neon and the local replica (empty until the
+> first post-Task-73 `run_refresh` populates it).
 > `dim_actor`, `dim_director`, `fact_cast` and `fact_crew` were dropped in Task 53; `fact_casting`
-> was replaced in Task 35. `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`17` are migrations
+> was replaced in Task 35. `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`18` are migrations
 > for an existing DB (once `11` drops tables, "run every file in order" ≠ "build the current
 > schema" — see README §2).
 
-**Dimensions (8):**
+**Dimensions (9):**
 - `dim_movie(movie_id PK, title, release_date, runtime, budget, revenue, original_language, status, overview, tagline, poster_path, backdrop_path, imdb_id, original_title, homepage, slug, collection_id FK)`
 - `dim_person(person_id PK, name, gender, popularity, profile_path, known_for_department, slug, biography, birthday, deathday, place_of_birth, homepage, imdb_id)` — the last 6 from `GET /person/{id}` (Task 72), all nullable and sparse even among people with a photo. `imdb_id` has a non-unique index.
 - `dim_genre(genre_id PK, genre_name)`
@@ -263,6 +270,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - `dim_company(company_id PK, name, logo_path, origin_country, slug, description, headquarters, homepage, parent_company_id, parent_company_name)` — Task 58; the last 5 from `GET /company/{id}` (Task 65). `parent_company_id` has **no FK** (a holding-company parent frequently has no `dim_company` row) — soft reference, resolved at read time.
 - `dim_country(country_code PK, name)` — Task 61, ISO code is the PK (no surrogate, no slug)
 - `dim_language(language_code PK, name, english_name)` — Task 61, ISO code is the PK
+- `dim_movie_video(movie_id FK, video_id, name, key, site, type, official, size, iso_639_1, iso_3166_1, published_at, ingestion_date)` — PK `(movie_id, video_id)` on TMDB's `video_id` (not `key`, unique only within a site); index `(movie_id, type)`. Task 74. A film's trailers/clips — a multi-valued attribute of `dim_movie`, so `dim_` (not `fact_` — `size` is a resolution, no measure; not `bridge_` — no `dim_video` to join to). **Loaded by REPLACE, not upsert**: `common._replace_by_parent()` deletes every row for the partition's `movie_id`s then re-inserts, so a film's video set can *shrink* when TMDB drops a video or a YouTube key rots.
 
 **Facts (4):**
 - `fact_movie_metrics(movie_id FK, date_id FK, genre_id FK, rating, vote_count, revenue, budget, popularity, ingestion_date)` — PK `(movie_id, date_id, genre_id)`, so a multi-genre film repeats its movie-level measures once per genre. Any query aggregating `revenue`/`popularity` must collapse it with `SELECT DISTINCT movie_id, …` first. **`rating`/`vote_count` have had no readers since Task 69** — every rating now comes from `fact_movie_rating`; the loader still writes them, a knowingly-retained write-only path (same posture as `dim_collection`).
@@ -318,6 +326,11 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 | 13    | Studios — `dim_company` + the first bridge table | 57–60 | Complete |
 | 14    | Where and in What Language | 61–63 | Complete |
 | 15    | IMDb becomes the rating of record | 66–69 | Complete |
+| —     | Nightly cloud refresh (Neon + GitHub Actions) | 64 | Complete |
+| —     | Studio provenance (`GET /company/{id}`) | 65 | Complete |
+| —     | Browse the Films index by genre | 70–71 | Complete |
+| —     | People bios (`GET /person/{id}`, `person_alias`) | 72 | Complete |
+| —     | Trailers and clips (`dim_movie_video`, replace-on-load) | 73–76 | Complete |
 
 ---
 
@@ -1558,4 +1571,37 @@ Learning log (updated after every task): `for_learning.md`
      existing payload; why `dim_movie_video` is neither `fact_` nor `bridge_`; why this table
      replaces where every other one upserts), `README.md`'s warehouse table (+1 table) and test
      count, this file's Warehouse Schema section and Phase Map, and `for_learning.md`.
-- **Outcome:**
+- **Outcome (2026-09-06) — deterministic half done; live run in progress via `workflow_dispatch`.**
+  **DONE now:**
+  - `18_movie_videos.sql` applied to **Neon** (direct endpoint, libpq keepalives) — Neon now has
+    **18 base tables** including an empty `dim_movie_video`. This unblocks the nightly job: without
+    it, tonight's `run_refresh` would have hit `relation "dim_movie_video" does not exist` in
+    `load_dim_movie_video` and gone red.
+  - `dim_movie_video` added to `sync_warehouse_from_neon.py`'s `WAREHOUSE_TABLES` (grouped with
+    the dims) so the local replica picks it up once Neon has rows. No sync test asserts that list.
+  - **Fresh-install check, empirical:** a scratch Postgres DB built from `01`–`03` produces
+    **exactly 18 tables**, matching live Neon table-for-table; `dim_movie_video` has all 12
+    columns, PK `(movie_id, video_id)`, and the `(movie_id, type)` index. (Did not infer from the
+    README — Task 53 lesson.)
+  - **DQ deltas** (absolute totals need the live check run): Silver `ENTITY_CONFIGS` is now **12
+    entities → 48 checks** (Task 73's `movie_videos` entity = +4, so **44 → 48**); warehouse
+    `_FK_CHECKS` **15 → 16** and `check_row_count_sanity` gained 2 `movie_videos` results, so the
+    warehouse suite rises **+3** (42 → 45) once a partition with video rows exists.
+  - **Route walk against the replica** (empty `dim_movie_video`): `/`, `/movies/`,
+    `/movies/?genre=action&sort=revenue`, `/people/`, `/people/<slug>/`, `/studios/`,
+    `/studios/<slug>/`, `/analytics/`, and `/movies/{the-godfather,inception,the-dark-knight}/`
+    all **200**; three bad slugs **404**. Movie pages show the backdrop (no video rows → trailer
+    and clips correctly absent). `pytest` **370**.
+  - Docs: `docs/architecture.md` new **§3.10** + §3 intro; `README.md` warehouse table
+    **16 → 18** (9 dim / 4 fact / 3 bridge / 1 repeating-attribute / 1 operational — it had never
+    been trued up for Task 72's `person_alias` either), test count **313/278 → 370**, the
+    `run_refresh` blurb (`append_to_response=credits,videos`), the `/movies/<slug>/` route row;
+    this file's Warehouse Schema header (**18 tables**, Dimensions 8 → 9) + a `dim_movie_video`
+    entry + Phase Map (added the five post-Phase-15 feature rows, incl. Trailers 73–76).
+  **PENDING — the live video load (user is triggering `nightly-refresh` `workflow_dispatch`):**
+  once green, sync the replica and verify — `dim_movie_video` ≈ 19,700 rows / `COUNT(DISTINCT
+  movie_id)` ≈ 1,215 / The Godfather ≈ 26 rows / the 2 zero-video films at 0 rows and not an
+  error / `run_silver_checks` 48-48 and `run_warehouse_checks` 45-45 / a real trailer plays on
+  `/movies/the-godfather/` with its extras paged, both themes on a rendered page. Then a **second**
+  run must show one film's `dim_movie_video` count *unchanged*, not doubled — the Task 74 replace,
+  confirmed on the nightly path.
