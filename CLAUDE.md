@@ -168,6 +168,14 @@ kept — the trailer still uses click-to-play. `dim_movie_video` and the ETL are
 video is still ingested and stored, the clip rows just have no UI consumer now (same as
 `person_alias`). Tests: 2 clip tests removed, 1 added (non-trailer videos render nowhere).
 `pytest` **370 → 369**.
+Since then (ad-hoc, 2026-09-07): **fixed YouTube error 153 on the movie-page trailer.** The embed
+failed with "player configuration error" because the site sends `Referrer-Policy: same-origin`
+(Django `SecurityMiddleware`'s default, no override in `settings.py`), which strips the `Referer`
+on the cross-origin `youtube-nocookie.com` load so YouTube can't validate the embedding domain.
+`initVideoEmbeds()` now sets `iframe.referrerPolicy = "strict-origin-when-cross-origin"` on the
+iframe it builds — scoped to that one request, sends the origin (enough for YouTube), works on
+`http://localhost` (protocol upgrade) and prod `https`. JS-only, no CSS/test change. Live-confirmed
+by the user: trailer plays. Commit `ccdbe9d`.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-07
