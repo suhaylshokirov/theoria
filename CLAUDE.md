@@ -176,6 +176,16 @@ on the cross-origin `youtube-nocookie.com` load so YouTube can't validate the em
 iframe it builds — scoped to that one request, sends the origin (enough for YouTube), works on
 `http://localhost` (protocol upgrade) and prod `https`. JS-only, no CSS/test change. Live-confirmed
 by the user: trailer plays. Commit `ccdbe9d`.
+Since then (ad-hoc, 2026-09-07): **the theme choice now survives the browser Back button.** The
+saved theme was only ever applied by the inline `<head>` script, which runs once per real load —
+so a page restored from the back/forward cache (a live DOM snapshot, no scripts re-run) kept the
+theme it was cached with, not the one just picked on a later page. That inline script is now an
+IIFE that also binds `applySavedTheme` to `pageshow` (which fires on a bfcache restore): it
+re-reads `theoria-theme`, sets/removes `data-theme` before the restored frame paints, and on a
+restore that actually flips the theme (`evt.persisted && now !== prev`) dispatches `themechange`
+so the analytics charts rebuild. `theoria.js`'s `initThemeToggle` re-runs `syncLabel` on
+`pageshow` so the toggle's `aria-label` matches. Template + JS only, no view/CSS/test change.
+`pytest` **369**.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-07

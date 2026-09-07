@@ -147,6 +147,11 @@
 
     syncLabel();
 
+    // A back/forward-cache restore re-shows this page without re-running the
+    // script, but the inline <head> handler re-applies the saved theme on the
+    // same pageshow — so the button's label has to be re-synced to match.
+    window.addEventListener("pageshow", syncLabel);
+
     btn.addEventListener("click", function () {
       var next = currentTheme() === "dark" ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", next);

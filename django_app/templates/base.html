@@ -22,14 +22,39 @@
        and synchronous in <head>: a deferred or external script runs after the
        first paint, so a dark-theme user would see a white flash on every page
        load. Wrapped in try/catch because localStorage throws in some privacy
-       modes, in which case we simply fall back to the OS preference. {% endcomment %}
+       modes, in which case we simply fall back to the OS preference.
+
+       Also re-applied on pageshow: the back/forward cache restores a page as a
+       live DOM snapshot without re-running any script, so a page reached via the
+       browser's Back button would otherwise keep whatever theme it was cached
+       with — not the one the reader has since picked on a later page. pageshow
+       fires on that restore, early enough to set the attribute before the
+       restored frame is shown. On a bfcache restore that actually changes the
+       theme we also emit `themechange` so the analytics charts (which bake in
+       their colours at build time) rebuild. {% endcomment %}
     <script>
-      try {
-        var t = localStorage.getItem("theoria-theme");
-        if (t === "dark" || t === "light") {
-          document.documentElement.setAttribute("data-theme", t);
+      (function () {
+        function applySavedTheme(evt) {
+          try {
+            var el = document.documentElement;
+            var prev = el.getAttribute("data-theme");
+            var t = localStorage.getItem("theoria-theme");
+            if (t === "dark" || t === "light") {
+              el.setAttribute("data-theme", t);
+            } else {
+              el.removeAttribute("data-theme");
+            }
+            var now = el.getAttribute("data-theme");
+            if (evt && evt.persisted && now !== prev) {
+              document.dispatchEvent(new CustomEvent("themechange", {
+                detail: { theme: now || "light" },
+              }));
+            }
+          } catch (e) {}
         }
-      } catch (e) {}
+        applySavedTheme();
+        window.addEventListener("pageshow", applySavedTheme);
+      })();
       {% comment %} Same reasoning as the theme script above: this has to run
          before first paint, synchronously, so the mobile nav starts collapsed
          with no flash of an open menu. Without JS, html carries no has-js
