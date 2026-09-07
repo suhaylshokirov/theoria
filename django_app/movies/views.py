@@ -369,22 +369,22 @@ def movie_detail(request, movie_slug):
     )
 
     # dim_movie_video (Task 74-75): one query for every YouTube video on the
-    # film (~16 rows), then the trailer and the clip list are chosen here in
-    # Python. Which trailer to *show* is a rendering decision, not a stored
-    # one (the Task 56 judgment) — freezing it into a column would mean a
-    # re-load to change it. The `site='YouTube'` filter is deliberate: the ~3
-    # Vimeo rows in the catalogue are all unofficial and pre-2020, not worth a
-    # second embed path; the column stays so a later task can revisit that.
-    # Ordered published_at DESC explicitly — nothing in the warehouse
-    # preserves TMDB's array order, so "it came back newest-first" is not a
-    # guarantee to lean on.
+    # film (~16 rows), then one trailer is chosen here in Python. Which trailer
+    # to *show* is a rendering decision, not a stored one (the Task 56
+    # judgment) — freezing it into a column would mean a re-load to change it.
+    # The `site='YouTube'` filter is deliberate: the ~3 Vimeo rows in the
+    # catalogue are all unofficial and pre-2020, not worth a second embed
+    # path; the column stays so a later task can revisit that. Ordered
+    # published_at DESC explicitly — nothing in the warehouse preserves TMDB's
+    # array order, so "it came back newest-first" is not a guarantee to lean
+    # on. (Clips beyond the trailer were removed by user request 2026-09-07 —
+    # the other video rows are still stored, just not rendered.)
     videos = list(
         MovieVideo.objects.using("warehouse")
         .filter(movie_id=movie_id, site="YouTube")
         .order_by(F("published_at").desc(nulls_last=True), "video_id")
     )
     trailer = _pick_trailer(videos)
-    clips = [v for v in videos if v is not trailer]
 
     context = {
         "movie": movie,
@@ -400,7 +400,6 @@ def movie_detail(request, movie_slug):
         "languages": languages,
         "movie_rating": movie_rating,
         "trailer": trailer,
-        "clips": clips,
     }
     return render(request, "movies/movie_detail.html", context)
 

@@ -1440,7 +1440,7 @@ html.has-js .bio-body.is-collapsed {
   object-position: center 30%;
 }
 
-/* --- Video embeds (trailer + clips) --------------------------------------
+/* --- Video embed (trailer) ---------------------------------------------
    A trailer sits where the backdrop strip would — same hairline frame and
    top margin — but 16:9, and click-to-play. Additive: nothing above is
    restyled (the Task 38 stylesheet contract). */
@@ -1510,42 +1510,6 @@ html.has-js .bio-body.is-collapsed {
   height: 100%;
   border: 0;
   display: block;
-}
-
-.clip-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: var(--space-6);
-}
-
-.clip-card {
-  margin: 0;
-}
-
-.clip-meta {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin-top: var(--space-3);
-}
-
-.clip-type {
-  flex-shrink: 0;
-  font-family: var(--font-label);
-  font-weight: 600;
-  font-stretch: 78%;
-  font-size: var(--text-3xs);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--ink-faint);
-}
-
-.clip-name {
-  font-size: var(--text-xs);
-  color: var(--ink-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 @media (max-width: 860px) {

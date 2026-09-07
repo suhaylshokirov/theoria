@@ -1,17 +1,16 @@
-{% comment %} Click-to-play YouTube embed, shared by the trailer and the clip cards.
+{% comment %} Click-to-play YouTube embed for the movie-page trailer.
 
    Renders NOTHING without a video (Task 56/68 — "only when there's something to
    say"): a film with no trailer gets no block, no empty frame, no placeholder.
 
    Ships only a lightweight thumbnail inside a link to the watch page. On click
-   static/js/theoria.js swaps in a youtube-nocookie iframe — so the page weight
-   stays flat regardless of how many clips a film has (the reasoning
-   _pager_client.html already applies to cast headshots), and a reader with JS
-   off still reaches the video via the plain link rather than a dead button.
+   static/js/theoria.js swaps in a youtube-nocookie iframe — no player loads
+   until one is actually asked for, and a reader with JS off still reaches the
+   video via the plain link rather than a dead button.
 
    Params (pass with `only`):
      video : a MovieVideo (dim_movie_video row). Falsy -> nothing renders.
-     kind  : "trailer" or "clip", for the play control's accessible name.
+     kind  : label for the play control's accessible name (e.g. "trailer").
 {% endcomment %}
 {% if video %}
 <div class="video-frame" data-video-embed>

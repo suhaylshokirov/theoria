@@ -1206,7 +1206,8 @@ def test_movie_detail_singular_language_label_for_one_language():
 
 
 # ---------------------------------------------------------------------------
-# movie_detail — trailer + clips (Task 75)
+# movie_detail — trailer (Task 75; clips section removed by user request
+# 2026-09-07 — other video rows stay in the warehouse, just aren't rendered)
 # ---------------------------------------------------------------------------
 
 
@@ -1288,7 +1289,9 @@ def test_movie_detail_keeps_backdrop_when_there_is_no_trailer():
     assert 'class="video-strip"' not in body
 
 
-def test_movie_detail_clips_section_excludes_the_chosen_trailer():
+def test_movie_detail_renders_only_the_trailer_not_other_videos():
+    """The trailer plays; every other video row (clips, featurettes, teasers
+    that lost the ladder) is stored but not rendered anywhere on the page."""
     movie = _movie()
     trailer = _video("t1", type="Trailer", official=True, key="TKEY")
     clip1 = _video("c1", type="Clip", official=False, key="CKEY1")
@@ -1297,24 +1300,12 @@ def test_movie_detail_clips_section_excludes_the_chosen_trailer():
     with _movie_detail_video_mocks(movie, [trailer, clip1, clip2]):
         response = client.get(f"/movies/{movie.movie_id}/")
 
-    assert list(response.context["clips"]) == [clip1, clip2]
     body = response.content.decode()
-    assert 'id="clips"' in body
-    assert "2 videos" in body
-    assert "img.youtube.com/vi/CKEY1/hqdefault.jpg" in body
-    assert "img.youtube.com/vi/CKEY2/hqdefault.jpg" in body
+    assert 'id="clips"' not in body
     assert body.count("img.youtube.com/vi/TKEY/hqdefault.jpg") == 1
-    assert "Featurette" in body
-
-
-def test_movie_detail_no_clips_section_when_trailer_is_the_only_video():
-    movie = _movie()
-
-    with _movie_detail_video_mocks(movie, [_video("t1")]):
-        response = client.get(f"/movies/{movie.movie_id}/")
-
-    assert response.context["clips"] == []
-    assert 'id="clips"' not in response.content.decode()
+    assert "img.youtube.com/vi/CKEY1/hqdefault.jpg" not in body
+    assert "img.youtube.com/vi/CKEY2/hqdefault.jpg" not in body
+    assert "Featurette" not in body
 
 
 def test_movie_detail_no_video_blocks_when_film_has_no_videos():
@@ -1328,7 +1319,6 @@ def test_movie_detail_no_video_blocks_when_film_has_no_videos():
 
     assert response.status_code == 200
     assert response.context["trailer"] is None
-    assert response.context["clips"] == []
     body = response.content.decode()
     assert 'class="video-strip"' not in body
     assert 'id="clips"' not in body
@@ -1336,7 +1326,8 @@ def test_movie_detail_no_video_blocks_when_film_has_no_videos():
 
 def test_movie_detail_reads_movie_videos_in_one_query():
     """Flat query cost: one filter against MovieVideo whatever the video count
-    — the trailer/clip split happens in Python (Task 68 standard)."""
+    — the trailer is picked in Python from the one result set (Task 68
+    standard)."""
     movie = _movie()
     videos = [_video(f"v{i}", type="Clip", official=False) for i in range(30)]
 

@@ -264,7 +264,7 @@ cd django_app && python manage.py runserver
 | Route | What it serves |
 |---|---|
 | `/` | Catalog overview and the contact-sheet hero |
-| `/movies/` · `/movies/<slug>/` | Search, sort and paginate the catalog; per-film detail with trailer, clips, full cast and crew |
+| `/movies/` · `/movies/<slug>/` | Search, sort and paginate the catalog; per-film detail with trailer, full cast and crew |
 | `/people/` · `/people/<slug>/` | Everyone holding any credit; per-person filmography, credits by department, and repeat collaborators |
 | `/studios/` · `/studios/<slug>/` | Browsable studio index; per-studio provenance (description, headquarters, site, parent) above a filterable filmography |
 | `/actors/` · `/directors/` | Scopes of `/people/`, filtered by the credits someone holds — not separate tables |

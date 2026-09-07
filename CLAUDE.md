@@ -159,9 +159,18 @@ applied to Neon + fresh-install check (18 tables) all DONE; the mandatory live `
 running via a `nightly-refresh` `workflow_dispatch` the user triggered — once green, sync the
 replica and verify a real trailer plays + the Task 74 replace holds across two runs. Detail in the
 Task 76 block.
+Since then (ad-hoc, 2026-09-07): **the Clips section was removed from the movie page — only the
+trailer stays.** User request: the extra videos weren't wanted. View drops the `clips` list +
+context key (keeps the `videos` query and `_pick_trailer`); `movie_detail.html` loses the
+`#clips` `<section>`; `theoria.css` loses `.clip-grid`/`.clip-card`/`.clip-meta`/`.clip-type`/
+`.clip-name` (all `.video-*` trailer rules stay); `_video_embed.html` + `initVideoEmbeds()`
+kept — the trailer still uses click-to-play. `dim_movie_video` and the ETL are untouched: every
+video is still ingested and stored, the clip rows just have no UI consumer now (same as
+`person_alias`). Tests: 2 clip tests removed, 1 added (non-trailer videos render nowhere).
+`pytest` **370 → 369**.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
-Last updated          : 2026-09-06
+Last updated          : 2026-09-07
 ```
 
 **After finishing any task, in this order:**

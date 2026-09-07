@@ -414,11 +414,11 @@
   }
 
   /* --- Click-to-play video embeds ---------------------------------------
-     The movie page ships trailer/clip thumbnails as links to YouTube, not
-     live iframes — see movies/_video_embed.html. One delegated listener
-     upgrades a click into an inline youtube-nocookie iframe, so a film with
-     dozens of clips still loads no players until one is actually asked for,
-     and a no-JS reader just follows the link. */
+     The movie page ships the trailer thumbnail as a link to YouTube, not a
+     live iframe — see movies/_video_embed.html. One delegated listener
+     upgrades a click into an inline youtube-nocookie iframe, so no player
+     loads until it is actually asked for, and a no-JS reader just follows
+     the link. */
 
   function initVideoEmbeds() {
     document.addEventListener("click", function (e) {

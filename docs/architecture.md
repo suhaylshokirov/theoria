@@ -421,6 +421,12 @@ to feature on the page is chosen in the Django view, not frozen into a column (a
 YouTube Trailer → any Trailer → any Teaser ladder, newest first) — a rendering decision, per
 §3.5's judgement, kept out of the warehouse so changing it needs no re-load.
 
+The movie page renders **only that one trailer**. A "Clips" section listing every other video
+was built (Task 75) and then removed by user request on 2026-09-07 — the extra rows (clips,
+featurettes, teasers that lost the ladder) are still ingested and still stored in
+`dim_movie_video`, they simply have no UI consumer, the same way `person_alias` sits in the
+warehouse with none.
+
 ## 4. Idempotency & incremental loads
 
 Every ETL stage is idempotent by design:
