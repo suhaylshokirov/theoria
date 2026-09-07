@@ -245,8 +245,9 @@ the current row), every value a theme token so dark mode follows with no block o
 `@media (pointer: coarse)` bump to 16px + a ~48px row. Live-verified with a headless mobile
 viewport (390×844, both themes): closed state matches the old select, open panel is 320px with all
 19 options reachable, picking "Horror" filters the grid and updates the URL; keyboard pick,
-outside-click and no-JS fallback all confirmed. `pytest` **372** (+1: the genre `<select>` carries
-`data-menu`); `node --check` clean.
+outside-click and no-JS fallback all confirmed. `pytest` **371** (unchanged — one added assertion
+in `test_movie_list_filters_by_genre` that the genre `<select>` carries `data-menu`); `node
+--check` clean.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-07
