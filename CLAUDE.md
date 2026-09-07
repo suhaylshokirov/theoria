@@ -147,8 +147,8 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > against a fresh scratch DB built from `01`–`03` (they match table-for-table): 9 dimensions,
 > 4 facts, 3 bridges, 1 repeating-attribute (`person_alias`, Task 72), 1 operational
 > (`etl_watermarks`). Task 74 added the 18th, `dim_movie_video`; its DDL is in `01_dimensions.sql`
-> and `18_movie_videos.sql` and is applied to **both** Neon and the local replica (empty until the
-> first post-Task-73 `run_refresh` populates it).
+> and `18_movie_videos.sql` and is applied to **both** Neon and the local replica. Task 76's live
+> `run_refresh` populated it: ~17.3k rows / ~1.2k films as of 2026-09-07, replace-loaded nightly.
 > `dim_actor`, `dim_director`, `fact_cast` and `fact_crew` were dropped in Task 53; `fact_casting`
 > was replaced in Task 35. `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`18` are migrations
 > for an existing DB (once `11` drops tables, "run every file in order" ≠ "build the current

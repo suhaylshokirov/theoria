@@ -24,7 +24,7 @@ TMDB API  →  Bronze (raw JSON)  →  Silver (typed Parquet)  →  Gold (aggreg
 | Film series | **365** |
 | Ratings | IMDb and TMDB, **1,211 / 1,215** films carry an IMDb score |
 | Warehouse tables | **18** — 9 dimensions, 4 facts, 3 bridges, 1 repeating-attribute, 1 operational |
-| Test suite | **370** tests, no network or live database required |
+| Test suite | **371** tests, no network or live database required |
 
 The corpus is deliberate rather than incidental. TMDB's `movie/popular` endpoint returns whatever
 is trending at call time, which produced a catalog that was 69% films from the 2020s. Switching
@@ -322,7 +322,7 @@ requests, and `/admin/` is not routed at all rather than 500-ing on a public URL
 pytest
 ```
 
-370 tests covering the ETL transforms, data quality checks, warehouse loaders and Django views.
+371 tests covering the ETL transforms, data quality checks, warehouse loaders and Django views.
 The suite mocks S3, TMDB and PostgreSQL **at the boundary** — no live infrastructure, no fixtures
 loaded into a real database, no network. Django views are driven through their real URLs with the
 managers patched, so routing and template rendering are genuinely exercised.
