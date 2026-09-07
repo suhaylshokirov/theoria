@@ -8,7 +8,7 @@
 <div class="poster-card is-film">
     <a href="{% url 'movies:movie_detail' movie.slug %}">
         {% if movie.poster_path %}
-        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster" loading="lazy">
+        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster" loading="lazy" decoding="async">
         {% else %}
         <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}

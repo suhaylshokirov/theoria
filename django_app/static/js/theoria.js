@@ -136,6 +136,28 @@
       : "light";
   }
 
+  /* The two <meta name="theme-color"> tags in base.html are keyed on
+     prefers-color-scheme, which is right until the reader overrides the OS from
+     the header toggle — at which point a dark page would still be reporting
+     white to the browser chrome. Both tags are rewritten with the resolved
+     colour so it no longer matters which one the engine matched.
+
+     The value is read back out of --paper rather than hardcoded, for the same
+     reason analytics.js reads its palette from CSS: the tokens in theoria.css
+     stay the one place a colour is defined. Only Safari and Chrome for Android
+     act on this; everywhere else it is inert, not wrong. */
+  function syncThemeColor() {
+    var tags = document.querySelectorAll('meta[name="theme-color"]');
+    if (!tags.length) return;
+    var paper = getComputedStyle(document.documentElement)
+      .getPropertyValue("--paper");
+    paper = paper ? paper.trim() : "";
+    if (!paper) return;
+    tags.forEach(function (tag) {
+      tag.setAttribute("content", paper);
+    });
+  }
+
   function initThemeToggle() {
     var btn = document.getElementById("theme-toggle");
     if (!btn) return;
@@ -361,7 +383,15 @@
             var current = document.querySelector(sel);
             if (next && current) current.innerHTML = next.innerHTML;
           });
-          history.replaceState(null, "", url);
+          // Safari caps history.replaceState at ~100 calls per 30s and throws
+          // a SecurityError past it. Fast typing against a 300ms debounce can
+          // reach that, and the throw would otherwise land in the .catch below
+          // — which reads any failure as "fetch died" and does a full
+          // form.submit(), reloading the page mid-keystroke. The URL bar going
+          // stale is the acceptable outcome here; the reload is not.
+          try {
+            history.replaceState(null, "", url);
+          } catch (e) {}
         })
         .catch(function (err) {
           if (err.name !== "AbortError") form.submit(); // fetch itself failed
@@ -405,17 +435,35 @@
     var btn = root.querySelector("[data-bio-toggle]");
     if (!body || !btn) return;
 
-    // scrollHeight is the full text height, clientHeight the clamped box; a
-    // few px of tolerance absorbs sub-pixel rounding so a bio that exactly
-    // fills the clamp doesn't get a pointless toggle.
-    if (body.scrollHeight - body.clientHeight < 4) return;
-
-    btn.hidden = false;
     btn.addEventListener("click", function () {
       var collapsed = body.classList.toggle("is-collapsed");
       btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
       btn.textContent = collapsed ? "See more" : "See less";
     });
+
+    // scrollHeight is the full text height, clientHeight the clamped box; a
+    // few px of tolerance absorbs sub-pixel rounding so a bio that exactly
+    // fills the clamp doesn't get a pointless toggle.
+    function measure() {
+      // Only meaningful while the clamp is actually applied — once the reader
+      // has expanded the bio, scrollHeight and clientHeight agree and the test
+      // would hide the button they are using.
+      if (!body.classList.contains("is-collapsed")) return;
+      btn.hidden = body.scrollHeight - body.clientHeight < 4;
+    }
+    measure();
+
+    // ...but the first measurement runs at DOMContentLoaded, when the body face
+    // is still the fallback: the webfonts load from Google with display=swap, so
+    // Instrument Sans arrives later and reflows the paragraph to a different
+    // line count. Whether that reflow crosses the six-line clamp depends on the
+    // network, so the same bio could get a "See more" button in one browser and
+    // not in another, or on the same browser twice running. Re-measure once the
+    // real face is in. document.fonts is Safari 10+/Firefox 41+; where it is
+    // missing the single measurement above still stands.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(measure).catch(function () {});
+    }
   }
 
   /* --- Click-to-play video embeds ---------------------------------------
@@ -455,6 +503,11 @@
   }
 
   function init() {
+    syncThemeColor();
+    // Covers all three ways the theme moves — the header toggle, an OS change
+    // with no explicit choice saved, and a bfcache restore under a theme picked
+    // on a later page — because each of them already dispatches this event.
+    document.addEventListener("themechange", syncThemeColor);
     initMeters();
     initCounters();
     initThemeToggle();

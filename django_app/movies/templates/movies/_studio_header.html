@@ -14,7 +14,7 @@
 <header class="studio-head">
     <div class="studio-plate">
         {% if company.logo_path %}
-        <img class="logo" src="{{ company.logo_path|tmdb_image:'w300' }}" alt="{{ company.name }} logo">
+        <img class="logo" src="{{ company.logo_path|tmdb_image:'w300' }}" alt="{{ company.name }} logo" decoding="async">
         {% else %}
         <div class="placeholder placeholder-studio" aria-hidden="true">
             <span class="studio-initial">{{ company.name|first|upper }}</span>

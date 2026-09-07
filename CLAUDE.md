@@ -203,6 +203,31 @@ incl. the inverted-range collapse, just-starting, em-dash-regardless, and a Stan
 `person_detail` integration test asserting `1989–2018` and the "Career" label). **Known data gap,
 not a bug:** a genuinely deceased person whose `dim_person.deathday` is still null (Task 72's
 backfill is partial) reads as Active until that column fills — e.g. James Dean.
+Since then (ad-hoc, 2026-09-07): **cross-browser / cross-device hardening.** Audit of
+`base.html` + `theoria.css` + `theoria.js` against what each engine actually does; **no view,
+model, ETL or warehouse change** — CSS, JS and head markup only. Seven real defects fixed:
+(1) **iOS zoomed the viewport on every search box and `<select>`** and never zoomed back, because
+they computed to `--text-sm` (14px) and iOS's threshold is an absolute 16px — fixed with
+`@media (pointer: coarse)` (a *width* query would miss a landscape iPad); (2) `<select>` rendered
+differently in all four engines → `appearance: none` + a new themed `--icon-chevron`
+(a `background-image`, **not** a mask like `--icon-search`: a mask needs `.field:has(select)::after`,
+which would leave Firefox <121 / Safari <15.4 with no arrow at all); (3) Safari's duplicate
+search magnifier + clear-cross reset; (4) the sticky header ate every anchor target (skip-link,
+`scrollIntoView`) → one `html { scroll-padding-top }`; (5) sideways swipe on a wide analytics
+table triggered browser Back on iOS/Android → `overscroll-behavior-x: contain`; (6) **Safari's
+`history.replaceState` throttle (~100/30s) threw into `initLiveFilter`'s `.catch`, which reads any
+failure as "fetch died" and did a full `form.submit()` — a page reload mid-keystroke after the
+swap had already succeeded** → `try/catch` around that one statement; (7) `initBioToggle()`
+measured the clamp at `DOMContentLoaded`, before the `display=swap` webfont reflowed the text, so
+the "See more" button appeared or not depending on the network → re-measure on
+`document.fonts.ready`, guarded on `.is-collapsed`. Plus `theme-color` (two media-keyed metas +
+`syncThemeColor()` reading `--paper`, since the site toggle can disagree with the OS),
+`-webkit-tap-highlight-color` recoloured rather than removed, `::placeholder` opacity pinned
+(Firefox), a `preconnect` to `image.tmdb.org` (**no `crossorigin`** — an `<img src>` fetch isn't
+CORS, so it would strand the socket) and one to `img.youtube.com` scoped to film pages with a
+trailer, and `decoding="async"` on all 10 images. `pytest` **374** unchanged (no test asserts on
+any of this); 12-route live walk against the replica all 200/404; `manage.py check` and
+`node --check` clean. Full detail in `for_learning.md`.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-07

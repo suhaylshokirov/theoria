@@ -125,6 +125,17 @@
      it can be tinted per theme and per state. Used by .field:has(search). */
   --icon-search: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%23000'%3E%3Cpath d='M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z'/%3E%3C/svg%3E");
 
+  /* The <select> chevron. Every engine draws its own menulist arrow in its own
+     place — Safari insets it in a rounded plate, Firefox and Chrome each pick a
+     different glyph — so the control is normalised with appearance:none and this
+     is drawn back on. Unlike --icon-search it is a background-image, not a mask:
+     a mask needs an ::after, and the only selector that could carry one here is
+     .field:has(select), which would leave Firefox <121 and Safari <15.4 with a
+     select that has no arrow at all. A background-image can't be tinted, so the
+     colour is baked in and the token is re-declared per theme below — the same
+     shape every other colour token in this file already has. */
+  --icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%2378716c'%3E%3Cpath d='M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z'/%3E%3C/svg%3E");
+
   color-scheme: light;
 }
 
@@ -168,6 +179,7 @@
   --dark-rank-1: #bef264;
   --dark-rank-2: #a3e635;
   --dark-rank-3: #7cb518;
+  --dark-icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%238a867e'%3E%3Cpath d='M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z'/%3E%3C/svg%3E");
 }
 
 [data-theme="dark"] {
@@ -188,6 +200,7 @@
   --rank-1: var(--dark-rank-1);
   --rank-2: var(--dark-rank-2);
   --rank-3: var(--dark-rank-3);
+  --icon-chevron: var(--dark-icon-chevron);
 
   color-scheme: dark;
 }
@@ -211,6 +224,7 @@
     --rank-1: var(--dark-rank-1);
     --rank-2: var(--dark-rank-2);
     --rank-3: var(--dark-rank-3);
+    --icon-chevron: var(--dark-icon-chevron);
 
     color-scheme: dark;
   }
@@ -225,7 +239,21 @@
 }
 
 html {
+  /* iOS inflates text in landscape unless this is pinned. */
   -webkit-text-size-adjust: 100%;
+
+  /* .site-header is sticky at top:0, so anything scrolled to by an anchor —
+     the "Skip to content" link, a section id, the scrollIntoView() that
+     initPagedSection() does when you page the cast list — lands underneath it.
+     Reserving the header's own min-height plus a little air fixes all three at
+     once, in every engine, without a scroll-offset hack per call site. */
+  scroll-padding-top: calc(60px + var(--space-5));
+
+  /* iOS/Android paint an opaque grey rectangle over any tapped link or button,
+     which on a poster card covers the artwork. A touch device has no hover to
+     fall back on, so the feedback is kept rather than zeroed out — recoloured
+     to the site's own wash instead of removed. */
+  -webkit-tap-highlight-color: rgba(163, 230, 53, 0.24);
 }
 
 body {
@@ -915,6 +943,10 @@ a.rating-badge:focus-visible .rating-badge-figure {
 
 .table-wrap {
   overflow-x: auto;
+  /* Without this, swiping a wide analytics table sideways on iOS Safari or
+     Chrome for Android runs off the end of the scroller and triggers the
+     browser's back-navigation gesture instead — the reader loses the page. */
+  overscroll-behavior-x: contain;
 }
 
 table {
@@ -1076,6 +1108,12 @@ td[data-meter] .meter-fill {
 
 input[type="text"],
 input[type="search"] {
+  /* Safari styles input[type=search] as a native rounded field and refuses
+     several of the declarations below until the native appearance is dropped;
+     the reset is what makes the control render identically in all four
+     engines rather than only in Chrome and Firefox. */
+  -webkit-appearance: none;
+  appearance: none;
   border: none;
   background: none;
   color: var(--ink);
@@ -1083,6 +1121,24 @@ input[type="search"] {
   font-size: var(--text-sm);
   padding: var(--space-3) var(--space-5);
   min-width: 200px;
+}
+
+/* Safari draws its own magnifier and a grey clear-cross inside a search field.
+   The magnifier duplicates the one .field already places, and the cross sits
+   where the design puts nothing — both are engine chrome the other browsers
+   never show, so they go. */
+input[type="search"]::-webkit-search-decoration,
+input[type="search"]::-webkit-search-cancel-button,
+input[type="search"]::-webkit-search-results-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Placeholders inherit neither colour nor opacity consistently: Firefox applies
+   its own opacity on top of the colour, so the same hex reads lighter there. */
+::placeholder {
+  color: var(--ink-faint);
+  opacity: 1;
 }
 
 /* The icon already supplies the left inset for a search field. */
@@ -1099,12 +1155,31 @@ input[type="search"]:focus {
    needs to shed its own border and pick up the shared font/colour instead —
    otherwise it renders as unstyled system chrome next to a designed one. */
 .field select {
+  /* Left to itself a <select> is the least portable control on the page:
+     Safari keeps a rounded inset plate and ignores the transparent background,
+     Firefox and Chrome each draw a different arrow in a different spot, and iOS
+     centres the label. appearance:none flattens all of that, and --icon-chevron
+     draws the one arrow back — so the field looks the same everywhere instead
+     of only where it was last checked. */
+  -webkit-appearance: none;
+  appearance: none;
   border: none;
-  background: none;
+  /* Longhands, not the background shorthand: the shorthand would have to carry
+     a var() inside its position/size slash form, and anything unresolvable
+     there fails the whole declaration at computed-value time — which would take
+     the chevron and the transparent ground down together. Split out, each piece
+     fails on its own or not at all. */
+  background-color: transparent;
+  background-image: var(--icon-chevron);
+  background-repeat: no-repeat;
+  background-position: right var(--space-4) center;
+  background-size: 0.7rem;
   color: var(--ink);
   font-family: inherit;
   font-size: var(--text-sm);
   padding: var(--space-3) var(--space-4);
+  /* Clear the chevron the background now draws. */
+  padding-right: calc(var(--space-4) + 1.1rem);
   cursor: pointer;
 }
 
@@ -1854,6 +1929,25 @@ html.has-js .bio-body.is-collapsed {
   .segmented label {
     flex: 1 1 auto;
     text-align: center;
+  }
+}
+
+/* Mobile Safari zooms the whole viewport in when a form control it is about to
+   focus computes to under 16px, and does not zoom back out on blur — so tapping
+   the search box on /movies/ leaves the reader on a magnified, side-scrolling
+   page for the rest of the visit. The threshold is absolute, which is why 16px
+   is written literally here rather than as --text-base: if that token were ever
+   retuned, this fix would stop working silently.
+
+   Keyed on pointer:coarse, not a width — an iPad in landscape is 1024px wide
+   and zooms exactly the same. Desktop keeps the 14px the design calls for.
+   The alternative, maximum-scale=1 on the viewport meta, would also stop the
+   zoom, by taking pinch-zoom away from everyone. */
+@media (pointer: coarse) {
+  input[type="text"],
+  input[type="search"],
+  .field select {
+    font-size: 16px;
   }
 }
 

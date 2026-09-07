@@ -11,6 +11,32 @@
        so the ring doesn't disappear against a dark tab bar. {% endcomment %}
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 32'%3E%3Cstyle%3Eellipse%7Bstroke:%230b0b0b%7D@media(prefers-color-scheme:dark)%7Bellipse%7Bstroke:%23f2f1ed%7D%7D%3C/style%3E%3Cellipse cx='13' cy='16' rx='9.9' ry='13.3' fill='none' stroke-width='6.4'/%3E%3Crect x='3.6' y='12.7' width='18.8' height='6.6' fill='%23a3e635'/%3E%3C/svg%3E">
 
+    {% comment %} Tints the browser chrome around the page: the iOS Safari
+       address bar and status bar, and the Android Chrome toolbar. Without it a
+       dark-theme reader gets a white bar clamped above a near-black page. Two
+       declarations because the media attribute is how the no-JS case follows
+       the OS; when the reader picks a theme from the header toggle,
+       syncThemeColor() in theoria.js overwrites BOTH contents with the resolved
+       colour, so whichever one the browser matches gives the same answer.
+       Chrome for Android honours only the first matching tag, which is why they
+       are not left to disagree. {% endcomment %}
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#12120f" media="(prefers-color-scheme: dark)">
+
+    {% comment %} Every poster, headshot and studio logo on the site is served
+       from image.tmdb.org, and a grid page asks for 24 of them at once — the
+       DNS and TLS handshake is on the critical path for the first one either
+       way, so it is worth starting during head parse rather than when the
+       parser reaches the first image. No crossorigin attribute, deliberately:
+       that opens an anonymous-CORS connection, and a plain img src fetch is
+       not a CORS request — the preconnected socket would go unused and cost a
+       second handshake rather than saving the first. It belongs on the font
+       preconnect below, where the fetch really is CORS, and nowhere else.
+       (The YouTube thumbnail host is preconnected from movie_detail.html
+       instead, since only a film page with a trailer ever asks for it.)
+       {% endcomment %}
+    <link rel="preconnect" href="https://image.tmdb.org">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet"

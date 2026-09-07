@@ -55,7 +55,7 @@
            href="{% url 'movies:movie_detail' movie.slug %}"
            tabindex="-1"
            style="--i: {{ forloop.counter0 }}">
-            <img src="{{ movie.poster_path|tmdb_image:'w185' }}" alt="" loading="lazy">
+            <img src="{{ movie.poster_path|tmdb_image:'w185' }}" alt="" loading="lazy" decoding="async">
         </a>
         {% endfor %}
     </div>

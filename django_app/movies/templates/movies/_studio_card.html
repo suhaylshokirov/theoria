@@ -18,7 +18,7 @@
 <div class="poster-card">
     <a href="{% url 'movies:studio_detail' company.slug %}">
         {% if company.logo_path %}
-        <img class="logo" src="{{ company.logo_path|tmdb_image:'w185' }}" alt="{{ company.name }} logo" loading="lazy">
+        <img class="logo" src="{{ company.logo_path|tmdb_image:'w185' }}" alt="{{ company.name }} logo" loading="lazy" decoding="async">
         {% else %}
         <div class="placeholder placeholder-studio" aria-hidden="true">
             <span class="studio-initial">{{ company.name|first|upper }}</span>

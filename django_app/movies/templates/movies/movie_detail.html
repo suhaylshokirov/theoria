@@ -3,6 +3,12 @@
 
 {% block title %}Theoria — {{ movie.title }}{% endblock %}
 
+{% comment %} Only a film page with a trailer loads a YouTube still, so the
+   handshake for it is opened here rather than in base.html, where it would be
+   dead weight on every other route. No crossorigin — an img src fetch is not a
+   CORS request, and the mismatch would leave the socket unused. {% endcomment %}
+{% block extra_head %}{% if trailer %}<link rel="preconnect" href="https://img.youtube.com">{% endif %}{% endblock %}
+
 {% block content %}
 {% comment %} A specimen record, not a streaming-app splash: the poster is a framed
    plate with its own caption, the facts sit beside it as a record, and the
@@ -10,7 +16,7 @@
 <article class="specimen">
     <div class="specimen-plate">
         {% if movie.poster_path %}
-        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster">
+        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster" decoding="async">
         {% else %}
         <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}
@@ -116,7 +122,7 @@
 </figure>
 {% elif movie.backdrop_path %}
 <figure class="backdrop-strip">
-    <img src="{{ movie.backdrop_path|tmdb_image:'w1280' }}" alt="" loading="lazy">
+    <img src="{{ movie.backdrop_path|tmdb_image:'w1280' }}" alt="" loading="lazy" decoding="async">
 </figure>
 {% endif %}
 
@@ -164,7 +170,7 @@
                 <li class="credit-row">
                     <a class="credit-person" href="{% url 'movies:person_detail' m.person.slug %}">
                         {% if m.person.profile_path %}
-                        <img class="credit-avatar" src="{{ m.person.profile_path|tmdb_image:'w185' }}" alt="" loading="lazy">
+                        <img class="credit-avatar" src="{{ m.person.profile_path|tmdb_image:'w185' }}" alt="" loading="lazy" decoding="async">
                         {% else %}
                         <span class="credit-avatar placeholder-person" aria-hidden="true">
                             <svg class="person-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8z"/></svg>
