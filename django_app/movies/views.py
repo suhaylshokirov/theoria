@@ -622,7 +622,10 @@ def _career_period(start, end, *, still_active=None):
               as Active regardless of when we last have them on a film.
       False — a person who has died. The career is closed no matter when the
               last film lands (a posthumous release doesn't reopen it), so
-              the range always ends at a year, never "Active".
+              the range always ends at a year, never "Active". The caller
+              passes the death date as `end`, so the range reads
+              "first film year – death year" — Stan Lee's archive-footage
+              cameos don't stretch his career past 2018.
     """
     if not start:
         return "—"
@@ -631,7 +634,12 @@ def _career_period(start, end, *, still_active=None):
             return "Active"
         return f"{start.year}–Active"
     if still_active is False:
-        return str(start.year) if start.year == end.year else f"{start.year}–{end.year}"
+        # end is the death year here; a person whose only catalogued credits
+        # are posthumous would give an inverted range, so collapse to the
+        # first year in that case.
+        if not end or end.year <= start.year:
+            return str(start.year)
+        return f"{start.year}–{end.year}"
     current_year = date.today().year
     if end.year >= current_year:
         return "Active" if start.year == end.year else f"{start.year}–Active"
@@ -847,11 +855,13 @@ def person_detail(request, person_slug):
         "film_count": len(movie_ids),
         "credit_count": len(credits),
         "avg_rating": avg_rating,
-        # A person with no recorded deathday reads as still active — see
-        # _career_period on why a thin catalogue makes "last film year" a bad
-        # proxy for "retired".
+        # First catalogued film → death year for someone who has died (a thin
+        # catalogue plus posthumous cameo credits make "last film year" wrong
+        # both ways); → "Active" for anyone with no recorded deathday. See
+        # _career_period.
         "career_period": _career_period(
-            span["earliest"], span["latest"],
+            span["earliest"],
+            person.deathday or span["latest"],
             still_active=person.deathday is None,
         ),
     }

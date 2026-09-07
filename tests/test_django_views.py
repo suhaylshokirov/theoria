@@ -1400,22 +1400,25 @@ def test_career_period_living_person_just_starting_is_active_with_no_range():
     assert _career_period(today, today, still_active=True) == "Active"
 
 
-def test_career_period_deceased_person_never_reads_active():
+def test_career_period_deceased_person_ends_at_the_death_year():
     from movies.views import _career_period
 
-    today = date.today()
-    # Even a film released this year (posthumous) doesn't reopen the career.
-    assert (
-        _career_period(date(1980, 1, 1), today, still_active=False)
-        == f"1980–{today.year}"
-    )
+    # `end` is the death date for the deceased path — the range reads
+    # "first film year – death year", never "Active".
     assert (
         _career_period(date(1980, 1, 1), date(2008, 1, 1), still_active=False)
         == "1980–2008"
     )
+    # Died the same year as the (only) catalogued film → the year alone.
     assert (
-        _career_period(date(2008, 1, 1), date(2008, 1, 1), still_active=False)
+        _career_period(date(2008, 1, 1), date(2008, 6, 1), still_active=False)
         == "2008"
+    )
+    # Only posthumous credits: death year precedes the first catalogued film,
+    # so an inverted range collapses to that first year.
+    assert (
+        _career_period(date(2020, 1, 1), date(2014, 1, 1), still_active=False)
+        == "2020"
     )
 
 
@@ -1604,26 +1607,28 @@ def test_person_detail_filters_filmography_by_search():
     assert response.context["base_query"] == "q=alph&sort=release"
 
 
-def test_person_detail_deceased_person_shows_a_closed_career_range():
-    """A person with a recorded deathday never reads as Active — the range
-    ends at their last catalogued film."""
+def test_person_detail_deceased_person_range_ends_at_the_death_year():
+    """A person with a recorded deathday never reads as Active, and the range
+    ends at their death year — not their last catalogued film, which can be a
+    posthumous cameo (the Stan Lee case)."""
     person = _person()
-    person.deathday = date(2014, 2, 2)
-    movie = _movie(movie_id=1, title="Only Film")
+    person.deathday = date(2018, 11, 12)
+    movie = _movie(movie_id=1, title="Posthumous Cameo")
     credits = [
         Credit(movie=movie, person=person, department="Acting", job="Actor",
-               character_name="Role", ordering=0),
+               character_name="Himself", ordering=0),
     ]
 
     with patch("movies.views.get_object_or_404", return_value=person), \
             _person_detail_mocks(
                 credits, {1: Decimal("7.0")},
-                span={"earliest": date(1978, 1, 1), "latest": date(2009, 1, 1)},
+                # Last catalogued film is 2021, three years after he died.
+                span={"earliest": date(1989, 1, 1), "latest": date(2021, 1, 1)},
             ):
         response = client.get("/people/test-person/")
 
     assert response.status_code == 200
-    assert response.context["career_period"] == "1978–2009"
+    assert response.context["career_period"] == "1989–2018"
     # The stat is labelled "Career" (a closed span), not "Active", for the dead.
     body = response.content.decode()
     assert '<span class="stat-label">Career</span>' in body

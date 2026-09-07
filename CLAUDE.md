@@ -191,14 +191,18 @@ from the last catalogued film.** `_career_period()` gained a keyword-only `still
 person page passes it; the studio page still leaves it `None` and is unchanged): `True` for anyone
 with no `deathday` → always `"{start}–Active"` (a thin catalogue makes "years since last film" a
 bad retirement proxy — Al Pacino/De Niro/Morgan Freeman were showing closed ranges like
-`1991–2016`); `False` for someone who has died → a closed `"{start}–{end}"` range that a
-posthumous release can't reopen, and `_person_header.html` labels that stat **"Career"** instead
-of "Active" when `person.deathday` is set. Live-checked against the replica (Brando/Ledger/Hoffman
-→ closed; Pacino/De Niro/Freeman → `–Active`). `views.py` + one template; `pytest` **369 → 374**
-(+5: living-with-stale-filmography, deceased-never-Active, just-starting, em-dash-regardless, and a
-deceased `person_detail` integration test asserting the "Career" label). **Known data gap, not a
-bug:** a genuinely deceased person whose `dim_person.deathday` is still null (Task 72's backfill is
-partial) reads as Active until that column fills — e.g. James Dean.
+`1991–2016`); `False` for someone who has died → a closed range, `_person_header.html` labelling
+that stat **"Career"** not "Active" when `person.deathday` is set. **The deceased range ends at the
+death year, not the last catalogued film** — the caller passes `person.deathday or span["latest"]`
+as `end`, so Stan Lee's archive-footage cameos (catalogued out to 2026) don't stretch his career
+past `1998–2018`; `_career_period` collapses an inverted range (only-posthumous credits) to the
+first year. Live-checked against the replica: Stan Lee `1998–2018`, Brando `1972–2004`, Hoffman
+`1992–2014` (last film 2015, died 2014); Pacino/De Niro/Freeman `–Active`. `views.py` + one
+template; `pytest` **369 → 374** (+5: living-with-stale-filmography, deceased-ends-at-death-year
+incl. the inverted-range collapse, just-starting, em-dash-regardless, and a Stan-Lee-shaped
+`person_detail` integration test asserting `1989–2018` and the "Career" label). **Known data gap,
+not a bug:** a genuinely deceased person whose `dim_person.deathday` is still null (Task 72's
+backfill is partial) reads as Active until that column fills — e.g. James Dean.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-07
