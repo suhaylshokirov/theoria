@@ -2133,7 +2133,7 @@ def test_analytics_dashboard_returns_200_with_expected_context():
     body = response.content.decode()
     assert "Top studios by revenue" in body
     assert 'href="/studios/test-studio/"' in body
-    assert "Films by production country" in body
+    assert "Movies by production country" in body
     assert "Studio output by decade" not in body
     assert "Non-English cinema over time" not in body
 

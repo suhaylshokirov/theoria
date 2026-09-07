@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Theoria{% endblock %}</title>
-    <meta name="description" content="{% block description %}Theoria — a film catalog measured end to end: every title, cast member and rating read straight out of a star-schema warehouse.{% endblock %}">
+    <meta name="description" content="{% block description %}Theoria — a movie catalog measured end to end: every title, cast member and rating read straight out of a star-schema warehouse.{% endblock %}">
 
     {% comment %} Favicon: the same Θ mark, at the heavier weight that survives 16px.
        Transparent ground and currentColor-equivalent stroke picked per scheme,
@@ -124,10 +124,10 @@
             {% comment %} resolver_match.url_name, not request.path: "/" would prefix every
                route, and view_name equality would drop the highlight as soon as
                you opened a detail page. Grouping the list and detail names keeps
-               "Films" lit while you're on /movies/120/. {% endcomment %}
+               "Movies" lit while you're on /movies/120/. {% endcomment %}
             {% with vn=request.resolver_match.url_name %}
             <div class="nav-links" id="nav-links">
-                <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>Films</a>
+                <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>Movies</a>
                 <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>People</a>
                 <a href="{% url 'movies:studio_list' %}"{% if vn in "studio_list,studio_detail" %} aria-current="page"{% endif %}>Studios</a>
                 <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>
@@ -157,7 +157,7 @@
 
     <footer class="site-footer">
         <div class="container footer-row">
-            <span>Theoria — a film catalog measured end to end.</span>
+            <span>Theoria — a movie catalog measured end to end.</span>
             <span class="mono">Source · TMDB</span>
         </div>
     </footer>

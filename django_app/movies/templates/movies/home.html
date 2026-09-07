@@ -24,7 +24,7 @@
 
         <dl class="hero-counts">
             <div class="count">
-                <dt class="stat-label">Films</dt>
+                <dt class="stat-label">Movies</dt>
                 <dd class="stat-value" data-count="{{ movie_count }}">{{ movie_count }}</dd>
             </div>
             <div class="count">
@@ -44,7 +44,7 @@
         </dl>
 
         <div class="hero-actions">
-            <a class="btn" href="{% url 'movies:movie_list' %}">Browse films</a>
+            <a class="btn" href="{% url 'movies:movie_list' %}">Browse movies</a>
             <a class="hero-link" href="{% url 'analytics:dashboard' %}">See the analytics →</a>
         </div>
     </div>
@@ -70,7 +70,7 @@
         {% for movie in top_rated %}
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
-        <p class="empty">No films loaded yet. Run the pipeline to fill the catalog.</p>
+        <p class="empty">No movies loaded yet. Run the pipeline to fill the catalog.</p>
         {% endfor %}
     </div>
 </section>
@@ -84,7 +84,7 @@
         {% for movie in newest %}
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
-        <p class="empty">No films loaded yet. Run the pipeline to fill the catalog.</p>
+        <p class="empty">No movies loaded yet. Run the pipeline to fill the catalog.</p>
         {% endfor %}
     </div>
 </section>

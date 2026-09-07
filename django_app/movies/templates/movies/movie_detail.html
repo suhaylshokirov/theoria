@@ -95,7 +95,7 @@
             {% endif %}
         </dl>
 
-        {% comment %} Each genre links back to the Films index filtered to it (Task 71).
+        {% comment %} Each genre links back to the Movies index filtered to it (Task 71).
            No ?sort= on the link: /movies/ already defaults to newest-first, which
            is what a reader clicking "Horror" wants to land on. The slug is built
            with the same django.utils.text.slugify the view's {slug: genre_id} map
@@ -142,7 +142,7 @@
             {% for credit in cast %}
             {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
             {% empty %}
-            <p class="empty">No cast recorded for this film.</p>
+            <p class="empty">No cast recorded for this movie.</p>
             {% endfor %}
         </div>
         {% include "movies/_pager_client.html" with label="cast" only %}
@@ -184,7 +184,7 @@
             </ul>
         </div>
         {% empty %}
-        <p class="empty">No crew recorded for this film.</p>
+        <p class="empty">No crew recorded for this movie.</p>
         {% endfor %}
         {% include "movies/_pager_client.html" with label="crew" only %}
     </div>

@@ -11,7 +11,7 @@
         {% for movie in page_obj %}
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
-        <p class="empty">No films match “{{ q }}”. Try a shorter title.</p>
+        <p class="empty">No movies match “{{ q }}”. Try a shorter title.</p>
         {% endfor %}
     </div>
 

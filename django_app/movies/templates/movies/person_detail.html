@@ -2,7 +2,7 @@
 {% load tmdb_images %}
 
 {% block title %}Theoria — {{ person.name }}{% endblock %}
-{% block description %}{{ person.name }}: {{ film_count }} film{{ film_count|pluralize }} in the Theoria catalog.{% endblock %}
+{% block description %}{{ person.name }}: {{ film_count }} movie{{ film_count|pluralize }} in the Theoria catalog.{% endblock %}
 
 {% block content %}
 {% include "movies/_person_header.html" with person=person film_count=film_count avg_rating=avg_rating activity=activity credit_count=credit_count only %}
@@ -55,7 +55,7 @@
            no JS — see _person_filmography_results.html's docstring. {% endcomment %}
         <form method="get" action="" data-live-filter data-live-targets="#person-filmography-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="Search this filmography" aria-label="Search {{ person.name }}'s films by title">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search this filmography" aria-label="Search {{ person.name }}'s movies by title">
             </div>
             <fieldset class="segmented">
                 <legend class="visually-hidden">Order by</legend>
@@ -74,7 +74,7 @@
 
     <div class="section-head">
         <h2>Filmography</h2>
-        <span class="section-note">{{ film_count }} film{{ film_count|pluralize }}</span>
+        <span class="section-note">{{ film_count }} movie{{ film_count|pluralize }}</span>
     </div>
 
     {% include "movies/_person_filmography_grid.html" %}

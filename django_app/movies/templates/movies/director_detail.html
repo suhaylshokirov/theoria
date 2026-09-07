@@ -8,13 +8,13 @@
 <section class="sheet-section">
     <div class="section-head">
         <h2>Filmography</h2>
-        <span class="section-note">{{ film_count }} film{{ film_count|pluralize }}</span>
+        <span class="section-note">{{ film_count }} movie{{ film_count|pluralize }}</span>
     </div>
     <div class="poster-grid">
         {% for movie in filmography %}
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
-        <p class="empty">No films recorded for this director yet.</p>
+        <p class="empty">No movies recorded for this director yet.</p>
         {% endfor %}
     </div>
 </section>

@@ -29,7 +29,7 @@
             {% if sort == "revenue" and company.total_revenue %}
             <span class="card-sub">${{ company.total_revenue|floatformat:"0g" }}</span>
             {% else %}
-            <span class="card-sub">{{ company.film_count }} film{{ company.film_count|pluralize }}</span>
+            <span class="card-sub">{{ company.film_count }} movie{{ company.film_count|pluralize }}</span>
             {% endif %}
         </div>
     </a>
