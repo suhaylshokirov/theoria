@@ -603,43 +603,20 @@ def studio_detail(request, company_slug):
     return render(request, "movies/studio_detail.html", context)
 
 
-def _career_period(start, end, *, still_active=None):
-    """Render a career span as a person- or studio-page stat, e.g. "1997–2019"
-    or "2019–Active".
+def _career_period(start, end):
+    """Render a studio's release span as a stat, e.g. "1997–2019" or "2019–Active".
 
     A closed range naming the same year twice (e.g. "2026–2026" for a single
     film released this year) reads as a typo, not a fact, so a one-year span
-    collapses to the year alone.
+    collapses to the year alone. A range that ends in the current year isn't
+    really "closed" — the latest release is one that just came out, not one
+    that ended the studio.
 
-    `still_active` decides how the end of the range reads. Only the person
-    page passes it; the studio page leaves it None.
-
-      None  — studio. "Active" only if the latest film is this year or later;
-              a studio that stopped releasing is genuinely inactive.
-      True  — a living person. Our film catalogue is deliberately thin, so a
-              gap since someone's latest catalogued film is far more often a
-              hole in the data than a retirement — anyone still alive reads
-              as Active regardless of when we last have them on a film.
-      False — a person who has died. The career is closed no matter when the
-              last film lands (a posthumous release doesn't reopen it), so
-              the range always ends at a year, never "Active". The caller
-              passes the death date as `end`, so the range reads
-              "first film year – death year" — Stan Lee's archive-footage
-              cameos don't stretch his career past 2018.
+    The person page does not use this — a person's activity is just
+    "Active"/"Retired", keyed off whether they have a recorded deathday.
     """
     if not start:
         return "—"
-    if still_active is True:
-        if start.year >= date.today().year:
-            return "Active"
-        return f"{start.year}–Active"
-    if still_active is False:
-        # end is the death year here; a person whose only catalogued credits
-        # are posthumous would give an inverted range, so collapse to the
-        # first year in that case.
-        if not end or end.year <= start.year:
-            return str(start.year)
-        return f"{start.year}–{end.year}"
     current_year = date.today().year
     if end.year >= current_year:
         return "Active" if start.year == end.year else f"{start.year}–Active"
@@ -823,10 +800,6 @@ def person_detail(request, person_slug):
     for row in filmography:
         row["movie"].imdb_rating = imdb_ratings.get(row["movie"].movie_id)
 
-    span = Movie.objects.using("warehouse").filter(movie_id__in=movie_ids).aggregate(
-        earliest=Min("release_date"), latest=Max("release_date")
-    )
-
     # Search + reorder the filmography, the same toolbar /studios/<slug>/ puts
     # over its filmography (Task 62). Done in Python: the list above is already
     # merged one-row-per-film and fully in memory, and a filmography is small
@@ -855,15 +828,11 @@ def person_detail(request, person_slug):
         "film_count": len(movie_ids),
         "credit_count": len(credits),
         "avg_rating": avg_rating,
-        # First catalogued film → death year for someone who has died (a thin
-        # catalogue plus posthumous cameo credits make "last film year" wrong
-        # both ways); → "Active" for anyone with no recorded deathday. See
-        # _career_period.
-        "career_period": _career_period(
-            span["earliest"],
-            person.deathday or span["latest"],
-            still_active=person.deathday is None,
-        ),
+        # Activity is deliberately just two states: "Retired" once TMDB records
+        # a death date, "Active" otherwise. The catalogue is too thin for
+        # "years since last credit" to mean anything, and this reads the same
+        # for an actor, a director or a crew member.
+        "activity": "Retired" if person.deathday else "Active",
     }
     # Same live-filter contract as movie_list()/studio_detail(): the record
     # header is never part of the swap, so only the grid+pager fragment comes

@@ -186,23 +186,24 @@ restore that actually flips the theme (`evt.persisted && now !== prev`) dispatch
 so the analytics charts rebuild. `theoria.js`'s `initThemeToggle` re-runs `syncLabel` on
 `pageshow` so the toggle's `aria-label` matches. Template + JS only, no view/CSS/test change.
 `pytest` **369**.
-Since then (ad-hoc, 2026-09-07): **the person page's "Active" stat now reads from `deathday`, not
-from the last catalogued film.** `_career_period()` gained a keyword-only `still_active` (only the
-person page passes it; the studio page still leaves it `None` and is unchanged): `True` for anyone
-with no `deathday` → always `"{start}–Active"` (a thin catalogue makes "years since last film" a
-bad retirement proxy — Al Pacino/De Niro/Morgan Freeman were showing closed ranges like
-`1991–2016`); `False` for someone who has died → a closed range, `_person_header.html` labelling
-that stat **"Career"** not "Active" when `person.deathday` is set. **The deceased range ends at the
-death year, not the last catalogued film** — the caller passes `person.deathday or span["latest"]`
-as `end`, so Stan Lee's archive-footage cameos (catalogued out to 2026) don't stretch his career
-past `1998–2018`; `_career_period` collapses an inverted range (only-posthumous credits) to the
-first year. Live-checked against the replica: Stan Lee `1998–2018`, Brando `1972–2004`, Hoffman
-`1992–2014` (last film 2015, died 2014); Pacino/De Niro/Freeman `–Active`. `views.py` + one
-template; `pytest` **369 → 374** (+5: living-with-stale-filmography, deceased-ends-at-death-year
-incl. the inverted-range collapse, just-starting, em-dash-regardless, and a Stan-Lee-shaped
-`person_detail` integration test asserting `1989–2018` and the "Career" label). **Known data gap,
-not a bug:** a genuinely deceased person whose `dim_person.deathday` is still null (Task 72's
-backfill is partial) reads as Active until that column fills — e.g. James Dean.
+Since then (ad-hoc, 2026-09-07): **the person page's activity stat is now just two states —
+`Active` / `Retired`.** Iterated: first attempt keyed the range off `deathday` instead of the last
+catalogued film, second ended a deceased range at the death year (Stan Lee's posthumous cameos ran
+to 2026); user then asked to drop the year ranges entirely for people. Final shape: `person_detail()`
+sets `"activity": "Retired" if person.deathday else "Active"` — no dates, no `_career_period` call
+(that helper is now studio-only; its `still_active` param and the whole deceased/living branch are
+gone), and the person `span` warehouse query (`Min`/`Max` release date) was **deleted** since
+nothing reads it any more — one fewer query per person page. The `_person_header.html` stat renders
+`{{ activity }}` under the label **"Status"** (was "Active"/"Career"); context key + include param
+renamed `career_period` → `activity` across `person_detail.html` and the two dead legacy
+`actor_detail.html`/`director_detail.html` includes. Applies to every `Person` — actor, director,
+crew — not just cast. Live-checked against the replica: Stan Lee / Brando / Hoffman → `Retired`,
+Al Pacino / Christopher Nolan → `Active`. `views.py` + 4 templates + tests; `pytest` **374 → 371**
+(removed the 4 `still_active` unit tests + the death-year integration test; added
+`test_person_detail_deceased_person_reads_retired` and `..._living_person_reads_active`;
+`_person_detail_mocks` lost its now-unused `span` param). **Known data gap, not a bug:** a
+genuinely deceased person whose `dim_person.deathday` is still null (Task 72's backfill is partial)
+reads as Active until that column fills — e.g. James Dean.
 Since then (ad-hoc, 2026-09-07): **cross-browser / cross-device hardening.** Audit of
 `base.html` + `theoria.css` + `theoria.js` against what each engine actually does; **no view,
 model, ETL or warehouse change** — CSS, JS and head markup only. Seven real defects fixed:

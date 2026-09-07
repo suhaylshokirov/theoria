@@ -1378,57 +1378,6 @@ def test_career_period_ongoing_career_reads_start_dash_active():
     assert _career_period(date(1997, 1, 1), today) == "1997–Active"
 
 
-def test_career_period_living_person_reads_active_despite_a_stale_last_film():
-    from movies.views import _career_period
-
-    # The catalogue is thin — a gap since someone's latest known film is a
-    # data hole far more often than a retirement, so anyone alive is Active.
-    assert (
-        _career_period(date(1997, 1, 1), date(2015, 1, 1), still_active=True)
-        == "1997–Active"
-    )
-    assert (
-        _career_period(date(2015, 6, 1), date(2015, 6, 1), still_active=True)
-        == "2015–Active"
-    )
-
-
-def test_career_period_living_person_just_starting_is_active_with_no_range():
-    from movies.views import _career_period
-
-    today = date.today()
-    assert _career_period(today, today, still_active=True) == "Active"
-
-
-def test_career_period_deceased_person_ends_at_the_death_year():
-    from movies.views import _career_period
-
-    # `end` is the death date for the deceased path — the range reads
-    # "first film year – death year", never "Active".
-    assert (
-        _career_period(date(1980, 1, 1), date(2008, 1, 1), still_active=False)
-        == "1980–2008"
-    )
-    # Died the same year as the (only) catalogued film → the year alone.
-    assert (
-        _career_period(date(2008, 1, 1), date(2008, 6, 1), still_active=False)
-        == "2008"
-    )
-    # Only posthumous credits: death year precedes the first catalogued film,
-    # so an inverted range collapses to that first year.
-    assert (
-        _career_period(date(2020, 1, 1), date(2014, 1, 1), still_active=False)
-        == "2020"
-    )
-
-
-def test_career_period_no_start_is_em_dash_regardless_of_alive_flag():
-    from movies.views import _career_period
-
-    assert _career_period(None, None, still_active=True) == "—"
-    assert _career_period(None, None, still_active=False) == "—"
-
-
 # ---------------------------------------------------------------------------
 # person_detail, and the legacy actor/director redirects
 # ---------------------------------------------------------------------------
@@ -1483,7 +1432,7 @@ def test_person_detail_merges_multi_job_credits_into_one_filmography_row():
 
     with patch("movies.views.get_object_or_404", return_value=person), patch.object(
         Credit, "objects", new=MagicMock()
-    ) as credit_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+    ) as credit_mgr, patch.object(
         MovieRating, "objects", new=MagicMock()
     ) as rating_mgr:
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
@@ -1497,9 +1446,6 @@ def test_person_detail_merges_multi_job_credits_into_one_filmography_row():
         rating_mgr.using.return_value.filter.return_value.values_list.return_value = [
             (movie.movie_id, Decimal("7.50")),
         ]
-        movie_mgr.using.return_value.filter.return_value.aggregate.return_value = {
-            "earliest": date(2020, 1, 1), "latest": date(2020, 1, 1),
-        }
 
         response = client.get("/people/test-person/")
 
@@ -1513,9 +1459,8 @@ def test_person_detail_merges_multi_job_credits_into_one_filmography_row():
     # Three credits, one film — a person holding several jobs on one title.
     assert response.context["credit_count"] == 3
     assert response.context["film_count"] == 1
-    # A living person (no deathday) always reads as Active, even though our
-    # only catalogued film for them is from a past year.
-    assert response.context["career_period"] == "2020–Active"
+    # A person with no deathday reads as Active.
+    assert response.context["activity"] == "Active"
     assert response.context["avg_rating"] == Decimal("7.50")
     # The poster grid displays exactly the figure the average was computed
     # from — the annotation attached onto the same Movie instance.
@@ -1537,7 +1482,7 @@ def test_person_detail_filmography_ratings_use_constant_number_of_queries():
 
     with patch("movies.views.get_object_or_404", return_value=person), patch.object(
         Credit, "objects", new=MagicMock()
-    ) as credit_mgr, patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+    ) as credit_mgr, patch.object(
         MovieRating, "objects", new=MagicMock()
     ) as rating_mgr:
         credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
@@ -1547,9 +1492,6 @@ def test_person_detail_filmography_ratings_use_constant_number_of_queries():
         rating_mgr.using.return_value.filter.return_value.values_list.return_value = [
             (m.movie_id, Decimal("7.00")) for m in movies
         ]
-        movie_mgr.using.return_value.filter.return_value.aggregate.return_value = {
-            "earliest": date(2020, 1, 1), "latest": date(2020, 1, 1),
-        }
 
         response = client.get("/people/test-person/")
 
@@ -1564,14 +1506,12 @@ def test_person_detail_filmography_ratings_use_constant_number_of_queries():
     )
 
 
-def _person_detail_mocks(credits, ratings, span=None):
-    """Wire the four mocked managers person_detail() reads, given a credit list
-    and a {movie_id: Decimal} rating map. Returns a contextlib.ExitStack the
-    caller uses as a `with` block; get_object_or_404 is patched separately."""
-    span = span or {"earliest": date(2020, 1, 1), "latest": date(2020, 1, 1)}
+def _person_detail_mocks(credits, ratings):
+    """Wire the mocked managers person_detail() reads, given a credit list and a
+    {movie_id: Decimal} rating map. Returns a contextlib.ExitStack the caller
+    uses as a `with` block; get_object_or_404 is patched separately."""
     stack = contextlib.ExitStack()
     credit_mgr = stack.enter_context(patch.object(Credit, "objects", new=MagicMock()))
-    movie_mgr = stack.enter_context(patch.object(Movie, "objects", new=MagicMock()))
     rating_mgr = stack.enter_context(patch.object(MovieRating, "objects", new=MagicMock()))
     credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
     rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
@@ -1580,7 +1520,6 @@ def _person_detail_mocks(credits, ratings, span=None):
     rating_mgr.using.return_value.filter.return_value.values_list.return_value = list(
         ratings.items()
     )
-    movie_mgr.using.return_value.filter.return_value.aggregate.return_value = span
     return stack
 
 
@@ -1607,31 +1546,41 @@ def test_person_detail_filters_filmography_by_search():
     assert response.context["base_query"] == "q=alph&sort=release"
 
 
-def test_person_detail_deceased_person_range_ends_at_the_death_year():
-    """A person with a recorded deathday never reads as Active, and the range
-    ends at their death year — not their last catalogued film, which can be a
-    posthumous cameo (the Stan Lee case)."""
+def test_person_detail_deceased_person_reads_retired():
+    """Any person with a recorded deathday shows "Retired" — actor, director or
+    crew, and regardless of when their last catalogued credit lands."""
     person = _person()
     person.deathday = date(2018, 11, 12)
     movie = _movie(movie_id=1, title="Posthumous Cameo")
     credits = [
-        Credit(movie=movie, person=person, department="Acting", job="Actor",
-               character_name="Himself", ordering=0),
+        Credit(movie=movie, person=person, department="Directing", job="Director"),
     ]
 
     with patch("movies.views.get_object_or_404", return_value=person), \
-            _person_detail_mocks(
-                credits, {1: Decimal("7.0")},
-                # Last catalogued film is 2021, three years after he died.
-                span={"earliest": date(1989, 1, 1), "latest": date(2021, 1, 1)},
-            ):
+            _person_detail_mocks(credits, {1: Decimal("7.0")}):
         response = client.get("/people/test-person/")
 
     assert response.status_code == 200
-    assert response.context["career_period"] == "1989–2018"
-    # The stat is labelled "Career" (a closed span), not "Active", for the dead.
+    assert response.context["activity"] == "Retired"
     body = response.content.decode()
-    assert '<span class="stat-label">Career</span>' in body
+    assert "Retired" in body
+    assert '<span class="stat-label">Status</span>' in body
+
+
+def test_person_detail_living_person_reads_active():
+    person = _person()  # no deathday
+    movie = _movie(movie_id=1, title="Recent Film")
+    credits = [
+        Credit(movie=movie, person=person, department="Acting", job="Actor",
+               character_name="Role", ordering=0),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {1: Decimal("7.0")}):
+        response = client.get("/people/test-person/")
+
+    assert response.status_code == 200
+    assert response.context["activity"] == "Active"
 
 
 def test_person_detail_sorts_filmography_by_title():

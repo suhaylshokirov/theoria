@@ -2,7 +2,8 @@
 
    Params (pass with `only`):
      person       : a Person
-     film_count, avg_rating, career_period : the measured stats {% endcomment %}
+     film_count, avg_rating, activity : the measured stats
+     ("activity" is "Active" or "Retired") {% endcomment %}
 {% load tmdb_images %}
 <header class="person-head">
     <div class="person-plate">
@@ -28,10 +29,10 @@
                 <span class="stat-label">Avg rating</span>
             </div>
             <div class="stat">
-                {% comment %} "Active" for the living (the value carries the "–Active"
-                   suffix); "Career" for someone who has died, whose span is closed. {% endcomment %}
-                <span class="stat-value">{{ career_period }}</span>
-                <span class="stat-label">{% if person.deathday %}Career{% else %}Active{% endif %}</span>
+                {% comment %} Two states only: "Retired" once there's a death date,
+                   "Active" otherwise — see person_detail(). {% endcomment %}
+                <span class="stat-value">{{ activity }}</span>
+                <span class="stat-label">Status</span>
             </div>
             {% comment %} Credits and films differ whenever someone holds more than one
                job on a film — a director who also wrote and produced it is

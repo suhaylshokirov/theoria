@@ -5,7 +5,7 @@
 {% block description %}{{ person.name }}: {{ film_count }} film{{ film_count|pluralize }} in the Theoria catalog.{% endblock %}
 
 {% block content %}
-{% include "movies/_person_header.html" with person=person film_count=film_count avg_rating=avg_rating career_period=career_period credit_count=credit_count only %}
+{% include "movies/_person_header.html" with person=person film_count=film_count avg_rating=avg_rating activity=activity credit_count=credit_count only %}
 
 {% comment %} Person bio (Task 72): who they are, above their films — the same
    slot and treatment studio_detail.html gives a studio's description. Every
