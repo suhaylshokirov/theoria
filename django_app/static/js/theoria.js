@@ -436,6 +436,11 @@
         encodeURIComponent(key) +
         "?autoplay=1";
       iframe.title = play.getAttribute("data-video-name") || "Video";
+      // The site sends Referrer-Policy: same-origin (Django's SecurityMiddleware
+      // default), which strips the Referer on this cross-origin load and makes
+      // YouTube reject the embed with "player configuration error" (153). Send
+      // the origin for just this iframe so YouTube can validate the domain.
+      iframe.referrerPolicy = "strict-origin-when-cross-origin";
       iframe.allow =
         "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
       iframe.setAttribute("allowfullscreen", "");
