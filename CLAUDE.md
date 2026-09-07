@@ -229,6 +229,24 @@ CORS, so it would strand the socket) and one to `img.youtube.com` scoped to film
 trailer, and `decoding="async"` on all 10 images. `pytest` **374** unchanged (no test asserts on
 any of this); 12-route live walk against the replica all 200/404; `manage.py check` and
 `node --check` clean. Full detail in `for_learning.md`.
+Since then (ad-hoc, 2026-09-07): **the `/movies/` genre filter is a custom in-page dropdown on
+mobile now, not the native `<select>` picker.** User on a phone: tapping the genre `<select>` opens
+the OS's full-screen option list — 18 genres fill the whole viewport. The native picker can't be
+restyled, so `initFilterMenu()` (new, in `theoria.js`) progressively enhances any
+`<select data-menu>` — currently just `#movie-genre` — into a trigger button + a short scrollable
+`role="listbox"` panel (`max-height: min(60vh, 20rem)`, ~7 rows then scroll). The real `<select>`
+stays in the DOM (`hidden`, still submits) as the value store **and** the no-JS control; a
+selection sets `select.value` and dispatches a bubbling `change`, so `initLiveFilter()` re-fetches
+exactly as before. Keyboard: ArrowUp/Down/Home/End/Enter/Escape, outside-click + `pageshow` close,
+focus moved on `requestAnimationFrame` after the panel un-hides (focusing in the same tick is
+unreliable). **CSS additive only** (Task 38): new `.menu`/`.menu-trigger` (sheds the global
+`button{}` lime fill, mirrors `.field select`)/`.menu-panel`/`.menu-option` (lime-dot marker on
+the current row), every value a theme token so dark mode follows with no block of its own; a
+`@media (pointer: coarse)` bump to 16px + a ~48px row. Live-verified with a headless mobile
+viewport (390×844, both themes): closed state matches the old select, open panel is 320px with all
+19 options reachable, picking "Horror" filters the grid and updates the URL; keyboard pick,
+outside-click and no-JS fallback all confirmed. `pytest` **372** (+1: the genre `<select>` carries
+`data-menu`); `node --check` clean.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-07

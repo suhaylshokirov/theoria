@@ -1187,6 +1187,131 @@ input[type="search"]:focus {
   outline: none;
 }
 
+/* Filter menu — the JS-built replacement for a long <select> in a toolbar
+   (see initFilterMenu() in theoria.js). The native <select> picker opens a
+   full-screen OS list on a phone; this keeps the choices to a short scroll
+   inside the page. Additive: no rule above is touched, and with JS off the
+   real <select> is what renders. Every value is a theme token, so the panel
+   follows light/dark with no dark-mode block of its own. */
+.menu {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+}
+
+/* The trigger has to shed the global button{} treatment (lime fill, uppercase,
+   pill) and instead read exactly like the .field select it stands in for. */
+.menu-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
+  background-image: var(--icon-chevron);
+  background-repeat: no-repeat;
+  background-position: right var(--space-4) center;
+  background-size: 0.7rem;
+  border: none;
+  /* Pill, not square: the trigger fills the .field shell, so its tap-highlight
+     and focus background should follow the same rounded edge. */
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  font-stretch: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  padding: var(--space-3) var(--space-4);
+  padding-right: calc(var(--space-4) + 1.1rem);
+  cursor: pointer;
+}
+
+.menu-label {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.menu-panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 30;
+  width: max-content;
+  min-width: 100%;
+  max-width: min(80vw, 18rem);
+  max-height: min(60vh, 20rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: var(--space-1);
+}
+
+.menu-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  font-stretch: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+/* A dot slot on every row so the label baseline doesn't shift when one is
+   marked; only the current choice fills it. */
+.menu-option::before {
+  content: "";
+  flex: none;
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.menu-option:hover,
+.menu-option:focus-visible {
+  background: var(--sheet);
+  outline-offset: -2px;
+}
+
+.menu-option[aria-selected="true"] {
+  color: var(--lime-text);
+  font-weight: 600;
+}
+
+.menu-option[aria-selected="true"]::before {
+  background: var(--lime-mark);
+}
+
+/* Match the 16px the search field takes on touch (see the pointer:coarse
+   block further down), and give each row a ~48px target. */
+@media (pointer: coarse) {
+  .menu-trigger,
+  .menu-option {
+    font-size: 16px;
+  }
+  .menu-option {
+    padding-block: var(--space-4);
+  }
+}
+
 /* Lime is the action colour. Ink text on lime is 13:1, so the label stays
    sharp; hover deepens the fill rather than changing hue. Text uses the fixed
    --ink-on-lime rather than --ink: --ink flips to near-white in dark mode,

@@ -246,6 +246,10 @@ def test_movie_list_filters_by_genre():
     qs.distinct.assert_called_once()
     assert response.context["genre"] == "horror"
     assert response.context["genre_choices"] == [("horror", "Horror")]
+    # The genre <select> carries data-menu so initFilterMenu() (theoria.js)
+    # upgrades it to a compact in-page dropdown on mobile, where the native
+    # picker opens a full-screen list.
+    assert 'id="movie-genre" data-menu' in response.content.decode()
 
 
 def test_movie_list_unknown_genre_falls_back_to_unfiltered():

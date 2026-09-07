@@ -33,10 +33,16 @@
             {% comment %} Genre is a facet of a film, not an entity with its own
                page — there was a /genres/ index once (removed 2026-08-14, see
                CLAUDE.md); this is a plain <select> filter here instead, the
-               same treatment person_list.html gives "known for" (Task 70). {% endcomment %}
+               same treatment person_list.html gives "known for" (Task 70).
+
+               data-menu: with JS on, initFilterMenu() in theoria.js swaps this
+               for a compact in-page dropdown. The native <select> picker opens
+               a full-screen OS list on a phone — 18 genres fill the whole
+               viewport. The <select> stays in the DOM (hidden) as the value
+               store and the no-JS control. {% endcomment %}
             <div class="field">
                 <label for="movie-genre" class="visually-hidden">Filter by genre</label>
-                <select name="genre" id="movie-genre">
+                <select name="genre" id="movie-genre" data-menu>
                     <option value="">Any genre</option>
                     {% for slug, name in genre_choices %}
                     <option value="{{ slug }}" {% if genre == slug %}selected{% endif %}>{{ name }}</option>
