@@ -1378,6 +1378,54 @@ def test_career_period_ongoing_career_reads_start_dash_active():
     assert _career_period(date(1997, 1, 1), today) == "1997–Active"
 
 
+def test_career_period_living_person_reads_active_despite_a_stale_last_film():
+    from movies.views import _career_period
+
+    # The catalogue is thin — a gap since someone's latest known film is a
+    # data hole far more often than a retirement, so anyone alive is Active.
+    assert (
+        _career_period(date(1997, 1, 1), date(2015, 1, 1), still_active=True)
+        == "1997–Active"
+    )
+    assert (
+        _career_period(date(2015, 6, 1), date(2015, 6, 1), still_active=True)
+        == "2015–Active"
+    )
+
+
+def test_career_period_living_person_just_starting_is_active_with_no_range():
+    from movies.views import _career_period
+
+    today = date.today()
+    assert _career_period(today, today, still_active=True) == "Active"
+
+
+def test_career_period_deceased_person_never_reads_active():
+    from movies.views import _career_period
+
+    today = date.today()
+    # Even a film released this year (posthumous) doesn't reopen the career.
+    assert (
+        _career_period(date(1980, 1, 1), today, still_active=False)
+        == f"1980–{today.year}"
+    )
+    assert (
+        _career_period(date(1980, 1, 1), date(2008, 1, 1), still_active=False)
+        == "1980–2008"
+    )
+    assert (
+        _career_period(date(2008, 1, 1), date(2008, 1, 1), still_active=False)
+        == "2008"
+    )
+
+
+def test_career_period_no_start_is_em_dash_regardless_of_alive_flag():
+    from movies.views import _career_period
+
+    assert _career_period(None, None, still_active=True) == "—"
+    assert _career_period(None, None, still_active=False) == "—"
+
+
 # ---------------------------------------------------------------------------
 # person_detail, and the legacy actor/director redirects
 # ---------------------------------------------------------------------------
@@ -1462,7 +1510,9 @@ def test_person_detail_merges_multi_job_credits_into_one_filmography_row():
     # Three credits, one film — a person holding several jobs on one title.
     assert response.context["credit_count"] == 3
     assert response.context["film_count"] == 1
-    assert response.context["career_period"] == "2020"
+    # A living person (no deathday) always reads as Active, even though our
+    # only catalogued film for them is from a past year.
+    assert response.context["career_period"] == "2020–Active"
     assert response.context["avg_rating"] == Decimal("7.50")
     # The poster grid displays exactly the figure the average was computed
     # from — the annotation attached onto the same Movie instance.
@@ -1552,6 +1602,31 @@ def test_person_detail_filters_filmography_by_search():
     assert response.context["film_count"] == 2
     assert response.context["q"] == "alph"
     assert response.context["base_query"] == "q=alph&sort=release"
+
+
+def test_person_detail_deceased_person_shows_a_closed_career_range():
+    """A person with a recorded deathday never reads as Active — the range
+    ends at their last catalogued film."""
+    person = _person()
+    person.deathday = date(2014, 2, 2)
+    movie = _movie(movie_id=1, title="Only Film")
+    credits = [
+        Credit(movie=movie, person=person, department="Acting", job="Actor",
+               character_name="Role", ordering=0),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(
+                credits, {1: Decimal("7.0")},
+                span={"earliest": date(1978, 1, 1), "latest": date(2009, 1, 1)},
+            ):
+        response = client.get("/people/test-person/")
+
+    assert response.status_code == 200
+    assert response.context["career_period"] == "1978–2009"
+    # The stat is labelled "Career" (a closed span), not "Active", for the dead.
+    body = response.content.decode()
+    assert '<span class="stat-label">Career</span>' in body
 
 
 def test_person_detail_sorts_filmography_by_title():

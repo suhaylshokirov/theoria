@@ -28,8 +28,10 @@
                 <span class="stat-label">Avg rating</span>
             </div>
             <div class="stat">
+                {% comment %} "Active" for the living (the value carries the "–Active"
+                   suffix); "Career" for someone who has died, whose span is closed. {% endcomment %}
                 <span class="stat-value">{{ career_period }}</span>
-                <span class="stat-label">Active</span>
+                <span class="stat-label">{% if person.deathday %}Career{% else %}Active{% endif %}</span>
             </div>
             {% comment %} Credits and films differ whenever someone holds more than one
                job on a film — a director who also wrote and produced it is

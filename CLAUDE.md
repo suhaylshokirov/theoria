@@ -186,6 +186,19 @@ restore that actually flips the theme (`evt.persisted && now !== prev`) dispatch
 so the analytics charts rebuild. `theoria.js`'s `initThemeToggle` re-runs `syncLabel` on
 `pageshow` so the toggle's `aria-label` matches. Template + JS only, no view/CSS/test change.
 `pytest` **369**.
+Since then (ad-hoc, 2026-09-07): **the person page's "Active" stat now reads from `deathday`, not
+from the last catalogued film.** `_career_period()` gained a keyword-only `still_active` (only the
+person page passes it; the studio page still leaves it `None` and is unchanged): `True` for anyone
+with no `deathday` → always `"{start}–Active"` (a thin catalogue makes "years since last film" a
+bad retirement proxy — Al Pacino/De Niro/Morgan Freeman were showing closed ranges like
+`1991–2016`); `False` for someone who has died → a closed `"{start}–{end}"` range that a
+posthumous release can't reopen, and `_person_header.html` labels that stat **"Career"** instead
+of "Active" when `person.deathday` is set. Live-checked against the replica (Brando/Ledger/Hoffman
+→ closed; Pacino/De Niro/Freeman → `–Active`). `views.py` + one template; `pytest` **369 → 374**
+(+5: living-with-stale-filmography, deceased-never-Active, just-starting, em-dash-regardless, and a
+deceased `person_detail` integration test asserting the "Career" label). **Known data gap, not a
+bug:** a genuinely deceased person whose `dim_person.deathday` is still null (Task 72's backfill is
+partial) reads as Active until that column fills — e.g. James Dean.
 Earlier               : **Task 70 — replaced the `/movies/` country filter with a genre filter
 (2026-08-30).**
 Last updated          : 2026-09-07

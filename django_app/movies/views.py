@@ -603,16 +603,35 @@ def studio_detail(request, company_slug):
     return render(request, "movies/studio_detail.html", context)
 
 
-def _career_period(start, end):
-    """Render a career span as a person-page stat, e.g. "1997–2019" or "2019–Active".
+def _career_period(start, end, *, still_active=None):
+    """Render a career span as a person- or studio-page stat, e.g. "1997–2019"
+    or "2019–Active".
 
     A closed range naming the same year twice (e.g. "2026–2026" for a single
-    film released this year) reads as a typo, not a fact. And a range that
-    ends in the current year isn't really "closed" — the person's latest
-    known film is one that just came out, not one that ended their career.
+    film released this year) reads as a typo, not a fact, so a one-year span
+    collapses to the year alone.
+
+    `still_active` decides how the end of the range reads. Only the person
+    page passes it; the studio page leaves it None.
+
+      None  — studio. "Active" only if the latest film is this year or later;
+              a studio that stopped releasing is genuinely inactive.
+      True  — a living person. Our film catalogue is deliberately thin, so a
+              gap since someone's latest catalogued film is far more often a
+              hole in the data than a retirement — anyone still alive reads
+              as Active regardless of when we last have them on a film.
+      False — a person who has died. The career is closed no matter when the
+              last film lands (a posthumous release doesn't reopen it), so
+              the range always ends at a year, never "Active".
     """
     if not start:
         return "—"
+    if still_active is True:
+        if start.year >= date.today().year:
+            return "Active"
+        return f"{start.year}–Active"
+    if still_active is False:
+        return str(start.year) if start.year == end.year else f"{start.year}–{end.year}"
     current_year = date.today().year
     if end.year >= current_year:
         return "Active" if start.year == end.year else f"{start.year}–Active"
@@ -828,7 +847,13 @@ def person_detail(request, person_slug):
         "film_count": len(movie_ids),
         "credit_count": len(credits),
         "avg_rating": avg_rating,
-        "career_period": _career_period(span["earliest"], span["latest"]),
+        # A person with no recorded deathday reads as still active — see
+        # _career_period on why a thin catalogue makes "last film year" a bad
+        # proxy for "retired".
+        "career_period": _career_period(
+            span["earliest"], span["latest"],
+            still_active=person.deathday is None,
+        ),
     }
     # Same live-filter contract as movie_list()/studio_detail(): the record
     # header is never part of the swap, so only the grid+pager fragment comes
