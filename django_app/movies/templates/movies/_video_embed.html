@@ -19,8 +19,12 @@
        data-video-name="{{ video.name|default:kind }}"
        href="https://www.youtube.com/watch?v={{ video.key|urlencode }}"
        aria-label="Play {{ kind }}: {{ video.name|default:'video' }}">
+        {% comment %} hqdefault.jpg (always present) is the no-JS baseline;
+           theoria.js upgrades it to the sharpest still YouTube has. The 16:9
+           dimensions match the frame — object-fit: cover handles the 4:3
+           hqdefault until the widescreen still swaps in. {% endcomment %}
         <img src="https://img.youtube.com/vi/{{ video.key|urlencode }}/hqdefault.jpg"
-             alt="" loading="lazy" decoding="async" width="480" height="360">
+             alt="" loading="lazy" decoding="async" width="1280" height="720">
         <span class="video-play-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </span>

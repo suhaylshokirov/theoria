@@ -476,7 +476,46 @@
      loads until it is actually asked for, and a no-JS reader just follows
      the link. */
 
+  /* The <img> ships as hqdefault.jpg (480x360) — the one still YouTube always
+     has, so it is the safe no-JS default. But the frame renders ~1200px wide
+     on desktop, where 480px is visibly soft. Try the sharper stills in turn
+     and swap one in only once it has actually loaded, so a video without a
+     maxres/sd still (YouTube 404s those) just keeps the hqdefault it already
+     showed. Playback resolution itself is YouTube's call — bandwidth-adaptive,
+     and not settable from an embed — so this is only about the preview. */
+  function upgradeVideoThumb(img) {
+    var play = img.closest("[data-video-play]");
+    var key = play && play.getAttribute("data-video-key");
+    if (!key) return;
+    var stills = ["maxresdefault", "sddefault"];
+
+    (function tryStill(i) {
+      if (i >= stills.length) return;
+      var url =
+        "https://img.youtube.com/vi/" +
+        encodeURIComponent(key) +
+        "/" +
+        stills[i] +
+        ".jpg";
+      var probe = new Image();
+      probe.onload = function () {
+        // A missing still sometimes resolves to a tiny grey placeholder rather
+        // than a 404 — anything that small is not a real thumbnail.
+        if (probe.naturalWidth > 320) img.src = url;
+        else tryStill(i + 1);
+      };
+      probe.onerror = function () {
+        tryStill(i + 1);
+      };
+      probe.src = url;
+    })(0);
+  }
+
   function initVideoEmbeds() {
+    document
+      .querySelectorAll("[data-video-embed] [data-video-play] img")
+      .forEach(upgradeVideoThumb);
+
     document.addEventListener("click", function (e) {
       var play = e.target.closest("[data-video-play]");
       if (!play) return;
