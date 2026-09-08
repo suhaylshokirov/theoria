@@ -71,11 +71,11 @@ def test_home_returns_200_with_expected_context():
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Person, "objects", new=MagicMock()
-    ) as person_mgr, patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+    ) as person_mgr, patch.object(
         MovieRating, "objects", new=MagicMock()
     ) as rating_mgr:
         using = movie_mgr.using.return_value
-        using.count.return_value = 99
+        using.count.return_value = 1217
         # top_rated and newest both now annotate(imdb_rating=...).order_by(...)[:12]
         # (Task 68), so both hit this same chain regardless of which order_by
         # expression each actually orders by.
@@ -83,7 +83,6 @@ def test_home_returns_200_with_expected_context():
         # mosaic: .filter(poster_path__isnull=False).order_by(...)[:120]
         using.filter.return_value.order_by.return_value.__getitem__.return_value = [movie]
         person_mgr.using.return_value.count.return_value = 122685
-        credit_mgr.using.return_value.count.return_value = 237454
         # avg_rating now reads fact_movie_rating filtered to source="imdb"
         # instead of averaging every fact_movie_metrics row (Task 68).
         rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
@@ -93,13 +92,25 @@ def test_home_returns_200_with_expected_context():
         response = client.get("/")
 
     assert response.status_code == 200
-    assert response.context["movie_count"] == 99
-    assert response.context["person_count"] == 122685
-    assert response.context["credit_count"] == 237454
+    # Counts are shown approximately (1,200+ etc.), rounded down by _approx().
+    assert response.context["movie_count"] == 1200
+    assert response.context["person_count"] == 120000
+    # Credits was removed from the landing page.
+    assert "credit_count" not in response.context
     assert response.context["avg_rating"] == Decimal("6.84")
     assert list(response.context["top_rated"]) == [movie]
     assert list(response.context["newest"]) == [movie]
     assert list(response.context["mosaic"]) == [movie]
+
+
+def test_home_approx_rounds_counts_down():
+    from movies.views import _approx
+
+    assert _approx(1217) == 1200
+    assert _approx(122685) == 120000
+    assert _approx(237454) == 230000
+    assert _approx(99) == 99          # too small to round
+    assert _approx(0) == 0
 
 
 # ---------------------------------------------------------------------------

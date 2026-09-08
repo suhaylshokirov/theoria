@@ -92,9 +92,12 @@
     var target = parseFloat(el.getAttribute("data-count"));
     if (isNaN(target)) return;
     var decimals = parseInt(el.getAttribute("data-decimals") || "0", 10);
+    // An optional trailing string kept through the animation, e.g. the "+" on
+    // the homepage's approximate counts ("1,200+").
+    var suffix = el.getAttribute("data-suffix") || "";
 
     if (reduce) {
-      el.textContent = format(target, decimals);
+      el.textContent = format(target, decimals) + suffix;
       return;
     }
 
@@ -105,9 +108,9 @@
       if (start === null) start = now;
       var t = Math.min((now - start) / duration, 1);
       var eased = 1 - Math.pow(1 - t, 3); // ease-out cubic, settling to rest
-      el.textContent = format(target * eased, decimals);
+      el.textContent = format(target * eased, decimals) + suffix;
       if (t < 1) requestAnimationFrame(step);
-      else el.textContent = format(target, decimals);
+      else el.textContent = format(target, decimals) + suffix;
     }
 
     requestAnimationFrame(step);

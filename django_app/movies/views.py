@@ -56,6 +56,21 @@ MOVIE_SORTS = {
 }
 
 
+def _approx(n):
+    """Round a count down to a rounder, approximate figure for the landing page:
+    1217 -> 1200, 122685 -> 120000. The homepage shows scale, not exact
+    inventory, and the number is rendered with a trailing "+"."""
+    if n < 100:
+        return n
+    if n < 10_000:
+        step = 100
+    elif n < 100_000:
+        step = 1_000
+    else:
+        step = 10_000
+    return n - (n % step)
+
+
 def home(request):
     """Landing page: the catalog as a contact sheet, plus warehouse-wide stats."""
     top_rated = (
@@ -79,9 +94,11 @@ def home(request):
     )
 
     context = {
-        "movie_count": Movie.objects.using("warehouse").count(),
-        "person_count": Person.objects.using("warehouse").count(),
-        "credit_count": Credit.objects.using("warehouse").count(),
+        # Shown as "1,200+" etc. — an approximate figure, not an exact count.
+        # Credits (every fact_credit row) was dropped: a raw join-table volume
+        # means nothing to a visitor, unlike Movies / People / Avg rating.
+        "movie_count": _approx(Movie.objects.using("warehouse").count()),
+        "person_count": _approx(Person.objects.using("warehouse").count()),
         # Reads fact_movie_rating instead of fact_movie_metrics (Task 68):
         # the old figure averaged every fact_movie_metrics row, silently
         # over-weighting multi-genre films since a film's rating repeats

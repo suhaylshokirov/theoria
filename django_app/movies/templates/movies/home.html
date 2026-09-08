@@ -25,20 +25,16 @@
         <dl class="hero-counts">
             <div class="count">
                 <dt class="stat-label">Movies</dt>
-                <dd class="stat-value" data-count="{{ movie_count }}">{{ movie_count }}</dd>
+                <dd class="stat-value" data-count="{{ movie_count }}" data-suffix="+">{{ movie_count }}+</dd>
             </div>
             <div class="count">
                 <dt class="stat-label">People</dt>
-                <dd class="stat-value" data-count="{{ person_count }}">{{ person_count }}</dd>
-            </div>
-            <div class="count">
-                <dt class="stat-label">Credits</dt>
-                <dd class="stat-value" data-count="{{ credit_count }}">{{ credit_count }}</dd>
+                <dd class="stat-value" data-count="{{ person_count }}" data-suffix="+">{{ person_count }}+</dd>
             </div>
             <div class="count">
                 <dt class="stat-label">Avg rating</dt>
                 <dd class="stat-value">
-                    {% if avg_rating %}<span data-count="{{ avg_rating|floatformat:2 }}" data-decimals="2">{{ avg_rating|floatformat:2 }}</span>{% else %}—{% endif %}
+                    {% if avg_rating %}<span data-count="{{ avg_rating|floatformat:1 }}" data-decimals="1">{{ avg_rating|floatformat:1 }}</span>{% else %}—{% endif %}
                 </dd>
             </div>
         </dl>
