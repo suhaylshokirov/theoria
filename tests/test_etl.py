@@ -523,6 +523,238 @@ def test_ingest_movie_details_empty_input_returns_empty_lists():
     mock_s3.put_object.assert_not_called()
 
 
+# --- ingest_discover_tv (Task 77) -------------------------------------------
+
+from etl.bronze.ingest_discover_tv import ingest_discover_tv
+
+
+def _discover_tv_page(page: int, ids: list[int], total_pages: int = 1) -> dict:
+    return {
+        "page": page,
+        "total_pages": total_pages,
+        "results": [{"id": sid, "name": f"Series {sid}"} for sid in ids],
+    }
+
+
+def test_discover_tv_sends_first_air_year_and_vote_filters():
+    """discover_tv() must translate its args into TMDB query params."""
+    client = _client()
+    with patch.object(
+        client.session, "get", return_value=_fake_response(200, {"results": []})
+    ) as mock_get:
+        client.discover_tv(page=2, first_air_year=2008, min_votes=300)
+
+    _, kwargs = mock_get.call_args
+    params = kwargs["params"]
+    assert params["first_air_date_year"] == 2008
+    assert params["vote_count.gte"] == 300
+    assert params["page"] == 2
+    assert params["sort_by"] == "vote_count.desc"
+
+
+def test_ingest_discover_tv_writes_one_file_per_year_and_page():
+    """Each year's page must land under bronze/discover_tv/.../year= ."""
+    mock_client = MagicMock()
+    mock_client.discover_tv.side_effect = [
+        _discover_tv_page(1, [10, 20]),
+        _discover_tv_page(1, [30, 40]),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ingest_discover_tv(
+            ingestion_date=dt.date(2026, 9, 9),
+            client=mock_client,
+            start_year=1994,
+            end_year=1995,
+            pages_per_year=1,
+        )
+
+    keys = [call[1]["Key"] for call in mock_s3.put_object.call_args_list]
+    assert "bronze/discover_tv/ingestion_date=2026-09-09/year=1994/page_0001.json" in keys
+    assert "bronze/discover_tv/ingestion_date=2026-09-09/year=1995/page_0001.json" in keys
+
+
+def test_ingest_discover_tv_deduplicates_ids_across_years():
+    """A show returned for two years must appear once in the returned list."""
+    mock_client = MagicMock()
+    mock_client.discover_tv.side_effect = [
+        _discover_tv_page(1, [1, 2]),
+        _discover_tv_page(1, [2, 3]),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ids = ingest_discover_tv(
+            ingestion_date=dt.date(2026, 9, 9),
+            client=mock_client,
+            start_year=1994,
+            end_year=1995,
+            pages_per_year=1,
+        )
+
+    assert ids == [1, 2, 3]
+
+
+def test_ingest_discover_tv_continues_after_a_failed_year():
+    """One year raising must not lose the years already written."""
+    mock_client = MagicMock()
+    mock_client.discover_tv.side_effect = [
+        _discover_tv_page(1, [10]),
+        TMDBAPIError("boom"),
+        _discover_tv_page(1, [30]),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ids = ingest_discover_tv(
+            ingestion_date=dt.date(2026, 9, 9),
+            client=mock_client,
+            start_year=1994,
+            end_year=1996,
+            pages_per_year=1,
+        )
+
+    assert mock_s3.put_object.call_count == 2
+    assert ids == [10, 30]
+
+
+def test_ingest_discover_tv_is_idempotent_same_date_same_keys():
+    """Same ingestion_date → same set of S3 keys on a re-run."""
+    def _fresh_client():
+        c = MagicMock()
+        c.discover_tv.side_effect = [
+            _discover_tv_page(1, [10, 20]),
+            _discover_tv_page(1, [30]),
+        ]
+        return c
+
+    def _run():
+        mock_s3 = MagicMock()
+        mock_s3.put_object.return_value = {}
+        with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+            ingest_discover_tv(
+                ingestion_date=dt.date(2026, 9, 9),
+                client=_fresh_client(),
+                start_year=1994,
+                end_year=1995,
+                pages_per_year=1,
+            )
+        return {c[1]["Key"] for c in mock_s3.put_object.call_args_list}
+
+    assert _run() == _run()
+
+
+# --- ingest_series_details (Task 77) --------------------------------------
+
+from etl.bronze.ingest_series_details import ingest_series_details
+
+
+def _series_detail(series_id: int) -> dict:
+    """Build a minimal TMDB series-detail payload with the appended blocks."""
+    return {
+        "id": series_id,
+        "name": f"Series {series_id}",
+        "number_of_episodes": 62,
+        "aggregate_credits": {"cast": [], "crew": []},
+        "external_ids": {"imdb_id": f"tt{series_id:07d}"},
+        "videos": {"results": []},
+    }
+
+
+def test_ingest_series_details_writes_one_file_per_series():
+    """Each series_id must land in its own S3 key named <series_id>.json."""
+    mock_client = MagicMock()
+    mock_client.get_series_details.side_effect = [
+        _series_detail(1396),
+        _series_detail(1399),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_series_details(
+            series_ids=[1396, 1399],
+            ingestion_date=dt.date(2026, 9, 9),
+            client=mock_client,
+        )
+
+    assert succeeded == [1396, 1399]
+    assert failed == []
+    keys_written = [call[1]["Key"] for call in mock_s3.put_object.call_args_list]
+    assert "bronze/series_details/ingestion_date=2026-09-09/1396.json" in keys_written
+    assert "bronze/series_details/ingestion_date=2026-09-09/1399.json" in keys_written
+
+
+def test_ingest_series_details_sends_one_call_with_all_three_blocks_appended():
+    """One TMDB call per series, folding in aggregate_credits + external_ids + videos."""
+    mock_client = MagicMock()
+    mock_client.get_series_details.return_value = _series_detail(1396)
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ingest_series_details(
+            series_ids=[1396],
+            ingestion_date=dt.date(2026, 9, 9),
+            client=mock_client,
+        )
+
+    assert mock_client.get_series_details.call_count == 1
+    _, kwargs = mock_client.get_series_details.call_args
+    assert kwargs["append_to_response"] == "aggregate_credits,external_ids,videos"
+
+
+def test_ingest_series_details_logs_failed_series_id_and_continues():
+    """A failed series_id is recorded; successes still write."""
+    mock_client = MagicMock()
+    mock_client.get_series_details.side_effect = [
+        _series_detail(100),
+        RuntimeError("404 not found"),
+        _series_detail(300),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = ingest_series_details(
+            series_ids=[100, 200, 300],
+            ingestion_date=dt.date(2026, 9, 9),
+            client=mock_client,
+        )
+
+    assert succeeded == [100, 300]
+    assert failed == [200]
+    assert mock_s3.put_object.call_count == 2
+
+
+def test_get_series_details_without_append_sends_no_extra_params():
+    """The default call shape sends only the api_key."""
+    client = _client()
+    with patch.object(
+        client.session, "get", return_value=_fake_response(200, {"id": 1396})
+    ) as mock_get:
+        client.get_series_details(1396)
+
+    _, kwargs = mock_get.call_args
+    assert "append_to_response" not in kwargs["params"]
+
+
+def test_get_tv_genres_hits_the_tv_list_endpoint():
+    """get_tv_genres() must GET genre/tv/list, not the movie list."""
+    client = _client()
+    with patch.object(
+        client.session, "get", return_value=_fake_response(200, {"genres": []})
+    ) as mock_get:
+        client.get_tv_genres()
+
+    args, _ = mock_get.call_args
+    assert args[0].endswith("/genre/tv/list")
+
+
 # --- ingest_credits -----------------------------------------------------------
 
 from etl.bronze.ingest_credits import ingest_credits

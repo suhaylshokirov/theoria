@@ -30,11 +30,13 @@ from etl import s3_utils
 from etl.bronze.ingest_companies import ingest_companies
 from etl.bronze.ingest_credits import ingest_credits
 from etl.bronze.ingest_discover import ingest_discover
+from etl.bronze.ingest_discover_tv import ingest_discover_tv
 from etl.bronze.ingest_genres import ingest_genres
 from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
 from etl.bronze.ingest_movie_details import ingest_movie_details
 from etl.bronze.ingest_movies import ingest_movies
 from etl.bronze.ingest_people import ingest_people
+from etl.bronze.ingest_series_details import ingest_series_details
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.silver.transform_companies import transform_companies
 from etl.silver.transform_credits_bridge import transform_credits_bridge
@@ -125,6 +127,7 @@ def run_pipeline(
     ingestion_date: dt.date | None = None,
     max_pages: int | None = None,
     source: str = "popular",
+    with_tv: bool = False,
 ) -> None:
     """Run every ETL stage in order for a single ingestion_date.
 
@@ -139,6 +142,13 @@ def run_pipeline(
     (whatever TMDB is featuring today) or "discover" (the most-voted films of
     each year in a configured range). Everything downstream is identical —
     both return a plain list of movie_ids.
+
+    `with_tv` adds a Bronze-only TV series pass (discover_tv + series_details)
+    after the movie ingest. It is off by default so the movie pipeline's
+    runtime and TMDB call volume are provably unchanged until Task 85 turns TV
+    on for real; nothing downstream reads the `bronze/discover_tv` /
+    `bronze/series_details` partitions yet (the Silver transforms land in
+    Task 78).
     """
     # Fail on a missing TMDB/AWS secret now, not 4 minutes into ingestion.
     config.require_etl()
@@ -201,6 +211,22 @@ def run_pipeline(
         "Bronze person details: %d new people fetched (of %d photo-having candidates)",
         len(succeeded_people), len(person_ids),
     )
+
+    # TV series (Task 77): Bronze only, and only when asked. Off by default so
+    # the movie pipeline's call volume is provably unchanged. discover_tv
+    # returns the series_ids that feed series_details directly, exactly as
+    # ingest_discover feeds ingest_movie_details above. Nothing downstream
+    # reads these partitions yet — the Silver transforms arrive in Task 78.
+    if with_tv:
+        series_ids = ingest_discover_tv(ingestion_date=ingestion_date)
+        logger.info("Bronze discover_tv: %d series_id(s) discovered", len(series_ids))
+        succeeded_series, failed_series = ingest_series_details(
+            series_ids, ingestion_date=ingestion_date
+        )
+        logger.info(
+            "Bronze series details: %d/%d succeeded",
+            len(succeeded_series), len(series_ids),
+        )
 
     transform_movies(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date)
@@ -268,6 +294,15 @@ def _parse_args() -> argparse.Namespace:
             "configured DISCOVER_* range). Default: popular."
         ),
     )
+    parser.add_argument(
+        "--with-tv",
+        action="store_true",
+        help=(
+            "Also run the Bronze-only TV series pass (discover_tv + "
+            "series_details). Off by default; nothing downstream consumes it "
+            "yet (Task 77)."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -277,5 +312,8 @@ if __name__ == "__main__":
     setup_logging("run_pipeline")
     args = _parse_args()
     run_pipeline(
-        ingestion_date=args.date, max_pages=args.max_pages, source=args.source
+        ingestion_date=args.date,
+        max_pages=args.max_pages,
+        source=args.source,
+        with_tv=args.with_tv,
     )
