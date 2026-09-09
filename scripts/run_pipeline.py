@@ -47,6 +47,8 @@ from etl.silver.transform_movie_videos import transform_movie_videos
 from etl.silver.transform_movies import transform_movies
 from etl.silver.transform_people import transform_people
 from etl.silver.transform_people_details import transform_people_details
+from etl.silver.transform_series import transform_series
+from etl.silver.transform_series_links import transform_series_links
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
 from etl.warehouse_loader.load_gold import load_gold
@@ -143,12 +145,12 @@ def run_pipeline(
     each year in a configured range). Everything downstream is identical —
     both return a plain list of movie_ids.
 
-    `with_tv` adds a Bronze-only TV series pass (discover_tv + series_details)
-    after the movie ingest. It is off by default so the movie pipeline's
-    runtime and TMDB call volume are provably unchanged until Task 85 turns TV
-    on for real; nothing downstream reads the `bronze/discover_tv` /
-    `bronze/series_details` partitions yet (the Silver transforms land in
-    Task 78).
+    `with_tv` adds the TV series path — Bronze (discover_tv + series_details +
+    the TV genre list) and Silver (transform_series, transform_series_links,
+    and the TV half of transform_genres / run_silver_checks). It is off by
+    default so the movie pipeline's runtime and TMDB call volume are provably
+    unchanged until Task 85 turns TV on for real; the warehouse load and the
+    site come later (Tasks 79 and 86).
     """
     # Fail on a missing TMDB/AWS secret now, not 4 minutes into ingestion.
     config.require_etl()
@@ -164,7 +166,7 @@ def run_pipeline(
         ingestion_date, source, max_pages,
     )
 
-    ingest_genres(ingestion_date=ingestion_date)
+    ingest_genres(ingestion_date=ingestion_date, with_tv=with_tv)
     if source == "discover":
         movie_ids = ingest_discover(ingestion_date=ingestion_date)
     else:
@@ -212,11 +214,11 @@ def run_pipeline(
         len(succeeded_people), len(person_ids),
     )
 
-    # TV series (Task 77): Bronze only, and only when asked. Off by default so
-    # the movie pipeline's call volume is provably unchanged. discover_tv
-    # returns the series_ids that feed series_details directly, exactly as
-    # ingest_discover feeds ingest_movie_details above. Nothing downstream
-    # reads these partitions yet — the Silver transforms arrive in Task 78.
+    # TV series (Tasks 77–78): Bronze + Silver, and only when asked. Off by
+    # default so the movie pipeline's call volume and runtime are provably
+    # unchanged. discover_tv returns the series_ids that feed series_details
+    # directly, exactly as ingest_discover feeds ingest_movie_details above.
+    # The warehouse load arrives in Task 79; the site shows nothing until 86.
     if with_tv:
         series_ids = ingest_discover_tv(ingestion_date=ingestion_date)
         logger.info("Bronze discover_tv: %d series_id(s) discovered", len(series_ids))
@@ -231,14 +233,17 @@ def run_pipeline(
     transform_movies(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date)
     transform_people_details(ingestion_date=ingestion_date)
-    transform_genres(ingestion_date=ingestion_date)
+    transform_genres(ingestion_date=ingestion_date, with_tv=with_tv)
     transform_credits_bridge(ingestion_date=ingestion_date)
     transform_movie_links(ingestion_date=ingestion_date)
     transform_movie_videos(ingestion_date=ingestion_date)
     transform_companies(ingestion_date=ingestion_date)
     transform_imdb_ratings(ingestion_date=ingestion_date)
+    if with_tv:
+        transform_series(ingestion_date=ingestion_date)
+        transform_series_links(ingestion_date=ingestion_date)
 
-    silver_results = run_silver_checks(ingestion_date=ingestion_date)
+    silver_results = run_silver_checks(ingestion_date=ingestion_date, with_tv=with_tv)
     silver_failed = [r for r in silver_results if not r.passed]
     if silver_failed:
         logger.warning("Silver DQ checks: %d check(s) failed", len(silver_failed))
@@ -298,9 +303,9 @@ def _parse_args() -> argparse.Namespace:
         "--with-tv",
         action="store_true",
         help=(
-            "Also run the Bronze-only TV series pass (discover_tv + "
-            "series_details). Off by default; nothing downstream consumes it "
-            "yet (Task 77)."
+            "Also run the TV series path through Bronze and Silver (discover_tv, "
+            "series_details, transform_series[_links]). Off by default; the "
+            "warehouse load and UI come later (Tasks 79, 86)."
         ),
     )
     return parser.parse_args()

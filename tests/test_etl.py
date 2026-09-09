@@ -1165,6 +1165,7 @@ def test_transform_people_raises_when_no_bronze_files():
 # --- transform_genres ---------------------------------------------------------
 
 from etl.silver.transform_genres import (
+    _assert_shared_ids_agree,
     _cast_genre_types,
     _extract_genres,
     transform_genres,
@@ -1268,6 +1269,330 @@ def test_transform_genres_raises_when_no_bronze_file():
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         with pytest.raises(Exception):
             transform_genres(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+
+# --- transform_genres: TV merge (Task 78) ----------------------------------
+
+def _make_s3_mock_with_two_genre_files(movie_payload: dict, tv_payload: dict) -> MagicMock:
+    """S3 mock serving genres.json and genres_tv.json by Key."""
+    import json
+    mock_s3 = MagicMock()
+
+    def get_object(Bucket, Key):
+        payload = tv_payload if Key.endswith("genres_tv.json") else movie_payload
+        body = MagicMock()
+        body.read.return_value = json.dumps(payload).encode("utf-8")
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = get_object
+    mock_s3.put_object.return_value = {}
+    return mock_s3
+
+
+def test_assert_shared_ids_agree_returns_shared_count():
+    movie = [{"genre_id": 18, "genre_name": "Drama"}, {"genre_id": 28, "genre_name": "Action"}]
+    tv = [{"genre_id": 18, "genre_name": "Drama"}, {"genre_id": 10759, "genre_name": "Action & Adventure"}]
+    assert _assert_shared_ids_agree(movie, tv) == 1
+
+
+def test_assert_shared_ids_agree_raises_on_name_mismatch():
+    movie = [{"genre_id": 18, "genre_name": "Drama"}]
+    tv = [{"genre_id": 18, "genre_name": "Drama (TV)"}]
+    with pytest.raises(ValueError, match="disagree on shared id"):
+        _assert_shared_ids_agree(movie, tv)
+
+
+def test_transform_genres_with_tv_merges_and_dedupes_shared_ids():
+    """The shared id collapses to one row; the TV-only id is added."""
+    movie_payload = _raw_genres_payload([
+        {"id": 18, "name": "Drama"},
+        {"id": 28, "name": "Action"},
+    ])
+    tv_payload = _raw_genres_payload([
+        {"id": 18, "name": "Drama"},
+        {"id": 10759, "name": "Action & Adventure"},
+    ])
+    mock_s3 = _make_s3_mock_with_two_genre_files(movie_payload, tv_payload)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_genres(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake", with_tv=True
+        )
+
+    _, kwargs = mock_s3.put_object.call_args
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert set(df_out["genre_id"].tolist()) == {18, 28, 10759}
+    assert len(df_out) == 3
+
+
+def test_transform_genres_with_tv_raises_on_shared_id_name_mismatch():
+    movie_payload = _raw_genres_payload([{"id": 18, "name": "Drama"}])
+    tv_payload = _raw_genres_payload([{"id": 18, "name": "Drama series"}])
+    mock_s3 = _make_s3_mock_with_two_genre_files(movie_payload, tv_payload)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(ValueError, match="disagree on shared id"):
+            transform_genres(
+                ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake", with_tv=True
+            )
+
+
+# --- transform_series (Task 78) ------------------------------------------
+
+from etl.silver.transform_series import _flatten_series, transform_series
+
+
+def _raw_series(series_id: int, **overrides) -> dict:
+    """Minimal TMDB series-detail payload with the appended external_ids block."""
+    base = {
+        "id": series_id,
+        "name": f"Series {series_id}",
+        "original_name": f"Series {series_id}",
+        "first_air_date": "2008-01-20",
+        "last_air_date": "2013-09-29",
+        "number_of_seasons": 5,
+        "number_of_episodes": 62,
+        "status": "Ended",
+        "type": "Scripted",
+        "in_production": False,
+        "original_language": "en",
+        "overview": "A chemistry teacher turns to crime.",
+        "tagline": "All bad things must come to an end.",
+        "poster_path": "/poster.jpg",
+        "backdrop_path": "/backdrop.jpg",
+        "homepage": "https://example.com/show",
+        "external_ids": {"imdb_id": f"tt{series_id:07d}"},
+    }
+    base.update(overrides)
+    return base
+
+
+def test_flatten_series_extracts_core_fields_and_imdb_id():
+    row = _flatten_series(_raw_series(1396))
+    assert row["series_id"] == 1396
+    assert row["name"] == "Series 1396"
+    assert row["number_of_episodes"] == 62
+    assert row["imdb_id"] == "tt0001396"  # pulled from the inline external_ids block
+
+
+def test_flatten_series_normalises_empty_strings_to_none():
+    row = _flatten_series(_raw_series(1, tagline="", homepage="", first_air_date=""))
+    assert row["tagline"] is None
+    assert row["homepage"] is None
+    assert row["first_air_date"] is None
+
+
+def test_flatten_series_handles_missing_external_ids():
+    raw = _raw_series(1)
+    del raw["external_ids"]
+    assert _flatten_series(raw)["imdb_id"] is None
+
+
+def test_transform_series_writes_silver_parquet_without_slug():
+    key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_series(1396)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uri = transform_series(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake"
+        )
+
+    assert uri == "s3://theoria-datalake/silver/series/ingestion_date=2026-09-09/series.parquet"
+    _, kwargs = mock_s3.put_object.call_args
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df_out) == 1
+    assert df_out["series_id"].iloc[0] == 1396
+    # Slugs are assigned in the warehouse loader, not here (the dim_movie rule).
+    assert "slug" not in df_out.columns
+
+
+def test_transform_series_deduplicates_on_series_id():
+    key1 = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    key2 = "bronze/series_details/ingestion_date=2026-09-09/1396_dup.json"
+    mock_s3 = _make_s3_mock_with_files(
+        {key1: _raw_series(1396), key2: _raw_series(1396, name="Renamed")}
+    )
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_series(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+    _, kwargs = mock_s3.put_object.call_args
+    df_out = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df_out) == 1
+    assert df_out["name"].iloc[0] == "Renamed"  # keep="last"
+
+
+def test_transform_series_raises_when_no_bronze_files():
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            transform_series(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+
+# --- transform_series_links (Task 78) ----------------------------------
+
+from etl.silver.transform_series_links import (
+    _extract_genre_rows,
+    _extract_network_rows,
+    transform_series_links,
+)
+
+
+def _raw_series_with_links(series_id: int, **overrides) -> dict:
+    base = _raw_series(series_id)
+    base.update({
+        "production_companies": [
+            {"id": 11073, "name": "Sony Pictures Television", "logo_path": "/s.png", "origin_country": "US"},
+            {"id": 33, "name": "Universal", "logo_path": None, "origin_country": "US"},
+        ],
+        "production_countries": [{"iso_3166_1": "US", "name": "United States of America"}],
+        "origin_country": ["US"],
+        "spoken_languages": [
+            {"iso_639_1": "en", "name": "English", "english_name": "English"},
+        ],
+        "networks": [
+            {"id": 174, "name": "AMC", "logo_path": "/amc.png", "origin_country": "US"},
+        ],
+        "genres": [
+            {"id": 18, "name": "Drama"},
+            {"id": 80, "name": "Crime"},
+        ],
+    })
+    base.update(overrides)
+    return base
+
+
+def test_extract_network_rows_one_row_per_network():
+    rows = _extract_network_rows(_raw_series_with_links(1396))
+    assert rows == [{
+        "series_id": 1396, "network_id": 174, "network_name": "AMC",
+        "logo_path": "/amc.png", "origin_country": "US",
+    }]
+
+
+def test_extract_genre_rows_ids_only():
+    rows = _extract_genre_rows(_raw_series_with_links(1396))
+    assert rows == [
+        {"series_id": 1396, "genre_id": 18},
+        {"series_id": 1396, "genre_id": 80},
+    ]
+
+
+def test_transform_series_links_writes_six_silver_files():
+    key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_series_with_links(1396)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uris = transform_series_links(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake"
+        )
+
+    assert len(uris) == 6
+    assert mock_s3.put_object.call_count == 6
+    written = {}
+    for call in mock_s3.put_object.call_args_list:
+        _, kwargs = call
+        written[kwargs["Key"]] = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+
+    base = "silver/{e}/ingestion_date=2026-09-09/{e}.parquet"
+    companies = written[base.format(e="series_companies")]
+    countries = written[base.format(e="series_countries")]
+    languages = written[base.format(e="series_languages")]
+    series_networks = written[base.format(e="series_networks")]
+    networks = written[base.format(e="networks")]
+    series_genres = written[base.format(e="series_genres")]
+
+    assert len(companies) == 2
+    assert set(countries["relation"]) == {"production", "origin"}
+    assert len(languages) == 1
+    assert len(series_networks) == 1
+    # networks dimension: deduped on network_id, network_name renamed to name
+    assert list(networks.columns) == ["network_id", "name", "logo_path", "origin_country"]
+    assert len(networks) == 1
+    assert sorted(series_genres["genre_id"].tolist()) == [18, 80]
+    assert list(series_genres.columns) == ["series_id", "genre_id"]
+
+
+def test_transform_series_links_networks_deduped_across_shows():
+    """The same network on two shows yields one networks-dimension row."""
+    k1 = "bronze/series_details/ingestion_date=2026-09-09/1.json"
+    k2 = "bronze/series_details/ingestion_date=2026-09-09/2.json"
+    mock_s3 = _make_s3_mock_with_files({
+        k1: _raw_series_with_links(1),
+        k2: _raw_series_with_links(2),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_series_links(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+    written = {c[1]["Key"]: pd.read_parquet(io.BytesIO(c[1]["Body"]))
+              for c in mock_s3.put_object.call_args_list}
+    networks = written["silver/networks/ingestion_date=2026-09-09/networks.parquet"]
+    series_networks = written["silver/series_networks/ingestion_date=2026-09-09/series_networks.parquet"]
+    assert len(networks) == 1           # AMC once
+    assert len(series_networks) == 2    # linked to both shows
+
+
+def test_transform_series_links_drops_null_id_rows_with_warning(caplog):
+    import logging
+    raw = _raw_series_with_links(1396, genres=[{"id": None, "name": "Broken"}])
+    key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    mock_s3 = _make_s3_mock_with_files({key: raw})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.WARNING):
+            transform_series_links(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+    assert any("null genre_id" in r.message for r in caplog.records)
+
+
+def test_transform_series_links_raises_when_no_bronze_files():
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            transform_series_links(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+
+# --- ingest_genres: TV list (Task 78) ---------------------------------
+
+def test_ingest_genres_with_tv_writes_both_files():
+    import json
+    mock_client = MagicMock()
+    mock_client.get_genres.return_value = {"genres": [{"id": 18, "name": "Drama"}]}
+    mock_client.get_tv_genres.return_value = {"genres": [{"id": 10759, "name": "Action & Adventure"}]}
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ingest_genres(
+            ingestion_date=dt.date(2026, 9, 9), client=mock_client, with_tv=True
+        )
+
+    mock_client.get_tv_genres.assert_called_once()
+    keys = [c[1]["Key"] for c in mock_s3.put_object.call_args_list]
+    assert "bronze/genres/ingestion_date=2026-09-09/genres.json" in keys
+    assert "bronze/genres/ingestion_date=2026-09-09/genres_tv.json" in keys
+
+
+def test_ingest_genres_without_tv_makes_no_tv_call():
+    mock_client = MagicMock()
+    mock_client.get_genres.return_value = {"genres": [{"id": 18, "name": "Drama"}]}
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ingest_genres(ingestion_date=dt.date(2026, 9, 9), client=mock_client)
+
+    mock_client.get_tv_genres.assert_not_called()
+    assert mock_s3.put_object.call_count == 1
 
 
 # --- transform_credits_bridge -------------------------------------------------

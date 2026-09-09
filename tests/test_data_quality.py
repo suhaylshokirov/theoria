@@ -25,6 +25,7 @@ from data_quality.silver_checks import (
     _write_rejects,
     run_silver_checks,
     ENTITY_CONFIGS,
+    _TV_ENTITIES,
 )
 
 
@@ -349,6 +350,43 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
     }
 
 
+def _tv_entity_dfs() -> dict[str, pd.DataFrame]:
+    """Minimal valid Silver DataFrames for the TV entities (Task 78)."""
+    return {
+        "series": pd.DataFrame([{
+            "series_id": 1396, "name": "Breaking Bad", "original_name": "Breaking Bad",
+            "first_air_date": dt.date(2008, 1, 20), "last_air_date": dt.date(2013, 9, 29),
+            "number_of_seasons": 5, "number_of_episodes": 62, "status": "Ended",
+            "type": "Scripted", "in_production": False, "original_language": "en",
+            "overview": "A teacher turns to crime.", "tagline": "Change the equation.",
+            "poster_path": "/p.jpg", "backdrop_path": "/b.jpg",
+            "homepage": "https://example.com", "imdb_id": "tt0903747",
+        }]),
+        "series_companies": pd.DataFrame([{
+            "series_id": 1396, "company_id": 11073, "company_name": "Sony Pictures Television",
+            "logo_path": "/s.png", "origin_country": "US",
+        }]),
+        "series_countries": pd.DataFrame([
+            {"series_id": 1396, "country_code": "US", "country_name": "United States of America", "relation": "production"},
+            {"series_id": 1396, "country_code": "US", "country_name": "United States of America", "relation": "origin"},
+        ]),
+        "series_languages": pd.DataFrame([{
+            "series_id": 1396, "language_code": "en", "language_name": "English", "english_name": "English",
+        }]),
+        "series_networks": pd.DataFrame([{
+            "series_id": 1396, "network_id": 174, "network_name": "AMC",
+            "logo_path": "/amc.png", "origin_country": "US",
+        }]),
+        "networks": pd.DataFrame([{
+            "network_id": 174, "name": "AMC", "logo_path": "/amc.png", "origin_country": "US",
+        }]),
+        "series_genres": pd.DataFrame([
+            {"series_id": 1396, "genre_id": 18},
+            {"series_id": 1396, "genre_id": 80},
+        ]),
+    }
+
+
 def test_run_silver_checks_all_clean_all_pass(tmp_path):
     mock_s3 = _make_multi_entity_s3_mock(_all_entity_dfs())
 
@@ -392,7 +430,8 @@ def test_run_silver_checks_missing_file_records_load_failure(tmp_path):
         )
 
     load_failures = [r for r in results if r.check == "load" and not r.passed]
-    assert len(load_failures) == len(ENTITY_CONFIGS)
+    # TV entities are skipped unless with_tv=True, so only the movie set is read.
+    assert len(load_failures) == len(ENTITY_CONFIGS) - len(_TV_ENTITIES)
 
 
 def test_run_silver_checks_movie_countries_requires_relation(tmp_path):
@@ -546,3 +585,79 @@ def test_run_silver_checks_movie_videos_empty_partition_passes(tmp_path):
     assert videos_checks and all(r.passed for r in videos_checks), [
         r for r in videos_checks if not r.passed
     ]
+
+
+# ---------------------------------------------------------------------------
+# TV Shows entities (Task 78) — only checked with with_tv=True
+# ---------------------------------------------------------------------------
+
+def test_run_silver_checks_skips_tv_entities_by_default(tmp_path):
+    """A movie-only run never writes the TV partitions, so they must not be
+    read — no load-failure, no result of any kind for a TV entity."""
+    mock_s3 = _make_multi_entity_s3_mock(_all_entity_dfs())
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    assert not any(r.entity in _TV_ENTITIES for r in results)
+
+
+def test_run_silver_checks_with_tv_all_clean_all_pass(tmp_path):
+    mock_s3 = _make_multi_entity_s3_mock(_all_entity_dfs() | _tv_entity_dfs())
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+            with_tv=True,
+        )
+
+    tv_results = [r for r in results if r.entity in _TV_ENTITIES]
+    assert {r.entity for r in tv_results} == set(_TV_ENTITIES)
+    assert all(r.passed for r in results), [r for r in results if not r.passed]
+
+
+def test_run_silver_checks_with_tv_series_null_name_fails(tmp_path):
+    """name is required on the series grain — a null must fail the nulls check."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["series"] = dfs["series"].assign(name=[None])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+            with_tv=True,
+        )
+
+    series_nulls = next(r for r in results if r.entity == "series" and r.check == "nulls")
+    assert not series_nulls.passed
+
+
+def test_run_silver_checks_with_tv_series_genres_duplicate_grain_fails(tmp_path):
+    """(series_id, genre_id) is the grain — a repeat must fail duplicates."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["series_genres"] = pd.DataFrame([
+        {"series_id": 1396, "genre_id": 18},
+        {"series_id": 1396, "genre_id": 18},
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+            with_tv=True,
+        )
+
+    sg_dupes = next(
+        r for r in results if r.entity == "series_genres" and r.check == "duplicates"
+    )
+    assert not sg_dupes.passed

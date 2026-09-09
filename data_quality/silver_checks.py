@@ -204,7 +204,82 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "vote_count": (0, None),
         },
     },
+    # --- TV Shows (Task 78). Only checked when run_silver_checks(with_tv=True);
+    # a movie-only pipeline run never writes these partitions, so listing them
+    # unconditionally would turn every such run into a wall of load failures.
+    # Written from the measured shape of TMDB's GET /tv/{id} payload, not by
+    # mirroring the transforms (the Task 40 lesson).
+    "series": {
+        "parquet": "series.parquet",
+        "pk_cols": ["series_id"],
+        "required_cols": ["series_id", "name", "original_name"],
+        "expected_cols": [
+            "series_id", "name", "original_name", "first_air_date", "last_air_date",
+            "number_of_seasons", "number_of_episodes", "status", "type",
+            "in_production", "original_language", "overview", "tagline",
+            "poster_path", "backdrop_path", "homepage", "imdb_id",
+        ],
+        "ranges": {
+            "number_of_seasons": (0, None),
+            "number_of_episodes": (0, None),
+        },
+    },
+    "series_companies": {
+        "parquet": "series_companies.parquet",
+        "pk_cols": ["series_id", "company_id"],
+        "required_cols": ["series_id", "company_id", "company_name"],
+        "expected_cols": [
+            "series_id", "company_id", "company_name", "logo_path", "origin_country",
+        ],
+        "ranges": {},
+    },
+    # relation is part of the PK for the same reason as movie_countries.
+    "series_countries": {
+        "parquet": "series_countries.parquet",
+        "pk_cols": ["series_id", "country_code", "relation"],
+        "required_cols": ["series_id", "country_code", "relation"],
+        "expected_cols": ["series_id", "country_code", "country_name", "relation"],
+        "ranges": {},
+    },
+    "series_languages": {
+        "parquet": "series_languages.parquet",
+        "pk_cols": ["series_id", "language_code"],
+        "required_cols": ["series_id", "language_code"],
+        "expected_cols": [
+            "series_id", "language_code", "language_name", "english_name",
+        ],
+        "ranges": {},
+    },
+    "series_networks": {
+        "parquet": "series_networks.parquet",
+        "pk_cols": ["series_id", "network_id"],
+        "required_cols": ["series_id", "network_id", "network_name"],
+        "expected_cols": [
+            "series_id", "network_id", "network_name", "logo_path", "origin_country",
+        ],
+        "ranges": {},
+    },
+    "networks": {
+        "parquet": "networks.parquet",
+        "pk_cols": ["network_id"],
+        "required_cols": ["network_id", "name"],
+        "expected_cols": ["network_id", "name", "logo_path", "origin_country"],
+        "ranges": {},
+    },
+    "series_genres": {
+        "parquet": "series_genres.parquet",
+        "pk_cols": ["series_id", "genre_id"],
+        "required_cols": ["series_id", "genre_id"],
+        "expected_cols": ["series_id", "genre_id"],
+        "ranges": {},
+    },
 }
+
+# Entities checked only when run_silver_checks is called with with_tv=True.
+_TV_ENTITIES = frozenset({
+    "series", "series_companies", "series_countries", "series_languages",
+    "series_networks", "networks", "series_genres",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -397,6 +472,7 @@ def run_silver_checks(
     ingestion_date: dt.date | None = None,
     bucket: str | None = None,
     rejected_dir: Path | None = None,
+    with_tv: bool = False,
 ) -> list[CheckResult]:
     """Run all Silver DQ checks for the given ingestion_date.
 
@@ -423,6 +499,8 @@ def run_silver_checks(
     all_results: list[CheckResult] = []
 
     for entity, cfg in ENTITY_CONFIGS.items():
+        if entity in _TV_ENTITIES and not with_tv:
+            continue
         try:
             df = _read_silver_parquet(bucket, entity, ingestion_date, cfg["parquet"])
             logger.info("[%s] loaded %d row(s)", entity, len(df))
@@ -458,6 +536,11 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Ingestion date (YYYY-MM-DD). Defaults to today.",
     )
+    parser.add_argument(
+        "--with-tv",
+        action="store_true",
+        help="Also check the TV series Silver entities (Task 78).",
+    )
     return parser.parse_args()
 
 
@@ -465,7 +548,7 @@ if __name__ == "__main__":
     from etl.logging_config import setup_logging
     setup_logging("silver_checks")
     args = _parse_args()
-    results = run_silver_checks(ingestion_date=args.date)
+    results = run_silver_checks(ingestion_date=args.date, with_tv=args.with_tv)
     overall = all(r.passed for r in results)
     for r in results:
         status = "PASS" if r.passed else "FAIL"
