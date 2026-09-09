@@ -48,6 +48,7 @@ from etl.silver.transform_movies import transform_movies
 from etl.silver.transform_people import transform_people
 from etl.silver.transform_people_details import transform_people_details
 from etl.silver.transform_series import transform_series
+from etl.silver.transform_series_credits import transform_series_credits
 from etl.silver.transform_series_links import transform_series_links
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
@@ -97,7 +98,10 @@ def _extract_company_ids(
 
 
 def _extract_person_ids(
-    movie_ids: list[int], ingestion_date: dt.date, bucket: str
+    movie_ids: list[int],
+    ingestion_date: dt.date,
+    bucket: str,
+    series_ids: list[int] | None = None,
 ) -> list[int]:
     """Re-read the Bronze credits files just written and return the person ids
     worth enriching, most-reachable first.
@@ -111,10 +115,22 @@ def _extract_person_ids(
     tail, so the people a reader reaches first are always fetched first, and
     the long tail fills in over subsequent nightly runs. Within a priority
     band ids are sorted so two runs process in the same order.
+
+    `series_ids` (Task 80): when given, `bronze/series_details/<sid>.json` is
+    swept too, so a person who only ever worked on a TV show still gets their
+    `GET /person/{id}` bio enrichment. The series payload nests its people
+    under `aggregate_credits` and gives each a `roles[]` / `jobs[]` array
+    rather than a flat `job` — handled below. TMDB has one person namespace
+    across film and TV, so these merge into the same sets with no
+    disambiguation.
     """
     keys = [
         s3_utils.build_path("bronze", "credits", ingestion_date, f"{mid}.json")
         for mid in movie_ids
+    ]
+    keys += [
+        s3_utils.build_path("bronze", "series_details", ingestion_date, f"{sid}.json")
+        for sid in (series_ids or [])
     ]
     lead: set[int] = set()
     rest: set[int] = set()
@@ -123,17 +139,24 @@ def _extract_person_ids(
         if err is not None or not raw:
             logger.warning("Could not read %s for person-id extraction: %s", key, err)
             continue
-        for member in raw.get("cast") or []:
+        # A series payload keeps cast/crew under aggregate_credits; a movie
+        # credits payload has them at the root.
+        agg = raw.get("aggregate_credits")
+        cast = agg.get("cast") if agg else raw.get("cast")
+        crew = agg.get("crew") if agg else raw.get("crew")
+        for member in cast or []:
             pid = member.get("id")
             if pid is None or not member.get("profile_path"):
                 continue
             order = member.get("order")
             (lead if order is not None and order < 10 else rest).add(pid)
-        for member in raw.get("crew") or []:
+        for member in crew or []:
             pid = member.get("id")
             if pid is None or not member.get("profile_path"):
                 continue
-            (lead if member.get("job") in _LEAD_JOBS else rest).add(pid)
+            jobs = member.get("jobs")
+            member_jobs = {j.get("job") for j in jobs} if jobs else {member.get("job")}
+            (lead if member_jobs & _LEAD_JOBS else rest).add(pid)
     rest -= lead
     return sorted(lead) + sorted(rest)
 
@@ -159,12 +182,14 @@ def run_pipeline(
     both return a plain list of movie_ids.
 
     `with_tv` adds the TV series path end to end — Bronze (discover_tv +
-    series_details + the TV genre list), Silver (transform_series[_links], the
-    TV half of transform_genres / run_silver_checks), and the warehouse
-    (load_dimensions / load_facts self-load dim_series, dim_network and the
-    five series bridges once the series Silver files exist). It is off by
-    default so the movie pipeline's runtime and TMDB call volume are provably
-    unchanged until Task 85 turns TV on for real; the site comes in Task 86.
+    series_details + the TV genre list), Silver (transform_series,
+    transform_series_links, transform_series_credits, the TV half of
+    transform_genres / run_silver_checks, and transform_people folding in
+    TV-only people), and the warehouse (load_dimensions / load_facts self-load
+    dim_series, dim_network, the five series bridges and fact_series_credit
+    once the series Silver files exist). It is off by default so the movie
+    pipeline's runtime and TMDB call volume are provably unchanged until Task
+    85 turns TV on for real; the site comes in Task 86.
     """
     # Fail on a missing TMDB/AWS secret now, not 4 minutes into ingestion.
     config.require_etl()
@@ -239,7 +264,9 @@ def run_pipeline(
     # ingest_people() skips anyone already enriched in a prior partition and
     # caps how many new people it fetches per run (Task 72), so on a
     # steady-state run this is cheap.
-    person_ids = _extract_person_ids(movie_ids, ingestion_date, config.S3_BUCKET)
+    person_ids = _extract_person_ids(
+        movie_ids, ingestion_date, config.S3_BUCKET, series_ids=series_ids
+    )
     succeeded_people, failed_people = ingest_people(
         person_ids, ingestion_date=ingestion_date
     )
@@ -249,7 +276,15 @@ def run_pipeline(
     )
 
     transform_movies(ingestion_date=ingestion_date)
-    transform_people(ingestion_date=ingestion_date)
+    # TV Silver runs before transform_people so its series_people hand-off
+    # exists when transform_people(with_tv=True) folds TV-only people into the
+    # person dedupe (Task 80). transform_series[_links] have no movie-Silver
+    # dependency, so their position here is free.
+    if with_tv:
+        transform_series(ingestion_date=ingestion_date)
+        transform_series_links(ingestion_date=ingestion_date)
+        transform_series_credits(ingestion_date=ingestion_date)
+    transform_people(ingestion_date=ingestion_date, with_tv=with_tv)
     transform_people_details(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date, with_tv=with_tv)
     transform_credits_bridge(ingestion_date=ingestion_date)
@@ -257,9 +292,6 @@ def run_pipeline(
     transform_movie_videos(ingestion_date=ingestion_date)
     transform_companies(ingestion_date=ingestion_date)
     transform_imdb_ratings(ingestion_date=ingestion_date)
-    if with_tv:
-        transform_series(ingestion_date=ingestion_date)
-        transform_series_links(ingestion_date=ingestion_date)
 
     silver_results = run_silver_checks(ingestion_date=ingestion_date, with_tv=with_tv)
     silver_failed = [r for r in silver_results if not r.passed]

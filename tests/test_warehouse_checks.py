@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 22  # 16 movie/person + 6 series bridges (Task 79)
+    assert len(results) == 24  # 16 movie/person + 6 series bridges (79) + 2 fact_series_credit (80)
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 21
+    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 23
 
     results = check_fk_integrity(mock_session)
 
@@ -794,6 +794,63 @@ def test_check_row_count_sanity_skips_series_when_no_silver_file():
 
     assert not any(r.check.startswith("rowcount:series") for r in results)
     assert not any(r.check.startswith("rowcount:networks") for r in results)
+
+
+# --- Task 80: fact_series_credit row-count sanity + FK -------------------
+
+def _series_credits_branch(n_rows: int) -> dict[str, bytes]:
+    df = pd.DataFrame([
+        {"series_id": 1000, "person_id": 10 + i, "department": "Acting", "job": "Actor",
+         "character_name": f"Role {i}", "episode_count": 5, "ordering": i}
+        for i in range(n_rows)
+    ])
+    buf = io.BytesIO()
+    df.to_parquet(buf, engine="pyarrow", index=False)
+    return {"/series_credits/": buf.getvalue()}
+
+
+def test_check_row_count_sanity_series_credits_pass_when_consistent():
+    mock_s3 = _mock_s3_for_full_row_count_sanity(_series_credits_branch(4))
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 50
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    s2w = next(r for r in results if r.check == "rowcount:series_credits:silver_to_warehouse")
+    load = next(r for r in results if r.check == "rowcount:series_credits:load")
+    assert s2w.passed and load.passed
+
+
+def test_check_row_count_sanity_series_credits_fails_when_load_produced_nothing():
+    mock_s3 = _mock_s3_for_full_row_count_sanity(_series_credits_branch(4))
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 0  # cumulative + this-date both 0
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    load = next(r for r in results if r.check == "rowcount:series_credits:load")
+    assert load.passed is False
+
+
+def test_check_row_count_sanity_skips_series_credits_when_no_silver_file():
+    mock_s3 = _mock_s3_for_full_row_count_sanity({})
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 50
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    assert not any(r.check.startswith("rowcount:series_credits") for r in results)
+
+
+def test_check_fk_integrity_covers_fact_series_credit():
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 0
+    names = {r.check for r in check_fk_integrity(mock_session)}
+    assert "fk:fact_series_credit.series_id->dim_series.series_id" in names
+    assert "fk:fact_series_credit.person_id->dim_person.person_id" in names
 
 
 def test_check_fk_integrity_covers_the_six_series_bridges():

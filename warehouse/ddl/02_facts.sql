@@ -84,3 +84,31 @@ CREATE TABLE IF NOT EXISTS fact_movie_rating (
 CREATE INDEX IF NOT EXISTS idx_fact_movie_rating_movie_id ON fact_movie_rating (movie_id);
 CREATE INDEX IF NOT EXISTS idx_fact_movie_rating_source_rating
     ON fact_movie_rating (source, rating DESC);
+
+
+-- fact_series_credit (Task 80) is the TV counterpart of fact_credit, with two
+-- differences forced by TMDB's aggregate_credits shape: character_name is IN
+-- the primary key (6.7% of cast hold >1 character per series, which a
+-- fact_credit-shaped key would collapse on upsert), and it carries a measure,
+-- episode_count — the first credit table here with a number to aggregate. See
+-- 20_series_credits.sql for the full rationale and the measured figures.
+CREATE TABLE IF NOT EXISTS fact_series_credit (
+    series_id      INTEGER  NOT NULL,
+    person_id      INTEGER  NOT NULL,
+    department     TEXT     NOT NULL,
+    job            TEXT     NOT NULL,
+    character_name TEXT     NOT NULL DEFAULT '',
+    episode_count  INTEGER,
+    ordering       SMALLINT,
+    ingestion_date DATE     NOT NULL,
+    CONSTRAINT pk_fact_series_credit
+        PRIMARY KEY (series_id, person_id, department, job, character_name),
+    CONSTRAINT fk_fsc_series FOREIGN KEY (series_id) REFERENCES dim_series (series_id),
+    CONSTRAINT fk_fsc_person FOREIGN KEY (person_id) REFERENCES dim_person (person_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fsc_series_id      ON fact_series_credit (series_id);
+CREATE INDEX IF NOT EXISTS idx_fsc_person_id      ON fact_series_credit (person_id);
+CREATE INDEX IF NOT EXISTS idx_fsc_department     ON fact_series_credit (department);
+CREATE INDEX IF NOT EXISTS idx_fsc_ingestion_date ON fact_series_credit (ingestion_date);
+CREATE INDEX IF NOT EXISTS idx_fsc_person_dept    ON fact_series_credit (person_id, department);

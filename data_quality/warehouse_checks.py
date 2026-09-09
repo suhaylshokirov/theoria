@@ -97,6 +97,10 @@ _FK_CHECKS = [
     ("bridge_series_country", "country_code", "dim_country", "country_code"),
     ("bridge_series_language", "language_code", "dim_language", "language_code"),
     ("bridge_series_network", "network_id", "dim_network", "network_id"),
+    # Task 80: fact_series_credit. Empty on a movie-only warehouse, so both
+    # pass trivially until the first --with-tv load — the same free ride.
+    ("fact_series_credit", "series_id", "dim_series", "series_id"),
+    ("fact_series_credit", "person_id", "dim_person", "person_id"),
 ]
 
 
@@ -531,6 +535,54 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
                 f"Silver={silver_count}, {warehouse_table}={warehouse_count} (cumulative)"))
             logger.info("[%s] OK (silver=%d, warehouse=%d)",
                          s2w_name, silver_count, warehouse_count)
+
+    # fact_series_credit (Task 80): same defensive shape as dim_series above —
+    # a movie-only run has no Silver series_credits file and this is skipped.
+    # Silver is already deduped on the 5-column grain the fact PK holds, and
+    # dim_person now carries TV-only people (transform_people --with-tv), so
+    # FK rejects are ~0 and the cumulative table can only be >= this
+    # partition's Silver row count. The load check is the "a loader that
+    # silently wrote zero rows from real input is a bug" guard.
+    try:
+        sc_df = _read_silver_parquet(
+            bucket, "series_credits", ingestion_date, "series_credits.parquet"
+        )
+    except Exception as exc:
+        logger.info(
+            "[rowcount:series_credits] no Silver series_credits for %s (%s) — skipped",
+            ingestion_date, exc,
+        )
+        sc_df = None
+    if sc_df is not None and "series_id" not in sc_df.columns:
+        logger.info(
+            "[rowcount:series_credits] Silver series_credits has no series_id column — skipped"
+        )
+        sc_df = None
+    if sc_df is not None:
+        s2w_name = "rowcount:series_credits:silver_to_warehouse"
+        warehouse_count = _table_row_count(session, "fact_series_credit")
+        if warehouse_count < len(sc_df):
+            results.append(CheckResult(s2w_name, False,
+                f"fact_series_credit has only {warehouse_count} row(s), fewer than the "
+                f"{len(sc_df)} just loaded from Silver"))
+            logger.error("[%s] FAIL — warehouse=%d < silver=%d",
+                          s2w_name, warehouse_count, len(sc_df))
+        else:
+            results.append(CheckResult(s2w_name, True,
+                f"Silver={len(sc_df)}, fact_series_credit={warehouse_count} (cumulative)"))
+            logger.info("[%s] OK", s2w_name)
+
+        load_name = "rowcount:series_credits:load"
+        loaded = _fact_ingestion_date_count(session, "fact_series_credit", ingestion_date)
+        if len(sc_df) > 0 and loaded == 0:
+            results.append(CheckResult(load_name, False,
+                f"fact_series_credit has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"{len(sc_df)} Silver series_credits row(s)"))
+            logger.error("[%s] FAIL — 0 rows loaded", load_name)
+        else:
+            results.append(CheckResult(load_name, True,
+                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+            logger.info("[%s] OK (%d rows)", load_name, loaded)
 
     return results
 

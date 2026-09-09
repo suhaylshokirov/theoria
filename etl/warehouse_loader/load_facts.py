@@ -627,6 +627,93 @@ def load_bridge_series_network(
     return count, rejects
 
 
+def _build_series_credit_rows(
+    credits_df: pd.DataFrame,
+    valid_series_ids: set[int],
+    valid_person_ids: set[int],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Resolve every Silver series_credits row into a fact_series_credit row.
+
+    Silver already flattened aggregate_credits' roles[]/jobs[] arrays and set
+    department/job to fact_credit's convention ("Acting"/"Actor" for cast), so
+    this is a straight FK-resolve + quarantine, like every other loader here.
+    `character_name` is coalesced to '' — it is in the PK and the column is
+    NOT NULL. A row whose (series, person, department, job, character) already
+    appeared in this partition is a Silver-side duplicate and is dropped rather
+    than left for the upsert to resolve arbitrarily.
+
+    Returns (rows, rejects).
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+    seen: set[tuple[int, int, str, str, str]] = set()
+
+    for credit in credits_df.to_dict("records"):
+        series_id = credit.get("series_id")
+        if pd.isna(series_id) or int(series_id) not in valid_series_ids:
+            rejects.append({**credit, "rejection_reason": "unknown series_id"})
+            continue
+
+        person_id = credit.get("person_id")
+        if pd.isna(person_id) or int(person_id) not in valid_person_ids:
+            rejects.append({**credit, "rejection_reason": "unknown person_id"})
+            continue
+
+        department = None if pd.isna(credit.get("department")) else credit.get("department")
+        job = None if pd.isna(credit.get("job")) else credit.get("job")
+        if not department or not job:
+            rejects.append({**credit, "rejection_reason": "missing department or job"})
+            continue
+
+        character_name = credit.get("character_name")
+        if character_name is None or pd.isna(character_name):
+            character_name = ""
+
+        key = (int(series_id), int(person_id), department, job, character_name)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        rows.append({
+            "series_id": int(series_id),
+            "person_id": int(person_id),
+            "department": department,
+            "job": job,
+            "character_name": character_name,
+            "episode_count": None if pd.isna(credit.get("episode_count")) else int(credit["episode_count"]),
+            "ordering": None if pd.isna(credit.get("ordering")) else int(credit["ordering"]),
+            "ingestion_date": ingestion_date,
+        })
+
+    return rows, rejects
+
+
+def load_fact_series_credit(
+    session: Session, credits_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert every Silver series_credits row into fact_series_credit.
+
+    Must run after load_dim_series() and load_dim_person() have committed —
+    both FKs are resolved against the live dimensions. Returns (count, rejects).
+    """
+    valid_series_ids = _existing_ids(session, "dim_series", "series_id")
+    valid_person_ids = _existing_ids(session, "dim_person", "person_id")
+
+    rows, rejects = _build_series_credit_rows(
+        credits_df, valid_series_ids, valid_person_ids, ingestion_date
+    )
+    columns = ["series_id", "person_id", "department", "job", "character_name",
+               "episode_count", "ordering", "ingestion_date"]
+    count = _upsert(
+        session, "fact_series_credit",
+        ["series_id", "person_id", "department", "job", "character_name"],
+        columns, _records(rows),
+    )
+    logger.info("fact_series_credit: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
 def _build_movie_rating_rows(
     ratings_df: pd.DataFrame,
     movies_df: pd.DataFrame,
@@ -806,6 +893,11 @@ def load_facts(
             "series_languages", "series_networks",
         )
     }
+    # Task 80: fact_series_credit. Same optional read — a movie-only run writes
+    # no silver/series_credits, so the whole TV credit block is skipped.
+    series_credits_df = _optional_silver(
+        bucket, "series_credits", ingestion_date, "series_credits.parquet"
+    )
     load_tv = any(v is not None and not v.empty for v in series_link_dfs.values())
 
     counts: dict[str, int] = {}
@@ -846,6 +938,15 @@ def load_facts(
                 counts[table], series_rejects[table] = loader(
                     session, src_df, ingestion_date
                 )
+
+        # Task 80: fact_series_credit — gated on its own Silver file, not on
+        # load_tv (the bridges), so it still loads if a partition somehow has
+        # credits but no link rows. Runs after load_dimensions committed
+        # dim_series and dim_person (the latter now carries TV-only people).
+        if series_credits_df is not None and not series_credits_df.empty:
+            counts["fact_series_credit"], series_rejects["fact_series_credit"] = (
+                load_fact_series_credit(session, series_credits_df, ingestion_date)
+            )
 
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)
     _write_rejects(rating_rejects, "fact_movie_rating", ingestion_date, rejected_dir)

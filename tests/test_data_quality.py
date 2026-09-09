@@ -384,6 +384,13 @@ def _tv_entity_dfs() -> dict[str, pd.DataFrame]:
             {"series_id": 1396, "genre_id": 18},
             {"series_id": 1396, "genre_id": 80},
         ]),
+        "series_credits": pd.DataFrame([
+            {"series_id": 1396, "person_id": 17419, "department": "Acting", "job": "Actor",
+             "character_name": "Walter White", "episode_count": 62, "ordering": 0},
+            {"series_id": 1396, "person_id": 66633, "department": "Production",
+             "job": "Executive Producer", "character_name": "", "episode_count": 62,
+             "ordering": None},
+        ]),
     }
 
 
@@ -661,3 +668,49 @@ def test_run_silver_checks_with_tv_series_genres_duplicate_grain_fails(tmp_path)
         r for r in results if r.entity == "series_genres" and r.check == "duplicates"
     )
     assert not sg_dupes.passed
+
+
+def test_run_silver_checks_with_tv_series_credits_multi_character_grain(tmp_path):
+    """One actor, two characters in one series — both rows are valid, not a dup (Task 80)."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["series_credits"] = pd.DataFrame([
+        {"series_id": 1396, "person_id": 17419, "department": "Acting", "job": "Actor",
+         "character_name": "Twin A", "episode_count": 10, "ordering": 0},
+        {"series_id": 1396, "person_id": 17419, "department": "Acting", "job": "Actor",
+         "character_name": "Twin B", "episode_count": 4, "ordering": 0},
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+            with_tv=True,
+        )
+
+    sc_results = [r for r in results if r.entity == "series_credits"]
+    assert sc_results and all(r.passed for r in sc_results)
+
+
+def test_run_silver_checks_with_tv_series_credits_negative_episode_count_fails(tmp_path):
+    """episode_count is a real measure, >= 0 — a negative value must fail ranges."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["series_credits"] = pd.DataFrame([
+        {"series_id": 1396, "person_id": 17419, "department": "Acting", "job": "Actor",
+         "character_name": "Walter White", "episode_count": -3, "ordering": 0},
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+            with_tv=True,
+        )
+
+    sc_ranges = next(
+        r for r in results if r.entity == "series_credits" and r.check == "ranges"
+    )
+    assert not sc_ranges.passed

@@ -1162,6 +1162,45 @@ def test_transform_people_raises_when_no_bronze_files():
             transform_people(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
 
 
+def test_transform_people_with_tv_folds_in_series_people():
+    """--with-tv unions this partition's silver/series_people into the dedupe (Task 80)."""
+    key = "bronze/credits/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_credits(550)})  # people 10, 11, 20, 21
+    series_people = pd.DataFrame([
+        {"person_id": 20, "name": "Carol", "gender": 1, "popularity": 30.0,
+         "profile_path": "/carol.jpg", "known_for_department": "Directing"},  # also on a film
+        {"person_id": 500, "name": "TV Only", "gender": 2, "popularity": 2.0,
+         "profile_path": "/t.jpg", "known_for_department": "Acting"},          # TV-only
+    ])
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3), patch(
+        "etl.silver.transform_people._read_series_people", return_value=series_people
+    ):
+        transform_people(
+            ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake", with_tv=True
+        )
+
+    df = pd.read_parquet(io.BytesIO(mock_s3.put_object.call_args[1]["Body"]))
+    assert set(df["person_id"]) == {10, 11, 20, 21, 500}  # TV-only person added
+    assert len(df[df["person_id"] == 20]) == 1            # shared person not duplicated
+
+
+def test_transform_people_with_tv_absent_series_people_is_movie_only():
+    """No silver/series_people file → byte-identical to a movie-only run."""
+    key = "bronze/credits/ingestion_date=2026-06-22/550.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_credits(550)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3), patch(
+        "etl.silver.transform_people._read_series_people", return_value=None
+    ):
+        transform_people(
+            ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake", with_tv=True
+        )
+
+    df = pd.read_parquet(io.BytesIO(mock_s3.put_object.call_args[1]["Body"]))
+    assert set(df["person_id"]) == {10, 11, 20, 21}
+
+
 # --- transform_genres ---------------------------------------------------------
 
 from etl.silver.transform_genres import (
@@ -1559,6 +1598,146 @@ def test_transform_series_links_raises_when_no_bronze_files():
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         with pytest.raises(FileNotFoundError):
             transform_series_links(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+
+# --- transform_series_credits (Task 80) --------------------------------
+
+from etl.silver.transform_series_credits import (
+    _extract_credit_rows,
+    _extract_people_rows,
+    transform_series_credits,
+)
+
+
+def _raw_series_with_credits(series_id: int, **overrides) -> dict:
+    """A series payload whose aggregate_credits exercises multi-role cast and multi-job crew."""
+    base = _raw_series(series_id)
+    base["aggregate_credits"] = {
+        "cast": [
+            {
+                "id": 17419, "name": "Bryan Cranston", "gender": 2, "popularity": 20.5,
+                "profile_path": "/bc.jpg", "known_for_department": "Acting", "order": 0,
+                "roles": [{"character": "Walter White", "episode_count": 62}],
+            },
+            {
+                "id": 999, "name": "Twin Actor", "gender": 2, "popularity": 1.0,
+                "profile_path": None, "known_for_department": "Acting", "order": 8,
+                "roles": [
+                    {"character": "Twin A", "episode_count": 10},
+                    {"character": "Twin B", "episode_count": 4},
+                ],
+            },
+        ],
+        "crew": [
+            {
+                "id": 66633, "name": "Vince Gilligan", "gender": 2, "popularity": 5.5,
+                "profile_path": "/vg.jpg", "known_for_department": "Writing",
+                "department": "Production",
+                "jobs": [
+                    {"job": "Executive Producer", "episode_count": 62},
+                    {"job": "Director", "episode_count": 5},
+                ],
+            },
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_extract_credit_rows_flattens_cast_roles_and_crew_jobs():
+    rows = _extract_credit_rows(_raw_series_with_credits(1396))
+    # 1 (Cranston) + 2 (Twin A/B) + 2 (Gilligan EP/Director) = 5
+    assert len(rows) == 5
+    cranston = next(r for r in rows if r["person_id"] == 17419)
+    assert cranston == {
+        "series_id": 1396, "person_id": 17419, "department": "Acting", "job": "Actor",
+        "character_name": "Walter White", "episode_count": 62, "ordering": 0,
+    }
+    twin = sorted(r["character_name"] for r in rows if r["person_id"] == 999)
+    assert twin == ["Twin A", "Twin B"]
+    gilligan = sorted(r["job"] for r in rows if r["person_id"] == 66633)
+    assert gilligan == ["Director", "Executive Producer"]
+    assert all(r["character_name"] == "" for r in rows if r["person_id"] == 66633)
+
+
+def test_extract_people_rows_one_identity_per_person():
+    rows = _extract_people_rows(_raw_series_with_credits(1396))
+    ids = sorted(r["person_id"] for r in rows)
+    assert ids == [999, 17419, 66633]
+    assert next(r for r in rows if r["person_id"] == 999)["profile_path"] is None
+
+
+def test_transform_series_credits_writes_both_parquets_with_multi_role_rows():
+    key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_series_with_credits(1396)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        credits_uri, people_uri = transform_series_credits(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake"
+        )
+
+    assert credits_uri.endswith("silver/series_credits/ingestion_date=2026-09-09/series_credits.parquet")
+    assert people_uri.endswith("silver/series_people/ingestion_date=2026-09-09/series_people.parquet")
+    written = {c[1]["Key"]: pd.read_parquet(io.BytesIO(c[1]["Body"]))
+              for c in mock_s3.put_object.call_args_list}
+    credits = written["silver/series_credits/ingestion_date=2026-09-09/series_credits.parquet"]
+    people = written["silver/series_people/ingestion_date=2026-09-09/series_people.parquet"]
+
+    assert len(credits) == 5
+    assert list(credits.columns) == [
+        "series_id", "person_id", "department", "job", "character_name",
+        "episode_count", "ordering",
+    ]
+    # one person, two characters — both survive the grain
+    assert sorted(credits[credits["person_id"] == 999]["character_name"]) == ["Twin A", "Twin B"]
+    assert len(people) == 3
+
+
+def test_transform_series_credits_dedups_on_the_five_column_grain():
+    """The same (series, person, dept, job, character) twice collapses to one row."""
+    raw = _raw_series_with_credits(1396)
+    raw["aggregate_credits"]["cast"][0]["roles"] = [
+        {"character": "Walter White", "episode_count": 62},
+        {"character": "Walter White", "episode_count": 62},
+    ]
+    key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    mock_s3 = _make_s3_mock_with_files({key: raw})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_series_credits(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+    written = {c[1]["Key"]: pd.read_parquet(io.BytesIO(c[1]["Body"]))
+              for c in mock_s3.put_object.call_args_list}
+    credits = written["silver/series_credits/ingestion_date=2026-09-09/series_credits.parquet"]
+    assert len(credits[credits["person_id"] == 17419]) == 1
+
+
+def test_transform_series_credits_handles_empty_aggregate_credits():
+    key = "bronze/series_details/ingestion_date=2026-09-09/1.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_series(1)})  # no aggregate_credits block
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_series_credits(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+    written = {c[1]["Key"]: pd.read_parquet(io.BytesIO(c[1]["Body"]))
+              for c in mock_s3.put_object.call_args_list}
+    credits = written["silver/series_credits/ingestion_date=2026-09-09/series_credits.parquet"]
+    assert credits.empty
+    assert list(credits.columns) == [
+        "series_id", "person_id", "department", "job", "character_name",
+        "episode_count", "ordering",
+    ]
+
+
+def test_transform_series_credits_raises_when_no_bronze_files():
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            transform_series_credits(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
 
 
 # --- ingest_genres: TV list (Task 78) ---------------------------------
@@ -3295,12 +3474,14 @@ from etl.warehouse_loader.load_facts import (
     _build_movie_metrics_rows,
     _build_movie_rating_rows,
     _build_series_bridge_rows,
+    _build_series_credit_rows,
     _existing_ids,
     _records,
     _write_rejects,
     load_bridge_movie_company,
     load_bridge_movie_country,
     load_bridge_movie_language,
+    load_fact_series_credit,
     load_bridge_series_country,
     load_bridge_series_genre,
     load_bridge_series_network,
@@ -3780,6 +3961,72 @@ def test_load_bridge_series_network_resolves_against_dim_network(monkeypatch):
 
     assert count == 1
     assert rejects[0]["rejection_reason"] == "unknown network_id"
+
+
+# --- fact_series_credit (Task 80) -------------------------------------------
+
+def _series_credits_df():
+    """Silver series_credits rows: one multi-character actor, one crew, two rejects."""
+    return pd.DataFrame({
+        "series_id": pd.array([1, 1, 1, 1, 2], dtype="Int64"),
+        "person_id": pd.array([10, 10, 20, 99, 10], dtype="Int64"),  # 99 unknown person, series 2 unknown
+        "department": ["Acting", "Acting", "Production", "Acting", "Acting"],
+        "job": ["Actor", "Actor", "Executive Producer", "Actor", "Actor"],
+        "character_name": ["Twin A", "Twin B", "", "Ghost", "Cameo"],
+        "episode_count": pd.array([10, 4, 62, 1, 2], dtype="Int64"),
+        "ordering": pd.array([0, 0, None, 5, 1], dtype="Int64"),
+    })
+
+
+def test_build_series_credit_rows_keeps_multi_character_and_rejects_unknown_fks():
+    rows, rejects = _build_series_credit_rows(
+        _series_credits_df(), valid_series_ids={1}, valid_person_ids={10, 20},
+        ingestion_date=dt.date(2026, 9, 9),
+    )
+
+    # series 1: Twin A, Twin B, the EP — all kept (character_name widens the key)
+    assert len(rows) == 3
+    twins = sorted(r["character_name"] for r in rows if r["person_id"] == 10)
+    assert twins == ["Twin A", "Twin B"]
+    ep = next(r for r in rows if r["person_id"] == 20)
+    assert ep["character_name"] == "" and ep["job"] == "Executive Producer"
+    assert ep["episode_count"] == 62 and ep["ordering"] is None
+    reasons = {r["rejection_reason"] for r in rejects}
+    assert reasons == {"unknown person_id", "unknown series_id"}
+
+
+def test_build_series_credit_rows_coalesces_null_character_to_empty():
+    df = pd.DataFrame({
+        "series_id": pd.array([1], dtype="Int64"),
+        "person_id": pd.array([20], dtype="Int64"),
+        "department": ["Directing"], "job": ["Director"],
+        "character_name": [None], "episode_count": pd.array([3], dtype="Int64"),
+        "ordering": pd.array([None], dtype="Int64"),
+    })
+    rows, _ = _build_series_credit_rows(
+        df, valid_series_ids={1}, valid_person_ids={20}, ingestion_date=dt.date(2026, 9, 9)
+    )
+    assert rows[0]["character_name"] == ""
+
+
+def test_load_fact_series_credit_upserts_on_five_column_key(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids",
+        lambda session, table, pk_col: {1} if table == "dim_series" else {10, 20},
+    )
+
+    count, rejects = load_fact_series_credit(
+        mock_session, _series_credits_df(), dt.date(2026, 9, 9)
+    )
+
+    assert count == 3
+    assert len(rejects) == 2
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO fact_series_credit" in str(stmt)
+    assert {p["character_name"] for p in params} == {"Twin A", "Twin B", ""}
+    assert all(p["ingestion_date"] == dt.date(2026, 9, 9) for p in params)
 
 
 def test_build_movie_rating_rows_builds_both_sources():
@@ -5027,3 +5274,38 @@ def test_extract_person_ids_leads_billed_cast_and_directors_and_filters_photoles
 
     assert ids[:2] == [1, 4]        # leads first, sorted
     assert ids[2:] == [2, 5]        # rest after, sorted
+
+
+def test_extract_person_ids_sweeps_series_aggregate_credits_too():
+    """With series_ids, a TV-only person under aggregate_credits is picked up (Task 80)."""
+    movie_credits = {
+        "id": 550,
+        "cast": [{"id": 1, "order": 0, "profile_path": "/1.jpg"}],
+        "crew": [],
+    }
+    series_payload = {
+        "id": 1396,
+        "aggregate_credits": {
+            "cast": [
+                {"id": 7, "order": 0, "profile_path": "/7.jpg"},    # billed -> lead
+                {"id": 8, "order": 40, "profile_path": "/8.jpg"},   # unbilled -> rest
+                {"id": 9, "order": 1, "profile_path": None},        # no photo -> dropped
+            ],
+            "crew": [
+                {"id": 66, "jobs": [{"job": "Director"}], "profile_path": "/66.jpg"},  # lead
+                {"id": 67, "jobs": [{"job": "Gaffer"}], "profile_path": "/67.jpg"},    # rest
+            ],
+        },
+    }
+    mkey = s3_utils.build_path("bronze", "credits", dt.date(2026, 6, 22), "550.json")
+    skey = s3_utils.build_path("bronze", "series_details", dt.date(2026, 6, 22), "1396.json")
+    with patch.object(
+        s3_utils, "read_json_objects",
+        return_value=[(mkey, movie_credits, None), (skey, series_payload, None)],
+    ):
+        ids = _extract_person_ids(
+            [550], dt.date(2026, 6, 22), "theoria-datalake", series_ids=[1396]
+        )
+
+    assert ids[:3] == [1, 7, 66]    # leads, sorted
+    assert ids[3:] == [8, 67]       # rest, sorted; person 9 (no photo) absent

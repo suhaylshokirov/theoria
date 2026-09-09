@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import io
 import logging
 import time
 from typing import Any
@@ -45,6 +46,23 @@ logger = logging.getLogger(__name__)
 PEOPLE_COLUMNS = [
     "person_id", "name", "gender", "popularity", "profile_path", "known_for_department",
 ]
+
+
+def _read_series_people(bucket: str, ingestion_date: dt.date) -> pd.DataFrame | None:
+    """Read this partition's silver/series_people Parquet, or None if it is absent.
+
+    Written by `transform_series_credits` (Task 80) under --with-tv only. A
+    movie-only run never produces it, so the caller degrades to "no TV people"
+    rather than crashing — the same posture the warehouse loaders take for
+    every optional TV Silver source.
+    """
+    key = s3_utils.build_path("silver", "series_people", ingestion_date, "series_people.parquet")
+    try:
+        response = s3_utils.get_s3_client().get_object(Bucket=bucket, Key=key)
+        return pd.read_parquet(io.BytesIO(response["Body"].read()))
+    except Exception as exc:
+        logger.info("No Silver series_people for %s (%s) — TV people not folded in", ingestion_date, exc)
+        return None
 
 
 def _list_bronze_keys(bucket: str, ingestion_date: dt.date) -> list[str]:
@@ -126,6 +144,7 @@ def _dedupe_people(rows: list[dict[str, Any]], label: str, columns: list[str]) -
 def transform_people(
     ingestion_date: dt.date | None = None,
     bucket: str | None = None,
+    with_tv: bool = False,
 ) -> str:
     """Read Bronze credits JSON → extract every credited person → write Silver Parquet.
 
@@ -133,6 +152,14 @@ def transform_people(
     extracts one identity row per cast and crew member, casts fields to target
     types, deduplicates on person_id (keeping last-seen record), and writes
     silver/people/ingestion_date=YYYY-MM-DD/people.parquet.
+
+    With `with_tv=True` the identity rows from this partition's
+    silver/series_people (written by `transform_series_credits`) are folded in
+    before the dedupe, so a person who only ever worked on a TV show still gets
+    a row here — and therefore a `dim_person` row, and the existing
+    `GET /person/{id}` bio enrichment, unchanged. TMDB has one person namespace
+    across film and TV, so a person on both a film and a show collapses to one
+    row on `person_id` exactly as two film credits already do.
 
     Returns the s3:// URI of the written Parquet file.
 
@@ -171,6 +198,13 @@ def transform_people(
             f"Every Bronze credits file failed to parse for ingestion_date={ingestion_date} — aborting."
         )
 
+    if with_tv:
+        series_people = _read_series_people(bucket, ingestion_date)
+        if series_people is not None and not series_people.empty:
+            tv_rows = series_people[PEOPLE_COLUMNS].to_dict("records")
+            logger.info("Folding in %d TV person row(s) from silver/series_people", len(tv_rows))
+            people_rows.extend(tv_rows)
+
     df_people = _dedupe_people(people_rows, "People", PEOPLE_COLUMNS)
     people_key = s3_utils.build_path("silver", "people", ingestion_date, "people.parquet")
     people_uri = s3_utils.write_parquet(bucket, people_key, df_people)
@@ -193,6 +227,11 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Ingestion date (YYYY-MM-DD). Defaults to today.",
     )
+    parser.add_argument(
+        "--with-tv",
+        action="store_true",
+        help="Also fold in this partition's silver/series_people rows (Task 80).",
+    )
     return parser.parse_args()
 
 
@@ -200,4 +239,4 @@ if __name__ == "__main__":
     from etl.logging_config import setup_logging
     setup_logging("transform_people")
     args = _parse_args()
-    transform_people(ingestion_date=args.date)
+    transform_people(ingestion_date=args.date, with_tv=args.with_tv)

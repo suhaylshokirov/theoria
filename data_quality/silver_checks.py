@@ -273,12 +273,31 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         "expected_cols": ["series_id", "genre_id"],
         "ranges": {},
     },
+    # Written from the measured shape of TMDB's aggregate_credits block after
+    # transform_series_credits flattens roles[]/jobs[] (Task 80), not by
+    # mirroring the transform. character_name is in the grain and NOT NULL
+    # (coalesced to '' upstream), so it is a required/PK column here too.
+    # episode_count is the measure (episodes in a role/job), hence >= 0;
+    # ordering is cast billing order, >= 0.
+    "series_credits": {
+        "parquet": "series_credits.parquet",
+        "pk_cols": ["series_id", "person_id", "department", "job", "character_name"],
+        "required_cols": ["series_id", "person_id", "department", "job", "character_name"],
+        "expected_cols": [
+            "series_id", "person_id", "department", "job", "character_name",
+            "episode_count", "ordering",
+        ],
+        "ranges": {
+            "episode_count": (0, None),
+            "ordering": (0, None),
+        },
+    },
 }
 
 # Entities checked only when run_silver_checks is called with with_tv=True.
 _TV_ENTITIES = frozenset({
     "series", "series_companies", "series_countries", "series_languages",
-    "series_networks", "networks", "series_genres",
+    "series_networks", "networks", "series_genres", "series_credits",
 })
 
 
