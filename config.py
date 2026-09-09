@@ -108,6 +108,15 @@ DISCOVER_END_YEAR = int(_optional("DISCOVER_END_YEAR", "2026"))
 DISCOVER_PAGES_PER_YEAR = int(_optional("DISCOVER_PAGES_PER_YEAR", "1"))
 DISCOVER_MIN_VOTES = int(_optional("DISCOVER_MIN_VOTES", "300"))
 
+# Corpus design for the `discover/tv` source (etl/bronze/ingest_discover_tv.py),
+# the TV counterpart of the DISCOVER_* block above. The defaults deliberately
+# match the movie values so turning TV on (Task 85) needs no new .env entry:
+# the most-voted series of each year in the range that clear a vote floor.
+TV_DISCOVER_START_YEAR = int(_optional("TV_DISCOVER_START_YEAR", "1970"))
+TV_DISCOVER_END_YEAR = int(_optional("TV_DISCOVER_END_YEAR", "2026"))
+TV_DISCOVER_PAGES_PER_YEAR = int(_optional("TV_DISCOVER_PAGES_PER_YEAR", "1"))
+TV_DISCOVER_MIN_VOTES = int(_optional("TV_DISCOVER_MIN_VOTES", "300"))
+
 # --- IMDb datasets -----------------------------------------------------------
 # Public bulk export, refreshed daily by IMDb — no auth, no key, no quota.
 # https://datasets.imdbws.com/title.ratings.tsv.gz (tconst/averageRating/numVotes).

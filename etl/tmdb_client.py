@@ -154,6 +154,54 @@ class TMDBClient:
             params["vote_count.gte"] = min_votes
         return self.get("discover/movie", params=params)
 
+    def get_tv_genres(self) -> dict[str, Any]:
+        """Official TV genre list (`genre/tv/list`).
+
+        A list distinct from get_genres()'s `genre/movie/list`: the two share
+        8 ids that carry identical names, plus each has its own extras. The
+        Silver genre transform merges both into one `dim_genre` (Task 78).
+        """
+        return self.get("genre/tv/list")
+
+    def discover_tv(
+        self,
+        page: int = 1,
+        first_air_year: int | None = None,
+        min_votes: int | None = None,
+        sort_by: str = "vote_count.desc",
+    ) -> dict[str, Any]:
+        """One page of `discover/tv` — the series counterpart of discover_movies().
+
+        Same corpus-design knobs (a first-air year, a vote-count floor, a sort
+        order) and the same reason to page one year at a time: it sidesteps
+        TMDB's pagination ceiling. Series have no `primary_release_year`; the
+        equivalent filter is `first_air_date_year`.
+        """
+        params: dict[str, Any] = {"page": page, "sort_by": sort_by}
+        if first_air_year is not None:
+            params["first_air_date_year"] = first_air_year
+        if min_votes is not None:
+            params["vote_count.gte"] = min_votes
+        return self.get("discover/tv", params=params)
+
+    def get_series_details(
+        self, series_id: int, *, append_to_response: str | None = None
+    ) -> dict[str, Any]:
+        """Full detail record for a single TV series.
+
+        Same shape as get_movie_details(): `append_to_response` folds
+        sub-resources into the one payload —
+        ``append_to_response="aggregate_credits,external_ids,videos"`` returns
+        the series object with all three blocks, so a single HTTP call covers
+        what would otherwise be four. `aggregate_credits` (not `credits`) is
+        TMDB's series-level cast/crew roll-up across every episode, carrying an
+        `episode_count` per person.
+        """
+        params = (
+            {"append_to_response": append_to_response} if append_to_response else None
+        )
+        return self.get(f"tv/{series_id}", params=params)
+
     def get_movie_details(
         self, movie_id: int, *, append_to_response: str | None = None
     ) -> dict[str, Any]:
