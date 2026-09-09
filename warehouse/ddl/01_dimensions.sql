@@ -187,6 +187,112 @@ CREATE TABLE IF NOT EXISTS dim_movie_video (
 CREATE INDEX IF NOT EXISTS idx_dim_movie_video_movie_type
     ON dim_movie_video (movie_id, type);
 
+-- Task 79: the TV series half of the star schema — dim_series mirrors dim_movie,
+-- and its five bridges mirror the movie company/country/language bridges.
+-- dim_network is its own dimension (TMDB keys networks in a separate id
+-- namespace from companies). dim_series/dim_network carry a slug (a page each);
+-- countries/languages still don't (the ISO code is the identifier). All bridges
+-- are factless and plain-upsert. See 19_series.sql for the full rationale.
+CREATE TABLE IF NOT EXISTS dim_series (
+    series_id          INTEGER      NOT NULL,
+    name               TEXT         NOT NULL,
+    original_name      TEXT,
+    first_air_date     DATE,
+    last_air_date      DATE,
+    number_of_seasons  INTEGER,
+    number_of_episodes INTEGER,
+    status             TEXT,
+    type               TEXT,
+    in_production      BOOLEAN,
+    original_language  VARCHAR(10),
+    overview           TEXT,
+    tagline            TEXT,
+    poster_path        TEXT,
+    backdrop_path      TEXT,
+    homepage           TEXT,
+    imdb_id            VARCHAR(16),
+    slug               VARCHAR(300),
+    CONSTRAINT pk_dim_series PRIMARY KEY (series_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_series_slug ON dim_series (slug);
+CREATE INDEX IF NOT EXISTS idx_dim_series_imdb_id ON dim_series (imdb_id);
+
+CREATE TABLE IF NOT EXISTS dim_network (
+    network_id     INTEGER      NOT NULL,
+    name           TEXT         NOT NULL,
+    logo_path      TEXT,
+    origin_country VARCHAR(10),
+    slug           VARCHAR(300),
+    CONSTRAINT pk_dim_network PRIMARY KEY (network_id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_network_slug ON dim_network (slug);
+
+CREATE TABLE IF NOT EXISTS bridge_series_genre (
+    series_id      INTEGER NOT NULL,
+    genre_id       INTEGER NOT NULL,
+    ingestion_date DATE    NOT NULL,
+    CONSTRAINT pk_bridge_series_genre PRIMARY KEY (series_id, genre_id),
+    CONSTRAINT fk_bridge_series_genre_series
+        FOREIGN KEY (series_id) REFERENCES dim_series (series_id),
+    CONSTRAINT fk_bridge_series_genre_genre
+        FOREIGN KEY (genre_id) REFERENCES dim_genre (genre_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_genre_series_id ON bridge_series_genre (series_id);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_genre_genre_id ON bridge_series_genre (genre_id);
+
+CREATE TABLE IF NOT EXISTS bridge_series_company (
+    series_id      INTEGER NOT NULL,
+    company_id     INTEGER NOT NULL,
+    ingestion_date DATE    NOT NULL,
+    CONSTRAINT pk_bridge_series_company PRIMARY KEY (series_id, company_id),
+    CONSTRAINT fk_bridge_series_company_series
+        FOREIGN KEY (series_id) REFERENCES dim_series (series_id),
+    CONSTRAINT fk_bridge_series_company_company
+        FOREIGN KEY (company_id) REFERENCES dim_company (company_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_company_series_id ON bridge_series_company (series_id);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_company_company_id ON bridge_series_company (company_id);
+
+CREATE TABLE IF NOT EXISTS bridge_series_country (
+    series_id      INTEGER     NOT NULL,
+    country_code   VARCHAR(10) NOT NULL,
+    relation       VARCHAR(20) NOT NULL,
+    ingestion_date DATE        NOT NULL,
+    CONSTRAINT pk_bridge_series_country PRIMARY KEY (series_id, country_code, relation),
+    CONSTRAINT fk_bridge_series_country_series
+        FOREIGN KEY (series_id) REFERENCES dim_series (series_id),
+    CONSTRAINT fk_bridge_series_country_country
+        FOREIGN KEY (country_code) REFERENCES dim_country (country_code)
+);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_country_series_id ON bridge_series_country (series_id);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_country_country_code ON bridge_series_country (country_code);
+
+CREATE TABLE IF NOT EXISTS bridge_series_language (
+    series_id      INTEGER     NOT NULL,
+    language_code  VARCHAR(10) NOT NULL,
+    ingestion_date DATE        NOT NULL,
+    CONSTRAINT pk_bridge_series_language PRIMARY KEY (series_id, language_code),
+    CONSTRAINT fk_bridge_series_language_series
+        FOREIGN KEY (series_id) REFERENCES dim_series (series_id),
+    CONSTRAINT fk_bridge_series_language_language
+        FOREIGN KEY (language_code) REFERENCES dim_language (language_code)
+);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_language_series_id ON bridge_series_language (series_id);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_language_language_code ON bridge_series_language (language_code);
+
+CREATE TABLE IF NOT EXISTS bridge_series_network (
+    series_id      INTEGER NOT NULL,
+    network_id     INTEGER NOT NULL,
+    ingestion_date DATE    NOT NULL,
+    CONSTRAINT pk_bridge_series_network PRIMARY KEY (series_id, network_id),
+    CONSTRAINT fk_bridge_series_network_series
+        FOREIGN KEY (series_id) REFERENCES dim_series (series_id),
+    CONSTRAINT fk_bridge_series_network_network
+        FOREIGN KEY (network_id) REFERENCES dim_network (network_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_network_series_id ON bridge_series_network (series_id);
+CREATE INDEX IF NOT EXISTS idx_bridge_series_network_network_id ON bridge_series_network (network_id);
+
 -- dim_date is a pre-populated calendar table; rows are generated by the loader.
 CREATE TABLE IF NOT EXISTS dim_date (
     date_id     INTEGER  NOT NULL,   -- surrogate key: YYYYMMDD integer

@@ -2673,6 +2673,8 @@ from etl.warehouse_loader.load_dimensions import (
     load_dim_language,
     load_dim_movie,
     load_dim_movie_video,
+    load_dim_network,
+    load_dim_series,
     load_dimensions,
 )
 
@@ -2913,6 +2915,107 @@ def test_load_dim_genre_upserts_expected_columns():
     (stmt, params), _ = mock_session.execute.call_args
     assert "INSERT INTO dim_genre" in str(stmt)
     assert set(params[0].keys()) == {"genre_id", "genre_name"}
+
+
+# --- Task 79: dim_series, dim_network, and the series unions ----------------
+
+def _dim_series_df():
+    return pd.DataFrame({
+        "series_id": pd.array([1396, 1399], dtype="Int64"),
+        "name": ["Breaking Bad", "Game of Thrones"],
+        "original_name": ["Breaking Bad", "Game of Thrones"],
+        "first_air_date": [dt.date(2008, 1, 20), dt.date(2011, 4, 17)],
+        "last_air_date": [dt.date(2013, 9, 29), dt.date(2019, 5, 19)],
+        "number_of_seasons": pd.array([5, 8], dtype="Int64"),
+        "number_of_episodes": pd.array([62, 73], dtype="Int64"),
+        "status": ["Ended", "Ended"],
+        "type": ["Scripted", "Scripted"],
+        "in_production": pd.array([False, False], dtype="boolean"),
+        "original_language": ["en", "en"],
+        "overview": ["a", "b"],
+        "tagline": ["Tag A", None],
+        "poster_path": ["/a.jpg", None],
+        "backdrop_path": ["/a_bd.jpg", None],
+        "homepage": ["https://example.com/bb", None],
+        "imdb_id": ["tt0903747", "tt0944947"],
+    })
+
+
+def _dim_networks_df():
+    return pd.DataFrame({
+        "network_id": pd.array([174, 49, pd.NA], dtype="Int64"),
+        "name": ["AMC", "HBO", None],  # last row: null name -> dropped
+        "logo_path": ["/amc.png", "/hbo.png", None],
+        "origin_country": ["US", "US", None],
+    })
+
+
+def _series_companies_link_df():
+    return pd.DataFrame({
+        "series_id": pd.array([1396, 1399], dtype="Int64"),
+        "company_id": pd.array([11073, 3268], dtype="Int64"),  # 3268 = HBO, TV-only
+        "company_name": ["Sony Pictures Television", "Home Box Office"],
+        "logo_path": ["/s.png", "/hbo.png"],
+        "origin_country": ["US", "US"],
+    })
+
+
+def test_load_dim_series_upserts_without_slug():
+    mock_session = MagicMock()
+    count = load_dim_series(mock_session, _dim_series_df())
+
+    assert count == 2
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_series" in str(stmt)
+    assert "slug" not in params[0]
+    assert params[0]["series_id"] == 1396
+    assert params[0]["imdb_id"] == "tt0903747"
+
+
+def test_load_dim_network_drops_null_name_and_dedupes():
+    mock_session = MagicMock()
+    count = load_dim_network(mock_session, _dim_networks_df())
+
+    assert count == 2  # AMC + HBO; the null-name row is excluded
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_network" in str(stmt)
+    assert {p["network_id"] for p in params} == {174, 49}
+    assert set(params[0].keys()) == {"network_id", "name", "logo_path", "origin_country"}
+
+
+def test_load_dim_company_unions_series_studios():
+    """A studio that only made TV still gets a dim_company row (Task 79)."""
+    mock_session = MagicMock()
+    count = load_dim_company(
+        mock_session, _dim_companies_df(), None, _series_companies_link_df()
+    )
+
+    # _dim_companies_df has 1 distinct company (900); series adds 11073 + 3268.
+    assert count == 3
+    (stmt, params), _ = mock_session.execute.call_args
+    assert {p["company_id"] for p in params} == {900, 11073, 3268}
+
+
+def test_load_dim_company_without_series_df_is_unchanged():
+    mock_session = MagicMock()
+    count = load_dim_company(mock_session, _dim_companies_df())
+    assert count == 1
+
+
+def test_load_dim_country_unions_series_countries():
+    mock_session = MagicMock()
+    series_countries = pd.DataFrame({
+        "series_id": pd.array([1396], dtype="Int64"),
+        "country_code": ["GB"],
+        "country_name": ["United Kingdom"],
+        "relation": ["production"],
+    })
+    count = load_dim_country(mock_session, _dim_countries_df(), series_countries)
+
+    # movies contribute US; series adds GB (JP still dropped — no name)
+    (stmt, params), _ = mock_session.execute.call_args
+    assert {p["country_code"] for p in params} == {"US", "GB"}
+    assert count == 2
 
 
 # --- Task 74: _replace_by_parent + load_dim_movie_video ----------------------
@@ -3191,12 +3294,16 @@ from etl.warehouse_loader.load_facts import (
     _build_credit_rows,
     _build_movie_metrics_rows,
     _build_movie_rating_rows,
+    _build_series_bridge_rows,
     _existing_ids,
     _records,
     _write_rejects,
     load_bridge_movie_company,
     load_bridge_movie_country,
     load_bridge_movie_language,
+    load_bridge_series_country,
+    load_bridge_series_genre,
+    load_bridge_series_network,
     load_fact_movie_metrics,
     load_fact_movie_rating,
     load_facts,
@@ -3571,6 +3678,108 @@ def test_load_bridge_movie_language_upserts_and_returns_rejects(monkeypatch):
     (stmt, params), _ = mock_session.execute.call_args
     assert "INSERT INTO bridge_movie_language" in str(stmt)
     assert params == [{"movie_id": 1, "language_code": "en", "ingestion_date": dt.date(2026, 6, 26)}]
+
+
+# --- Task 79: series bridges ------------------------------------------------
+
+def _series_genres_df():
+    return pd.DataFrame({
+        "series_id": pd.array([1, 1, 2], dtype="Int64"),
+        "genre_id": pd.array([18, 99, 18], dtype="Int64"),  # 99 is unknown
+    })
+
+
+def _series_countries_df():
+    return pd.DataFrame({
+        "series_id": pd.array([1, 1, 2], dtype="Int64"),
+        "country_code": ["US", "US", "ZZ"],  # ZZ unknown
+        "country_name": ["United States", "United States", "Nowhere"],
+        "relation": ["production", "origin", "production"],
+    })
+
+
+def _series_networks_df():
+    return pd.DataFrame({
+        "series_id": pd.array([1, 2], dtype="Int64"),
+        "network_id": pd.array([174, 999], dtype="Int64"),  # 999 unknown
+    })
+
+
+def test_build_series_bridge_rows_resolves_and_rejects_int_entity():
+    rows, rejects = _build_series_bridge_rows(
+        _series_genres_df(), "genre_id",
+        valid_series_ids={1}, valid_entity_ids={18},
+        ingestion_date=dt.date(2026, 9, 9),
+    )
+    assert rows == [{"series_id": 1, "genre_id": 18, "ingestion_date": dt.date(2026, 9, 9)}]
+    reasons = {r["rejection_reason"] for r in rejects}
+    assert reasons == {"unknown genre_id", "unknown series_id"}
+
+
+def test_build_series_bridge_rows_str_entity_and_relation_extra_col():
+    rows, rejects = _build_series_bridge_rows(
+        _series_countries_df(), "country_code",
+        valid_series_ids={1, 2}, valid_entity_ids={"US"},
+        ingestion_date=dt.date(2026, 9, 9),
+        entity_is_str=True, extra_cols=("relation",),
+    )
+    assert rows == [
+        {"series_id": 1, "country_code": "US", "relation": "production", "ingestion_date": dt.date(2026, 9, 9)},
+        {"series_id": 1, "country_code": "US", "relation": "origin", "ingestion_date": dt.date(2026, 9, 9)},
+    ]
+    assert [r["rejection_reason"] for r in rejects] == ["unknown country_code"]
+
+
+def test_load_bridge_series_genre_upserts_and_returns_rejects(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids",
+        lambda session, table, pk_col: {1} if table == "dim_series" else {18},
+    )
+
+    count, rejects = load_bridge_series_genre(
+        mock_session, _series_genres_df(), dt.date(2026, 9, 9)
+    )
+
+    assert count == 1
+    assert len(rejects) == 2
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO bridge_series_genre" in str(stmt)
+    assert params == [{"series_id": 1, "genre_id": 18, "ingestion_date": dt.date(2026, 9, 9)}]
+
+
+def test_load_bridge_series_country_keeps_relation_in_the_key(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+    monkeypatch.setattr(load_facts_module, "_existing_ids", lambda s, t, p: {1, 2})
+    monkeypatch.setattr(load_facts_module, "_existing_str_ids", lambda s, t, p: {"US"})
+
+    count, rejects = load_bridge_series_country(
+        mock_session, _series_countries_df(), dt.date(2026, 9, 9)
+    )
+
+    assert count == 2  # one production + one origin row for US, both kept
+    assert len(rejects) == 1
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO bridge_series_country" in str(stmt)
+    assert {p["relation"] for p in params} == {"production", "origin"}
+
+
+def test_load_bridge_series_network_resolves_against_dim_network(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids",
+        lambda session, table, pk_col: {1, 2} if table == "dim_series" else {174},
+    )
+
+    count, rejects = load_bridge_series_network(
+        mock_session, _series_networks_df(), dt.date(2026, 9, 9)
+    )
+
+    assert count == 1
+    assert rejects[0]["rejection_reason"] == "unknown network_id"
 
 
 def test_build_movie_rating_rows_builds_both_sources():

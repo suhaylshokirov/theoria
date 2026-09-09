@@ -88,6 +88,7 @@ from etl.incremental import pending_partitions, set_watermark
 from etl.warehouse_loader.common import (
     _existing_ids,
     _existing_str_ids,
+    _optional_silver,
     _read_silver_parquet,
     _upsert,
     _write_rejects,
@@ -471,6 +472,161 @@ def load_bridge_movie_company(
     return count, rejects
 
 
+# --- Task 79: the five series bridges --------------------------------------
+# All five have the same shape — resolve series_id against dim_series, resolve
+# the other id against its dimension, quarantine either miss — so they share
+# one row builder rather than five near-identical copies. Every bridge here is
+# a plain _upsert: a show's genre / studio / country / language / network set
+# does not shrink between runs the way a film's video set does, so there is no
+# need for _replace_by_parent (18_movie_videos.sql).
+
+def _build_series_bridge_rows(
+    link_df: pd.DataFrame,
+    entity_col: str,
+    valid_series_ids: set[int],
+    valid_entity_ids: set,
+    ingestion_date: dt.date,
+    *,
+    entity_is_str: bool = False,
+    extra_cols: tuple[str, ...] = (),
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Resolve every Silver series-link row into a bridge row.
+
+    `entity_col` is the non-series FK column (genre_id / company_id /
+    country_code / language_code / network_id). `entity_is_str` selects
+    natural-key matching (ISO codes) over int matching. `extra_cols` carries
+    non-FK columns straight through — just `relation` for the country bridge,
+    which is a fixed tag, not a reference (the bridge_movie_country precedent).
+
+    Returns (rows, rejects). A row whose series_id or entity id has no
+    dimension row is quarantined, never dropped — the standing rule.
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+
+    for link in link_df.to_dict("records"):
+        series_id = link["series_id"]
+        if pd.isna(series_id) or int(series_id) not in valid_series_ids:
+            rejects.append({**link, "rejection_reason": "unknown series_id"})
+            continue
+
+        entity_val = link[entity_col]
+        if entity_is_str:
+            resolved = (
+                entity_val is not None
+                and not pd.isna(entity_val)
+                and entity_val in valid_entity_ids
+            )
+        else:
+            resolved = not pd.isna(entity_val) and int(entity_val) in valid_entity_ids
+        if not resolved:
+            rejects.append({**link, "rejection_reason": f"unknown {entity_col}"})
+            continue
+
+        row = {
+            "series_id": int(series_id),
+            entity_col: entity_val if entity_is_str else int(entity_val),
+            "ingestion_date": ingestion_date,
+        }
+        for col in extra_cols:
+            row[col] = link.get(col)
+        rows.append(row)
+
+    return rows, rejects
+
+
+def load_bridge_series_genre(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve Silver series_genres into bridge_series_genre. Returns (count, rejects)."""
+    rows, rejects = _build_series_bridge_rows(
+        df, "genre_id",
+        _existing_ids(session, "dim_series", "series_id"),
+        _existing_ids(session, "dim_genre", "genre_id"),
+        ingestion_date,
+    )
+    columns = ["series_id", "genre_id", "ingestion_date"]
+    count = _upsert(session, "bridge_series_genre", ["series_id", "genre_id"], columns, _records(rows))
+    logger.info("bridge_series_genre: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
+def load_bridge_series_company(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve Silver series_companies into bridge_series_company. Returns (count, rejects)."""
+    rows, rejects = _build_series_bridge_rows(
+        df, "company_id",
+        _existing_ids(session, "dim_series", "series_id"),
+        _existing_ids(session, "dim_company", "company_id"),
+        ingestion_date,
+    )
+    columns = ["series_id", "company_id", "ingestion_date"]
+    count = _upsert(session, "bridge_series_company", ["series_id", "company_id"], columns, _records(rows))
+    logger.info("bridge_series_company: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
+def load_bridge_series_country(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve Silver series_countries into bridge_series_country.
+
+    relation is in the PK and carried through as a plain column, not
+    FK-resolved — the bridge_movie_country precedent. Returns (count, rejects).
+    """
+    rows, rejects = _build_series_bridge_rows(
+        df, "country_code",
+        _existing_ids(session, "dim_series", "series_id"),
+        _existing_str_ids(session, "dim_country", "country_code"),
+        ingestion_date,
+        entity_is_str=True,
+        extra_cols=("relation",),
+    )
+    columns = ["series_id", "country_code", "relation", "ingestion_date"]
+    count = _upsert(
+        session, "bridge_series_country",
+        ["series_id", "country_code", "relation"], columns, _records(rows),
+    )
+    logger.info("bridge_series_country: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
+def load_bridge_series_language(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve Silver series_languages into bridge_series_language. Returns (count, rejects)."""
+    rows, rejects = _build_series_bridge_rows(
+        df, "language_code",
+        _existing_ids(session, "dim_series", "series_id"),
+        _existing_str_ids(session, "dim_language", "language_code"),
+        ingestion_date,
+        entity_is_str=True,
+    )
+    columns = ["series_id", "language_code", "ingestion_date"]
+    count = _upsert(
+        session, "bridge_series_language", ["series_id", "language_code"], columns, _records(rows)
+    )
+    logger.info("bridge_series_language: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
+def load_bridge_series_network(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve Silver series_networks into bridge_series_network. Returns (count, rejects)."""
+    rows, rejects = _build_series_bridge_rows(
+        df, "network_id",
+        _existing_ids(session, "dim_series", "series_id"),
+        _existing_ids(session, "dim_network", "network_id"),
+        ingestion_date,
+    )
+    columns = ["series_id", "network_id", "ingestion_date"]
+    count = _upsert(session, "bridge_series_network", ["series_id", "network_id"], columns, _records(rows))
+    logger.info("bridge_series_network: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
 def _build_movie_rating_rows(
     ratings_df: pd.DataFrame,
     movies_df: pd.DataFrame,
@@ -639,7 +795,21 @@ def load_facts(
             columns=["person_id", "alias", "ordering"]
         )
 
+    # Task 79: the five series bridges. Every source is optional — a movie-only
+    # pipeline run (and the nightly refresh, until Task 85) writes none of
+    # them, so the whole TV bridge block is skipped and the 19_series.sql
+    # migration need not even be applied yet.
+    series_link_dfs = {
+        name: _optional_silver(bucket, name, ingestion_date, f"{name}.parquet")
+        for name in (
+            "series_genres", "series_companies", "series_countries",
+            "series_languages", "series_networks",
+        )
+    }
+    load_tv = any(v is not None and not v.empty for v in series_link_dfs.values())
+
     counts: dict[str, int] = {}
+    series_rejects: dict[str, list[dict[str, Any]]] = {}
     with get_session() as session:
         counts["fact_movie_metrics"], metrics_rejects = load_fact_movie_metrics(session, movies_df, ingestion_date)
         counts["fact_movie_rating"], rating_rejects = load_fact_movie_rating(
@@ -659,6 +829,24 @@ def load_facts(
             session, languages_df, ingestion_date
         )
 
+        # Task 79: series bridges. Run after load_dimensions committed
+        # dim_series / dim_network / the extended dim_company/country/language.
+        if load_tv:
+            _series_loaders = [
+                ("bridge_series_genre", load_bridge_series_genre, "series_genres"),
+                ("bridge_series_company", load_bridge_series_company, "series_companies"),
+                ("bridge_series_country", load_bridge_series_country, "series_countries"),
+                ("bridge_series_language", load_bridge_series_language, "series_languages"),
+                ("bridge_series_network", load_bridge_series_network, "series_networks"),
+            ]
+            for table, loader, src in _series_loaders:
+                src_df = series_link_dfs[src]
+                if src_df is None:
+                    continue
+                counts[table], series_rejects[table] = loader(
+                    session, src_df, ingestion_date
+                )
+
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)
     _write_rejects(rating_rejects, "fact_movie_rating", ingestion_date, rejected_dir)
     _write_rejects(credit_rejects, "fact_credit", ingestion_date, rejected_dir)
@@ -666,6 +854,8 @@ def load_facts(
     _write_rejects(company_rejects, "bridge_movie_company", ingestion_date, rejected_dir)
     _write_rejects(country_rejects, "bridge_movie_country", ingestion_date, rejected_dir)
     _write_rejects(language_rejects, "bridge_movie_language", ingestion_date, rejected_dir)
+    for table, rejects in series_rejects.items():
+        _write_rejects(rejects, table, ingestion_date, rejected_dir)
 
     elapsed = time.monotonic() - t0
     logger.info(

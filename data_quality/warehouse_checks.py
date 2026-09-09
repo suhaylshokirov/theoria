@@ -86,6 +86,17 @@ _FK_CHECKS = [
     ("fact_movie_rating", "movie_id", "dim_movie", "movie_id"),
     ("person_alias", "person_id", "dim_person", "person_id"),
     ("dim_movie_video", "movie_id", "dim_movie", "movie_id"),
+    # Task 79: the series bridges. series_id -> dim_series is checked once via
+    # the genre bridge as representative (every series bridge shares that FK);
+    # the other five entries cover each distinct entity linkage once. On a
+    # movie-only warehouse every bridge_series_* table is empty, so these pass
+    # trivially (0 orphan rows) — the dim_movie_video precedent from Task 74.
+    ("bridge_series_genre", "series_id", "dim_series", "series_id"),
+    ("bridge_series_genre", "genre_id", "dim_genre", "genre_id"),
+    ("bridge_series_company", "company_id", "dim_company", "company_id"),
+    ("bridge_series_country", "country_code", "dim_country", "country_code"),
+    ("bridge_series_language", "language_code", "dim_language", "language_code"),
+    ("bridge_series_network", "network_id", "dim_network", "network_id"),
 ]
 
 
@@ -479,6 +490,47 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             results.append(CheckResult(load_name, True,
                 f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
             logger.info("[%s] OK (%d rows)", load_name, loaded)
+
+    # dim_series / dim_network (Task 79): checked here beside the other
+    # dimension-backed entities, same defensive shape as movie_videos above —
+    # a movie-only run has no Silver series file and the whole block is
+    # skipped. Both Silver Parquets are already one row per entity, so the
+    # silver_to_warehouse comparison is a plain len(df), no nunique().
+    for silver_entity, warehouse_table, id_col in [
+        ("series", "dim_series", "series_id"),
+        ("networks", "dim_network", "network_id"),
+    ]:
+        try:
+            sdf = _read_silver_parquet(
+                bucket, silver_entity, ingestion_date, f"{silver_entity}.parquet"
+            )
+        except Exception as exc:
+            logger.info(
+                "[rowcount:%s] no Silver %s for %s (%s) — skipped",
+                silver_entity, silver_entity, ingestion_date, exc,
+            )
+            continue
+        if id_col not in sdf.columns:
+            logger.info(
+                "[rowcount:%s] Silver %s has no %s column — skipped",
+                silver_entity, silver_entity, id_col,
+            )
+            continue
+
+        silver_count = len(sdf)
+        s2w_name = f"rowcount:{silver_entity}:silver_to_warehouse"
+        warehouse_count = _table_row_count(session, warehouse_table)
+        if warehouse_count < silver_count:
+            results.append(CheckResult(s2w_name, False,
+                f"{warehouse_table} has only {warehouse_count} row(s), fewer than the "
+                f"{silver_count} just loaded from Silver"))
+            logger.error("[%s] FAIL — warehouse=%d < silver=%d",
+                          s2w_name, warehouse_count, silver_count)
+        else:
+            results.append(CheckResult(s2w_name, True,
+                f"Silver={silver_count}, {warehouse_table}={warehouse_count} (cumulative)"))
+            logger.info("[%s] OK (silver=%d, warehouse=%d)",
+                         s2w_name, silver_count, warehouse_count)
 
     return results
 

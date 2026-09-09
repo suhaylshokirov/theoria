@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 16
+    assert len(results) == 22  # 16 movie/person + 6 series bridges (Task 79)
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 15
+    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 21
 
     results = check_fk_integrity(mock_session)
 
@@ -734,6 +734,79 @@ def test_check_row_count_sanity_movie_videos_fails_when_load_produced_nothing():
     load = next(r for r in results if r.check == "rowcount:movie_videos:load")
     assert load.passed is False
     assert "0 row(s)" in load.detail
+
+
+# --- Task 79: dim_series / dim_network row-count sanity --------------------
+
+def _silver_series_df(n: int) -> pd.DataFrame:
+    return pd.DataFrame([{"series_id": 1000 + i, "name": f"Series {i}"} for i in range(n)])
+
+
+def _silver_networks_df(n: int) -> pd.DataFrame:
+    return pd.DataFrame([{"network_id": 100 + i, "name": f"Net {i}"} for i in range(n)])
+
+
+def _series_branches(n_series: int, n_networks: int) -> dict[str, bytes]:
+    def to_bytes(df):
+        buf = io.BytesIO()
+        df.to_parquet(buf, engine="pyarrow", index=False)
+        return buf.getvalue()
+    return {
+        "/series/": to_bytes(_silver_series_df(n_series)),
+        "/networks/": to_bytes(_silver_networks_df(n_networks)),
+    }
+
+
+def test_check_row_count_sanity_series_and_networks_pass_when_consistent():
+    mock_s3 = _mock_s3_for_full_row_count_sanity(_series_branches(2, 1))
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 50  # >= every silver count
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    series = next(r for r in results if r.check == "rowcount:series:silver_to_warehouse")
+    networks = next(r for r in results if r.check == "rowcount:networks:silver_to_warehouse")
+    assert series.passed and networks.passed
+
+
+def test_check_row_count_sanity_series_fails_when_warehouse_shrinks():
+    mock_s3 = _mock_s3_for_full_row_count_sanity(_series_branches(3, 1))
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 1  # < 3 series rows
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    series = next(r for r in results if r.check == "rowcount:series:silver_to_warehouse")
+    assert series.passed is False
+    assert "fewer than" in series.detail
+
+
+def test_check_row_count_sanity_skips_series_when_no_silver_file():
+    """A movie-only warehouse has no Silver series file — no series result at all."""
+    mock_s3 = _mock_s3_for_full_row_count_sanity({})
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 50
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    assert not any(r.check.startswith("rowcount:series") for r in results)
+    assert not any(r.check.startswith("rowcount:networks") for r in results)
+
+
+def test_check_fk_integrity_covers_the_six_series_bridges():
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 0
+
+    names = {r.check for r in check_fk_integrity(mock_session)}
+    assert "fk:bridge_series_genre.series_id->dim_series.series_id" in names
+    assert "fk:bridge_series_genre.genre_id->dim_genre.genre_id" in names
+    assert "fk:bridge_series_company.company_id->dim_company.company_id" in names
+    assert "fk:bridge_series_country.country_code->dim_country.country_code" in names
+    assert "fk:bridge_series_language.language_code->dim_language.language_code" in names
+    assert "fk:bridge_series_network.network_id->dim_network.network_id" in names
 
 
 # ---------------------------------------------------------------------------

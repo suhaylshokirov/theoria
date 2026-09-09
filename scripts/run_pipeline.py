@@ -57,19 +57,32 @@ logger = logging.getLogger(__name__)
 
 
 def _extract_company_ids(
-    movie_ids: list[int], ingestion_date: dt.date, bucket: str
+    movie_ids: list[int],
+    ingestion_date: dt.date,
+    bucket: str,
+    series_ids: list[int] | None = None,
 ) -> list[int]:
-    """Re-read the Bronze movie-detail files just written and return the
-    deduplicated set of production_companies[].id across all of them.
+    """Re-read the Bronze detail files just written and return the deduplicated
+    set of production_companies[].id across all of them.
 
     TMDB has no "list all companies" endpoint, and the company ids aren't in
-    the discovery listing — they live inside each movie's detail payload. This
-    is the company-id equivalent of the movie_ids that ingest_movies() threads
-    into ingest_movie_details(): the input to ingest_companies().
+    the discovery listing — they live inside each movie's (and each series')
+    detail payload. This is the company-id equivalent of the movie_ids that
+    ingest_movies() threads into ingest_movie_details(): the input to
+    ingest_companies().
+
+    `series_ids` (Task 79): when given, `bronze/series_details/<sid>.json` is
+    swept too, so a studio that only ever made TV shows still gets its
+    `GET /company/{id}` enrichment. TMDB has one company namespace across film
+    and TV, so these merge into the same set with no disambiguation.
     """
     keys = [
         s3_utils.build_path("bronze", "movie_details", ingestion_date, f"{mid}.json")
         for mid in movie_ids
+    ]
+    keys += [
+        s3_utils.build_path("bronze", "series_details", ingestion_date, f"{sid}.json")
+        for sid in (series_ids or [])
     ]
     company_ids: set[int] = set()
     for key, raw, err in s3_utils.read_json_objects(bucket, keys):
@@ -145,12 +158,13 @@ def run_pipeline(
     each year in a configured range). Everything downstream is identical —
     both return a plain list of movie_ids.
 
-    `with_tv` adds the TV series path — Bronze (discover_tv + series_details +
-    the TV genre list) and Silver (transform_series, transform_series_links,
-    and the TV half of transform_genres / run_silver_checks). It is off by
+    `with_tv` adds the TV series path end to end — Bronze (discover_tv +
+    series_details + the TV genre list), Silver (transform_series[_links], the
+    TV half of transform_genres / run_silver_checks), and the warehouse
+    (load_dimensions / load_facts self-load dim_series, dim_network and the
+    five series bridges once the series Silver files exist). It is off by
     default so the movie pipeline's runtime and TMDB call volume are provably
-    unchanged until Task 85 turns TV on for real; the warehouse load and the
-    site come later (Tasks 79 and 86).
+    unchanged until Task 85 turns TV on for real; the site comes in Task 86.
     """
     # Fail on a missing TMDB/AWS secret now, not 4 minutes into ingestion.
     config.require_etl()
@@ -189,10 +203,30 @@ def run_pipeline(
     # transform_movies()'s output below, so it must run after that.
     ingest_imdb_ratings(ingestion_date=ingestion_date)
 
-    # Company ids only exist inside the movie-detail payloads just written.
-    # ingest_companies() then skips any already enriched in a prior partition,
-    # so this is cheap on every run after the first (Task 65).
-    company_ids = _extract_company_ids(movie_ids, ingestion_date, config.S3_BUCKET)
+    # TV series (Tasks 77–79): Bronze, and only when asked. Off by default so
+    # the movie pipeline's call volume and runtime are provably unchanged.
+    # Runs here, before the company-id extraction, so a TV-only studio is
+    # picked up by _extract_company_ids() and enriched too (Task 79). The
+    # Silver transforms run below with the movie ones; the warehouse loaders
+    # self-degrade when the series Silver files are absent.
+    series_ids: list[int] = []
+    if with_tv:
+        series_ids = ingest_discover_tv(ingestion_date=ingestion_date)
+        logger.info("Bronze discover_tv: %d series_id(s) discovered", len(series_ids))
+        succeeded_series, failed_series = ingest_series_details(
+            series_ids, ingestion_date=ingestion_date
+        )
+        logger.info(
+            "Bronze series details: %d/%d succeeded",
+            len(succeeded_series), len(series_ids),
+        )
+
+    # Company ids only exist inside the movie- (and series-) detail payloads
+    # just written. ingest_companies() then skips any already enriched in a
+    # prior partition, so this is cheap on every run after the first (Task 65).
+    company_ids = _extract_company_ids(
+        movie_ids, ingestion_date, config.S3_BUCKET, series_ids=series_ids
+    )
     succeeded_companies, failed_companies = ingest_companies(
         company_ids, ingestion_date=ingestion_date
     )
@@ -213,22 +247,6 @@ def run_pipeline(
         "Bronze person details: %d new people fetched (of %d photo-having candidates)",
         len(succeeded_people), len(person_ids),
     )
-
-    # TV series (Tasks 77–78): Bronze + Silver, and only when asked. Off by
-    # default so the movie pipeline's call volume and runtime are provably
-    # unchanged. discover_tv returns the series_ids that feed series_details
-    # directly, exactly as ingest_discover feeds ingest_movie_details above.
-    # The warehouse load arrives in Task 79; the site shows nothing until 86.
-    if with_tv:
-        series_ids = ingest_discover_tv(ingestion_date=ingestion_date)
-        logger.info("Bronze discover_tv: %d series_id(s) discovered", len(series_ids))
-        succeeded_series, failed_series = ingest_series_details(
-            series_ids, ingestion_date=ingestion_date
-        )
-        logger.info(
-            "Bronze series details: %d/%d succeeded",
-            len(succeeded_series), len(series_ids),
-        )
 
     transform_movies(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date)
@@ -303,9 +321,9 @@ def _parse_args() -> argparse.Namespace:
         "--with-tv",
         action="store_true",
         help=(
-            "Also run the TV series path through Bronze and Silver (discover_tv, "
-            "series_details, transform_series[_links]). Off by default; the "
-            "warehouse load and UI come later (Tasks 79, 86)."
+            "Also run the TV series path — Bronze, Silver and the warehouse "
+            "load of dim_series / dim_network / the series bridges. Off by "
+            "default; the UI comes in Task 86."
         ),
     )
     return parser.parse_args()

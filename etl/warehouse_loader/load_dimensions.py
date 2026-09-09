@@ -50,6 +50,7 @@ import config
 from etl.incremental import pending_partitions, set_watermark
 from etl.warehouse_loader.common import (
     _existing_ids,
+    _optional_silver,
     _read_silver_parquet,
     _replace_by_parent,
     _upsert,
@@ -158,16 +159,61 @@ def load_dim_genre(session: Session, df: pd.DataFrame) -> int:
     return count
 
 
+_DIM_SERIES_COLS = [
+    "series_id", "name", "original_name", "first_air_date", "last_air_date",
+    "number_of_seasons", "number_of_episodes", "status", "type", "in_production",
+    "original_language", "overview", "tagline", "poster_path", "backdrop_path",
+    "homepage", "imdb_id",
+]
+
+
+def load_dim_series(session: Session, df: pd.DataFrame) -> int:
+    """Upsert Silver series into dim_series (Task 79).
+
+    Plain column-for-column upsert, the same shape as load_dim_movie(). `slug`
+    is not written here — assign_slugs() computes it over the whole table
+    afterwards, exactly as it does for dim_movie.
+    """
+    records = _records(df, _DIM_SERIES_COLS)
+    count = _upsert(session, "dim_series", ["series_id"], _DIM_SERIES_COLS, records)
+    logger.info("dim_series: upserted %d row(s)", count)
+    return count
+
+
+def load_dim_network(session: Session, df: pd.DataFrame) -> int:
+    """Upsert the distinct networks referenced by Silver series into dim_network.
+
+    Silver's `networks` Parquet is already one row per network_id, but the
+    same id/name null-filter and dedupe every other link-derived dimension
+    applies is kept for consistency: a network row with a null name can't
+    satisfy dim_network.name NOT NULL, so it gets no dimension row and
+    load_bridge_series_network() then quarantines its bridge rows.
+    """
+    named = df[df["network_id"].notna() & df["name"].notna()]
+    networks = named[["network_id", "name", "logo_path", "origin_country"]].drop_duplicates(
+        subset=["network_id"], keep="last"
+    )
+    columns = ["network_id", "name", "logo_path", "origin_country"]
+    records = _records(networks, columns)
+    count = _upsert(session, "dim_network", ["network_id"], columns, records)
+    logger.info("dim_network: upserted %d row(s)", count)
+    return count
+
+
 _COMPANY_DETAIL_COLS = [
     "description", "headquarters", "homepage",
     "parent_company_id", "parent_company_name",
 ]
 
 
+_COMPANY_LINK_COLS = ["company_id", "company_name", "logo_path", "origin_country"]
+
+
 def load_dim_company(
     session: Session,
     df: pd.DataFrame,
     details_df: pd.DataFrame | None = None,
+    series_df: pd.DataFrame | None = None,
 ) -> int:
     """Upsert the distinct companies referenced by Silver movie_companies into dim_company.
 
@@ -186,8 +232,19 @@ def load_dim_company(
     company whose one API call failed) still upserts with its five original
     columns and simply leaves the five new ones null. Passing None (a missing
     Silver file) degrades the same way rather than blocking the load.
+
+    `series_df` (Task 79) is the TV equivalent of `df` — Silver
+    `series_companies` link rows, carrying the same company_id / name / logo /
+    origin_country. TMDB has one company namespace across film and TV (the
+    feature preamble), so a studio that made a show is the same dim_company
+    entity as one that made a film; its link rows are unioned in here so
+    bridge_series_company resolves without a systematic quarantine. None
+    degrades to "movies only", exactly as before Task 79.
     """
-    named = df[df["company_id"].notna() & df["company_name"].notna()]
+    link = df[_COMPANY_LINK_COLS]
+    if series_df is not None and not series_df.empty:
+        link = pd.concat([link, series_df[_COMPANY_LINK_COLS]], ignore_index=True)
+    named = link[link["company_id"].notna() & link["company_name"].notna()]
     companies = (
         named[["company_id", "company_name", "logo_path", "origin_country"]]
         .drop_duplicates(subset=["company_id"], keep="last")
@@ -211,7 +268,9 @@ def load_dim_company(
     return count
 
 
-def load_dim_country(session: Session, df: pd.DataFrame) -> int:
+def load_dim_country(
+    session: Session, df: pd.DataFrame, series_df: pd.DataFrame | None = None
+) -> int:
     """Upsert the distinct named countries referenced by Silver movie_countries into dim_country.
 
     Mirrors load_dim_company(): the dimension is the *distinct* set of
@@ -225,8 +284,15 @@ def load_dim_country(session: Session, df: pd.DataFrame) -> int:
     name. A code named on *any* movie's production_countries list gets a row
     even if this exact link row's name is null, since drop_duplicates keeps
     the last named occurrence across the whole partition.
+
+    `series_df` (Task 79) unions Silver `series_countries` rows the same way
+    load_dim_company() unions series companies — countries are ISO-standard
+    and shared across film and TV. None degrades to "movies only".
     """
-    named = df[df["country_code"].notna() & df["country_name"].notna()]
+    link = df[["country_code", "country_name"]]
+    if series_df is not None and not series_df.empty:
+        link = pd.concat([link, series_df[["country_code", "country_name"]]], ignore_index=True)
+    named = link[link["country_code"].notna() & link["country_name"].notna()]
     countries = (
         named[["country_code", "country_name"]]
         .drop_duplicates(subset=["country_code"], keep="last")
@@ -239,7 +305,9 @@ def load_dim_country(session: Session, df: pd.DataFrame) -> int:
     return count
 
 
-def load_dim_language(session: Session, df: pd.DataFrame) -> int:
+def load_dim_language(
+    session: Session, df: pd.DataFrame, series_df: pd.DataFrame | None = None
+) -> int:
     """Upsert the distinct languages referenced by Silver movie_languages into dim_language.
 
     Same shape as load_dim_country(): dedupe the link table down to its
@@ -247,8 +315,15 @@ def load_dim_language(session: Session, df: pd.DataFrame) -> int:
     carry both a name and an english_name, so unlike countries there's no
     partial-coverage case here — just the id/name null-filter every other
     link-derived dimension applies for consistency.
+
+    `series_df` (Task 79) unions Silver `series_languages` rows — same
+    namespace across film and TV. None degrades to "movies only".
     """
-    named = df[df["language_code"].notna() & df["language_name"].notna()]
+    _cols = ["language_code", "language_name", "english_name"]
+    link = df[_cols]
+    if series_df is not None and not series_df.empty:
+        link = pd.concat([link, series_df[_cols]], ignore_index=True)
+    named = link[link["language_code"].notna() & link["language_name"].notna()]
     languages = (
         named[["language_code", "language_name", "english_name"]]
         .drop_duplicates(subset=["language_code"], keep="last")
@@ -510,6 +585,23 @@ def load_dimensions(
         )
         videos_df = None
 
+    # Task 79: TV series. Every series Silver source is optional in the same
+    # way — a movie-only pipeline run (or the nightly refresh, until Task 85)
+    # writes none of them, so all of dim_series / dim_network / the series
+    # unions below simply do not run and the 19_series.sql migration need not
+    # even be applied yet.
+    series_df = _optional_silver(bucket, "series", ingestion_date, "series.parquet")
+    series_companies_df = _optional_silver(
+        bucket, "series_companies", ingestion_date, "series_companies.parquet"
+    )
+    series_countries_df = _optional_silver(
+        bucket, "series_countries", ingestion_date, "series_countries.parquet"
+    )
+    series_languages_df = _optional_silver(
+        bucket, "series_languages", ingestion_date, "series_languages.parquet"
+    )
+    networks_df = _optional_silver(bucket, "networks", ingestion_date, "networks.parquet")
+
     counts: dict[str, int] = {}
     video_rejects: list[dict[str, Any]] = []
     with get_session() as session:
@@ -524,20 +616,34 @@ def load_dimensions(
             )
         else:
             counts["dim_movie_video"] = 0
+        # Task 79: dim_series has no FK; load it beside dim_movie_video. Only
+        # when there is series Silver to load — otherwise the 19_series.sql
+        # migration need not be applied and assign_slugs() below is skipped too.
+        tv = series_df is not None and not series_df.empty
+        if tv:
+            counts["dim_series"] = load_dim_series(session, series_df)
+            if networks_df is not None and not networks_df.empty:
+                counts["dim_network"] = load_dim_network(session, networks_df)
+            else:
+                counts["dim_network"] = 0
         counts["dim_person"] = load_dim_person(session, people_df, person_details_df)
         counts["dim_genre"] = load_dim_genre(session, genres_df)
-        # Before load_facts.load_bridge_movie_company(), which has an FK here.
+        # Before load_facts.load_bridge_movie_company() / load_bridge_series_company(),
+        # both of which have an FK here. series_companies_df unions TV studios in.
         counts["dim_company"] = load_dim_company(
-            session, companies_df, company_details_df
+            session, companies_df, company_details_df, series_companies_df
         )
-        # Before load_facts.load_bridge_movie_country/language(), same reason.
-        counts["dim_country"] = load_dim_country(session, countries_df)
-        counts["dim_language"] = load_dim_language(session, languages_df)
+        # Before the movie and series country/language bridges, same reason.
+        counts["dim_country"] = load_dim_country(session, countries_df, series_countries_df)
+        counts["dim_language"] = load_dim_language(session, languages_df, series_languages_df)
         counts["dim_date"] = load_dim_date(session, calendar_start, calendar_end)
         counts["dim_movie_slugs"] = assign_slugs(session, "dim_movie", "movie_id", "title")
         counts["dim_person_slugs"] = assign_slugs(session, "dim_person", "person_id", "name")
         counts["dim_collection_slugs"] = assign_slugs(session, "dim_collection", "collection_id", "name")
         counts["dim_company_slugs"] = assign_slugs(session, "dim_company", "company_id", "name")
+        if tv:
+            counts["dim_series_slugs"] = assign_slugs(session, "dim_series", "series_id", "name")
+            counts["dim_network_slugs"] = assign_slugs(session, "dim_network", "network_id", "name")
 
     _write_rejects(video_rejects, "dim_movie_video", ingestion_date, rejected_dir)
 

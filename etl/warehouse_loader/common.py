@@ -32,6 +32,27 @@ def _read_silver_parquet(bucket: str, entity: str, ingestion_date: dt.date, file
     return pd.read_parquet(io.BytesIO(response["Body"].read()))
 
 
+def _optional_silver(
+    bucket: str, entity: str, ingestion_date: dt.date, filename: str
+) -> pd.DataFrame | None:
+    """Read a Silver Parquet that may not exist, returning None instead of raising.
+
+    Used for every source a movie-only pipeline run does not produce — the TV
+    series entities (Task 79) — mirroring the degrade-don't-crash posture the
+    company_details / person_details / movie_videos reads already take inline.
+    """
+    try:
+        return _read_silver_parquet(bucket, entity, ingestion_date, filename)
+    except Exception as exc:
+        # info, not warning: for the TV entities this is the normal state on
+        # every movie-only run until Task 85 turns nightly TV on.
+        logger.info(
+            "No Silver %s for %s (%s) — that source will not be loaded",
+            entity, ingestion_date, exc,
+        )
+        return None
+
+
 def _upsert(session: Session, table: str, pk_cols: list[str], columns: list[str],
             records: list[dict[str, Any]]) -> int:
     """Bulk upsert records into `table`, updating non-PK columns on conflict.
