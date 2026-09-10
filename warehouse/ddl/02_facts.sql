@@ -132,3 +132,25 @@ CREATE TABLE IF NOT EXISTS fact_series_rating (
 CREATE INDEX IF NOT EXISTS idx_fact_series_rating_series_id ON fact_series_rating (series_id);
 CREATE INDEX IF NOT EXISTS idx_fact_series_rating_source_rating
     ON fact_series_rating (source, rating DESC);
+
+
+-- fact_episode_rating (Task 84) is the third copy of the fact_movie_rating
+-- shape, after fact_series_rating: one row per (episode, source), IMDb as the
+-- rating of record and TMDB kept for comparison. silver/episode_ratings
+-- (Task 83) already emits both sources with a `source` column, so
+-- load_fact_episode_rating() is a plain read-and-upsert. See 22_episodes.sql.
+CREATE TABLE IF NOT EXISTS fact_episode_rating (
+    episode_id     INTEGER     NOT NULL,
+    source         VARCHAR(16) NOT NULL,
+    rating         NUMERIC(4,2),
+    vote_count     INTEGER,
+    ingestion_date DATE        NOT NULL,
+    CONSTRAINT pk_fact_episode_rating PRIMARY KEY (episode_id, source),
+    CONSTRAINT fk_fact_episode_rating_episode
+        FOREIGN KEY (episode_id) REFERENCES dim_episode (episode_id),
+    CONSTRAINT ck_fact_episode_rating_source CHECK (source IN ('imdb', 'tmdb'))
+);
+CREATE INDEX IF NOT EXISTS idx_fact_episode_rating_episode_id
+    ON fact_episode_rating (episode_id);
+CREATE INDEX IF NOT EXISTS idx_fact_episode_rating_source_rating
+    ON fact_episode_rating (source, rating DESC);

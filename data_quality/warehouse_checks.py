@@ -103,6 +103,12 @@ _FK_CHECKS = [
     ("fact_series_credit", "person_id", "dim_person", "person_id"),
     # Task 81: fact_series_rating. Same free ride until the first --with-tv load.
     ("fact_series_rating", "series_id", "dim_series", "series_id"),
+    # Task 84: the episode grain. dim_season / dim_episode reference dim_series;
+    # fact_episode_rating references dim_episode. All empty on a movie-only
+    # warehouse, so all three pass trivially until the first --with-tv load.
+    ("dim_season", "series_id", "dim_series", "series_id"),
+    ("dim_episode", "series_id", "dim_series", "series_id"),
+    ("fact_episode_rating", "episode_id", "dim_episode", "episode_id"),
 ]
 
 
@@ -631,6 +637,80 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             results.append(CheckResult(load_name, True,
                 f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
             logger.info("[%s] OK (%d rows)", load_name, loaded)
+
+    # dim_episode (Task 84): same defensive shape as dim_series / series_credits
+    # above — a movie-only run has no Silver episodes file and the whole block
+    # (row-count sanity *and* the natural-grain guard) is skipped. Silver
+    # episodes.parquet is one row per episode_id, so silver_to_warehouse is a
+    # plain len(df). dim_episode is loaded by _replace_by_parent, so the
+    # cumulative table can shrink for a given series between runs — but never
+    # below this partition's Silver row count on the load-date check.
+    try:
+        ep_df = _read_silver_parquet(
+            bucket, "episodes", ingestion_date, "episodes.parquet"
+        )
+    except Exception as exc:
+        logger.info(
+            "[rowcount:episodes] no Silver episodes for %s (%s) — skipped",
+            ingestion_date, exc,
+        )
+        ep_df = None
+    if ep_df is not None and "episode_id" not in ep_df.columns:
+        logger.info(
+            "[rowcount:episodes] Silver episodes has no episode_id column — skipped"
+        )
+        ep_df = None
+    if ep_df is not None:
+        s2w_name = "rowcount:episodes:silver_to_warehouse"
+        warehouse_count = _table_row_count(session, "dim_episode")
+        if warehouse_count < len(ep_df):
+            results.append(CheckResult(s2w_name, False,
+                f"dim_episode has only {warehouse_count} row(s), fewer than the "
+                f"{len(ep_df)} just loaded from Silver"))
+            logger.error("[%s] FAIL — warehouse=%d < silver=%d",
+                          s2w_name, warehouse_count, len(ep_df))
+        else:
+            results.append(CheckResult(s2w_name, True,
+                f"Silver={len(ep_df)}, dim_episode={warehouse_count} (cumulative)"))
+            logger.info("[%s] OK", s2w_name)
+
+        load_name = "rowcount:episodes:load"
+        loaded = _fact_ingestion_date_count(session, "dim_episode", ingestion_date)
+        if len(ep_df) > 0 and loaded == 0:
+            results.append(CheckResult(load_name, False,
+                f"dim_episode has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"{len(ep_df)} Silver episodes row(s)"))
+            logger.error("[%s] FAIL — 0 rows loaded", load_name)
+        else:
+            results.append(CheckResult(load_name, True,
+                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+            logger.info("[%s] OK (%d rows)", load_name, loaded)
+
+        # Natural-grain guard: dim_episode's PK is TMDB's surrogate episode_id,
+        # so a (series_id, season_number, episode_number) collision that slipped
+        # the UNIQUE index (or a bug in _replace_by_parent) would not fail the
+        # PK. This is the warehouse mirror of the Silver `grain` check on
+        # silver/episodes (Task 82). NULLs in the natural key (an unaired,
+        # unnumbered episode) are excluded — Postgres already permits them.
+        grain_name = "grain:dim_episode"
+        dupes = session.execute(text(
+            "SELECT COUNT(*) FROM ("
+            "  SELECT series_id, season_number, episode_number "
+            "  FROM dim_episode "
+            "  WHERE season_number IS NOT NULL AND episode_number IS NOT NULL "
+            "  GROUP BY series_id, season_number, episode_number "
+            "  HAVING COUNT(*) > 1"
+            ") d"
+        )).scalar()
+        if dupes:
+            results.append(CheckResult(grain_name, False,
+                f"{dupes} (series_id, season_number, episode_number) pair(s) repeat "
+                f"in dim_episode"))
+            logger.error("[%s] FAIL — %d repeated natural key(s)", grain_name, dupes)
+        else:
+            results.append(CheckResult(grain_name, True,
+                "No (series_id, season_number, episode_number) repeats in dim_episode"))
+            logger.info("[%s] OK", grain_name)
 
     return results
 

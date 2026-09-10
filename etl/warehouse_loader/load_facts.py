@@ -49,6 +49,11 @@ at (series_id, source) grain. Both TV reads are optional — a movie-only run
 (and the nightly refresh, until Task 85) writes neither, so the whole block
 is skipped.
 
+fact_episode_rating (Task 84) is the third copy of that shape, at
+(episode_id, source) grain — but simpler to load: silver/episode_ratings
+already carries both sources with a `source` column (Task 83), so it is a
+plain FK-resolve + upsert, no 'tmdb' synthesis. Optional in the same way.
+
 person_alias (Task 72) is neither a fact nor a bridge — it attaches one
 dimension's repeating text (a person's also_known_as entries) to it. It is
 loaded here, alongside the facts, because it follows the same
@@ -872,6 +877,57 @@ def load_fact_series_rating(
     return count, rejects
 
 
+def _build_episode_rating_rows(
+    ratings_df: pd.DataFrame,
+    valid_episode_ids: set[int],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Resolve every silver/episode_ratings row into a fact_episode_rating row.
+
+    Unlike _build_movie_rating_rows / _build_series_rating_rows, this does NOT
+    synthesise the source='tmdb' rows — silver/episode_ratings (Task 83)
+    already carries both sources with a `source` column, one row per
+    (episode_id, source), deduped Silver-side. So this is a straight
+    FK-resolve + quarantine, like the bridge loaders. Returns (rows, rejects).
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+
+    for record in ratings_df.to_dict("records"):
+        episode_id = record.get("episode_id")
+        if pd.isna(episode_id) or int(episode_id) not in valid_episode_ids:
+            rejects.append({**record, "rejection_reason": "unknown episode_id"})
+            continue
+        rows.append({
+            "episode_id": int(episode_id),
+            "source": record.get("source"),
+            "rating": record.get("rating"),
+            "vote_count": record.get("vote_count"),
+            "ingestion_date": ingestion_date,
+        })
+
+    return rows, rejects
+
+
+def load_fact_episode_rating(
+    session: Session, ratings_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert silver/episode_ratings into fact_episode_rating.
+
+    Must run after load_dim_episode() has committed — episode_id is resolved
+    against the live dimension. Returns (count, rejects).
+    """
+    valid_episode_ids = _existing_ids(session, "dim_episode", "episode_id")
+
+    rows, rejects = _build_episode_rating_rows(
+        ratings_df, valid_episode_ids, ingestion_date
+    )
+    columns = ["episode_id", "source", "rating", "vote_count", "ingestion_date"]
+    count = _upsert(session, "fact_episode_rating", ["episode_id", "source"], columns, _records(rows))
+    logger.info("fact_episode_rating: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
 def load_fact_movie_metrics(
     session: Session, movies_df: pd.DataFrame, ingestion_date: dt.date,
 ) -> tuple[int, list[dict[str, Any]]]:
@@ -987,6 +1043,12 @@ def load_facts(
     series_ratings_df = _optional_silver(
         bucket, "series_ratings", ingestion_date, "series_ratings.parquet"
     )
+    # Task 84: fact_episode_rating. silver/episode_ratings already carries both
+    # sources ('imdb' + 'tmdb') — a plain read-and-upsert. Optional like every
+    # TV source; skipped whole on a movie-only run.
+    episode_ratings_df = _optional_silver(
+        bucket, "episode_ratings", ingestion_date, "episode_ratings.parquet"
+    )
     load_tv = any(v is not None and not v.empty for v in series_link_dfs.values())
 
     counts: dict[str, int] = {}
@@ -1046,6 +1108,15 @@ def load_facts(
                 load_fact_series_rating(
                     session, series_ratings_df, series_df, ingestion_date
                 )
+            )
+
+        # Task 84: fact_episode_rating — gated on its own Silver file. Runs
+        # after load_dimensions committed dim_episode (a separate invocation,
+        # so the rows are visible here). silver/episode_ratings already
+        # carries both sources, so this is a plain resolve-and-upsert.
+        if episode_ratings_df is not None and not episode_ratings_df.empty:
+            counts["fact_episode_rating"], series_rejects["fact_episode_rating"] = (
+                load_fact_episode_rating(session, episode_ratings_df, ingestion_date)
             )
 
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)

@@ -3361,11 +3361,13 @@ from etl.warehouse_loader.load_dimensions import (
     load_dim_company,
     load_dim_country,
     load_dim_date,
+    load_dim_episode,
     load_dim_genre,
     load_dim_language,
     load_dim_movie,
     load_dim_movie_video,
     load_dim_network,
+    load_dim_season,
     load_dim_series,
     load_dimensions,
 )
@@ -3825,6 +3827,109 @@ def test_load_dim_movie_video_replace_semantics_a_film_can_shrink(monkeypatch):
     assert [r["video_id"] for r in ins_params] == ["a", "b"]   # exactly 2
 
 
+# --- Task 84: load_dim_season + load_dim_episode ---------------------------
+
+
+def _wh_seasons_df():
+    return pd.DataFrame({
+        "series_id": pd.array([1396, 1396, 999], dtype="Int64"),
+        "season_number": pd.array([1, 2, 1], dtype="Int64"),
+        "season_id": pd.array([3572, 3573, 4000], dtype="Int64"),
+        "name": ["Season 1", "Season 2", "Orphan"],
+        "air_date": [dt.date(2008, 1, 20), dt.date(2009, 3, 8), None],
+        "episode_count": pd.array([7, 13, 5], dtype="Int64"),
+        "overview": ["a", "b", None],
+        "poster_path": ["/s1.jpg", None, None],
+    })
+
+
+def _wh_episodes_df(episode_ids, series_id=1396):
+    n = len(episode_ids)
+    return pd.DataFrame({
+        "episode_id": pd.array(list(episode_ids), dtype="Int64"),
+        "series_id": pd.array([series_id] * n, dtype="Int64"),
+        "season_number": pd.array([1] * n, dtype="Int64"),
+        "episode_number": pd.array(list(range(1, n + 1)), dtype="Int64"),
+        "name": [f"E{i}" for i in range(1, n + 1)],
+        "air_date": [dt.date(2008, 1, 20)] * n,
+        "runtime": pd.array([47] * n, dtype="Int64"),
+        "overview": ["x"] * n,
+        "still_path": ["/still.jpg"] * n,
+        "episode_type": ["standard"] * n,
+        "production_code": [""] * n,
+        "vote_average": [8.2] * n,
+        "vote_count": pd.array([250] * n, dtype="Int64"),
+        "imdb_id": ["tt0959621"] * n,
+    })
+
+
+def test_load_dim_season_upserts_and_quarantines_unknown_series(monkeypatch):
+    import etl.warehouse_loader.load_dimensions as load_dimensions_module
+    monkeypatch.setattr(
+        load_dimensions_module, "_existing_ids", lambda session, table, pk_col: {1396}
+    )
+    mock_session = MagicMock()
+
+    count, rejects = load_dim_season(mock_session, _wh_seasons_df())
+
+    assert count == 2  # series 999 has no dim_series row
+    assert [r["rejection_reason"] for r in rejects] == ["unknown series_id"]
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO dim_season" in str(stmt)
+    assert {p["season_id"] for p in params} == {3572, 3573}
+    assert "ingestion_date" not in params[0]  # dim_season carries none
+
+
+def test_load_dim_episode_replaces_by_series_and_quarantines(monkeypatch):
+    import etl.warehouse_loader.load_dimensions as load_dimensions_module
+    monkeypatch.setattr(
+        load_dimensions_module, "_existing_ids", lambda session, table, pk_col: {1396}
+    )
+    mock_session = MagicMock()
+
+    df = pd.concat([
+        _wh_episodes_df([1, 2, 3]),
+        _wh_episodes_df([4], series_id=999),  # unknown series -> quarantined
+    ], ignore_index=True)
+
+    count, rejects = load_dim_episode(mock_session, df, dt.date(2026, 9, 9))
+
+    assert count == 3
+    assert [r["rejection_reason"] for r in rejects] == ["unknown series_id"]
+    calls = mock_session.execute.call_args_list
+    assert "DELETE FROM dim_episode WHERE series_id = ANY(:parent_ids)" in str(calls[0][0][0])
+    assert calls[0][0][1] == {"parent_ids": [1396]}
+    (ins_stmt, ins_params), _ = calls[1]
+    assert "INSERT INTO dim_episode" in str(ins_stmt)
+    assert [r["episode_id"] for r in ins_params] == [1, 2, 3]
+    assert all(r["ingestion_date"] == dt.date(2026, 9, 9) for r in ins_params)
+    # vote_average / vote_count are Silver-only, never on dim_episode
+    assert "vote_average" not in ins_params[0]
+
+
+def test_load_dim_episode_a_series_episode_set_can_shrink(monkeypatch):
+    """The reason dim_episode uses _replace_by_parent, not _upsert: load 3
+    episodes for a series, then 2, and the second load DELETEs the series' rows
+    first — so it ends at 2, never 5 (Task 74 pattern, first non-movie parent)."""
+    import etl.warehouse_loader.load_dimensions as load_dimensions_module
+    monkeypatch.setattr(
+        load_dimensions_module, "_existing_ids", lambda session, table, pk_col: {1396}
+    )
+    session = MagicMock()
+
+    load_dim_episode(session, _wh_episodes_df([1, 2, 3]), dt.date(2026, 9, 6))
+    session.reset_mock()
+    count, _ = load_dim_episode(session, _wh_episodes_df([1, 2]), dt.date(2026, 9, 7))
+
+    assert count == 2
+    calls = session.execute.call_args_list
+    assert len(calls) == 2  # one DELETE, one INSERT
+    assert "DELETE FROM dim_episode" in str(calls[0][0][0])
+    assert calls[0][0][1] == {"parent_ids": [1396]}
+    (_, ins_params), _ = calls[1]
+    assert [r["episode_id"] for r in ins_params] == [1, 2]
+
+
 def test_slugify_lowercases_and_hyphenates():
     """_slugify() must produce a lowercase, hyphenated, ASCII-only slug."""
     assert _slugify("Tom Holland") == "tom-holland"
@@ -3986,6 +4091,7 @@ from etl.warehouse_loader.load_facts import (
     _build_credit_rows,
     _build_movie_metrics_rows,
     _build_movie_rating_rows,
+    _build_episode_rating_rows,
     _build_series_bridge_rows,
     _build_series_credit_rows,
     _build_series_rating_rows,
@@ -3995,6 +4101,7 @@ from etl.warehouse_loader.load_facts import (
     load_bridge_movie_company,
     load_bridge_movie_country,
     load_bridge_movie_language,
+    load_fact_episode_rating,
     load_fact_series_credit,
     load_bridge_series_country,
     load_bridge_series_genre,
@@ -4678,6 +4785,50 @@ def test_load_fact_series_rating_upserts_on_series_id_source_key(monkeypatch):
     assert len(rejects) == 1  # series 999's imdb row has no dim_series match
     (stmt, params), _ = mock_session.execute.call_args
     assert "INSERT INTO fact_series_rating" in str(stmt)
+    assert {p["source"] for p in params} == {"imdb", "tmdb"}
+
+
+# --- fact_episode_rating (Task 84) -------------------------------------------
+
+def _episode_ratings_df():
+    """silver/episode_ratings already carries both sources with a `source`
+    column (Task 83) — the loader does not synthesise 'tmdb' rows."""
+    return pd.DataFrame({
+        "episode_id": pd.array([62085, 62085, 99999], dtype="Int64"),
+        "source": ["imdb", "tmdb", "imdb"],
+        "rating": [8.9, 8.2, 5.0],
+        "vote_count": pd.array([32000, 250, 3], dtype="Int64"),
+    })
+
+
+def test_build_episode_rating_rows_passes_both_sources_and_rejects_unknown_episode():
+    rows, rejects = _build_episode_rating_rows(
+        _episode_ratings_df(), valid_episode_ids={62085}, ingestion_date=dt.date(2026, 9, 9)
+    )
+
+    assert {(r["episode_id"], r["source"]) for r in rows} == {(62085, "imdb"), (62085, "tmdb")}
+    imdb_row = next(r for r in rows if r["source"] == "imdb")
+    assert imdb_row["rating"] == 8.9 and imdb_row["vote_count"] == 32000
+    assert all(r["ingestion_date"] == dt.date(2026, 9, 9) for r in rows)
+    # episode 99999 has no dim_episode row
+    assert [r["rejection_reason"] for r in rejects] == ["unknown episode_id"]
+
+
+def test_load_fact_episode_rating_upserts_on_episode_id_source_key(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids", lambda session, table, pk_col: {62085}
+    )
+
+    count, rejects = load_fact_episode_rating(
+        mock_session, _episode_ratings_df(), dt.date(2026, 9, 9)
+    )
+
+    assert count == 2  # imdb + tmdb for episode 62085
+    assert len(rejects) == 1  # episode 99999
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO fact_episode_rating" in str(stmt)
     assert {p["source"] for p in params} == {"imdb", "tmdb"}
 
 

@@ -395,6 +395,101 @@ def load_dim_movie_video(
     return count, rejects
 
 
+# --- Task 84: dim_season, dim_episode --------------------------------------
+
+_DIM_SEASON_COLS = [
+    "season_id", "series_id", "season_number", "name", "air_date",
+    "episode_count", "overview", "poster_path",
+]
+_DIM_EPISODE_COLS = [
+    "episode_id", "series_id", "season_number", "episode_number", "name",
+    "air_date", "runtime", "overview", "still_path", "episode_type",
+    "production_code", "imdb_id",
+]
+
+
+def load_dim_season(
+    session: Session, seasons_df: pd.DataFrame,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Upsert Silver seasons into dim_season, resolving series_id against dim_series.
+
+    Plain upsert (not _replace_by_parent): a show's season list is stable in a
+    way its episode list is not — see 22_episodes.sql. A season row whose
+    series_id has no dim_series row is quarantined, never dropped (the standing
+    rule). Returns (count, rejects).
+    """
+    valid_series_ids = _existing_ids(session, "dim_series", "series_id")
+
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+    for record in seasons_df.to_dict("records"):
+        series_id = record.get("series_id")
+        if pd.isna(series_id) or int(series_id) not in valid_series_ids:
+            rejects.append({**record, "rejection_reason": "unknown series_id"})
+            continue
+        season_id = record.get("season_id")
+        if season_id is None or pd.isna(season_id):
+            rejects.append({**record, "rejection_reason": "missing season_id"})
+            continue
+        row = {col: record.get(col) for col in _DIM_SEASON_COLS}
+        row["season_id"] = int(season_id)
+        row["series_id"] = int(series_id)
+        rows.append({k: (None if pd.isna(v) else v) for k, v in row.items()})
+
+    count = _upsert(session, "dim_season", ["season_id"], _DIM_SEASON_COLS, rows)
+    logger.info(
+        "dim_season: upserted %d row(s), rejected %d row(s)", count, len(rejects)
+    )
+    return count, rejects
+
+
+def load_dim_episode(
+    session: Session, episodes_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Replace (not upsert) every episode row for the series in this Silver partition.
+
+    dim_episode is the second table here to use _replace_by_parent() and the
+    first whose parent is not a movie: TMDB renumbers and withdraws episodes,
+    so a series' episode set must be able to *shrink* — a pure upsert would
+    leave a phantom episode on the show page forever (22_episodes.sql). The
+    delete is scoped to the series_ids present in this partition, never a
+    blanket wipe.
+
+    series_id is resolved against dim_series; a row whose series_id has no
+    dimension row is quarantined, never dropped. Returns (count, rejects).
+    """
+    valid_series_ids = _existing_ids(session, "dim_series", "series_id")
+
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+    for record in episodes_df.to_dict("records"):
+        series_id = record.get("series_id")
+        if pd.isna(series_id) or int(series_id) not in valid_series_ids:
+            rejects.append({**record, "rejection_reason": "unknown series_id"})
+            continue
+        episode_id = record.get("episode_id")
+        if episode_id is None or pd.isna(episode_id):
+            rejects.append({**record, "rejection_reason": "missing episode_id"})
+            continue
+
+        row = {col: record.get(col) for col in _DIM_EPISODE_COLS}
+        row["episode_id"] = int(episode_id)
+        row["series_id"] = int(series_id)
+        row["ingestion_date"] = ingestion_date
+        rows.append({k: (None if pd.isna(v) else v) for k, v in row.items()})
+
+    parent_ids = sorted({r["series_id"] for r in rows})
+    columns = _DIM_EPISODE_COLS + ["ingestion_date"]
+    count = _replace_by_parent(
+        session, "dim_episode", "series_id", parent_ids, columns, rows
+    )
+    logger.info(
+        "dim_episode: replaced %d row(s) across %d series, rejected %d row(s)",
+        count, len(parent_ids), len(rejects),
+    )
+    return count, rejects
+
+
 def _slugify(name: str) -> str:
     """Lowercase, ASCII, hyphenated form of a name/title for use in a URL.
 
@@ -516,10 +611,10 @@ def load_dimensions(
     Returns a dict of table name -> row count upserted.
 
     Most dimensions are derived by drop_duplicates from FK-clean Silver and so
-    can't produce rejects. dim_movie_video (Task 74) is the exception: it
-    resolves movie_id against dim_movie and quarantines the misses to
-    `rejected_dir` (default config.REJECTED_DIR), the same posture the fact
-    loaders take.
+    can't produce rejects. dim_movie_video (Task 74) and dim_season /
+    dim_episode (Task 84) are the exceptions: each resolves its parent id
+    against the parent dimension and quarantines the misses to `rejected_dir`
+    (default config.REJECTED_DIR), the same posture the fact loaders take.
     """
     if ingestion_date is None:
         ingestion_date = dt.date.today()
@@ -601,9 +696,16 @@ def load_dimensions(
         bucket, "series_languages", ingestion_date, "series_languages.parquet"
     )
     networks_df = _optional_silver(bucket, "networks", ingestion_date, "networks.parquet")
+    # Task 84: the episode grain. Optional in the same way — no Silver seasons /
+    # episodes on a movie-only run, so dim_season / dim_episode simply do not
+    # load and the 22_episodes.sql migration need not be applied yet.
+    seasons_df = _optional_silver(bucket, "seasons", ingestion_date, "seasons.parquet")
+    episodes_df = _optional_silver(bucket, "episodes", ingestion_date, "episodes.parquet")
 
     counts: dict[str, int] = {}
     video_rejects: list[dict[str, Any]] = []
+    season_rejects: list[dict[str, Any]] = []
+    episode_rejects: list[dict[str, Any]] = []
     with get_session() as session:
         # Before dim_movie: dim_movie.collection_id is an FK to this table.
         counts["dim_collection"] = load_dim_collection(session, movies_df)
@@ -626,6 +728,18 @@ def load_dimensions(
                 counts["dim_network"] = load_dim_network(session, networks_df)
             else:
                 counts["dim_network"] = 0
+        # Task 84: dim_season / dim_episode have an FK to dim_series, so they
+        # run after the load_dim_series() above committed (in-transaction) its
+        # rows. Gated on their own Silver files, like dim_movie_video — a
+        # movie-only run has neither and adds no counts key. dim_episode uses
+        # _replace_by_parent keyed on series_id (a series' episode set can
+        # shrink); dim_season uses plain upsert.
+        if seasons_df is not None and not seasons_df.empty:
+            counts["dim_season"], season_rejects = load_dim_season(session, seasons_df)
+        if episodes_df is not None and not episodes_df.empty:
+            counts["dim_episode"], episode_rejects = load_dim_episode(
+                session, episodes_df, ingestion_date
+            )
         counts["dim_person"] = load_dim_person(session, people_df, person_details_df)
         counts["dim_genre"] = load_dim_genre(session, genres_df)
         # Before load_facts.load_bridge_movie_company() / load_bridge_series_company(),
@@ -646,6 +760,8 @@ def load_dimensions(
             counts["dim_network_slugs"] = assign_slugs(session, "dim_network", "network_id", "name")
 
     _write_rejects(video_rejects, "dim_movie_video", ingestion_date, rejected_dir)
+    _write_rejects(season_rejects, "dim_season", ingestion_date, rejected_dir)
+    _write_rejects(episode_rejects, "dim_episode", ingestion_date, rejected_dir)
 
     elapsed = time.monotonic() - t0
     logger.info(

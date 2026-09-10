@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 25  # 16 movie/person + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81)
+    assert len(results) == 28  # 16 movie/person + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81) + 3 episode grain (84)
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 24
+    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 27
 
     results = check_fk_integrity(mock_session)
 
@@ -864,6 +864,112 @@ def test_check_fk_integrity_covers_the_six_series_bridges():
     assert "fk:bridge_series_country.country_code->dim_country.country_code" in names
     assert "fk:bridge_series_language.language_code->dim_language.language_code" in names
     assert "fk:bridge_series_network.network_id->dim_network.network_id" in names
+
+
+# --- Task 84: dim_season / dim_episode / fact_episode_rating --------------
+
+def test_check_fk_integrity_covers_the_episode_grain_tables():
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 0
+
+    names = {r.check for r in check_fk_integrity(mock_session)}
+    assert "fk:dim_season.series_id->dim_series.series_id" in names
+    assert "fk:dim_episode.series_id->dim_series.series_id" in names
+    assert "fk:fact_episode_rating.episode_id->dim_episode.episode_id" in names
+
+
+def _silver_episodes_df(n: int) -> pd.DataFrame:
+    return pd.DataFrame([
+        {"episode_id": 60000 + i, "series_id": 1000, "season_number": 1,
+         "episode_number": i + 1, "name": f"E{i + 1}", "imdb_id": None}
+        for i in range(n)
+    ])
+
+
+def _episodes_branch(n_rows: int) -> dict[str, bytes]:
+    buf = io.BytesIO()
+    _silver_episodes_df(n_rows).to_parquet(buf, engine="pyarrow", index=False)
+    return {"/episodes/": buf.getvalue()}
+
+
+def _scalar_router(default: int, *, grain: int = 0):
+    """A session.execute side_effect: the (series, season, episode) natural-grain
+    query returns `grain`, every other COUNT(*) returns `default`. Lets one test
+    make dim_episode's row-count checks pass while steering the grain guard
+    independently (a shared scalar return_value can't do both)."""
+    def _exec(stmt, *args, **kwargs):
+        result = MagicMock()
+        if "HAVING COUNT(*) > 1" in str(stmt):
+            result.scalar.return_value = grain
+        else:
+            result.scalar.return_value = default
+        return result
+    return _exec
+
+
+def test_check_row_count_sanity_episodes_pass_when_consistent_and_grain_clean():
+    mock_s3 = _mock_s3_for_full_row_count_sanity(_episodes_branch(4))
+    mock_session = MagicMock()
+    mock_session.execute.side_effect = _scalar_router(50, grain=0)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    s2w = next(r for r in results if r.check == "rowcount:episodes:silver_to_warehouse")
+    load = next(r for r in results if r.check == "rowcount:episodes:load")
+    grain = next(r for r in results if r.check == "grain:dim_episode")
+    assert s2w.passed and load.passed and grain.passed
+
+
+def test_check_row_count_sanity_episodes_fails_when_warehouse_shrinks():
+    mock_s3 = _mock_s3_for_full_row_count_sanity(_episodes_branch(5))
+    mock_session = MagicMock()
+    mock_session.execute.side_effect = _scalar_router(2, grain=0)  # 2 < 5 episodes
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    s2w = next(r for r in results if r.check == "rowcount:episodes:silver_to_warehouse")
+    assert s2w.passed is False
+    assert "fewer than" in s2w.detail
+
+
+def test_check_row_count_sanity_episodes_fails_when_load_produced_nothing():
+    mock_s3 = _mock_s3_for_full_row_count_sanity(_episodes_branch(4))
+    mock_session = MagicMock()
+    mock_session.execute.side_effect = _scalar_router(0, grain=0)  # nothing loaded
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    load = next(r for r in results if r.check == "rowcount:episodes:load")
+    assert load.passed is False
+    assert "0 row(s)" in load.detail
+
+
+def test_check_row_count_sanity_episode_grain_fails_when_natural_key_repeats():
+    mock_s3 = _mock_s3_for_full_row_count_sanity(_episodes_branch(4))
+    mock_session = MagicMock()
+    mock_session.execute.side_effect = _scalar_router(50, grain=3)  # 3 repeated pairs
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    grain = next(r for r in results if r.check == "grain:dim_episode")
+    assert grain.passed is False
+    assert "repeat" in grain.detail
+
+
+def test_check_row_count_sanity_skips_episodes_when_no_silver_file():
+    mock_s3 = _mock_s3_for_full_row_count_sanity({})
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 50
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    assert not any(r.check.startswith("rowcount:episodes") for r in results)
+    assert not any(r.check == "grain:dim_episode" for r in results)
 
 
 # ---------------------------------------------------------------------------
