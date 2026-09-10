@@ -405,8 +405,12 @@ def _tv_entity_dfs() -> dict[str, pd.DataFrame]:
             "name": "Pilot", "air_date": dt.date(2008, 1, 20), "runtime": 58,
             "overview": "Walter White begins.", "still_path": "/e1.jpg",
             "episode_type": "standard", "production_code": "", "vote_average": 8.2,
-            "vote_count": 250,
+            "vote_count": 250, "imdb_id": "tt0959621",
         }]),
+        "episode_ratings": pd.DataFrame([
+            {"episode_id": 62085, "source": "imdb", "rating": 8.9, "vote_count": 32000},
+            {"episode_id": 62085, "source": "tmdb", "rating": 8.2, "vote_count": 250},
+        ]),
     }
 
 
@@ -737,7 +741,7 @@ def _episode_row(**overrides):
         "episode_id": 1, "series_id": 1396, "season_number": 1, "episode_number": 1,
         "name": "E", "air_date": dt.date(2020, 1, 1), "runtime": 45, "overview": "o",
         "still_path": "/s.jpg", "episode_type": "standard", "production_code": "",
-        "vote_average": 8.0, "vote_count": 100,
+        "vote_average": 8.0, "vote_count": 100, "imdb_id": "tt1234567",
     }
     base.update(overrides)
     return base
@@ -778,3 +782,99 @@ def test_run_silver_checks_with_tv_episodes_zero_episode_number_fails_ranges(tmp
 
     ep_ranges = next(r for r in results if r.entity == "episodes" and r.check == "ranges")
     assert not ep_ranges.passed
+
+
+def test_run_silver_checks_with_tv_episodes_imdb_id_is_optional(tmp_path):
+    """imdb_id is backfilled onto episodes.parquet but sparse — only episodes
+    that matched a tconst carry one, so a null must still pass nulls (Task 83)."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["episodes"] = pd.DataFrame([_episode_row(imdb_id=None)])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake",
+            rejected_dir=tmp_path, with_tv=True,
+        )
+
+    ep_results = [r for r in results if r.entity == "episodes"]
+    assert ep_results and all(r.passed for r in ep_results), [r for r in ep_results if not r.passed]
+
+
+def test_run_silver_checks_with_tv_episodes_missing_imdb_id_column_fails_schema(tmp_path):
+    """A --with-tv run always runs transform_imdb_ratings after transform_episodes,
+    so episodes.parquet must carry the backfilled imdb_id column (Task 83)."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["episodes"] = dfs["episodes"].drop(columns=["imdb_id"])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake",
+            rejected_dir=tmp_path, with_tv=True,
+        )
+
+    ep_schema = next(r for r in results if r.entity == "episodes" and r.check == "schema")
+    assert not ep_schema.passed
+
+
+def test_run_silver_checks_with_tv_episode_ratings_rating_out_of_range_fails(tmp_path):
+    """rating is on IMDb's / TMDB's 0-10 scale — a bad value must fail ranges."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["episode_ratings"] = pd.DataFrame([
+        {"episode_id": 62085, "source": "imdb", "rating": 42.0, "vote_count": 10},
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake",
+            rejected_dir=tmp_path, with_tv=True,
+        )
+
+    er_ranges = next(
+        r for r in results if r.entity == "episode_ratings" and r.check == "ranges"
+    )
+    assert not er_ranges.passed
+
+
+def test_run_silver_checks_with_tv_episode_ratings_duplicate_source_grain_fails(tmp_path):
+    """(episode_id, source) is the grain — two 'imdb' rows for one episode must
+    fail duplicates, the same one-row-per-(entity, source) rule as films."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["episode_ratings"] = pd.DataFrame([
+        {"episode_id": 62085, "source": "imdb", "rating": 8.9, "vote_count": 32000},
+        {"episode_id": 62085, "source": "imdb", "rating": 9.1, "vote_count": 33000},
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake",
+            rejected_dir=tmp_path, with_tv=True,
+        )
+
+    er_dupes = next(
+        r for r in results if r.entity == "episode_ratings" and r.check == "duplicates"
+    )
+    assert not er_dupes.passed
+
+
+def test_run_silver_checks_with_tv_episode_ratings_both_sources_for_one_episode_pass(tmp_path):
+    """An 'imdb' and a 'tmdb' row for the same episode are two distinct facts,
+    not a duplicate — both must survive (Task 83)."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["episode_ratings"] = pd.DataFrame([
+        {"episode_id": 62085, "source": "imdb", "rating": 8.9, "vote_count": 32000},
+        {"episode_id": 62085, "source": "tmdb", "rating": 8.2, "vote_count": 250},
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake",
+            rejected_dir=tmp_path, with_tv=True,
+        )
+
+    er_results = [r for r in results if r.entity == "episode_ratings"]
+    assert er_results and all(r.passed for r in er_results), [r for r in er_results if not r.passed]

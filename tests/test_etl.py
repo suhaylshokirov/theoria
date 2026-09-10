@@ -1048,6 +1048,43 @@ def test_fetch_with_retry_raises_after_exhausting_retries():
             _fetch_with_retry("https://example.com/x", max_retries=2, backoff_factor=0)
 
 
+# --- ingest_imdb_episodes -----------------------------------------------------
+
+import etl.bronze.ingest_imdb_episodes as ingest_imdb_episodes_module
+from etl.bronze.ingest_imdb_episodes import ingest_imdb_episodes
+
+
+def test_ingest_imdb_episodes_writes_raw_bytes_verbatim():
+    """The gzip body from IMDb's title.episode file must be written to Bronze
+    byte-for-byte, at its own partition key (Task 83)."""
+    raw_gzip = b"\x1f\x8b\x08fake-episode-payload"
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3), \
+         patch.object(
+             ingest_imdb_episodes_module.config, "IMDB_EPISODES_URL",
+             "https://datasets.imdbws.com/title.episode.tsv.gz",
+         ), \
+         patch(
+             "etl.bronze.ingest_imdb_episodes._fetch_with_retry",
+             return_value=raw_gzip,
+         ) as fetch:
+        uri = ingest_imdb_episodes(ingestion_date=dt.date(2026, 6, 22))
+
+    assert uri == "s3://theoria-datalake/bronze/imdb_episodes/ingestion_date=2026-06-22/title.episode.tsv.gz"
+    _, kwargs = mock_s3.put_object.call_args
+    assert kwargs["Key"] == "bronze/imdb_episodes/ingestion_date=2026-06-22/title.episode.tsv.gz"
+    assert kwargs["Body"] == raw_gzip
+    fetch.assert_called_once_with("https://datasets.imdbws.com/title.episode.tsv.gz")
+
+
+def test_ingest_imdb_episodes_reuses_the_shared_retry_helper():
+    """It is a near-copy of ingest_imdb_ratings and shares its retry loop
+    rather than carrying a second copy that could drift."""
+    assert ingest_imdb_episodes_module._fetch_with_retry is _fetch_with_retry
+
+
 # --- transform_movies ---------------------------------------------------------
 
 import io
@@ -2648,11 +2685,84 @@ def _silver_series_with_imdb_df() -> pd.DataFrame:
     })
 
 
+# --- transform_imdb_ratings: the Task 83 episode path -------------------------
+
+from etl.silver.transform_imdb_ratings import _parse_episode_tsv
+
+
+def _make_episode_tsv_gz(rows: list[tuple[str, str, str, str]]) -> bytes:
+    """Build a gzip-compressed TSV body shaped like IMDb's title.episode.tsv.gz."""
+    lines = ["tconst\tparentTconst\tseasonNumber\tepisodeNumber"]
+    for tconst, parent, season, episode in rows:
+        lines.append(f"{tconst}\t{parent}\t{season}\t{episode}")
+    return gzip.compress("\n".join(lines).encode("utf-8"))
+
+
+def _silver_episodes_df() -> pd.DataFrame:
+    """Four catalogued episodes across two shows: one rated on IMDb, one with a
+    tconst but no rating row, one whose (season, episode) has no IMDb mapping,
+    and one whose parent series isn't in the catalogue at all."""
+    return pd.DataFrame({
+        "episode_id": pd.array([62085, 62086, 62087, 349232], dtype="Int64"),
+        "series_id": pd.array([1396, 1396, 1396, 1399], dtype="Int64"),
+        "season_number": pd.array([1, 1, 1, 1], dtype="Int64"),
+        "episode_number": pd.array([1, 2, 99, 1], dtype="Int64"),
+        "name": ["Pilot", "Cat's in the Bag...", "Ghost Episode", "Winter Is Coming"],
+        "vote_average": pd.array([8.2, 8.1, 0.0, 8.9], dtype="float64"),
+        "vote_count": pd.array([250, 210, 0, 900], dtype="Int64"),
+    })
+
+
+def test_parse_episode_tsv_parses_columns_and_backslash_n_null():
+    raw = _make_episode_tsv_gz([
+        ("tt0959621", "tt0903747", "1", "1"),
+        ("tt5789012", "tt0903747", "\\N", "\\N"),
+    ])
+    df = _parse_episode_tsv(raw)
+    assert list(df.columns) == ["tconst", "parentTconst", "seasonNumber", "episodeNumber"]
+    assert df.iloc[0]["tconst"] == "tt0959621"
+    assert df.iloc[0]["parentTconst"] == "tt0903747"
+    assert pd.isna(df.iloc[1]["seasonNumber"])
+    assert pd.isna(df.iloc[1]["episodeNumber"])
+
+
+def _run_transform_with_tv(caplog, *, episode_rows, ratings_rows):
+    """Drive transform_imdb_ratings(with_tv=True) with mocked S3 and return the
+    dict of {key: parsed DataFrame} that was written."""
+    movies_buf = io.BytesIO()
+    _silver_movies_with_imdb_df().to_parquet(movies_buf, engine="pyarrow", index=False)
+    series_buf = io.BytesIO()
+    _silver_series_with_imdb_df().to_parquet(series_buf, engine="pyarrow", index=False)
+    episodes_buf = io.BytesIO()
+    _silver_episodes_df().to_parquet(episodes_buf, engine="pyarrow", index=False)
+
+    mock_s3 = _make_multi_key_s3_mock({
+        "imdb_episodes": _make_episode_tsv_gz(episode_rows),
+        "imdb_ratings": _make_ratings_tsv_gz(ratings_rows),
+        "silver/movies": movies_buf.getvalue(),
+        "silver/series": series_buf.getvalue(),
+        "silver/episodes": episodes_buf.getvalue(),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.INFO):
+            transform_imdb_ratings(
+                ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake", with_tv=True,
+            )
+
+    written: dict[str, pd.DataFrame] = {}
+    for _, kw in mock_s3.put_object.call_args_list:
+        written[kw["Key"]] = pd.read_parquet(io.BytesIO(kw["Body"]))
+    return written
+
+
 def test_transform_imdb_ratings_with_tv_writes_series_ratings_beside_movies(caplog):
     movies_buf = io.BytesIO()
     _silver_movies_with_imdb_df().to_parquet(movies_buf, engine="pyarrow", index=False)
     series_buf = io.BytesIO()
     _silver_series_with_imdb_df().to_parquet(series_buf, engine="pyarrow", index=False)
+    episodes_buf = io.BytesIO()
+    _silver_episodes_df().to_parquet(episodes_buf, engine="pyarrow", index=False)
 
     ratings_gz = _make_ratings_tsv_gz([
         ("tt0068646", "9.2", "2250628"),
@@ -2661,9 +2771,11 @@ def test_transform_imdb_ratings_with_tv_writes_series_ratings_beside_movies(capl
         ("tt0944947", "9.2", "2100000"),
     ])
     mock_s3 = _make_multi_key_s3_mock({
+        "imdb_episodes": _make_episode_tsv_gz([("tt0959621", "tt0903747", "1", "1")]),
         "imdb_ratings": ratings_gz,
         "silver/movies": movies_buf.getvalue(),
         "silver/series": series_buf.getvalue(),
+        "silver/episodes": episodes_buf.getvalue(),
     })
 
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
@@ -2689,7 +2801,82 @@ def test_transform_imdb_ratings_with_tv_writes_series_ratings_beside_movies(capl
     assert any("IMDb match rate for show(s)" in r.message for r in caplog.records)
 
 
-def test_transform_imdb_ratings_without_tv_writes_no_series_ratings():
+def test_transform_imdb_ratings_with_tv_writes_episode_ratings_both_sources(caplog):
+    written = _run_transform_with_tv(
+        caplog,
+        episode_rows=[
+            ("tt0959621", "tt0903747", "1", "1"),   # Breaking Bad S1E1 -> rated
+            ("tt5789012", "tt0903747", "1", "2"),    # S1E2 -> tconst but no rating row
+            ("tt6666666", "tt9999999", "1", "1"),    # parent series not in catalogue
+        ],
+        ratings_rows=[
+            ("tt0959621", "8.9", "32000"),
+            ("tt0944947", "9.2", "2100000"),
+        ],
+    )
+
+    er = written["silver/episode_ratings/ingestion_date=2026-06-22/episode_ratings.parquet"]
+    assert list(er.columns) == ["episode_id", "source", "rating", "vote_count"]
+
+    imdb = er[er["source"] == "imdb"]
+    # Only the episode with a tconst AND a rating row survives hop 2.
+    assert set(imdb["episode_id"]) == {62085}
+    assert imdb.iloc[0]["rating"] == 8.9
+    assert imdb.iloc[0]["vote_count"] == 32000
+
+    tmdb = er[er["source"] == "tmdb"]
+    # A 'tmdb' row for every episode that carries a vote_average (all four here).
+    assert set(tmdb["episode_id"]) == {62085, 62086, 62087, 349232}
+    assert tmdb[tmdb["episode_id"] == 62085].iloc[0]["rating"] == 8.2
+
+    # Hop counts are logged (Task 83 steps 4-5).
+    assert any("IMDb episode rows in scope" in r.message for r in caplog.records)
+    assert any("Episode -> IMDb id" in r.message for r in caplog.records)
+    assert any("Episode -> IMDb rating" in r.message for r in caplog.records)
+
+
+def test_transform_imdb_ratings_with_tv_backfills_imdb_id_onto_episodes(caplog):
+    written = _run_transform_with_tv(
+        caplog,
+        episode_rows=[
+            ("tt0959621", "tt0903747", "1", "1"),
+            ("tt5789012", "tt0903747", "1", "2"),
+        ],
+        ratings_rows=[("tt0959621", "8.9", "32000")],
+    )
+
+    eps = written["silver/episodes/ingestion_date=2026-06-22/episodes.parquet"]
+    assert "imdb_id" in eps.columns
+    by_id = eps.set_index("episode_id")["imdb_id"]
+    # Matched a tconst (rated or not) -> id filled; no mapping / off-catalogue -> null.
+    assert by_id[62085] == "tt0959621"
+    assert by_id[62086] == "tt5789012"
+    assert pd.isna(by_id[62087])   # (1, 99) has no episode-file row
+    assert pd.isna(by_id[349232])  # parent series 1399 has no episode-file rows here
+
+
+def test_transform_imdb_ratings_with_tv_scopes_episode_file_to_catalogue(caplog):
+    """An episode whose parentTconst isn't a catalogued series' imdb_id must be
+    dropped before the per-episode join — the 9.87M-row filter (Task 83 step 4)."""
+    written = _run_transform_with_tv(
+        caplog,
+        episode_rows=[
+            ("tt0959621", "tt0903747", "1", "1"),     # in catalogue
+            ("tt_off_1", "tt0000000", "1", "1"),       # parent not in catalogue
+            ("tt_off_2", "tt1234567", "5", "5"),       # parent not in catalogue
+        ],
+        ratings_rows=[("tt0959621", "8.9", "32000"), ("tt_off_1", "9.9", "5")],
+    )
+
+    er = written["silver/episode_ratings/ingestion_date=2026-06-22/episode_ratings.parquet"]
+    imdb = er[er["source"] == "imdb"]
+    assert set(imdb["episode_id"]) == {62085}  # tt_off_1 rated but off-catalogue -> excluded
+
+    scope_log = next(r for r in caplog.records if "IMDb episode rows in scope" in r.message)
+    assert "1 of 3" in scope_log.message
+
+
+def test_transform_imdb_ratings_without_tv_writes_no_series_or_episode_ratings():
     movies_buf = io.BytesIO()
     _silver_movies_with_imdb_df().to_parquet(movies_buf, engine="pyarrow", index=False)
     ratings_gz = _make_ratings_tsv_gz([("tt0068646", "9.2", "2250628")])
@@ -2703,6 +2890,9 @@ def test_transform_imdb_ratings_without_tv_writes_no_series_ratings():
 
     keys = [kw["Key"] for _, kw in mock_s3.put_object.call_args_list]
     assert all("series_ratings" not in k for k in keys)
+    assert all("episode_ratings" not in k for k in keys)
+    # episodes.parquet is not rewritten on a movie-only run either.
+    assert all("silver/episodes/" not in k for k in keys)
 
 
 # ---------------------------------------------------------------------------

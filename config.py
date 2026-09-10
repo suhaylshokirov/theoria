@@ -129,9 +129,16 @@ TV_SEASONS_MAX_NEW = int(_optional("TV_SEASONS_MAX_NEW", "300"))
 TV_SEASONS_INCLUDE_SPECIALS = _optional("TV_SEASONS_INCLUDE_SPECIALS", "False").lower() in ("1", "true", "yes")
 
 # --- IMDb datasets -----------------------------------------------------------
-# Public bulk export, refreshed daily by IMDb — no auth, no key, no quota.
+# Public bulk exports, refreshed daily by IMDb — no auth, no key, no quota.
 # https://datasets.imdbws.com/title.ratings.tsv.gz (tconst/averageRating/numVotes).
 IMDB_RATINGS_URL = _optional("IMDB_RATINGS_URL", "https://datasets.imdbws.com/title.ratings.tsv.gz")
+
+# title.episode.tsv.gz (tconst/parentTconst/seasonNumber/episodeNumber) — maps
+# every episode to its parent series and its season/episode number. Task 83
+# joins it to give each episode its IMDb id and rating with zero per-episode
+# API calls (the alternative, GET /tv/{id}/season/{n}/episode/{m}/external_ids,
+# is one call per episode — ~75k at full corpus).
+IMDB_EPISODES_URL = _optional("IMDB_EPISODES_URL", "https://datasets.imdbws.com/title.episode.tsv.gz")
 
 # --- Django ----------------------------------------------------------------
 DJANGO_SECRET_KEY = _require("DJANGO_SECRET_KEY", role="web")

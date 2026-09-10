@@ -32,6 +32,7 @@ from etl.bronze.ingest_credits import ingest_credits
 from etl.bronze.ingest_discover import ingest_discover
 from etl.bronze.ingest_discover_tv import ingest_discover_tv
 from etl.bronze.ingest_genres import ingest_genres
+from etl.bronze.ingest_imdb_episodes import ingest_imdb_episodes
 from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
 from etl.bronze.ingest_movie_details import ingest_movie_details
 from etl.bronze.ingest_movies import ingest_movies
@@ -249,6 +250,12 @@ def run_pipeline(
     # no movie_ids dependency — but its Silver transform reads
     # transform_movies()'s output below, so it must run after that.
     ingest_imdb_ratings(ingestion_date=ingestion_date)
+    # IMDb's episode-mapping bulk file (Task 83) — same class of source, one
+    # daily file, no per-entity cost. Only consumed by the --with-tv episode
+    # join in transform_imdb_ratings, but ingested unconditionally so every
+    # Bronze partition is complete (the ingest_imdb_ratings posture) and Task 85
+    # has one less thing to wire.
+    ingest_imdb_episodes(ingestion_date=ingestion_date)
 
     # TV series (Tasks 77–79): Bronze, and only when asked. Off by default so
     # the movie pipeline's call volume and runtime are provably unchanged.

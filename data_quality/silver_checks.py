@@ -331,10 +331,13 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
         # A second grain the page relies on: (series, season, episode) must be
         # unique too, not just the surrogate episode_id.
         "extra_unique_cols": ["series_id", "season_number", "episode_number"],
+        # imdb_id is backfilled by transform_imdb_ratings after transform_episodes
+        # (Task 83), so on a --with-tv run the column is present here but sparse —
+        # only episodes that matched a tconst in title.episode.tsv.gz carry one.
         "expected_cols": [
             "episode_id", "series_id", "season_number", "episode_number", "name",
             "air_date", "runtime", "overview", "still_path", "episode_type",
-            "production_code", "vote_average", "vote_count",
+            "production_code", "vote_average", "vote_count", "imdb_id",
         ],
         "ranges": {
             "season_number": (0, None),
@@ -344,13 +347,29 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "vote_count": (0, None),
         },
     },
+    # Task 83: the episode counterpart of imdb_ratings / series_ratings, but
+    # unlike those it carries BOTH sources with a `source` column — the
+    # transform already holds the episodes Parquet (for the tconst -> episode_id
+    # link and the imdb_id backfill), so its TMDB figures are in hand and
+    # emitting them here keeps Task 84's loader a plain read-and-upsert.
+    # Written from that measured shape, not by mirroring the transform.
+    "episode_ratings": {
+        "parquet": "episode_ratings.parquet",
+        "pk_cols": ["episode_id", "source"],
+        "required_cols": ["episode_id", "source", "rating"],
+        "expected_cols": ["episode_id", "source", "rating", "vote_count"],
+        "ranges": {
+            "rating": (0.0, 10.0),
+            "vote_count": (0, None),
+        },
+    },
 }
 
 # Entities checked only when run_silver_checks is called with with_tv=True.
 _TV_ENTITIES = frozenset({
     "series", "series_companies", "series_countries", "series_languages",
     "series_networks", "networks", "series_genres", "series_credits",
-    "series_ratings", "seasons", "episodes",
+    "series_ratings", "seasons", "episodes", "episode_ratings",
 })
 
 

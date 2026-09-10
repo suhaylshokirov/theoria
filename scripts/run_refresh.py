@@ -16,9 +16,11 @@ only differences are at the head and tail:
     metrics to ``gold/metrics_snapshot/`` before the warehouse load upserts
     ``fact_movie_metrics`` in place and the previous values are lost.
 
-Genres and IMDb ratings are still ingested fresh: ``transform_genres`` needs a
-Bronze genres file for the partition, and IMDb ratings / vote counts are the
-fields that actually drift (the whole reason this job exists).
+Genres and the two IMDb bulk files are still ingested fresh: ``transform_genres``
+needs a Bronze genres file for the partition; IMDb ratings / vote counts are the
+fields that actually drift (the whole reason this job exists); and the IMDb
+episode-mapping file (Task 83) is pulled so the partition is complete for when
+Task 85 turns the nightly TV path on.
 
 Every stage is idempotent per ``ingestion_date``, so re-running for the same
 date is safe — which is what makes unattended nightly scheduling sound.
@@ -40,6 +42,7 @@ from data_quality.silver_checks import run_silver_checks
 from data_quality.warehouse_checks import run_warehouse_checks
 from etl.bronze.ingest_companies import ingest_companies
 from etl.bronze.ingest_genres import ingest_genres
+from etl.bronze.ingest_imdb_episodes import ingest_imdb_episodes
 from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
 from etl.bronze.ingest_people import ingest_people
 from etl.bronze.refresh_movies import refresh_movies
@@ -79,6 +82,11 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
         "Bronze refresh: %d film(s) refreshed, %d failed", len(succeeded), len(failed)
     )
     ingest_imdb_ratings(ingestion_date=ingestion_date)
+    # Second IMDb bulk file (Task 83): the episode -> tconst mapping. No TV
+    # transform consumes it here until Task 85 turns TV on for the nightly job,
+    # but it is ingested now so the Bronze partition is complete from tonight
+    # and Task 85 only has to flip the transform flag, not add a source.
+    ingest_imdb_episodes(ingestion_date=ingestion_date)
 
     # A refreshed film can gain a production company that isn't enriched yet.
     # ingest_companies() skips every already-enriched id, so on a steady-state
