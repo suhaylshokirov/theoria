@@ -415,7 +415,8 @@ def _tv_entity_dfs() -> dict[str, pd.DataFrame]:
 
 
 def test_run_silver_checks_all_clean_all_pass(tmp_path):
-    mock_s3 = _make_multi_entity_s3_mock(_all_entity_dfs())
+    # TV is checked by default since Task 85, so a clean run supplies both sets.
+    mock_s3 = _make_multi_entity_s3_mock(_all_entity_dfs() | _tv_entity_dfs())
 
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         results = run_silver_checks(
@@ -457,8 +458,8 @@ def test_run_silver_checks_missing_file_records_load_failure(tmp_path):
         )
 
     load_failures = [r for r in results if r.check == "load" and not r.passed]
-    # TV entities are skipped unless with_tv=True, so only the movie set is read.
-    assert len(load_failures) == len(ENTITY_CONFIGS) - len(_TV_ENTITIES)
+    # Task 85: TV is checked by default, so every entity is read and none load.
+    assert len(load_failures) == len(ENTITY_CONFIGS)
 
 
 def test_run_silver_checks_movie_countries_requires_relation(tmp_path):
@@ -615,12 +616,28 @@ def test_run_silver_checks_movie_videos_empty_partition_passes(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# TV Shows entities (Task 78) — only checked with with_tv=True
+# TV Shows entities (Task 78) — checked by default since Task 85
 # ---------------------------------------------------------------------------
 
-def test_run_silver_checks_skips_tv_entities_by_default(tmp_path):
-    """A movie-only run never writes the TV partitions, so they must not be
-    read — no load-failure, no result of any kind for a TV entity."""
+def test_run_silver_checks_checks_tv_entities_by_default(tmp_path):
+    """Task 85 turned the TV path on: run_silver_checks with no with_tv arg
+    reads every TV partition and reports results for each."""
+    mock_s3 = _make_multi_entity_s3_mock(_all_entity_dfs() | _tv_entity_dfs())
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9),
+            bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    assert {r.entity for r in results if r.entity in _TV_ENTITIES} == set(_TV_ENTITIES)
+    assert all(r.passed for r in results), [r for r in results if not r.passed]
+
+
+def test_run_silver_checks_with_tv_false_skips_tv_entities(tmp_path):
+    """with_tv=False is the escape hatch for replaying a pre-TV partition —
+    no TV entity is read, no result of any kind is produced for one."""
     mock_s3 = _make_multi_entity_s3_mock(_all_entity_dfs())
 
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
@@ -628,6 +645,7 @@ def test_run_silver_checks_skips_tv_entities_by_default(tmp_path):
             ingestion_date=dt.date(2026, 9, 9),
             bucket="theoria-datalake",
             rejected_dir=tmp_path,
+            with_tv=False,
         )
 
     assert not any(r.entity in _TV_ENTITIES for r in results)

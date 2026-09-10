@@ -167,7 +167,7 @@ def _extract_person_ids(
 def _warehouse_episode_counts() -> dict[int, int]:
     """{series_id: number_of_episodes} from dim_series, for ingest_seasons' change signal.
 
-    Degrades to {} if dim_series does not exist yet (the first --with-tv run,
+    Degrades to {} if dim_series does not exist yet (a partition replayed
     before 19_series.sql is applied) — so every series reads as newly seen.
     """
     try:
@@ -188,7 +188,6 @@ def run_pipeline(
     ingestion_date: dt.date | None = None,
     max_pages: int | None = None,
     source: str = "popular",
-    with_tv: bool = False,
 ) -> None:
     """Run every ETL stage in order for a single ingestion_date.
 
@@ -204,15 +203,16 @@ def run_pipeline(
     each year in a configured range). Everything downstream is identical —
     both return a plain list of movie_ids.
 
-    `with_tv` adds the TV series path end to end — Bronze (discover_tv +
-    series_details + the TV genre list), Silver (transform_series,
-    transform_series_links, transform_series_credits, the TV half of
-    transform_genres / run_silver_checks, and transform_people folding in
-    TV-only people), and the warehouse (load_dimensions / load_facts self-load
-    dim_series, dim_network, the five series bridges and fact_series_credit
-    once the series Silver files exist). It is off by default so the movie
-    pipeline's runtime and TMDB call volume are provably unchanged until Task
-    85 turns TV on for real; the site comes in Task 86.
+    The TV series path runs unconditionally (Task 85 removed the `--with-tv`
+    gate that Tasks 77–84 hid it behind): Bronze (discover_tv + series_details
+    + seasons + the TV genre list), Silver (transform_series,
+    transform_series_links, transform_series_credits, transform_episodes, the
+    TV half of transform_genres / transform_imdb_ratings / run_silver_checks,
+    and transform_people folding in TV-only people), and the warehouse
+    (load_dimensions / load_facts self-load dim_series, dim_network, dim_season,
+    dim_episode, the series bridges and the series/episode facts). The
+    warehouse loaders and warehouse_checks still self-degrade when a partition
+    has no series Silver files, so a pre-Task-85 partition replays unchanged.
     """
     # Fail on a missing TMDB/AWS secret now, not 4 minutes into ingestion.
     config.require_etl()
@@ -228,7 +228,7 @@ def run_pipeline(
         ingestion_date, source, max_pages,
     )
 
-    ingest_genres(ingestion_date=ingestion_date, with_tv=with_tv)
+    ingest_genres(ingestion_date=ingestion_date, with_tv=True)
     if source == "discover":
         movie_ids = ingest_discover(ingestion_date=ingestion_date)
     else:
@@ -251,41 +251,36 @@ def run_pipeline(
     # transform_movies()'s output below, so it must run after that.
     ingest_imdb_ratings(ingestion_date=ingestion_date)
     # IMDb's episode-mapping bulk file (Task 83) — same class of source, one
-    # daily file, no per-entity cost. Only consumed by the --with-tv episode
-    # join in transform_imdb_ratings, but ingested unconditionally so every
-    # Bronze partition is complete (the ingest_imdb_ratings posture) and Task 85
-    # has one less thing to wire.
+    # daily file, no per-entity cost. Feeds the episode-rating join in
+    # transform_imdb_ratings(with_tv=True) below.
     ingest_imdb_episodes(ingestion_date=ingestion_date)
 
-    # TV series (Tasks 77–79): Bronze, and only when asked. Off by default so
-    # the movie pipeline's call volume and runtime are provably unchanged.
-    # Runs here, before the company-id extraction, so a TV-only studio is
-    # picked up by _extract_company_ids() and enriched too (Task 79). The
-    # Silver transforms run below with the movie ones; the warehouse loaders
-    # self-degrade when the series Silver files are absent.
-    series_ids: list[int] = []
-    if with_tv:
-        series_ids = ingest_discover_tv(ingestion_date=ingestion_date)
-        logger.info("Bronze discover_tv: %d series_id(s) discovered", len(series_ids))
-        succeeded_series, failed_series = ingest_series_details(
-            series_ids, ingestion_date=ingestion_date
-        )
-        logger.info(
-            "Bronze series details: %d/%d succeeded",
-            len(succeeded_series), len(series_ids),
-        )
-        # Seasons/episodes (Task 82): bounded per run by TV_SEASONS_MAX_NEW.
-        # dim_series' episode counts (last night's) decide which already-known
-        # series get re-fetched. series_ids are already in discovery order.
-        seasons_ok, seasons_failed = ingest_seasons(
-            series_ids,
-            ingestion_date=ingestion_date,
-            known_episode_counts=_warehouse_episode_counts(),
-        )
-        logger.info(
-            "Bronze seasons: %d series written, %d failed",
-            len(seasons_ok), len(seasons_failed),
-        )
+    # TV series (Tasks 77–84, turned on unconditionally in Task 85). Runs here,
+    # before the company-id extraction, so a TV-only studio is picked up by
+    # _extract_company_ids() and enriched too (Task 79). The Silver transforms
+    # run below with the movie ones; the warehouse loaders self-degrade when
+    # the series Silver files are absent, so an old partition replays unchanged.
+    series_ids = ingest_discover_tv(ingestion_date=ingestion_date)
+    logger.info("Bronze discover_tv: %d series_id(s) discovered", len(series_ids))
+    succeeded_series, failed_series = ingest_series_details(
+        series_ids, ingestion_date=ingestion_date
+    )
+    logger.info(
+        "Bronze series details: %d/%d succeeded",
+        len(succeeded_series), len(series_ids),
+    )
+    # Seasons/episodes (Task 82): bounded per run by TV_SEASONS_MAX_NEW.
+    # dim_series' episode counts (last night's) decide which already-known
+    # series get re-fetched. series_ids are already in discovery order.
+    seasons_ok, seasons_failed = ingest_seasons(
+        series_ids,
+        ingestion_date=ingestion_date,
+        known_episode_counts=_warehouse_episode_counts(),
+    )
+    logger.info(
+        "Bronze seasons: %d series written, %d failed",
+        len(seasons_ok), len(seasons_failed),
+    )
 
     # Company ids only exist inside the movie- (and series-) detail payloads
     # just written. ingest_companies() then skips any already enriched in a
@@ -321,21 +316,20 @@ def run_pipeline(
     # exists when transform_people(with_tv=True) folds TV-only people into the
     # person dedupe (Task 80). transform_series[_links] have no movie-Silver
     # dependency, so their position here is free.
-    if with_tv:
-        transform_series(ingestion_date=ingestion_date)
-        transform_series_links(ingestion_date=ingestion_date)
-        transform_series_credits(ingestion_date=ingestion_date)
-        transform_episodes(ingestion_date=ingestion_date)
-    transform_people(ingestion_date=ingestion_date, with_tv=with_tv)
+    transform_series(ingestion_date=ingestion_date)
+    transform_series_links(ingestion_date=ingestion_date)
+    transform_series_credits(ingestion_date=ingestion_date)
+    transform_episodes(ingestion_date=ingestion_date)
+    transform_people(ingestion_date=ingestion_date, with_tv=True)
     transform_people_details(ingestion_date=ingestion_date)
-    transform_genres(ingestion_date=ingestion_date, with_tv=with_tv)
+    transform_genres(ingestion_date=ingestion_date, with_tv=True)
     transform_credits_bridge(ingestion_date=ingestion_date)
     transform_movie_links(ingestion_date=ingestion_date)
     transform_movie_videos(ingestion_date=ingestion_date)
     transform_companies(ingestion_date=ingestion_date)
-    transform_imdb_ratings(ingestion_date=ingestion_date, with_tv=with_tv)
+    transform_imdb_ratings(ingestion_date=ingestion_date, with_tv=True)
 
-    silver_results = run_silver_checks(ingestion_date=ingestion_date, with_tv=with_tv)
+    silver_results = run_silver_checks(ingestion_date=ingestion_date)
     silver_failed = [r for r in silver_results if not r.passed]
     if silver_failed:
         logger.warning("Silver DQ checks: %d check(s) failed", len(silver_failed))
@@ -391,15 +385,6 @@ def _parse_args() -> argparse.Namespace:
             "configured DISCOVER_* range). Default: popular."
         ),
     )
-    parser.add_argument(
-        "--with-tv",
-        action="store_true",
-        help=(
-            "Also run the TV series path — Bronze, Silver and the warehouse "
-            "load of dim_series / dim_network / the series bridges. Off by "
-            "default; the UI comes in Task 86."
-        ),
-    )
     return parser.parse_args()
 
 
@@ -412,5 +397,4 @@ if __name__ == "__main__":
         ingestion_date=args.date,
         max_pages=args.max_pages,
         source=args.source,
-        with_tv=args.with_tv,
     )

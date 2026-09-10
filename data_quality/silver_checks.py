@@ -204,11 +204,11 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "vote_count": (0, None),
         },
     },
-    # --- TV Shows (Task 78). Only checked when run_silver_checks(with_tv=True);
-    # a movie-only pipeline run never writes these partitions, so listing them
-    # unconditionally would turn every such run into a wall of load failures.
-    # Written from the measured shape of TMDB's GET /tv/{id} payload, not by
-    # mirroring the transforms (the Task 40 lesson).
+    # --- TV Shows (Task 78). Checked by default since Task 85 turned the TV
+    # path on; run_silver_checks(with_tv=False) skips them for replaying a
+    # pre-TV partition that never wrote these Parquets. Written from the
+    # measured shape of TMDB's GET /tv/{id} payload, not by mirroring the
+    # transforms (the Task 40 lesson).
     "series": {
         "parquet": "series.parquet",
         "pk_cols": ["series_id"],
@@ -365,7 +365,9 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
     },
 }
 
-# Entities checked only when run_silver_checks is called with with_tv=True.
+# TV series entities. Checked by default (Task 85); skipped only when
+# run_silver_checks is called with with_tv=False — e.g. replaying a pre-Task-77
+# partition that has no series Parquet files.
 _TV_ENTITIES = frozenset({
     "series", "series_companies", "series_countries", "series_languages",
     "series_networks", "networks", "series_genres", "series_credits",
@@ -584,7 +586,7 @@ def run_silver_checks(
     ingestion_date: dt.date | None = None,
     bucket: str | None = None,
     rejected_dir: Path | None = None,
-    with_tv: bool = False,
+    with_tv: bool = True,
 ) -> list[CheckResult]:
     """Run all Silver DQ checks for the given ingestion_date.
 
@@ -649,9 +651,9 @@ def _parse_args() -> argparse.Namespace:
         help="Ingestion date (YYYY-MM-DD). Defaults to today.",
     )
     parser.add_argument(
-        "--with-tv",
+        "--no-tv",
         action="store_true",
-        help="Also check the TV series Silver entities (Task 78).",
+        help="Skip the TV series Silver entities (for replaying a pre-TV partition).",
     )
     return parser.parse_args()
 
@@ -660,7 +662,7 @@ if __name__ == "__main__":
     from etl.logging_config import setup_logging
     setup_logging("silver_checks")
     args = _parse_args()
-    results = run_silver_checks(ingestion_date=args.date, with_tv=args.with_tv)
+    results = run_silver_checks(ingestion_date=args.date, with_tv=not args.no_tv)
     overall = all(r.passed for r in results)
     for r in results:
         status = "PASS" if r.passed else "FAIL"

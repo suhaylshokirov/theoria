@@ -1,7 +1,8 @@
 name: nightly-refresh
 
-# Refresh every film already in the warehouse: re-fetch its TMDB details +
-# credits and today's IMDb ratings snapshot, rebuild Silver/Gold, upsert the
+# Refresh every film AND every TV series already in the warehouse: re-fetch
+# TMDB details + credits, today's IMDb ratings snapshot and any newly-aired
+# seasons (bounded by TV_SEASONS_MAX_NEW), rebuild Silver/Gold, upsert the
 # warehouse, and append a dated volatile-metrics snapshot to the lake.
 #
 # The whole run is idempotent per ingestion_date, so a retry (or an overlap
@@ -28,9 +29,12 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    # ~30-40 min in practice (the runner is US-hosted, the bucket is in
-    # eu-central-1). 90 is headroom, not the expected runtime.
-    timeout-minutes: 90
+    # ~30-40 min for the movie-only run (the runner is US-hosted, the bucket is
+    # in eu-central-1). Task 85 added the TV path: ~730 series calls plus up to
+    # TV_SEASONS_MAX_NEW*~5 season calls while the episode backlog fills over
+    # the first nights, then it settles. 150 is headroom, not the expected
+    # runtime; TV_SEASONS_MAX_NEW is the knob if a run ever approaches it.
+    timeout-minutes: 150
 
     env:
       TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}

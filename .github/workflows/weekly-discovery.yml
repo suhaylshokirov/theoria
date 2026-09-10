@@ -1,11 +1,12 @@
 name: weekly-discovery
 
-# The nightly refresh only updates films already in dim_movie. It cannot see a
-# film that didn't exist yet, and it doesn't re-run discovery. This weekly job
-# does: a full `run_pipeline.py --source discover` pass, which adds newly
-# qualifying titles and picks up the structural edits a metrics-only refresh
+# The nightly refresh only updates titles already in the warehouse. It cannot
+# see a film or series that didn't exist yet, and it doesn't re-run discovery.
+# This weekly job does: a full `run_pipeline.py --source discover` pass, which
+# adds newly qualifying films and TV series (Task 85 made the TV path
+# unconditional) and picks up the structural edits a metrics-only refresh
 # misses (new cast/crew, retitles, runtime corrections, In Production ->
-# Released).
+# Released, Returning Series -> Ended).
 #
 # Same idempotency guarantee as the nightly job — safe to retry or overlap.
 
@@ -25,10 +26,11 @@ concurrency:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    # A full run_pipeline pass, so slower than the nightly refresh. Cross-region
-    # S3 reads are batched (s3_utils.read_json_objects) but the discovery sweep
-    # and full re-transform still run longer; 120 is headroom.
-    timeout-minutes: 120
+    # A full run_pipeline pass, so slower than the nightly refresh, and Task 85
+    # added the TV discovery + season sweep on top. Cross-region S3 reads are
+    # batched (s3_utils.read_json_objects) but the discovery sweep and full
+    # re-transform still run longer; 180 is headroom.
+    timeout-minutes: 180
 
     env:
       TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}

@@ -161,7 +161,7 @@ missing one still stops the process before it does any work — it is just the r
 ### 2. Create the warehouse schema
 
 Apply the three bootstrap files in order against an empty database. Together they build the
-**current** 16-table schema; all statements are `IF NOT EXISTS`, so re-running is safe.
+**current** 30-table schema; all statements are `IF NOT EXISTS`, so re-running is safe.
 
 ```bash
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/01_dimensions.sql
@@ -169,11 +169,11 @@ psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/02_facts.sql
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/03_watermark.sql
 ```
 
-> **Do not run `04`–`15` on a fresh database.** Those are the historical migrations that brought an
+> **Do not run `04`–`22` on a fresh database.** Those are the historical migrations that brought an
 > already-live warehouse to this shape, and they are only correct applied in order to a database
 > that predates them — `11_drop_legacy_person_tables.sql` drops tables `01` no longer creates. Once
 > a migration drops something, "run every DDL file in order" stops being the same instruction as
-> "build the current schema". Use `04`–`15` only to migrate an existing Theoria warehouse.
+> "build the current schema". Use `04`–`22` only to migrate an existing Theoria warehouse.
 
 `slug` columns are declared empty by the DDL and populated by `load_dimensions()`.
 
@@ -339,7 +339,7 @@ etl/
 data_quality/             Silver and warehouse check suites; rejected/ holds quarantined rows
 warehouse/
   db.py                   engine and session management
-  ddl/                    01–03 bootstrap, 04–15 migrations
+  ddl/                    01–03 bootstrap, 04–22 migrations
   queries/                analytics SQL — never inline in application code
 django_app/               core (settings, router) · movies · analytics
 scripts/

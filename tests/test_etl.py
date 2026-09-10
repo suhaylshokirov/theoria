@@ -5429,6 +5429,108 @@ def test_refresh_movies_appends_credits_and_videos_keeping_videos_inline():
     assert credits == {"id": 550, "cast": [{"id": 1}], "crew": [{"id": 2, "job": "Director"}]}
 
 
+# --- Task 85: etl/bronze/refresh_series.py ---------------------------------------
+
+from etl.bronze.refresh_series import refresh_series
+
+
+def _series_refresh_payload(series_id: int) -> dict:
+    """A tv-detail payload with the three appended blocks folded in."""
+    return {
+        "id": series_id,
+        "name": f"Series {series_id}",
+        "number_of_episodes": 62,
+        "aggregate_credits": {
+            "cast": [{"id": 1, "name": "A", "roles": [{"character": "X"}]}],
+            "crew": [{"id": 2, "name": "B", "jobs": [{"job": "Executive Producer"}]}],
+        },
+        "external_ids": {"imdb_id": f"tt000{series_id}"},
+        "videos": {"results": [{"id": "v1", "type": "Trailer"}]},
+    }
+
+
+def test_refresh_series_writes_series_details_per_show():
+    """One tv-detail call per show, written whole — aggregate_credits stays inline."""
+    mock_client = MagicMock()
+    mock_client.get_series_details.side_effect = [
+        _series_refresh_payload(1396),
+        _series_refresh_payload(1399),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = refresh_series(
+            series_ids=[1396, 1399],
+            ingestion_date=dt.date(2026, 9, 10),
+            client=mock_client,
+        )
+
+    assert (succeeded, failed) == ([1396, 1399], [])
+    assert mock_client.get_series_details.call_count == 2
+    for _, kwargs in mock_client.get_series_details.call_args_list:
+        assert kwargs["append_to_response"] == "aggregate_credits,external_ids,videos"
+
+    bodies = _bodies_by_key(mock_s3)
+    assert set(bodies) == {
+        "bronze/series_details/ingestion_date=2026-09-10/1396.json",
+        "bronze/series_details/ingestion_date=2026-09-10/1399.json",
+    }
+    payload = bodies["bronze/series_details/ingestion_date=2026-09-10/1396.json"]
+    # No split: the credits roll-up rides inside the one file (Task 77 precedent).
+    assert payload["aggregate_credits"]["cast"][0]["id"] == 1
+    assert payload["external_ids"]["imdb_id"] == "tt0001396"
+
+
+def test_refresh_series_defaults_ids_to_dim_series():
+    """With no series_ids, the corpus is every id in dim_series, ascending."""
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.scalars.return_value.all.return_value = [1399, 1396]
+    mock_engine = MagicMock()
+    mock_engine.connect.return_value.__enter__.return_value = mock_conn
+
+    mock_client = MagicMock()
+    mock_client.get_series_details.side_effect = lambda sid, **_: _series_refresh_payload(sid)
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = refresh_series(
+            ingestion_date=dt.date(2026, 9, 10),
+            client=mock_client,
+            engine=mock_engine,
+        )
+
+    assert failed == []
+    assert sorted(succeeded) == [1396, 1399]
+    queried = [c.args[0] for c in mock_client.get_series_details.call_args_list]
+    assert queried == [1399, 1396]  # order preserved from the SELECT
+    sql = str(mock_conn.execute.call_args[0][0]).lower()
+    assert "from dim_series" in sql and "order by series_id" in sql
+
+
+def test_refresh_series_continues_after_a_failed_show():
+    """A failed show is recorded, writes nothing, and does not abort the run."""
+    mock_client = MagicMock()
+    mock_client.get_series_details.side_effect = [
+        _series_refresh_payload(100),
+        RuntimeError("TMDB 404"),
+        _series_refresh_payload(300),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = refresh_series(
+            series_ids=[100, 200, 300],
+            ingestion_date=dt.date(2026, 9, 10),
+            client=mock_client,
+        )
+
+    assert (succeeded, failed) == ([100, 300], [200])
+    assert mock_s3.put_object.call_count == 2  # nothing written for the failed show
+
+
 # --- Task 64: etl/gold/build_metrics_snapshot.py --------------------------------
 
 from etl.gold.build_metrics_snapshot import build_metrics_snapshot

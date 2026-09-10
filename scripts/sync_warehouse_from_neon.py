@@ -53,13 +53,29 @@ WAREHOUSE_TABLES = [
     "dim_language",
     "dim_date",
     "dim_movie_video",
+    # TV series dimensions (Tasks 79/84). Parents before children: dim_season /
+    # dim_episode reference dim_series, so they follow it in the reload order.
+    "dim_series",
+    "dim_network",
+    "dim_season",
+    "dim_episode",
     "fact_movie_metrics",
     "fact_movie_rating",
     "fact_credit",
     "fact_collaboration",
+    # TV facts (Tasks 80/81/84).
+    "fact_series_credit",
+    "fact_series_rating",
+    "fact_episode_rating",
     "bridge_movie_company",
     "bridge_movie_country",
     "bridge_movie_language",
+    # TV bridges (Task 79).
+    "bridge_series_genre",
+    "bridge_series_company",
+    "bridge_series_country",
+    "bridge_series_language",
+    "bridge_series_network",
     "person_alias",
     "etl_watermarks",
 ]
