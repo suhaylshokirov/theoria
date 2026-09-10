@@ -755,6 +755,158 @@ def test_get_tv_genres_hits_the_tv_list_endpoint():
     assert args[0].endswith("/genre/tv/list")
 
 
+def test_get_season_details_hits_the_season_endpoint():
+    """get_season_details() must GET tv/{id}/season/{n}."""
+    client = _client()
+    with patch.object(
+        client.session, "get", return_value=_fake_response(200, {"episodes": []})
+    ) as mock_get:
+        client.get_season_details(1396, 2)
+
+    args, _ = mock_get.call_args
+    assert args[0].endswith("/tv/1396/season/2")
+
+
+# --- ingest_seasons (Task 82) -----------------------------------------------
+
+import etl.bronze.ingest_seasons as ingest_seasons_module
+from etl.bronze.ingest_seasons import ingest_seasons
+
+
+def _series_detail_with_seasons(series_id: int, *, number_of_episodes: int, season_numbers: list[int]) -> dict:
+    return {
+        "id": series_id,
+        "name": f"Series {series_id}",
+        "number_of_episodes": number_of_episodes,
+        "seasons": [{"season_number": n, "id": 1000 + n, "episode_count": 10} for n in season_numbers],
+    }
+
+
+def _season_payload(season_number: int, n_episodes: int = 2) -> dict:
+    return {
+        "id": 5000 + season_number,
+        "season_number": season_number,
+        "name": f"Season {season_number}",
+        "episodes": [
+            {"id": 90000 + season_number * 100 + e, "season_number": season_number,
+             "episode_number": e, "name": f"E{e}", "runtime": 45, "air_date": "2020-01-0%d" % e,
+             "vote_average": 8.0, "vote_count": 100}
+            for e in range(1, n_episodes + 1)
+        ],
+    }
+
+
+def _seasons_s3_mock(list_result: list[str]):
+    """S3 mock: list_objects_v2 returns `list_result` keys; put_object is a no-op."""
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": [{"Key": k} for k in list_result]}]
+    mock_s3.get_paginator.return_value = paginator
+    mock_s3.put_object.return_value = {}
+    return mock_s3
+
+
+def test_ingest_seasons_writes_one_file_per_season_and_skips_specials():
+    mock_client = MagicMock()
+    mock_client.get_season_details.side_effect = lambda sid, n: _season_payload(n)
+    mock_s3 = _seasons_s3_mock([])
+    stubs = [("k", _series_detail_with_seasons(1396, number_of_episodes=62, season_numbers=[0, 1, 2]), None)]
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3), \
+         patch.object(s3_utils, "read_json_objects", return_value=stubs):
+        succeeded, failed = ingest_seasons(
+            [1396], ingestion_date=dt.date(2026, 9, 10), client=mock_client,
+        )
+
+    assert succeeded == [1396] and failed == []
+    keys = [c[1]["Key"] for c in mock_s3.put_object.call_args_list]
+    assert keys == [
+        "bronze/seasons/ingestion_date=2026-09-10/1396/season_1.json",
+        "bronze/seasons/ingestion_date=2026-09-10/1396/season_2.json",
+    ]  # season 0 skipped
+
+
+def test_ingest_seasons_include_specials_keeps_season_zero():
+    mock_client = MagicMock()
+    mock_client.get_season_details.side_effect = lambda sid, n: _season_payload(n)
+    stubs = [("k", _series_detail_with_seasons(1, number_of_episodes=5, season_numbers=[0, 1]), None)]
+
+    with patch.object(s3_utils, "get_s3_client", return_value=_seasons_s3_mock([])), \
+         patch.object(s3_utils, "read_json_objects", return_value=stubs):
+        ingest_seasons([1], ingestion_date=dt.date(2026, 9, 10), client=mock_client, include_specials=True)
+
+    seasons_called = sorted(c.args[1] for c in mock_client.get_season_details.call_args_list)
+    assert seasons_called == [0, 1]
+
+
+def test_ingest_seasons_skips_series_whose_episode_count_is_unchanged():
+    mock_client = MagicMock()
+    stubs = [("k", _series_detail_with_seasons(1396, number_of_episodes=62, season_numbers=[1]), None)]
+    # Already in S3 (already ingested) AND warehouse count matches → skip.
+    already_key = "bronze/seasons/ingestion_date=2026-09-01/1396/season_1.json"
+
+    with patch.object(s3_utils, "get_s3_client", return_value=_seasons_s3_mock([already_key])), \
+         patch.object(s3_utils, "read_json_objects", return_value=stubs):
+        succeeded, failed = ingest_seasons(
+            [1396], ingestion_date=dt.date(2026, 9, 10), client=mock_client,
+            known_episode_counts={1396: 62},
+        )
+
+    assert succeeded == [] and failed == []
+    mock_client.get_season_details.assert_not_called()
+
+
+def test_ingest_seasons_refetches_series_whose_episode_count_moved():
+    mock_client = MagicMock()
+    mock_client.get_season_details.side_effect = lambda sid, n: _season_payload(n)
+    stubs = [("k", _series_detail_with_seasons(1396, number_of_episodes=70, season_numbers=[1]), None)]
+    already_key = "bronze/seasons/ingestion_date=2026-09-01/1396/season_1.json"
+
+    with patch.object(s3_utils, "get_s3_client", return_value=_seasons_s3_mock([already_key])), \
+         patch.object(s3_utils, "read_json_objects", return_value=stubs):
+        succeeded, _ = ingest_seasons(
+            [1396], ingestion_date=dt.date(2026, 9, 10), client=mock_client,
+            known_episode_counts={1396: 62},  # warehouse says 62, payload says 70
+        )
+
+    assert succeeded == [1396]
+    mock_client.get_season_details.assert_called_once_with(1396, 1)
+
+
+def test_ingest_seasons_caps_newly_seen_series_at_max_new():
+    mock_client = MagicMock()
+    mock_client.get_season_details.side_effect = lambda sid, n: _season_payload(n)
+    stubs = [
+        ("a", _series_detail_with_seasons(1, number_of_episodes=10, season_numbers=[1]), None),
+        ("b", _series_detail_with_seasons(2, number_of_episodes=10, season_numbers=[1]), None),
+        ("c", _series_detail_with_seasons(3, number_of_episodes=10, season_numbers=[1]), None),
+    ]
+    with patch.object(s3_utils, "get_s3_client", return_value=_seasons_s3_mock([])), \
+         patch.object(s3_utils, "read_json_objects", return_value=stubs):
+        succeeded, _ = ingest_seasons(
+            [1, 2, 3], ingestion_date=dt.date(2026, 9, 10), client=mock_client, max_new=2,
+        )
+
+    assert succeeded == [1, 2]  # series 3 deferred to a later run
+
+
+def test_ingest_seasons_marks_series_failed_when_a_season_call_raises():
+    mock_client = MagicMock()
+
+    def get_season(sid, n):
+        if n == 2:
+            raise RuntimeError("500")
+        return _season_payload(n)
+
+    mock_client.get_season_details.side_effect = get_season
+    stubs = [("k", _series_detail_with_seasons(1, number_of_episodes=20, season_numbers=[1, 2]), None)]
+    with patch.object(s3_utils, "get_s3_client", return_value=_seasons_s3_mock([])), \
+         patch.object(s3_utils, "read_json_objects", return_value=stubs):
+        succeeded, failed = ingest_seasons([1], ingestion_date=dt.date(2026, 9, 10), client=mock_client)
+
+    assert succeeded == [] and failed == [1]
+
+
 # --- ingest_credits -----------------------------------------------------------
 
 from etl.bronze.ingest_credits import ingest_credits
@@ -1602,6 +1754,105 @@ def test_transform_series_links_raises_when_no_bronze_files():
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         with pytest.raises(FileNotFoundError):
             transform_series_links(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+
+# --- transform_episodes (Task 82) -------------------------------------------
+
+from etl.silver.transform_episodes import transform_episodes
+
+
+def _episodes_s3_mock(files: dict[str, dict]):
+    """S3 mock: prefix-aware list_objects_v2 + get_object over `files` {key: json}."""
+    import json as _json
+    mock_s3 = MagicMock()
+
+    def paginate(Bucket, Prefix):
+        return [{"Contents": [{"Key": k} for k in files if k.startswith(Prefix)]}]
+
+    paginator = MagicMock()
+    paginator.paginate.side_effect = paginate
+    mock_s3.get_paginator.return_value = paginator
+
+    def get_object(Bucket, Key):
+        body = MagicMock()
+        body.read.return_value = _json.dumps(files[Key]).encode("utf-8")
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = get_object
+    mock_s3.put_object.return_value = {}
+    return mock_s3
+
+
+def test_transform_episodes_writes_both_parquets_with_series_id_from_key_path():
+    d = "2026-09-10"
+    files = {
+        f"bronze/series_details/ingestion_date={d}/1396.json": {
+            "id": 1396,
+            "seasons": [
+                {"season_number": 1, "id": 3572, "name": "Season 1", "air_date": "2008-01-20",
+                 "episode_count": 7, "overview": "s1", "poster_path": "/s1.jpg"},
+            ],
+        },
+        f"bronze/seasons/ingestion_date={d}/1396/season_1.json": {
+            "id": 3572, "season_number": 1,
+            "episodes": [
+                {"id": 62085, "season_number": 1, "episode_number": 1, "name": "Pilot",
+                 "air_date": "2008-01-20", "runtime": 58, "overview": "o", "still_path": "/e.jpg",
+                 "episode_type": "standard", "production_code": "", "vote_average": 8.2, "vote_count": 250},
+            ],
+        },
+    }
+    mock_s3 = _episodes_s3_mock(files)
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        seasons_uri, episodes_uri = transform_episodes(
+            ingestion_date=dt.date(2026, 9, 10), bucket="theoria-datalake"
+        )
+
+    assert seasons_uri.endswith(f"silver/seasons/ingestion_date={d}/seasons.parquet")
+    assert episodes_uri.endswith(f"silver/episodes/ingestion_date={d}/episodes.parquet")
+
+    written = {c[1]["Key"]: pd.read_parquet(io.BytesIO(c[1]["Body"]))
+              for c in mock_s3.put_object.call_args_list}
+    seasons = written[f"silver/seasons/ingestion_date={d}/seasons.parquet"]
+    episodes = written[f"silver/episodes/ingestion_date={d}/episodes.parquet"]
+
+    assert list(seasons.columns) == [
+        "series_id", "season_number", "season_id", "name", "air_date",
+        "episode_count", "overview", "poster_path",
+    ]
+    assert seasons.iloc[0]["series_id"] == 1396 and seasons.iloc[0]["episode_count"] == 7
+    # series_id on the episode row comes from the key path, not the payload body.
+    assert episodes.iloc[0]["series_id"] == 1396
+    assert episodes.iloc[0]["episode_id"] == 62085
+    assert episodes.iloc[0]["runtime"] == 58
+
+
+def test_transform_episodes_dedups_episodes_on_episode_id():
+    d = "2026-09-10"
+    ep = {"id": 1, "season_number": 1, "episode_number": 1, "name": "E1", "air_date": "2020-01-01",
+          "runtime": 30, "overview": "", "still_path": "", "episode_type": "standard",
+          "production_code": "", "vote_average": 7.0, "vote_count": 10}
+    files = {
+        f"bronze/series_details/ingestion_date={d}/9.json": {"id": 9, "seasons": []},
+        f"bronze/seasons/ingestion_date={d}/9/season_1.json": {"episodes": [ep, dict(ep)]},
+    }
+    mock_s3 = _episodes_s3_mock(files)
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_episodes(ingestion_date=dt.date(2026, 9, 10), bucket="theoria-datalake")
+
+    episodes = next(
+        pd.read_parquet(io.BytesIO(c[1]["Body"]))
+        for c in mock_s3.put_object.call_args_list if "episodes.parquet" in c[1]["Key"]
+    )
+    assert len(episodes) == 1
+
+
+def test_transform_episodes_raises_when_no_season_files():
+    d = "2026-09-10"
+    files = {f"bronze/series_details/ingestion_date={d}/9.json": {"id": 9, "seasons": []}}
+    with patch.object(s3_utils, "get_s3_client", return_value=_episodes_s3_mock(files)):
+        with pytest.raises(FileNotFoundError):
+            transform_episodes(ingestion_date=dt.date(2026, 9, 10), bucket="theoria-datalake")
 
 
 # --- transform_series_credits (Task 80) --------------------------------

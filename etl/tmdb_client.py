@@ -202,6 +202,21 @@ class TMDBClient:
         )
         return self.get(f"tv/{series_id}", params=params)
 
+    def get_season_details(
+        self, series_id: int, season_number: int
+    ) -> dict[str, Any]:
+        """Every episode of one season (`tv/{id}/season/{n}`).
+
+        One call returns the whole season: an `episodes[]` array where each
+        entry carries `runtime`, `air_date`, `vote_average`, `vote_count`,
+        `still_path`, `episode_type`, `production_code`, plus per-episode
+        `crew` and `guest_stars`. The series payload's `episode_run_time` is
+        unreliable (`[]` for many shows), so this per-episode `runtime` is the
+        real source. Season numbers come from the `seasons[]` stub already on
+        the series payload — no call is needed to discover them.
+        """
+        return self.get(f"tv/{series_id}/season/{season_number}")
+
     def get_movie_details(
         self, movie_id: int, *, append_to_response: str | None = None
     ) -> dict[str, Any]:

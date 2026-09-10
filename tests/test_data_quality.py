@@ -395,6 +395,18 @@ def _tv_entity_dfs() -> dict[str, pd.DataFrame]:
         "series_ratings": pd.DataFrame([{
             "series_id": 1396, "imdb_id": "tt0903747", "rating": 9.5, "vote_count": 2200000,
         }]),
+        "seasons": pd.DataFrame([{
+            "series_id": 1396, "season_number": 1, "season_id": 3572, "name": "Season 1",
+            "air_date": dt.date(2008, 1, 20), "episode_count": 7,
+            "overview": "High school chemistry teacher Walter White.", "poster_path": "/s1.jpg",
+        }]),
+        "episodes": pd.DataFrame([{
+            "episode_id": 62085, "series_id": 1396, "season_number": 1, "episode_number": 1,
+            "name": "Pilot", "air_date": dt.date(2008, 1, 20), "runtime": 58,
+            "overview": "Walter White begins.", "still_path": "/e1.jpg",
+            "episode_type": "standard", "production_code": "", "vote_average": 8.2,
+            "vote_count": 250,
+        }]),
     }
 
 
@@ -718,3 +730,51 @@ def test_run_silver_checks_with_tv_series_credits_negative_episode_count_fails(t
         r for r in results if r.entity == "series_credits" and r.check == "ranges"
     )
     assert not sc_ranges.passed
+
+
+def _episode_row(**overrides):
+    base = {
+        "episode_id": 1, "series_id": 1396, "season_number": 1, "episode_number": 1,
+        "name": "E", "air_date": dt.date(2020, 1, 1), "runtime": 45, "overview": "o",
+        "still_path": "/s.jpg", "episode_type": "standard", "production_code": "",
+        "vote_average": 8.0, "vote_count": 100,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_run_silver_checks_with_tv_episodes_duplicate_natural_grain_fails(tmp_path):
+    """(series, season, episode) must be unique even when episode_id differs — the
+    secondary 'grain' check catches a renumbering collision the PK check misses."""
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["episodes"] = pd.DataFrame([
+        _episode_row(episode_id=1, episode_number=1),
+        _episode_row(episode_id=2, episode_number=1),  # same (series, season, episode)
+    ])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake",
+            rejected_dir=tmp_path, with_tv=True,
+        )
+
+    grain = next(r for r in results if r.entity == "episodes" and r.check == "grain")
+    assert not grain.passed
+    pk = next(r for r in results if r.entity == "episodes" and r.check == "duplicates")
+    assert pk.passed  # episode_id is still unique
+
+
+def test_run_silver_checks_with_tv_episodes_zero_episode_number_fails_ranges(tmp_path):
+    dfs = _all_entity_dfs() | _tv_entity_dfs()
+    dfs["episodes"] = pd.DataFrame([_episode_row(episode_number=0)])
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake",
+            rejected_dir=tmp_path, with_tv=True,
+        )
+
+    ep_ranges = next(r for r in results if r.entity == "episodes" and r.check == "ranges")
+    assert not ep_ranges.passed

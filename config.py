@@ -117,6 +117,17 @@ TV_DISCOVER_END_YEAR = int(_optional("TV_DISCOVER_END_YEAR", "2026"))
 TV_DISCOVER_PAGES_PER_YEAR = int(_optional("TV_DISCOVER_PAGES_PER_YEAR", "1"))
 TV_DISCOVER_MIN_VOTES = int(_optional("TV_DISCOVER_MIN_VOTES", "300"))
 
+# Season/episode ingestion (etl/bronze/ingest_seasons.py, Task 82). Episodes are
+# the expensive half of TV — ~3,500 season calls for a full sweep — so newly
+# seen series get their seasons fetched a bounded number per run (the Task 72
+# `max_new` pattern) and the tail fills over subsequent nights. A series already
+# ingested is re-fetched only when its episode count has moved.
+# TV_SEASONS_INCLUDE_SPECIALS keeps season 0 ("Specials"), which is off by
+# default: specials distort every per-season chart and are not what a reader
+# means by "season 1".
+TV_SEASONS_MAX_NEW = int(_optional("TV_SEASONS_MAX_NEW", "300"))
+TV_SEASONS_INCLUDE_SPECIALS = _optional("TV_SEASONS_INCLUDE_SPECIALS", "False").lower() in ("1", "true", "yes")
+
 # --- IMDb datasets -----------------------------------------------------------
 # Public bulk export, refreshed daily by IMDb — no auth, no key, no quota.
 # https://datasets.imdbws.com/title.ratings.tsv.gz (tconst/averageRating/numVotes).

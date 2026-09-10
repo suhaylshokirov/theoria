@@ -36,6 +36,7 @@ from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
 from etl.bronze.ingest_movie_details import ingest_movie_details
 from etl.bronze.ingest_movies import ingest_movies
 from etl.bronze.ingest_people import ingest_people
+from etl.bronze.ingest_seasons import ingest_seasons
 from etl.bronze.ingest_series_details import ingest_series_details
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.silver.transform_companies import transform_companies
@@ -47,6 +48,7 @@ from etl.silver.transform_movie_videos import transform_movie_videos
 from etl.silver.transform_movies import transform_movies
 from etl.silver.transform_people import transform_people
 from etl.silver.transform_people_details import transform_people_details
+from etl.silver.transform_episodes import transform_episodes
 from etl.silver.transform_series import transform_series
 from etl.silver.transform_series_credits import transform_series_credits
 from etl.silver.transform_series_links import transform_series_links
@@ -161,6 +163,26 @@ def _extract_person_ids(
     return sorted(lead) + sorted(rest)
 
 
+def _warehouse_episode_counts() -> dict[int, int]:
+    """{series_id: number_of_episodes} from dim_series, for ingest_seasons' change signal.
+
+    Degrades to {} if dim_series does not exist yet (the first --with-tv run,
+    before 19_series.sql is applied) — so every series reads as newly seen.
+    """
+    try:
+        from sqlalchemy import text
+        from warehouse.db import get_session
+        with get_session() as session:
+            rows = session.execute(
+                text("SELECT series_id, number_of_episodes FROM dim_series "
+                     "WHERE number_of_episodes IS NOT NULL")
+            ).all()
+        return {int(sid): int(n) for sid, n in rows}
+    except Exception as exc:
+        logger.info("No dim_series episode counts available (%s) — all series treated as new", exc)
+        return {}
+
+
 def run_pipeline(
     ingestion_date: dt.date | None = None,
     max_pages: int | None = None,
@@ -245,6 +267,18 @@ def run_pipeline(
             "Bronze series details: %d/%d succeeded",
             len(succeeded_series), len(series_ids),
         )
+        # Seasons/episodes (Task 82): bounded per run by TV_SEASONS_MAX_NEW.
+        # dim_series' episode counts (last night's) decide which already-known
+        # series get re-fetched. series_ids are already in discovery order.
+        seasons_ok, seasons_failed = ingest_seasons(
+            series_ids,
+            ingestion_date=ingestion_date,
+            known_episode_counts=_warehouse_episode_counts(),
+        )
+        logger.info(
+            "Bronze seasons: %d series written, %d failed",
+            len(seasons_ok), len(seasons_failed),
+        )
 
     # Company ids only exist inside the movie- (and series-) detail payloads
     # just written. ingest_companies() then skips any already enriched in a
@@ -284,6 +318,7 @@ def run_pipeline(
         transform_series(ingestion_date=ingestion_date)
         transform_series_links(ingestion_date=ingestion_date)
         transform_series_credits(ingestion_date=ingestion_date)
+        transform_episodes(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date, with_tv=with_tv)
     transform_people_details(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date, with_tv=with_tv)

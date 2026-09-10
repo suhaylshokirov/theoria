@@ -308,13 +308,49 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "vote_count": (0, None),
         },
     },
+    # Task 82: seasons + episodes. Written from the measured shape of TMDB's
+    # tv/{id} `seasons[]` stub and tv/{id}/season/{n} `episodes[]` array, not
+    # by mirroring transform_episodes.py (the Task 40 lesson).
+    "seasons": {
+        "parquet": "seasons.parquet",
+        "pk_cols": ["series_id", "season_number"],
+        "required_cols": ["series_id", "season_number"],
+        "expected_cols": [
+            "series_id", "season_number", "season_id", "name", "air_date",
+            "episode_count", "overview", "poster_path",
+        ],
+        "ranges": {
+            "season_number": (0, None),
+            "episode_count": (0, None),
+        },
+    },
+    "episodes": {
+        "parquet": "episodes.parquet",
+        "pk_cols": ["episode_id"],
+        "required_cols": ["episode_id", "series_id", "season_number", "episode_number"],
+        # A second grain the page relies on: (series, season, episode) must be
+        # unique too, not just the surrogate episode_id.
+        "extra_unique_cols": ["series_id", "season_number", "episode_number"],
+        "expected_cols": [
+            "episode_id", "series_id", "season_number", "episode_number", "name",
+            "air_date", "runtime", "overview", "still_path", "episode_type",
+            "production_code", "vote_average", "vote_count",
+        ],
+        "ranges": {
+            "season_number": (0, None),
+            "episode_number": (1, None),
+            "runtime": (0, None),
+            "vote_average": (0.0, 10.0),
+            "vote_count": (0, None),
+        },
+    },
 }
 
 # Entities checked only when run_silver_checks is called with with_tv=True.
 _TV_ENTITIES = frozenset({
     "series", "series_companies", "series_countries", "series_languages",
     "series_networks", "networks", "series_genres", "series_credits",
-    "series_ratings",
+    "series_ratings", "seasons", "episodes",
 })
 
 
@@ -486,6 +522,27 @@ def _run_entity_checks(
         results.append(CheckResult(entity=entity, check="ranges", passed=True,
                                    bad_count=0, message="All values within expected ranges"))
         logger.info("[%s] ranges OK", entity)
+
+    # 5. Extra uniqueness check — a secondary grain that must also hold, beyond
+    #    the primary key (e.g. episodes: (series, season, episode) as well as
+    #    the surrogate episode_id). Only run when the entity declares one.
+    extra_cols = cfg.get("extra_unique_cols")
+    if extra_cols:
+        extra_bad = _duplicate_mask(df, extra_cols)
+        n_extra = int(extra_bad.sum())
+        if n_extra:
+            bad = df[extra_bad].copy()
+            bad["rejection_reason"] = "duplicate_secondary_grain"
+            rejects.append(bad)
+            results.append(CheckResult(
+                entity=entity, check="grain", passed=False, bad_count=n_extra,
+                message=f"{n_extra} duplicate row(s) on grain={extra_cols}",
+            ))
+            logger.error("[%s] grain FAIL — %d row(s)", entity, n_extra)
+        else:
+            results.append(CheckResult(entity=entity, check="grain", passed=True,
+                                       bad_count=0, message=f"No duplicates on grain={extra_cols}"))
+            logger.info("[%s] grain OK", entity)
 
     _write_rejects(rejects, entity, ingestion_date, rejected_dir)
     return results
