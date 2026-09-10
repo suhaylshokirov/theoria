@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 24  # 16 movie/person + 6 series bridges (79) + 2 fact_series_credit (80)
+    assert len(results) == 25  # 16 movie/person + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81)
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 23
+    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 24
 
     results = check_fk_integrity(mock_session)
 

@@ -218,10 +218,13 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "number_of_seasons", "number_of_episodes", "status", "type",
             "in_production", "original_language", "overview", "tagline",
             "poster_path", "backdrop_path", "homepage", "imdb_id",
+            "vote_average", "vote_count",
         ],
         "ranges": {
             "number_of_seasons": (0, None),
             "number_of_episodes": (0, None),
+            "vote_average": (0.0, 10.0),
+            "vote_count": (0, None),
         },
     },
     "series_companies": {
@@ -292,12 +295,26 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "ordering": (0, None),
         },
     },
+    # Task 81: the show counterpart of imdb_ratings — same shape, keyed by
+    # series_id. Written from IMDb's published schema, not by mirroring
+    # transform_imdb_ratings.py (the Task 40 lesson).
+    "series_ratings": {
+        "parquet": "series_ratings.parquet",
+        "pk_cols": ["series_id"],
+        "required_cols": ["series_id", "imdb_id", "rating"],
+        "expected_cols": ["series_id", "imdb_id", "rating", "vote_count"],
+        "ranges": {
+            "rating": (0.0, 10.0),
+            "vote_count": (0, None),
+        },
+    },
 }
 
 # Entities checked only when run_silver_checks is called with with_tv=True.
 _TV_ENTITIES = frozenset({
     "series", "series_companies", "series_countries", "series_languages",
     "series_networks", "networks", "series_genres", "series_credits",
+    "series_ratings",
 })
 
 

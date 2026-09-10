@@ -27,6 +27,8 @@ series.parquet columns (grain: series_id):
     backdrop_path        string  — nullable, "" -> None
     homepage             string  — nullable, "" -> None
     imdb_id              string  — nullable; from the inline `external_ids` block
+    vote_average         float   — TMDB's own rating, 0.0-10.0 (Task 81)
+    vote_count           Int64   — TMDB vote count (Task 81)
 
 No `slug` column. Slugs are assigned in the warehouse loader by
 `assign_slugs()` over the whole `dim_series` table (Task 79), exactly as
@@ -105,6 +107,10 @@ def _flatten_series(raw: dict[str, Any]) -> dict[str, Any]:
         "backdrop_path": raw.get("backdrop_path") or None,
         "homepage": raw.get("homepage") or None,
         "imdb_id": external_ids.get("imdb_id") or None,
+        # Task 81: TMDB's own rating, kept beside the IMDb one for comparison —
+        # the same two figures transform_movies.py carries for films.
+        "vote_average": raw.get("vote_average"),
+        "vote_count": raw.get("vote_count"),
     }
 
 
@@ -118,6 +124,8 @@ def _cast_types(df: pd.DataFrame) -> pd.DataFrame:
     df["number_of_episodes"] = pd.to_numeric(
         df["number_of_episodes"], errors="coerce"
     ).astype("Int64")
+    df["vote_average"] = pd.to_numeric(df["vote_average"], errors="coerce")
+    df["vote_count"] = pd.to_numeric(df["vote_count"], errors="coerce").astype("Int64")
     df["in_production"] = df["in_production"].astype("boolean")
     # Empty strings from TMDB for missing dates become NaT, not errors.
     df["first_air_date"] = pd.to_datetime(df["first_air_date"], errors="coerce").dt.date
@@ -134,7 +142,7 @@ _COLUMNS = [
     "series_id", "name", "original_name", "first_air_date", "last_air_date",
     "number_of_seasons", "number_of_episodes", "status", "type", "in_production",
     "original_language", "overview", "tagline", "poster_path", "backdrop_path",
-    "homepage", "imdb_id",
+    "homepage", "imdb_id", "vote_average", "vote_count",
 ]
 
 

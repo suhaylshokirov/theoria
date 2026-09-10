@@ -291,7 +291,7 @@ def run_pipeline(
     transform_movie_links(ingestion_date=ingestion_date)
     transform_movie_videos(ingestion_date=ingestion_date)
     transform_companies(ingestion_date=ingestion_date)
-    transform_imdb_ratings(ingestion_date=ingestion_date)
+    transform_imdb_ratings(ingestion_date=ingestion_date, with_tv=with_tv)
 
     silver_results = run_silver_checks(ingestion_date=ingestion_date, with_tv=with_tv)
     silver_failed = [r for r in silver_results if not r.passed]

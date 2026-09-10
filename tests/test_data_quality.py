@@ -361,6 +361,7 @@ def _tv_entity_dfs() -> dict[str, pd.DataFrame]:
             "overview": "A teacher turns to crime.", "tagline": "Change the equation.",
             "poster_path": "/p.jpg", "backdrop_path": "/b.jpg",
             "homepage": "https://example.com", "imdb_id": "tt0903747",
+            "vote_average": 8.9, "vote_count": 12000,
         }]),
         "series_companies": pd.DataFrame([{
             "series_id": 1396, "company_id": 11073, "company_name": "Sony Pictures Television",
@@ -391,6 +392,9 @@ def _tv_entity_dfs() -> dict[str, pd.DataFrame]:
              "job": "Executive Producer", "character_name": "", "episode_count": 62,
              "ordering": None},
         ]),
+        "series_ratings": pd.DataFrame([{
+            "series_id": 1396, "imdb_id": "tt0903747", "rating": 9.5, "vote_count": 2200000,
+        }]),
     }
 
 

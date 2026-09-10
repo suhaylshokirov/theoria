@@ -43,6 +43,12 @@ vote_count columns (source='tmdb'). Both land in the same table at the same
 (movie_id, source) grain — one row per film per source, never fanned out by
 genre the way fact_movie_metrics is.
 
+fact_series_rating (Task 81) is the exact TV mirror: silver/series_ratings
+(source='imdb') + silver/series' own vote_average/vote_count (source='tmdb'),
+at (series_id, source) grain. Both TV reads are optional — a movie-only run
+(and the nightly refresh, until Task 85) writes neither, so the whole block
+is skipped.
+
 person_alias (Task 72) is neither a fact nor a bridge — it attaches one
 dimension's repeating text (a person's also_known_as entries) to it. It is
 loaded here, alongside the facts, because it follows the same
@@ -790,6 +796,82 @@ def load_fact_movie_rating(
     return count, rejects
 
 
+def _build_series_rating_rows(
+    ratings_df: pd.DataFrame,
+    series_df: pd.DataFrame,
+    valid_series_ids: set[int],
+    ingestion_date: dt.date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build fact_series_rating rows from both sources — the TV mirror of
+    _build_movie_rating_rows.
+
+    silver/series_ratings -> source='imdb'; silver/series' own vote_average/
+    vote_count -> source='tmdb'. Both inputs are already one row per series_id
+    (Silver guarantees it for series.parquet; series_ratings.parquet is an
+    inner join against that same table), so no de-dup is needed here.
+
+    Returns (rows, rejects).
+    """
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+
+    if ratings_df is not None:
+        for record in ratings_df.to_dict("records"):
+            series_id = record.get("series_id")
+            if pd.isna(series_id) or int(series_id) not in valid_series_ids:
+                rejects.append({**record, "source": "imdb", "rejection_reason": "unknown series_id"})
+                continue
+            rows.append({
+                "series_id": int(series_id),
+                "source": "imdb",
+                "rating": record.get("rating"),
+                "vote_count": record.get("vote_count"),
+                "ingestion_date": ingestion_date,
+            })
+
+    for record in series_df.to_dict("records"):
+        series_id = record.get("series_id")
+        if pd.isna(series_id) or int(series_id) not in valid_series_ids:
+            rejects.append({
+                "series_id": series_id,
+                "source": "tmdb",
+                "rating": record.get("vote_average"),
+                "vote_count": record.get("vote_count"),
+                "rejection_reason": "unknown series_id",
+            })
+            continue
+        rows.append({
+            "series_id": int(series_id),
+            "source": "tmdb",
+            "rating": record.get("vote_average"),
+            "vote_count": record.get("vote_count"),
+            "ingestion_date": ingestion_date,
+        })
+
+    return rows, rejects
+
+
+def load_fact_series_rating(
+    session: Session, ratings_df: pd.DataFrame | None, series_df: pd.DataFrame,
+    ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Resolve and upsert both IMDb and TMDB show ratings into fact_series_rating.
+
+    Must run after load_dim_series() has committed. `ratings_df` may be None
+    (a --with-tv run whose IMDb join produced no silver/series_ratings) — the
+    source='tmdb' rows off `series_df` still load. Returns (count, rejects).
+    """
+    valid_series_ids = _existing_ids(session, "dim_series", "series_id")
+
+    rows, rejects = _build_series_rating_rows(
+        ratings_df, series_df, valid_series_ids, ingestion_date
+    )
+    columns = ["series_id", "source", "rating", "vote_count", "ingestion_date"]
+    count = _upsert(session, "fact_series_rating", ["series_id", "source"], columns, _records(rows))
+    logger.info("fact_series_rating: upserted %d row(s), rejected %d row(s)", count, len(rejects))
+    return count, rejects
+
+
 def load_fact_movie_metrics(
     session: Session, movies_df: pd.DataFrame, ingestion_date: dt.date,
 ) -> tuple[int, list[dict[str, Any]]]:
@@ -898,6 +980,13 @@ def load_facts(
     series_credits_df = _optional_silver(
         bucket, "series_credits", ingestion_date, "series_credits.parquet"
     )
+    # Task 81: fact_series_rating. series.parquet carries the source='tmdb'
+    # figures; series_ratings.parquet (optional even on a --with-tv run — the
+    # IMDb join can match nothing) carries source='imdb'.
+    series_df = _optional_silver(bucket, "series", ingestion_date, "series.parquet")
+    series_ratings_df = _optional_silver(
+        bucket, "series_ratings", ingestion_date, "series_ratings.parquet"
+    )
     load_tv = any(v is not None and not v.empty for v in series_link_dfs.values())
 
     counts: dict[str, int] = {}
@@ -946,6 +1035,17 @@ def load_facts(
         if series_credits_df is not None and not series_credits_df.empty:
             counts["fact_series_credit"], series_rejects["fact_series_credit"] = (
                 load_fact_series_credit(session, series_credits_df, ingestion_date)
+            )
+
+        # Task 81: fact_series_rating — gated on the series dimension file
+        # (guarantees the source='tmdb' rows); the source='imdb' rows come
+        # from series_ratings_df, which may be None. Runs after
+        # load_dimensions committed dim_series.
+        if series_df is not None and not series_df.empty:
+            counts["fact_series_rating"], series_rejects["fact_series_rating"] = (
+                load_fact_series_rating(
+                    session, series_ratings_df, series_df, ingestion_date
+                )
             )
 
     _write_rejects(metrics_rejects, "fact_movie_metrics", ingestion_date, rejected_dir)

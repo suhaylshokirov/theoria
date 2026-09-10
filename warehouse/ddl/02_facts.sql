@@ -112,3 +112,23 @@ CREATE INDEX IF NOT EXISTS idx_fsc_person_id      ON fact_series_credit (person_
 CREATE INDEX IF NOT EXISTS idx_fsc_department     ON fact_series_credit (department);
 CREATE INDEX IF NOT EXISTS idx_fsc_ingestion_date ON fact_series_credit (ingestion_date);
 CREATE INDEX IF NOT EXISTS idx_fsc_person_dept    ON fact_series_credit (person_id, department);
+
+
+-- fact_series_rating (Task 81) is the TV counterpart of fact_movie_rating:
+-- one row per (series, source), IMDb as the rating of record and TMDB kept
+-- for comparison. No fact_series_metrics — TV has no money measures, so that
+-- table would be write-only. See 21_series_ratings.sql for the full rationale.
+CREATE TABLE IF NOT EXISTS fact_series_rating (
+    series_id      INTEGER     NOT NULL,
+    source         VARCHAR(16) NOT NULL,
+    rating         NUMERIC(4,2),
+    vote_count     INTEGER,
+    ingestion_date DATE        NOT NULL,
+    CONSTRAINT pk_fact_series_rating PRIMARY KEY (series_id, source),
+    CONSTRAINT fk_fact_series_rating_series
+        FOREIGN KEY (series_id) REFERENCES dim_series (series_id),
+    CONSTRAINT ck_fact_series_rating_source CHECK (source IN ('imdb', 'tmdb'))
+);
+CREATE INDEX IF NOT EXISTS idx_fact_series_rating_series_id ON fact_series_rating (series_id);
+CREATE INDEX IF NOT EXISTS idx_fact_series_rating_source_rating
+    ON fact_series_rating (source, rating DESC);

@@ -101,6 +101,8 @@ _FK_CHECKS = [
     # pass trivially until the first --with-tv load — the same free ride.
     ("fact_series_credit", "series_id", "dim_series", "series_id"),
     ("fact_series_credit", "person_id", "dim_person", "person_id"),
+    # Task 81: fact_series_rating. Same free ride until the first --with-tv load.
+    ("fact_series_rating", "series_id", "dim_series", "series_id"),
 ]
 
 
@@ -578,6 +580,52 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             results.append(CheckResult(load_name, False,
                 f"fact_series_credit has 0 row(s) for ingestion_date={ingestion_date} despite "
                 f"{len(sc_df)} Silver series_credits row(s)"))
+            logger.error("[%s] FAIL — 0 rows loaded", load_name)
+        else:
+            results.append(CheckResult(load_name, True,
+                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+            logger.info("[%s] OK (%d rows)", load_name, loaded)
+
+    # fact_series_rating (Task 81): same defensive shape. The Silver anchor is
+    # silver/series (it guarantees the source='tmdb' rows); silver/series_ratings
+    # is the source='imdb' half and may be absent even on a --with-tv run. The
+    # warehouse table also holds the source='tmdb' rows, so like fact_movie_rating
+    # this is a "never shrinks below the Silver series count" check, not equality.
+    try:
+        srs_df = _read_silver_parquet(
+            bucket, "series", ingestion_date, "series.parquet"
+        )
+    except Exception as exc:
+        logger.info(
+            "[rowcount:series_ratings] no Silver series for %s (%s) — skipped",
+            ingestion_date, exc,
+        )
+        srs_df = None
+    if srs_df is not None and "series_id" not in srs_df.columns:
+        logger.info(
+            "[rowcount:series_ratings] Silver series has no series_id column — skipped"
+        )
+        srs_df = None
+    if srs_df is not None:
+        s2w_name = "rowcount:series_ratings:silver_to_warehouse"
+        warehouse_count = _table_row_count(session, "fact_series_rating")
+        if warehouse_count < len(srs_df):
+            results.append(CheckResult(s2w_name, False,
+                f"fact_series_rating has only {warehouse_count} row(s), fewer than the "
+                f"{len(srs_df)} Silver series row(s) that seed its source='tmdb' rows"))
+            logger.error("[%s] FAIL — warehouse=%d < silver=%d",
+                          s2w_name, warehouse_count, len(srs_df))
+        else:
+            results.append(CheckResult(s2w_name, True,
+                f"Silver series={len(srs_df)}, fact_series_rating={warehouse_count} (cumulative)"))
+            logger.info("[%s] OK", s2w_name)
+
+        load_name = "rowcount:series_ratings:load"
+        loaded = _fact_ingestion_date_count(session, "fact_series_rating", ingestion_date)
+        if len(srs_df) > 0 and loaded == 0:
+            results.append(CheckResult(load_name, False,
+                f"fact_series_rating has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"{len(srs_df)} Silver series row(s)"))
             logger.error("[%s] FAIL — 0 rows loaded", load_name)
         else:
             results.append(CheckResult(load_name, True,

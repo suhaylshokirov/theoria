@@ -1400,6 +1400,8 @@ def _raw_series(series_id: int, **overrides) -> dict:
         "poster_path": "/poster.jpg",
         "backdrop_path": "/backdrop.jpg",
         "homepage": "https://example.com/show",
+        "vote_average": 8.9,
+        "vote_count": 12345,
         "external_ids": {"imdb_id": f"tt{series_id:07d}"},
     }
     base.update(overrides)
@@ -1412,6 +1414,8 @@ def test_flatten_series_extracts_core_fields_and_imdb_id():
     assert row["name"] == "Series 1396"
     assert row["number_of_episodes"] == 62
     assert row["imdb_id"] == "tt0001396"  # pulled from the inline external_ids block
+    assert row["vote_average"] == 8.9  # TMDB's own rating, kept for comparison (Task 81)
+    assert row["vote_count"] == 12345
 
 
 def test_flatten_series_normalises_empty_strings_to_none():
@@ -2380,6 +2384,74 @@ def test_transform_imdb_ratings_excludes_null_and_unmatched_imdb_ids_with_loggin
 
     assert any("no imdb_id" in r.message for r in caplog.records)
     assert any("no matching IMDb rating row" in r.message for r in caplog.records)
+
+
+def _silver_series_with_imdb_df() -> pd.DataFrame:
+    """Two shows with a rated imdb_id, one with an unrated id, one with none."""
+    return pd.DataFrame({
+        "series_id": pd.array([1396, 1399, 999, 1000], dtype="Int64"),
+        "imdb_id": pd.array(["tt0903747", "tt0944947", "tt9999999", None], dtype="string"),
+        "name": ["Breaking Bad", "Game of Thrones", "No Rating Show", "No IMDb ID Show"],
+        "vote_average": [8.9, 8.4, 5.0, 6.0],
+        "vote_count": pd.array([12000, 21000, 3, 1], dtype="Int64"),
+    })
+
+
+def test_transform_imdb_ratings_with_tv_writes_series_ratings_beside_movies(caplog):
+    movies_buf = io.BytesIO()
+    _silver_movies_with_imdb_df().to_parquet(movies_buf, engine="pyarrow", index=False)
+    series_buf = io.BytesIO()
+    _silver_series_with_imdb_df().to_parquet(series_buf, engine="pyarrow", index=False)
+
+    ratings_gz = _make_ratings_tsv_gz([
+        ("tt0068646", "9.2", "2250628"),
+        ("tt0468569", "9.1", "3217719"),
+        ("tt0903747", "9.5", "2200000"),
+        ("tt0944947", "9.2", "2100000"),
+    ])
+    mock_s3 = _make_multi_key_s3_mock({
+        "imdb_ratings": ratings_gz,
+        "silver/movies": movies_buf.getvalue(),
+        "silver/series": series_buf.getvalue(),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.INFO):
+            uri = transform_imdb_ratings(
+                ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake", with_tv=True,
+            )
+
+    # Return value is still the movie Parquet URI.
+    assert uri == "s3://theoria-datalake/silver/imdb_ratings/ingestion_date=2026-06-22/imdb_ratings.parquet"
+
+    keys = [kw["Key"] for _, kw in mock_s3.put_object.call_args_list]
+    assert "silver/series_ratings/ingestion_date=2026-06-22/series_ratings.parquet" in keys
+    series_body = next(
+        kw["Body"] for _, kw in mock_s3.put_object.call_args_list
+        if "series_ratings" in kw["Key"]
+    )
+    written = pd.read_parquet(io.BytesIO(series_body))
+    assert list(written.columns) == ["series_id", "imdb_id", "rating", "vote_count"]
+    assert set(written["series_id"]) == {1396, 1399}  # 999 unrated, 1000 no imdb_id
+    assert written[written["series_id"] == 1396].iloc[0]["rating"] == 9.5
+    # The match rate is logged (Task 81 step 4).
+    assert any("IMDb match rate for show(s)" in r.message for r in caplog.records)
+
+
+def test_transform_imdb_ratings_without_tv_writes_no_series_ratings():
+    movies_buf = io.BytesIO()
+    _silver_movies_with_imdb_df().to_parquet(movies_buf, engine="pyarrow", index=False)
+    ratings_gz = _make_ratings_tsv_gz([("tt0068646", "9.2", "2250628")])
+    mock_s3 = _make_multi_key_s3_mock({
+        "imdb_ratings": ratings_gz,
+        "silver/movies": movies_buf.getvalue(),
+    })
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_imdb_ratings(ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake")
+
+    keys = [kw["Key"] for _, kw in mock_s3.put_object.call_args_list]
+    assert all("series_ratings" not in k for k in keys)
 
 
 # ---------------------------------------------------------------------------
@@ -3475,6 +3547,7 @@ from etl.warehouse_loader.load_facts import (
     _build_movie_rating_rows,
     _build_series_bridge_rows,
     _build_series_credit_rows,
+    _build_series_rating_rows,
     _existing_ids,
     _records,
     _write_rejects,
@@ -3487,6 +3560,7 @@ from etl.warehouse_loader.load_facts import (
     load_bridge_series_network,
     load_fact_movie_metrics,
     load_fact_movie_rating,
+    load_fact_series_rating,
     load_facts,
 )
 
@@ -4094,6 +4168,76 @@ def test_load_fact_movie_rating_upserts_both_sources_and_returns_rejects(monkeyp
     assert "INSERT INTO fact_movie_rating" in str(stmt)
     sources_in_params = {p["source"] for p in params}
     assert sources_in_params == {"imdb", "tmdb"}
+
+
+# --- fact_series_rating (Task 81) ----------------------------------------------
+
+def _fact_series_df():
+    return pd.DataFrame({
+        "series_id": pd.array([1, 2], dtype="Int64"),
+        "name": ["Show One", "Show Two"],
+        "imdb_id": ["tt0000001", "tt0000002"],
+        "vote_average": [8.0, 7.5],
+        "vote_count": pd.array([500, 300], dtype="Int64"),
+    })
+
+
+def _fact_series_ratings_df():
+    return pd.DataFrame({
+        "series_id": pd.array([1, 999], dtype="Int64"),
+        "imdb_id": ["tt0000001", "tt0000999"],
+        "rating": [9.5, 6.0],
+        "vote_count": pd.array([2200000, 40], dtype="Int64"),
+    })
+
+
+def test_build_series_rating_rows_builds_both_sources():
+    rows, rejects = _build_series_rating_rows(
+        _fact_series_ratings_df(), _fact_series_df(), valid_series_ids={1, 2},
+        ingestion_date=dt.date(2026, 9, 9),
+    )
+
+    by_source = {(r["series_id"], r["source"]) for r in rows}
+    assert (1, "imdb") in by_source
+    assert (1, "tmdb") in by_source
+    assert (2, "tmdb") in by_source
+    imdb_row = next(r for r in rows if r["series_id"] == 1 and r["source"] == "imdb")
+    assert imdb_row["rating"] == 9.5
+    tmdb_row = next(r for r in rows if r["series_id"] == 1 and r["source"] == "tmdb")
+    assert tmdb_row["rating"] == 8.0
+    # series_id 999 only appears in the imdb input and isn't a known series.
+    assert {r["rejection_reason"] for r in rejects} == {"unknown series_id"}
+
+
+def test_build_series_rating_rows_tmdb_only_when_ratings_df_is_none():
+    """A --with-tv run whose IMDb join matched nothing passes ratings_df=None;
+    the source='tmdb' rows off silver/series must still load."""
+    rows, rejects = _build_series_rating_rows(
+        None, _fact_series_df(), valid_series_ids={1, 2},
+        ingestion_date=dt.date(2026, 9, 9),
+    )
+
+    assert {r["source"] for r in rows} == {"tmdb"}
+    assert len(rows) == 2
+    assert rejects == []
+
+
+def test_load_fact_series_rating_upserts_on_series_id_source_key(monkeypatch):
+    mock_session = MagicMock()
+    import etl.warehouse_loader.load_facts as load_facts_module
+    monkeypatch.setattr(
+        load_facts_module, "_existing_ids", lambda session, table, pk_col: {1, 2}
+    )
+
+    count, rejects = load_fact_series_rating(
+        mock_session, _fact_series_ratings_df(), _fact_series_df(), dt.date(2026, 9, 9)
+    )
+
+    assert count == 3  # 2 tmdb (series 1,2) + 1 imdb (series 1)
+    assert len(rejects) == 1  # series 999's imdb row has no dim_series match
+    (stmt, params), _ = mock_session.execute.call_args
+    assert "INSERT INTO fact_series_rating" in str(stmt)
+    assert {p["source"] for p in params} == {"imdb", "tmdb"}
 
 
 def test_write_rejects_writes_parquet_file(tmp_path):
