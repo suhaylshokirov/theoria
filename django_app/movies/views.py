@@ -10,6 +10,7 @@ from django.utils.text import slugify
 from movies.models import (
     Company, Credit, Genre, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person,
+    Series, SeriesRating,
 )
 
 MOVIES_PER_PAGE = 24
@@ -191,6 +192,88 @@ def movie_list(request):
     if _is_ajax(request):
         return render(request, "movies/_movie_results.html", context)
     return render(request, "movies/movie_list.html", context)
+
+
+# ?sort= values accepted by series_list, mapped to an order_by expression.
+# No "revenue" segment — TV has no money measures (21_series_ratings.sql's
+# deliberate omission of fact_series_metrics carries through here too).
+SERIES_SORTS = {
+    "first_air": F("first_air_date").desc(nulls_last=True),
+    "rating": F("imdb_rating").desc(nulls_last=True),
+    "name": F("name").asc(),
+}
+
+
+def series_list(request):
+    """Browsable TV catalog: the /movies/ shape (search, sort, genre filter,
+    pagination), with two simplifications forced by the schema being a
+    genuine star rather than movie's fact-embedded genre:
+
+    * the genre filter is a plain join through bridge_series_genre, with no
+      .distinct() dedupe guard — each (series, genre) pair is already unique
+      in the bridge, unlike fact_movie_metrics' (movie, date, genre) grain;
+    * the genre choice list is a plain count on that same bridge.
+    """
+    q = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "first_air")
+    if sort not in SERIES_SORTS:
+        sort = "first_air"
+
+    genre_rows = (
+        Genre.objects.using("warehouse")
+        .annotate(series_count=Count("series_genres"))
+        .filter(series_count__gt=0)
+        .order_by("genre_name")
+        .values_list("genre_id", "genre_name")
+    )
+    genre_slugs = {slugify(name): genre_id for genre_id, name in genre_rows}
+    genre_choices = [(slugify(name), name) for _, name in genre_rows]
+
+    genre = request.GET.get("genre", "").strip()
+    if genre not in genre_slugs:
+        genre = ""
+
+    series = Series.objects.using("warehouse").all()
+    if q:
+        series = series.filter(name__icontains=q)
+    if genre:
+        series = series.filter(series_genres__genre_id=genre_slugs[genre])
+    # Annotated unconditionally, same reasoning as movie_list()'s imdb_rating:
+    # the cards display this figure too, so it must exist whichever sort is
+    # active.
+    series = series.annotate(
+        imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb"))
+    )
+    series = series.order_by(SERIES_SORTS[sort])
+
+    page_obj = Paginator(series, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
+    for row in page_obj:
+        row.year_span = _series_year_span(row)
+
+    context = {
+        "page_obj": page_obj, "q": q, "sort": sort,
+        "genre": genre,
+        "genre_choices": genre_choices,
+        "base_query": urlencode({"q": q, "sort": sort, "genre": genre}),
+    }
+    if _is_ajax(request):
+        return render(request, "movies/_series_results.html", context)
+    return render(request, "movies/series_list.html", context)
+
+
+def _series_year_span(series):
+    """A show's first–last air year as one card sub-line figure, e.g. "2011",
+    "2011–2019" (ended), or "2011–" (still airing — no last_air_date yet).
+    Mirrors _career_period()'s single-year collapse, minus the "Active"
+    wording — a card sub-line has no room for a word, only figures.
+    """
+    if not series.first_air_date:
+        return None
+    start = series.first_air_date.year
+    if not series.last_air_date:
+        return f"{start}–"
+    end = series.last_air_date.year
+    return str(start) if start == end else f"{start}–{end}"
 
 
 # ?sort= values accepted by person_list, mapped to an order_by expression.
@@ -486,6 +569,38 @@ def _movie_languages(movie, language_rows):
             names.append(r.language.name)
             seen.add(r.language_id)
     return names
+
+
+def series_detail(request, series_slug):
+    """One show: the minimal record available before the full show page.
+
+    Cast/crew, networks, studios, countries, languages and episodes are all
+    Task 87-88 work (the record block, "Created by", the season/episode
+    grid) — this exists now only so /tv/<slug>/ resolves for the index
+    card's link instead of 404ing, with the handful of facts already on
+    dim_series/bridge_series_genre/fact_series_rating shown in the meantime.
+    """
+    series = get_object_or_404(Series.objects.using("warehouse"), slug=series_slug)
+
+    genres = (
+        Genre.objects.using("warehouse")
+        .filter(series_genres__series_id=series.series_id)
+        .order_by("genre_name")
+    )
+
+    series_rating = (
+        SeriesRating.objects.using("warehouse")
+        .filter(series_id=series.series_id, source="imdb")
+        .first()
+    )
+
+    context = {
+        "series": series,
+        "genres": genres,
+        "series_rating": series_rating,
+        "year_span": _series_year_span(series),
+    }
+    return render(request, "movies/series_detail.html", context)
 
 
 # ?sort= values accepted by studio_list, mapped to an order_by expression.

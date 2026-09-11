@@ -1,0 +1,7 @@
+{% comment %} AJAX-only response for the TV index's live filtering (see
+   _is_ajax() and series_list() in views.py). static/js/theoria.js's
+   initLiveFilter() locates #series-grid in this response and copies its
+   innerHTML onto the live element. Also included directly by series_list.html
+   for a normal page load, so the live and no-JS paths render from the same
+   source and can't drift apart. {% endcomment %}
+{% include "movies/_series_grid.html" %}

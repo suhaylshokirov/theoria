@@ -1,0 +1,21 @@
+{% comment %} A show as a frame on the sheet, mirroring _movie_card.html.
+   Params (pass with `only`):
+     series : a Series, with .year_span and .imdb_rating already set by the
+              calling view (series_list()'s per-page loop and annotation). {% endcomment %}
+{% load tmdb_images %}
+<div class="poster-card is-film">
+    <a href="{% url 'movies:series_detail' series.slug %}">
+        {% if series.poster_path %}
+        <img class="poster" src="{{ series.poster_path|tmdb_image:'w342' }}" alt="{{ series.name }} poster" loading="lazy" decoding="async">
+        {% else %}
+        <div class="placeholder" aria-hidden="true">◻</div>
+        {% endif %}
+        <div class="card-body">
+            <span class="card-title">{{ series.name }}</span>
+            <span class="card-sub">
+                {{ series.year_span|default:"—" }}{% if series.number_of_seasons %} · {{ series.number_of_seasons }} season{{ series.number_of_seasons|pluralize }}{% endif %}
+            </span>
+            {% include "movies/_rating_badge.html" with rating=series.imdb_rating only %}
+        </div>
+    </a>
+</div>

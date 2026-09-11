@@ -428,3 +428,320 @@ class MovieLanguage(models.Model):
 
     def __str__(self):
         return f"{self.movie_id}/{self.language_id}"
+
+
+# ---------------------------------------------------------------------------
+# TV Shows (Task 86+) — the structural mirror of dim_movie and its bridges.
+# See warehouse/ddl/19_series.sql-22_episodes.sql and the "Feature — TV Shows"
+# block in tasks.md for the full design rationale.
+# ---------------------------------------------------------------------------
+
+
+class Series(models.Model):
+    """dim_series: a TV show (Task 79)."""
+
+    series_id = models.IntegerField(primary_key=True)
+    name = models.TextField()
+    original_name = models.TextField(null=True)
+    first_air_date = models.DateField(null=True)
+    last_air_date = models.DateField(null=True)
+    number_of_seasons = models.IntegerField(null=True)
+    number_of_episodes = models.IntegerField(null=True)
+    status = models.TextField(null=True)
+    type = models.TextField(null=True)
+    in_production = models.BooleanField(null=True)
+    original_language = models.CharField(max_length=10, null=True)
+    overview = models.TextField(null=True)
+    tagline = models.TextField(null=True)
+    poster_path = models.TextField(null=True)
+    backdrop_path = models.TextField(null=True)
+    homepage = models.TextField(null=True)
+    imdb_id = models.CharField(max_length=16, null=True)
+    slug = models.SlugField(max_length=300, unique=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_series"
+
+    def __str__(self):
+        return self.name
+
+
+class Network(models.Model):
+    """dim_network: a broadcaster/streamer (Task 79).
+
+    A separate dimension from Company, not a `kind` column on dim_company —
+    TMDB keys networks in their own id namespace (network 49 is HBO, company
+    49 is Universal Studios), so a shared table would collide on the PK.
+    """
+
+    network_id = models.IntegerField(primary_key=True)
+    name = models.TextField()
+    logo_path = models.TextField(null=True)
+    origin_country = models.CharField(max_length=10, null=True)
+    slug = models.SlugField(max_length=300, unique=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_network"
+
+    def __str__(self):
+        return self.name
+
+
+class Season(models.Model):
+    """dim_season: a show's seasons (Task 84).
+
+    Unlike the composite-PK fact/bridge tables, season_id is TMDB's real
+    global season id, so this needs none of the fake-single-PK workaround.
+    """
+
+    season_id = models.IntegerField(primary_key=True)
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id",
+        related_name="seasons",
+    )
+    season_number = models.SmallIntegerField(null=True)
+    name = models.TextField(null=True)
+    air_date = models.DateField(null=True)
+    episode_count = models.IntegerField(null=True)
+    overview = models.TextField(null=True)
+    poster_path = models.TextField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_season"
+
+    def __str__(self):
+        return f"{self.series_id}/S{self.season_number}"
+
+
+class Episode(models.Model):
+    """dim_episode: every episode, at TMDB's real global episode id — again a
+    real single-column PK, no fake-PK workaround (Task 84).
+
+    Loaded by REPLACE, not upsert (_replace_by_parent(), scoped to series_id):
+    TMDB can renumber or withdraw episodes, so a series' episode set must be
+    able to shrink — see 22_episodes.sql.
+    """
+
+    episode_id = models.IntegerField(primary_key=True)
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id",
+        related_name="episodes",
+    )
+    season_number = models.SmallIntegerField(null=True)
+    episode_number = models.SmallIntegerField(null=True)
+    name = models.TextField(null=True)
+    air_date = models.DateField(null=True)
+    runtime = models.IntegerField(null=True)
+    overview = models.TextField(null=True)
+    still_path = models.TextField(null=True)
+    episode_type = models.TextField(null=True)
+    production_code = models.TextField(null=True)
+    imdb_id = models.CharField(max_length=16, null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "dim_episode"
+
+    def __str__(self):
+        return f"{self.series_id}/S{self.season_number}E{self.episode_number}"
+
+
+class SeriesCredit(models.Model):
+    """fact_series_credit: every person who worked on a show (Task 80).
+
+    Same fake-single-PK workaround as Credit: `series` carries
+    primary_key=True purely to satisfy Django's one-pk rule; the real PK is
+    the composite (series_id, person_id, department, job, character_name) —
+    wider than fact_credit's because 6.7% of cast hold more than one
+    character in a single series (see 20_series_credits.sql).
+    """
+
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id", primary_key=True,
+        related_name="credits",
+    )
+    person = models.ForeignKey(
+        Person, on_delete=models.DO_NOTHING, db_column="person_id",
+        related_name="series_credits",
+    )
+    department = models.TextField()
+    job = models.TextField()
+    character_name = models.TextField()
+    episode_count = models.IntegerField(null=True)
+    ordering = models.SmallIntegerField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "fact_series_credit"
+
+    def __str__(self):
+        return f"{self.series_id}/{self.person_id}/{self.job}"
+
+
+class SeriesRating(models.Model):
+    """fact_series_rating: a show's rating of record, from IMDb (Task 81).
+
+    The Phase 15 contract extended to TV — byte-for-byte the fact_movie_rating
+    shape with series_id in place of movie_id. Same fake-single-PK workaround
+    as MovieRating.
+    """
+
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id", primary_key=True,
+    )
+    source = models.CharField(max_length=16)
+    rating = models.DecimalField(max_digits=4, decimal_places=2, null=True)
+    vote_count = models.IntegerField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "fact_series_rating"
+
+    def __str__(self):
+        return f"{self.series_id}/{self.source}"
+
+
+class EpisodeRating(models.Model):
+    """fact_episode_rating: an episode's rating of record, from IMDb (Task 84).
+
+    The third copy of the fact_movie_rating shape, after SeriesRating. Same
+    fake-single-PK workaround: `episode` carries primary_key=True.
+    """
+
+    episode = models.ForeignKey(
+        Episode, on_delete=models.DO_NOTHING, db_column="episode_id", primary_key=True,
+    )
+    source = models.CharField(max_length=16)
+    rating = models.DecimalField(max_digits=4, decimal_places=2, null=True)
+    vote_count = models.IntegerField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "fact_episode_rating"
+
+    def __str__(self):
+        return f"{self.episode_id}/{self.source}"
+
+
+class SeriesGenre(models.Model):
+    """bridge_series_genre: which genres a show belongs to (Task 79).
+
+    Unlike dim_movie, which has no genre bridge (genre lives only in
+    fact_movie_metrics), TV genres are a real factless bridge — so, unlike
+    movie_list()'s genre filter, series_list()'s needs no .distinct() dedupe
+    guard. Same fake-single-PK workaround as MovieCompany: `series` carries
+    primary_key=True.
+    """
+
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id", primary_key=True,
+        related_name="series_genres",
+    )
+    genre = models.ForeignKey(
+        Genre, on_delete=models.DO_NOTHING, db_column="genre_id",
+        related_name="series_genres",
+    )
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "bridge_series_genre"
+
+    def __str__(self):
+        return f"{self.series_id}/{self.genre_id}"
+
+
+class SeriesCompany(models.Model):
+    """bridge_series_company: which studios worked on which shows (Task 79)."""
+
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id", primary_key=True,
+        related_name="series_companies",
+    )
+    company = models.ForeignKey(
+        Company, on_delete=models.DO_NOTHING, db_column="company_id",
+        related_name="series_companies",
+    )
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "bridge_series_company"
+
+    def __str__(self):
+        return f"{self.series_id}/{self.company_id}"
+
+
+class SeriesCountry(models.Model):
+    """bridge_series_country: which countries a show originates from and/or
+    was produced in (Task 79). `relation` is part of the PK for the same
+    reason MovieCountry's is — origin and production are simultaneously-true
+    claims about a show's country that can disagree.
+    """
+
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id", primary_key=True,
+        related_name="series_countries",
+    )
+    country = models.ForeignKey(
+        Country, on_delete=models.DO_NOTHING, db_column="country_code",
+        related_name="series_countries",
+    )
+    relation = models.CharField(max_length=20)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "bridge_series_country"
+
+    def __str__(self):
+        return f"{self.series_id}/{self.country_id}/{self.relation}"
+
+
+class SeriesLanguage(models.Model):
+    """bridge_series_language: which languages are spoken in a show (Task 79)."""
+
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id", primary_key=True,
+        related_name="series_languages",
+    )
+    language = models.ForeignKey(
+        Language, on_delete=models.DO_NOTHING, db_column="language_code",
+        related_name="series_languages",
+    )
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "bridge_series_language"
+
+    def __str__(self):
+        return f"{self.series_id}/{self.language_id}"
+
+
+class SeriesNetwork(models.Model):
+    """bridge_series_network: which networks aired which shows (Task 79)."""
+
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id", primary_key=True,
+        related_name="series_networks",
+    )
+    network = models.ForeignKey(
+        Network, on_delete=models.DO_NOTHING, db_column="network_id",
+        related_name="series_networks",
+    )
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "bridge_series_network"
+
+    def __str__(self):
+        return f"{self.series_id}/{self.network_id}"

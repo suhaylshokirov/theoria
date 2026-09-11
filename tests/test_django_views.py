@@ -32,6 +32,7 @@ from django.test.utils import setup_test_environment, teardown_test_environment 
 from movies.models import (  # noqa: E402
     Company, Country, Credit, Genre, Language, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person,
+    Series, SeriesRating,
 )
 
 client = Client()
@@ -338,6 +339,247 @@ def test_movie_list_genre_survives_pagination():
 
     base_query = response.context["base_query"]
     assert "genre=horror" in base_query
+
+
+# ---------------------------------------------------------------------------
+# series_list / series_detail
+# ---------------------------------------------------------------------------
+
+
+def _series(series_id=1, name="Test Show", slug="test-show"):
+    return Series(
+        series_id=series_id,
+        name=name,
+        slug=slug,
+        first_air_date=date(2011, 1, 1),
+        last_air_date=date(2019, 1, 1),
+        number_of_seasons=8,
+        number_of_episodes=73,
+        status="Ended",
+    )
+
+
+def test_series_list_returns_200_with_pagination():
+    shows = [_series(series_id=i, name=f"Show {i}", slug=f"show-{i}") for i in range(1, 4)]
+
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = shows
+
+        response = client.get("/tv/")
+
+    assert response.status_code == 200
+    assert list(response.context["page_obj"]) == shows
+    assert response.context["q"] == ""
+    assert response.context["sort"] == "first_air"
+
+
+def test_series_list_search_and_sort():
+    show = _series()
+
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [show]
+
+        response = client.get("/tv/", {"q": "test", "sort": "rating"})
+
+    assert response.status_code == 200
+    qs.filter.assert_called_once_with(name__icontains="test")
+    qs.annotate.assert_called_once()
+    assert response.context["q"] == "test"
+    assert response.context["sort"] == "rating"
+
+
+def test_series_list_sort_by_rating_uses_the_imdb_annotation():
+    """SERIES_SORTS["rating"] and the card display both read the same
+    Max("seriesrating__rating", filter=source="imdb") annotation — sorting
+    and what each card shows can never disagree."""
+    from django.db.models import Max, Q
+
+    show = _series()
+
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
+        qs = series_mgr.using.return_value.all.return_value
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [show]
+
+        response = client.get("/tv/", {"sort": "rating"})
+
+    assert response.status_code == 200
+    (_, kwargs), = qs.annotate.call_args_list
+    imdb_rating = kwargs["imdb_rating"]
+    assert isinstance(imdb_rating, Max)
+    assert imdb_rating.source_expressions[0].name == "seriesrating__rating"
+    assert imdb_rating.filter == Q(seriesrating__source="imdb")
+    (order_expr,), _ = qs.order_by.call_args
+    assert order_expr.expression.name == "imdb_rating"
+
+
+def test_series_list_invalid_sort_falls_back_to_first_air():
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+
+        response = client.get("/tv/", {"sort": "bogus"})
+
+    assert response.status_code == 200
+    assert response.context["sort"] == "first_air"
+
+
+def test_series_list_ajax_request_renders_results_fragment_only():
+    show = _series()
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [show]
+
+        response = client.get("/tv/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "series-grid" in content
+    assert "<html" not in content
+    assert "<!DOCTYPE" not in content
+
+
+def test_series_list_filters_by_genre():
+    """?genre= narrows the catalog via bridge_series_genre — a real bridge
+    (unlike movie_list()'s fact_movie_metrics join), so this needs no
+    .distinct() dedupe guard."""
+    show = _series()
+
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Drama")]
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [show]
+
+        response = client.get("/tv/", {"genre": "drama"})
+
+    assert response.status_code == 200
+    qs.filter.assert_called_once_with(series_genres__genre_id=27)
+    assert response.context["genre"] == "drama"
+    assert response.context["genre_choices"] == [("drama", "Drama")]
+    assert 'id="series-genre" data-menu' in response.content.decode()
+
+
+def test_series_list_unknown_genre_falls_back_to_unfiltered():
+    show = _series()
+
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Drama")]
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [show]
+
+        response = client.get("/tv/", {"genre": "nonsense"})
+
+    assert response.status_code == 200
+    for _, kwargs in qs.filter.call_args_list:
+        assert "series_genres__genre_id" not in kwargs
+    assert response.context["genre"] == ""
+
+
+def test_series_list_genre_composes_with_name_sort():
+    """The genre filter and a non-default sort must both take effect at once."""
+    show = _series()
+
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(28, "Comedy")]
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [show]
+
+        response = client.get("/tv/", {"genre": "comedy", "sort": "name"})
+
+    assert response.status_code == 200
+    qs.filter.assert_called_once_with(series_genres__genre_id=28)
+    (order_expr,), _ = qs.order_by.call_args
+    assert order_expr.expression.name == "name"
+    assert response.context["sort"] == "name"
+
+
+def test_series_list_genre_survives_pagination():
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Drama")]
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+
+        response = client.get("/tv/", {"genre": "drama"})
+
+    base_query = response.context["base_query"]
+    assert "genre=drama" in base_query
+
+
+def test_series_detail_returns_200_with_expected_context():
+    show = _series()
+
+    with patch("movies.views.get_object_or_404", return_value=show), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(
+        SeriesRating, "objects", new=MagicMock()
+    ) as rating_mgr:
+        genre_mgr.using.return_value.filter.return_value.order_by.return_value = []
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
+
+        response = client.get("/tv/test-show/")
+
+    assert response.status_code == 200
+    assert response.context["series"] == show
+    assert response.context["year_span"] == "2011–2019"
+
+
+def test_series_detail_404_when_missing():
+    from django.http import Http404
+
+    with patch("movies.views.get_object_or_404", side_effect=Http404()):
+        response = client.get("/tv/does-not-exist/")
+
+    assert response.status_code == 404
 
 
 # ---------------------------------------------------------------------------

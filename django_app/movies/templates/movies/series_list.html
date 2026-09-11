@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — TV Shows{% endblock %}
+
+{% block content %}
+{% include "movies/_sheet_header.html" with title="TV Shows" sub="Every show the warehouse holds. Search by name, narrow by genre, or reorder by what was measured." only %}
+
+<section class="sheet-section">
+    <div class="toolbar">
+        {% comment %} Same live-filter contract as movie_list.html — see its
+           docstring. Plain GET form underneath, so it still works with no
+           JS — see _series_results.html's docstring. {% endcomment %}
+        <form method="get" action="{% url 'movies:series_list' %}" data-live-filter data-live-targets="#series-grid">
+            <div class="field">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search shows" aria-label="Search TV shows by name">
+            </div>
+            {% comment %} No Revenue segment — TV has no money measures. {% endcomment %}
+            <fieldset class="segmented">
+                <legend class="visually-hidden">Order by</legend>
+                <input type="radio" name="sort" id="sort-first-air" value="first_air" {% if sort == "first_air" %}checked{% endif %}>
+                <label for="sort-first-air">Newest</label>
+                <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
+                <label for="sort-rating">Rated</label>
+                <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
+                <label for="sort-name">A–Z</label>
+            </fieldset>
+            <div class="field">
+                <label for="series-genre" class="visually-hidden">Filter by genre</label>
+                <select name="genre" id="series-genre" data-menu>
+                    <option value="">Any genre</option>
+                    {% for slug, name in genre_choices %}
+                    <option value="{{ slug }}" {% if genre == slug %}selected{% endif %}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="apply-btn">Apply</button>
+        </form>
+    </div>
+
+    {% include "movies/_series_grid.html" %}
+</section>
+{% endblock %}

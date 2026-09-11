@@ -128,6 +128,7 @@
             {% with vn=request.resolver_match.url_name %}
             <div class="nav-links" id="nav-links">
                 <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>Movies</a>
+                <a href="{% url 'movies:series_list' %}"{% if vn in "series_list,series_detail" %} aria-current="page"{% endif %}>TV Shows</a>
                 <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>People</a>
                 <a href="{% url 'movies:studio_list' %}"{% if vn in "studio_list,studio_detail" %} aria-current="page"{% endif %}>Studios</a>
                 <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>

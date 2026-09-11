@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% load tmdb_images %}
+
+{% block title %}Theoria — {{ series.name }}{% endblock %}
+
+{% comment %} A minimal record — the full show page (cast/crew, "Created by",
+   networks, studios, countries, languages, the season/episode grid) is Task
+   87-88. This exists now only so /tv/<slug>/ resolves; it reuses the same
+   .specimen shell movie_detail.html uses, so Task 87 grows this page rather
+   than replacing it. {% endcomment %}
+{% block content %}
+<article class="specimen">
+    <div class="specimen-plate">
+        {% if series.poster_path %}
+        <img class="poster" src="{{ series.poster_path|tmdb_image:'w342' }}" alt="{{ series.name }} poster" decoding="async">
+        {% else %}
+        <div class="placeholder" aria-hidden="true">◻</div>
+        {% endif %}
+        {% if year_span %}<p class="plate-caption mono">{{ year_span }}</p>{% endif %}
+    </div>
+
+    <div class="specimen-record">
+        <h1 class="sheet-title">{{ series.name }}</h1>
+        {% if series.original_name and series.original_name != series.name %}
+        <p class="specimen-original-title mono">originally &ldquo;{{ series.original_name }}&rdquo;</p>
+        {% endif %}
+        {% if series.tagline %}<p class="specimen-tagline">{{ series.tagline }}</p>{% endif %}
+        {% if series.overview %}<p class="specimen-synopsis">{{ series.overview }}</p>{% endif %}
+
+        <dl class="record-list">
+            {% if series_rating.rating %}
+            <div class="record-row record-row--rating">
+                <dt class="label">Rating</dt>
+                <dd>{% include "movies/_rating_badge.html" with rating=series_rating.rating vote_count=series_rating.vote_count imdb_id=series.imdb_id only %}</dd>
+            </div>
+            {% endif %}
+            <div class="record-row">
+                <dt class="label">First aired</dt>
+                <dd class="mono">{% if series.first_air_date %}{{ series.first_air_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
+            </div>
+            <div class="record-row">
+                <dt class="label">Last aired</dt>
+                <dd class="mono">{% if series.last_air_date %}{{ series.last_air_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
+            </div>
+            <div class="record-row">
+                <dt class="label">Status</dt>
+                <dd>{{ series.status|default:"—" }}</dd>
+            </div>
+            <div class="record-row">
+                <dt class="label">Seasons</dt>
+                <dd class="mono">{{ series.number_of_seasons|default:"—" }}</dd>
+            </div>
+            <div class="record-row">
+                <dt class="label">Episodes</dt>
+                <dd class="mono">{{ series.number_of_episodes|default:"—" }}</dd>
+            </div>
+        </dl>
+
+        {% comment %} Same slug-built link contract as movie_detail.html's genre
+           chips (Task 71) — the slug comes from the same django.utils.text.slugify
+           the view's genre_choices map uses, so the two can't drift. {% endcomment %}
+        {% if genres %}
+        <div class="chips">
+            {% for genre in genres %}
+            <a class="chip" href="{% url 'movies:series_list' %}?genre={{ genre.genre_name|slugify }}">{{ genre.genre_name }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</article>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% comment %} The poster grid + pager for /tv/, mirroring _movie_grid.html.
+   Separate partial from series_list.html so static/js/theoria.js's
+   initLiveFilter() can swap just this region as the filter form changes.
+   aria-live so the swap is announced to screen readers. {% endcomment %}
+<div id="series-grid" aria-live="polite">
+    <div class="poster-grid">
+        {% for series in page_obj %}
+        {% include "movies/_series_card.html" with series=series only %}
+        {% empty %}
+        <p class="empty">
+            {% if q %}No shows match “{{ q }}”. Try a shorter title.
+            {% elif genre %}No shows match this filter. Try loosening it.
+            {% else %}No shows loaded yet. Run the pipeline to fill the catalog.{% endif %}
+        </p>
+        {% endfor %}
+    </div>
+
+    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query=base_query only %}
+</div>
