@@ -196,18 +196,29 @@ def _bronze_imdb_ratings_row_count(bucket: str, ingestion_date: dt.date) -> int:
         return 0
 
 
-def _bronze_genre_count(bucket: str, ingestion_date: dt.date) -> int:
-    """Count genres in the single Bronze genres.json payload for a date. 0 if missing."""
-    key = s3_utils.build_path("bronze", "genres", ingestion_date, "genres.json")
+def _bronze_genre_ids(bucket: str, ingestion_date: dt.date, filename: str) -> set[int]:
+    """genre ids from one Bronze genres payload for a date. Empty set if missing."""
+    key = s3_utils.build_path("bronze", "genres", ingestion_date, filename)
     client = s3_utils.get_s3_client()
     try:
         response = client.get_object(Bucket=bucket, Key=key)
     except client.exceptions.NoSuchKey:
-        return 0
+        return set()
     except Exception:
-        return 0
+        return set()
     payload = json.loads(response["Body"].read())
-    return len(payload.get("genres", []))
+    return {g["id"] for g in payload.get("genres", []) if g.get("id") is not None}
+
+
+def _bronze_genre_count(bucket: str, ingestion_date: dt.date) -> int:
+    """Distinct genre ids Bronze provided for a date: genres.json, unioned with
+    genres_tv.json when present (Task 78's with_tv merge — 8 ids are shared
+    between the two TMDB lists, so summing the two files' lengths would
+    overcount; transform_genres dedupes on genre_id and this must match it).
+    0 if the movie file itself is missing."""
+    ids = _bronze_genre_ids(bucket, ingestion_date, "genres.json")
+    ids |= _bronze_genre_ids(bucket, ingestion_date, "genres_tv.json")
+    return len(ids)
 
 
 # ---------------------------------------------------------------------------

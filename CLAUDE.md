@@ -143,17 +143,19 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> **30 tables** on the live Neon warehouse (and the local replica) as of 2026-09-10. The **18
+> **30 tables** on the live Neon warehouse (and the local replica) as of 2026-09-11. The **18
 > movie-side tables** were verified 2026-09-06 against `information_schema` and a fresh scratch DB
 > from `01`–`03` (they match table-for-table): 9 dimensions, 4 facts, 3 bridges, 1
 > repeating-attribute (`person_alias`, Task 72), 1 operational (`etl_watermarks`). Task 74 added
 > `dim_movie_video`; Task 76's live `run_refresh` populated it (~17.3k rows / ~1.2k films as of
-> 2026-09-07, replace-loaded nightly). **Task 85 applied the 12 TV tables** — `dim_series`,
-> `dim_network`, `dim_season`, `dim_episode`, `fact_series_credit`, `fact_series_rating`,
-> `fact_episode_rating`, and `bridge_series_{genre,company,country,language,network}` — to **both**
-> Neon and the replica (DDL `19`–`22`, also folded into `01`/`02`); their columns and indexes are
-> documented in the `### Feature — TV Shows` block in `tasks.md` and each DDL file's header.
-> Population runs with the first Task 85 `--with-tv` load. `dim_actor`, `dim_director`, `fact_cast`
+> 2026-09-07, replace-loaded nightly). **Task 85 applied and populated the 12 TV tables** —
+> `dim_series`, `dim_network`, `dim_season`, `dim_episode`, `fact_series_credit`,
+> `fact_series_rating`, `fact_episode_rating`, and `bridge_series_{genre,company,country,language,
+> network}` — on **both** Neon and the replica (DDL `19`–`22`, also folded into `01`/`02`); their
+> columns and indexes are documented in the `### Feature — TV Shows` block in `tasks.md` and each
+> DDL file's header. Live-populated 2026-09-11 via `weekly-discovery`: `dim_series` 734,
+> `dim_episode` 52,612 (across the first `TV_SEASONS_MAX_NEW`-capped 300 series; the rest fill over
+> subsequent nightly runs), `fact_series_credit` 386,326. `dim_actor`, `dim_director`, `fact_cast`
 > and `fact_crew` were dropped in Task 53; `fact_casting` was replaced in Task 35.
 > `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`22` are migrations for an existing DB (once
 > `11` drops tables, "run every file in order" ≠ "build the current schema" — see README §2).

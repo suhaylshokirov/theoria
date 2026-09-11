@@ -144,6 +144,53 @@ def test_bronze_genre_count_returns_zero_when_missing():
     assert count == 0
 
 
+def test_bronze_genre_count_unions_movie_and_tv_lists_without_double_counting(monkeypatch):
+    """Task 85: with_tv is unconditional now, so genres_tv.json always exists
+    beside genres.json. 8 ids are shared between the two real TMDB lists
+    (measured in tasks.md) — summing the two files' lengths would overcount
+    them; the check must match transform_genres' dedupe-on-id merge."""
+    movie_bytes = json.dumps({"genres": [{"id": 1}, {"id": 2}, {"id": 3}]}).encode()
+    tv_bytes = json.dumps({"genres": [{"id": 2}, {"id": 3}, {"id": 4}]}).encode()
+
+    mock_s3 = MagicMock()
+    mock_s3.exceptions.NoSuchKey = KeyError
+
+    def fake_get_object(Bucket, Key):
+        body = MagicMock()
+        body.read.return_value = tv_bytes if "genres_tv.json" in Key else movie_bytes
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = fake_get_object
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        count = _bronze_genre_count("bucket", dt.date(2026, 9, 11))
+
+    assert count == 4  # {1, 2, 3} | {2, 3, 4} — not 3 + 3
+
+
+def test_bronze_genre_count_movie_only_when_tv_file_absent():
+    """A pre-Task-85 partition has no genres_tv.json — the count stays
+    movie-only rather than raising."""
+    movie_bytes = json.dumps({"genres": [{"id": 1}, {"id": 2}]}).encode()
+
+    mock_s3 = MagicMock()
+    mock_s3.exceptions.NoSuchKey = KeyError
+
+    def fake_get_object(Bucket, Key):
+        if "genres_tv.json" in Key:
+            raise mock_s3.exceptions.NoSuchKey("missing")
+        body = MagicMock()
+        body.read.return_value = movie_bytes
+        return {"Body": body}
+
+    mock_s3.get_object.side_effect = fake_get_object
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        count = _bronze_genre_count("bucket", dt.date(2026, 6, 22))
+
+    assert count == 2
+
+
 def test_bronze_imdb_ratings_row_count_parses_gzip_tsv():
     import gzip
 
@@ -191,7 +238,10 @@ def _mock_s3_with_parquet(df: pd.DataFrame) -> MagicMock:
 
     def fake_get_object(Bucket, Key):
         body = MagicMock()
-        body.read.return_value = genre_bytes if "genres.json" in Key else parquet_bytes
+        # "genres" also routes genres_tv.json here — _bronze_genre_count (Task
+        # 85) now unions both Bronze genre files, and this fixture models a
+        # partition with no TV genres.
+        body.read.return_value = genre_bytes if "genres" in Key else parquet_bytes
         return {"Body": body}
 
     mock_s3.get_object.side_effect = fake_get_object
@@ -286,7 +336,9 @@ def test_check_row_count_sanity_companies_compares_distinct_ids_not_row_count(mo
 
     def fake_get_object(Bucket, Key):
         body = MagicMock()
-        if "genres.json" in Key:
+        # "genres" also routes genres_tv.json here — _bronze_genre_count (Task
+        # 85) now unions both Bronze genre files.
+        if "genres" in Key:
             body.read.return_value = genre_bytes
         elif "movie_companies" in Key:
             body.read.return_value = companies_bytes
@@ -329,7 +381,9 @@ def test_check_row_count_sanity_companies_fails_when_warehouse_shrinks(monkeypat
 
     def fake_get_object(Bucket, Key):
         body = MagicMock()
-        if "genres.json" in Key:
+        # "genres" also routes genres_tv.json here — _bronze_genre_count (Task
+        # 85) now unions both Bronze genre files.
+        if "genres" in Key:
             body.read.return_value = genre_bytes
         elif "movie_companies" in Key:
             body.read.return_value = companies_bytes
@@ -388,7 +442,9 @@ def test_check_row_count_sanity_person_aliases_pass_and_fail(monkeypatch):
 
     def fake_get_object(Bucket, Key):
         body = MagicMock()
-        if "genres.json" in Key:
+        # "genres" also routes genres_tv.json here — _bronze_genre_count (Task
+        # 85) now unions both Bronze genre files.
+        if "genres" in Key:
             body.read.return_value = genre_bytes
         elif "person_aliases" in Key:
             body.read.return_value = aliases_bytes
@@ -461,7 +517,9 @@ def test_check_row_count_sanity_countries_and_languages_compare_distinct_ids(mon
 
     def fake_get_object(Bucket, Key):
         body = MagicMock()
-        if "genres.json" in Key:
+        # "genres" also routes genres_tv.json here — _bronze_genre_count (Task
+        # 85) now unions both Bronze genre files.
+        if "genres" in Key:
             body.read.return_value = genre_bytes
         elif "movie_countries" in Key:
             body.read.return_value = countries_bytes
@@ -537,7 +595,9 @@ def test_check_row_count_sanity_imdb_ratings_pass_when_consistent():
 
     def fake_get_object(Bucket, Key):
         body = MagicMock()
-        if "genres.json" in Key:
+        # "genres" also routes genres_tv.json here — _bronze_genre_count (Task
+        # 85) now unions both Bronze genre files.
+        if "genres" in Key:
             body.read.return_value = genre_bytes
         elif "bronze/imdb_ratings" in Key:
             body.read.return_value = ratings_tsv_gz
@@ -605,7 +665,9 @@ def test_check_row_count_sanity_imdb_ratings_fails_when_warehouse_shrinks():
 
     def fake_get_object(Bucket, Key):
         body = MagicMock()
-        if "genres.json" in Key:
+        # "genres" also routes genres_tv.json here — _bronze_genre_count (Task
+        # 85) now unions both Bronze genre files.
+        if "genres" in Key:
             body.read.return_value = genre_bytes
         elif "bronze/imdb_ratings" in Key:
             raise mock_s3.exceptions.NoSuchKey("missing")
@@ -669,7 +731,9 @@ def _mock_s3_for_full_row_count_sanity(extra_branches: dict[str, bytes]) -> Magi
 
     def fake_get_object(Bucket, Key):
         body = MagicMock()
-        if "genres.json" in Key:
+        # "genres" also routes genres_tv.json here — _bronze_genre_count (Task
+        # 85) now unions both Bronze genre files.
+        if "genres" in Key:
             body.read.return_value = genre_bytes
         else:
             body.read.return_value = next(
