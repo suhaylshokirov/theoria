@@ -103,6 +103,8 @@
             {% endif %}
         </dl>
 
+        {% include "movies/_collection_actions.html" with content_type="series" content_id=series.series_id collection_flags=collection_flags request=request only %}
+
         {% comment %} Same slug-built link contract as movie_detail.html's genre
            chips (Task 71) — the slug comes from the same django.utils.text.slugify
            the view's genre_choices map uses, so the two can't drift. {% endcomment %}

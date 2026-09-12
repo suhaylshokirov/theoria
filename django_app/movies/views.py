@@ -2,11 +2,14 @@ import itertools
 from datetime import date
 
 from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
 from django.db.models import Avg, Count, F, Max, Min, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 from django.utils.text import slugify
 
+from core.models import CollectionItem
+from core.services import collection_flags
 
 from movies.models import (
     Company, Credit, Episode, Genre, Movie, MovieCompany,
@@ -421,6 +424,7 @@ def director_list(request):
     return _person_list(request, _person_queryset("Directing"), "Directing", "directing")
 
 
+@login_required
 def movie_detail(request, movie_slug):
     """Single movie: core facts, genres, directors, and cast."""
     movie = get_object_or_404(
@@ -550,6 +554,9 @@ def movie_detail(request, movie_slug):
         "languages": languages,
         "movie_rating": movie_rating,
         "trailer": trailer,
+        "collection_flags": collection_flags(
+            request.user, CollectionItem.MOVIE, movie_id
+        ),
     }
     return render(request, "movies/movie_detail.html", context)
 
@@ -624,6 +631,7 @@ def _reconcile_languages(original_language, language_rows):
     return names
 
 
+@login_required
 def series_detail(request, series_slug):
     """One show: mirrors movie_detail() — one query for every credit, split
     into cast/crew and merged with the same _merge_crew()/_department_rank()
@@ -792,6 +800,9 @@ def series_detail(request, series_slug):
         "seasons": seasons,
         "year_span": _series_year_span(series),
         "trailer": trailer,
+        "collection_flags": collection_flags(
+            request.user, CollectionItem.SERIES, series.series_id
+        ),
     }
     return render(request, "movies/series_detail.html", context)
 
@@ -1118,14 +1129,17 @@ def _redirect_to_person(slug):
     return redirect("movies:person_detail", person_slug=person.slug, permanent=True)
 
 
+@login_required
 def actor_detail(request, actor_slug):
     return _redirect_to_person(actor_slug)
 
 
+@login_required
 def director_detail(request, director_slug):
     return _redirect_to_person(director_slug)
 
 
+@login_required
 def person_detail(request, person_slug):
     """One person, every title they worked on — film or show (Task 89 folded
     fact_series_credit into the same filmography fact_credit already fed),

@@ -240,6 +240,74 @@
     });
   }
 
+  /* --- Account dialog -----------------------------------------------------
+     Google is a normal link so the OAuth redirect remains browser-native.
+     The email row is a disabled placeholder until that separate provider is
+     implemented. Native dialog methods provide focus management and Escape
+     handling, while the attribute fallback keeps the trigger usable in older
+     engines. */
+
+  function initAuthDialog() {
+    var trigger = document.getElementById("account-trigger");
+    var dialog = document.getElementById("auth-dialog");
+    if (!trigger || !dialog) return;
+
+    var closeButtons = dialog.querySelectorAll("[data-auth-close]");
+    var supportsModal = typeof dialog.showModal === "function";
+
+    function setExpanded(open) {
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    function close(restoreFocus) {
+      if (dialog.open && typeof dialog.close === "function") {
+        dialog.close();
+      } else {
+        dialog.removeAttribute("open");
+        dialog.classList.remove("is-open");
+      }
+      setExpanded(false);
+      if (restoreFocus) trigger.focus();
+    }
+
+    function open() {
+      if (supportsModal) dialog.showModal();
+      else dialog.setAttribute("open", "");
+      dialog.classList.add("is-open");
+      setExpanded(true);
+      var first = dialog.querySelector("[data-auth-close], a[href], button:not([disabled])");
+      if (first) first.focus();
+    }
+
+    trigger.addEventListener("click", function () {
+      if (dialog.open) close(true);
+      else open();
+    });
+
+    closeButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        close(true);
+      });
+    });
+
+    dialog.addEventListener("click", function (e) {
+      if (e.target === dialog) close(true);
+    });
+
+    dialog.addEventListener("close", function () {
+      dialog.classList.remove("is-open");
+      setExpanded(false);
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && dialog.open && !supportsModal) close(true);
+    });
+
+    window.addEventListener("pageshow", function () {
+      if (dialog.open) close(false);
+    });
+  }
+
   /* --- Client-side paging ----------------------------------------------------
      Used by the movie page for cast and crew. Everything is already in the
      document; this only shows a window of it, so "Next" is a repaint rather
@@ -841,6 +909,7 @@
     initThemeToggle();
     initNavToggle();
     initAssistant();
+    initAuthDialog();
     initPagedSections();
     initSeasonPicker();
     initFilterMenu();

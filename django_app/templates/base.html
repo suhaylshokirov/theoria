@@ -149,6 +149,61 @@
                     <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/>
                 </svg>
             </button>
+            <button type="button" class="account-trigger" id="account-trigger"
+                    aria-haspopup="dialog" aria-controls="auth-dialog" aria-expanded="false"
+                    aria-label="{% if request.user.is_authenticated %}Open account for {{ request.user.username }}{% else %}Sign in{% endif %}">
+                <svg class="account-trigger__icon" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                     stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="8" r="3.25"/>
+                    <path d="M5.5 20c.65-3.25 2.82-5 6.5-5s5.85 1.75 6.5 5"/>
+                </svg>
+                <span class="account-trigger__name">{% if request.user.is_authenticated %}{{ request.user.username }}{% else %}Sign in{% endif %}</span>
+            </button>
+
+            <dialog class="auth-dialog" id="auth-dialog" aria-labelledby="auth-dialog-title">
+                <div class="auth-dialog__sheet">
+                    <div class="auth-dialog__topline">
+                        <span class="label">Account access</span>
+                        <button type="button" class="auth-dialog__close" data-auth-close
+                                aria-label="Close sign-in dialog">Close</button>
+                    </div>
+
+                    {% if request.user.is_authenticated %}
+                    <span class="auth-dialog__eyebrow label">Signed in</span>
+                    <h2 class="auth-dialog__title" id="auth-dialog-title">Your account</h2>
+                    <dl class="auth-profile">
+                        <div class="auth-profile__row">
+                            <dt class="label">Login</dt>
+                            <dd>{{ request.user.username }}</dd>
+                        </div>
+                        <div class="auth-profile__row">
+                            <dt class="label">Email</dt>
+                            <dd>{{ request.user.email }}</dd>
+                        </div>
+                    </dl>
+                    <div class="auth-account-links">
+                        <a class="auth-signout" href="{% url 'account:index' %}">Your collections</a>
+                        <form method="post" action="{% url 'core:logout' %}">
+                            {% csrf_token %}
+                            <button class="auth-signout" type="submit">Sign out</button>
+                        </form>
+                    </div>
+                    {% else %}
+                    <span class="auth-dialog__eyebrow label">Welcome to Theoria</span>
+                    <h2 class="auth-dialog__title" id="auth-dialog-title">Account access</h2>
+                    <p class="auth-dialog__intro">Browse freely. Sign in when you want to open a detail page, view analytics, or keep your own lists.</p>
+                    <div class="auth-options">
+                        {% if google_enabled %}
+                        <a class="auth-provider auth-provider--google" href="{% url 'core:google_login' %}?next={{ request.get_full_path|urlencode }}">Continue with Google</a>
+                        {% endif %}
+                        <a class="auth-provider" href="{% url 'core:login' %}?next={{ request.get_full_path|urlencode }}">Sign in with email</a>
+                        <a class="auth-provider" href="{% url 'core:signup' %}?next={{ request.get_full_path|urlencode }}">Create an account</a>
+                    </div>
+                    <p class="auth-dialog__note">No password required. We will email you a six-digit code.</p>
+                    {% endif %}
+                </div>
+            </dialog>
         </nav>
     </header>
 
