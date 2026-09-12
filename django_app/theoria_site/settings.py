@@ -71,9 +71,11 @@ CSRF_TRUSTED_ORIGINS = [
 
 # The /admin/ route is served only where it can actually work. Nothing in the
 # warehouse is registered with it (every model is managed = False and
-# read-only), and the deployed function has no persistent database behind
-# django.contrib.auth -- so on Vercel the route would be a guaranteed 500 on
-# a public URL. Local development keeps it.
+# read-only) -- and now that AUTH_DATABASE_URL gives 'default' a real,
+# persistent home on Vercel too (see DATABASES above), the route would no
+# longer 500 there. It still stays local-only, deliberately: a public admin
+# login form is attack surface this site has no use for, since nothing an
+# admin would manage is reachable from a deployed instance anyway.
 ADMIN_ENABLED = not ON_VERCEL
 
 
@@ -163,7 +165,46 @@ DATABASES = {
     },
 }
 
+# 'default' is Django's own database -- the accounts app, sessions, and (local
+# only) the admin. Unlike 'warehouse' it is NOT read-only and DOES take real
+# migrations, so it needs a durable home once deployed rather than the SQLite
+# file above.
+#
+# ON_VERCEL with no AUTH_DATABASE_URL is refused outright rather than falling
+# back to the SQLite default: that file lives on Vercel's ephemeral /tmp,
+# wiped between invocations, so a reader who signs up would silently lose
+# their account on the next cold start. Failing loud here, before Django
+# touches a request, is cheaper than debugging vanished users later.
+if config.AUTH_DATABASE_URL:
+    _auth_url = urlparse(config.AUTH_DATABASE_URL.replace('postgresql+psycopg2', 'postgresql'))
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': _auth_url.path.lstrip('/'),
+        'USER': _auth_url.username,
+        'PASSWORD': _auth_url.password,
+        'HOST': _auth_url.hostname,
+        'PORT': _auth_url.port,
+        'CONN_MAX_AGE': 600 if ON_VERCEL else 0,
+        'CONN_HEALTH_CHECKS': ON_VERCEL,
+        'OPTIONS': {'sslmode': 'require'} if ON_VERCEL else {},
+    }
+elif ON_VERCEL:
+    raise config.ConfigError(
+        "AUTH_DATABASE_URL is required when deployed: without it, Django's "
+        "own database (accounts, sessions) would point at Vercel's ephemeral "
+        "/tmp filesystem and lose every row between cold starts."
+    )
+
 DATABASE_ROUTERS = ['core.routers.WarehouseRouter']
+
+# Sessions stay signed in for 30 days of inactivity rather than Django's
+# default two weeks, matching a "sign in once, browse for a while" reader
+# rather than a security-sensitive account. Lax (not Strict) so following a
+# link from an email client or another site still arrives signed in.
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
+SESSION_COOKIE_SAMESITE = 'Lax'
+# SESSION_COOKIE_SECURE is set to True under ON_VERCEL in the transport
+# security block below, alongside CSRF_COOKIE_SECURE.
 
 
 # Transport security

@@ -95,6 +95,22 @@ DATABASE_URL = _require("DATABASE_URL")
 # optional, not required.
 NEON_DATABASE_URL = _optional("NEON_DATABASE_URL", "")
 
+# --- User accounts database -------------------------------------------------
+# AUTH_DATABASE_URL is Django's *own* database -- the one it manages with real
+# migrations, holding the accounts app and the session/auth tables. It plays a
+# different role in each environment:
+#   * locally, left blank: settings.py falls back to a SQLite file, since dev
+#     accounts are throwaway and standing up Postgres just for this is not
+#     worth it;
+#   * on Vercel, required: a separate `theoria_auth` database on the same Neon
+#     project as the warehouse (same endpoint/region, different dbname), kept
+#     apart from DATABASE_URL specifically so scripts/sync_warehouse_from_neon.py's
+#     TRUNCATE-and-reload can never reach a user's row. settings.py raises if
+#     this is unset while deployed -- an unset value there would otherwise
+#     silently point Django at Vercel's ephemeral /tmp filesystem, which is
+#     wiped between invocations.
+AUTH_DATABASE_URL = _optional("AUTH_DATABASE_URL", "")
+
 # --- Ingestion tuning ------------------------------------------------------
 MAX_PAGES = int(_optional("MAX_PAGES", "5"))
 
