@@ -160,6 +160,20 @@ IMDB_EPISODES_URL = _optional("IMDB_EPISODES_URL", "https://datasets.imdbws.com/
 DJANGO_SECRET_KEY = _require("DJANGO_SECRET_KEY", role="web")
 DJANGO_DEBUG = _optional("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 
+# --- Email (Task 90) ---------------------------------------------------------
+# All optional: settings.py derives the *backend* from DJANGO_DEBUG rather than
+# a flag here. Locally (DEBUG) the console backend prints the code to the
+# terminal and none of these need a value. Deployed (not DEBUG), settings.py
+# requires EMAIL_HOST to be set -- an empty value there is a misconfiguration,
+# not a silent fallback, since the whole feature depends on this email
+# actually reaching an inbox.
+EMAIL_HOST = _optional("EMAIL_HOST", "")
+EMAIL_PORT = int(_optional("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = _optional("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = _optional("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = _optional("EMAIL_USE_TLS", "True").lower() in ("1", "true", "yes")
+DEFAULT_FROM_EMAIL = _optional("DEFAULT_FROM_EMAIL", "Theoria <no-reply@example.com>")
+
 
 # --- Fail loud -------------------------------------------------------------
 def _check(role: str, needed_by: str) -> None:

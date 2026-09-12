@@ -230,6 +230,32 @@ if ON_VERCEL:
     # would buy nothing here. Set it deliberately if a custom domain is added.
 
 
+# Email (Task 90)
+#
+# The backend is derived from DEBUG, not a separate flag: locally that means
+# the console backend, so a reader signing up needs no SMTP credentials and
+# the code just prints to the terminal. Outside DEBUG (always the case when
+# deployed -- see DEBUG above), an empty EMAIL_HOST is refused outright rather
+# than silently falling back to the console backend, since the deployed site
+# printing a reader's code to a serverless function's logs instead of mailing
+# it would be a silent feature outage, not a usable default.
+DEFAULT_FROM_EMAIL = config.DEFAULT_FROM_EMAIL
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+elif not config.EMAIL_HOST:
+    raise config.ConfigError(
+        "EMAIL_HOST is required outside DEBUG: without it, a reader has no "
+        "way to receive the sign-in code the whole accounts feature depends on."
+    )
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = config.EMAIL_HOST
+    EMAIL_PORT = config.EMAIL_PORT
+    EMAIL_HOST_USER = config.EMAIL_HOST_USER
+    EMAIL_HOST_PASSWORD = config.EMAIL_HOST_PASSWORD
+    EMAIL_USE_TLS = config.EMAIL_USE_TLS
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
