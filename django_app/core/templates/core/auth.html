@@ -12,12 +12,40 @@
         <h1 class="auth-dialog__title" id="auth-page-title">Welcome to Theoria</h1>
         <p class="auth-dialog__intro">Browse the catalogue freely. Sign in when you want to open a detail page, view analytics, or keep your own lists.</p>
         <div class="auth-options">
+            {% if google_enabled %}
+            <a class="auth-provider auth-provider--google" href="{% url 'core:google_login' %}?next={{ next_url|urlencode }}">Continue with Google</a>
+            {% endif %}
             <a class="auth-provider" href="{% url 'core:login' %}?next={{ next_url|urlencode }}">Sign in with email</a>
             <a class="auth-provider" href="{% url 'core:signup' %}?next={{ next_url|urlencode }}">Create an account</a>
         </div>
+        {% elif mode == "verify" %}
+        <h1 class="auth-dialog__title" id="auth-page-title">Enter your code</h1>
+        <p class="auth-dialog__intro">We sent a six-digit code to <strong>{{ email }}</strong>. It expires in 10 minutes.</p>
+        {% if errors %}
+        <div class="auth-errors" role="alert">
+            {% for error in errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}
+        <form class="auth-form" method="post">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next_url }}">
+            <label class="auth-field">
+                <span class="label">Verification code</span>
+                <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" minlength="6" required autofocus aria-describedby="code-help">
+            </label>
+            <p class="auth-help" id="code-help">Check your spam folder if it does not arrive.</p>
+            <button class="btn" type="submit">Verify and continue</button>
+        </form>
+        <div class="auth-code-links">
+            <form method="post" action="{% url 'core:resend_code' %}">
+                {% csrf_token %}
+                <button class="auth-text-button" type="submit">Resend code</button>
+            </form>
+            <a href="{% url 'core:login' %}?next={{ next_url|urlencode }}">Start over</a>
+        </div>
         {% else %}
         <h1 class="auth-dialog__title" id="auth-page-title">{% if mode == "signup" %}Create your account{% else %}Sign in{% endif %}</h1>
-        <p class="auth-dialog__intro">{% if mode == "signup" %}Create an account to save your personal collections and recommendations.{% else %}Enter your details to continue to Theoria.{% endif %}</p>
+        <p class="auth-dialog__intro">{% if mode == "signup" %}Choose a username and use your email to create a password-free account.{% else %}Enter your email and we will send you a one-time code.{% endif %}</p>
         {% if errors %}
         <div class="auth-errors" role="alert">
             {% for error in errors %}<p>{{ error }}</p>{% endfor %}
@@ -28,28 +56,24 @@
             <input type="hidden" name="next" value="{{ next_url }}">
             {% if mode == "signup" %}
             <label class="auth-field">
-                <span class="label">First name</span>
-                <input type="text" name="first_name" value="{{ values.first_name }}" autocomplete="given-name" maxlength="150" required autofocus>
-            </label>
-            <label class="auth-field">
-                <span class="label">Last name</span>
-                <input type="text" name="last_name" value="{{ values.last_name }}" autocomplete="family-name" maxlength="150" required>
+                <span class="label">Username</span>
+                <input type="text" name="username" value="{{ values.username }}" autocomplete="username" minlength="3" maxlength="30" required autofocus>
             </label>
             {% endif %}
             <label class="auth-field">
                 <span class="label">Email</span>
                 <input type="email" name="email" value="{{ values.email }}" autocomplete="email" required{% if mode == "login" %} autofocus{% endif %}>
             </label>
-            <label class="auth-field">
-                <span class="label">Password</span>
-                <input type="password" name="password" autocomplete="{% if mode == 'signup' %}new-password{% else %}current-password{% endif %}" minlength="8" required>
-            </label>
-            <button class="btn" type="submit">{% if mode == "signup" %}Create account{% else %}Sign in{% endif %}</button>
+            <button class="btn" type="submit">Send my code</button>
         </form>
         <p class="auth-switch">
             {% if mode == "signup" %}Already have an account? <a href="{% url 'core:login' %}?next={{ next_url|urlencode }}">Sign in</a>.
             {% else %}New to Theoria? <a href="{% url 'core:signup' %}?next={{ next_url|urlencode }}">Create an account</a>.{% endif %}
         </p>
+        {% if google_enabled %}
+        <div class="auth-divider"><span class="label">Or</span></div>
+        <a class="auth-provider auth-provider--google" href="{% url 'core:google_login' %}?next={{ next_url|urlencode }}">Continue with Google</a>
+        {% endif %}
         {% endif %}
     </article>
 </section>

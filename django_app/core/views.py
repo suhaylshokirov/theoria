@@ -1,32 +1,58 @@
 from __future__ import annotations
 
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.password_validation import validate_password
 from django.core.validators import validate_email
 from django.http import HttpResponseBadRequest, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_http_methods, require_POST
 
-from core.models import Collection, CollectionItem, User
+from core.models import Collection, CollectionItem, EmailCode, User
 from core.services import (
+    CodeRequestError,
+    CodeVerificationError,
     collection_rows,
     ensure_default_collections,
-    generate_username,
+    issue_email_code,
     move_collection_item,
     normalize_email,
     remove_collection_item,
     safe_next,
     toggle_collection_item,
-    validate_name,
+    validate_username,
+    verify_email_code,
 )
+
+CHALLENGE_SESSION_KEY = "email_auth_challenge"
+NEXT_SESSION_KEY = "email_auth_next"
+MODE_SESSION_KEY = "email_auth_mode"
+
 
 def _next_url(request):
     return safe_next(
         request.GET.get("next")
         or request.POST.get("next")
+        or request.session.get(NEXT_SESSION_KEY)
         or "/"
     )
+
+
+def _request_ip(request):
+    return request.META.get("REMOTE_ADDR")
+
+
+def _begin_code_flow(request, *, purpose, email, username="", next_url="/"):
+    challenge = issue_email_code(
+        email=email,
+        purpose=purpose,
+        username=username,
+        request_ip=_request_ip(request),
+    )
+    request.session[CHALLENGE_SESSION_KEY] = str(challenge.pk)
+    request.session[NEXT_SESSION_KEY] = next_url
+    request.session[MODE_SESSION_KEY] = purpose
+    return redirect("core:verify_code")
 
 
 @require_http_methods(["GET"])
@@ -47,44 +73,36 @@ def signup(request):
     if request.method == "GET":
         return render(request, "core/auth.html", context)
 
-    first_name = request.POST.get("first_name", "").strip()
-    last_name = request.POST.get("last_name", "").strip()
+    username = request.POST.get("username", "").strip()
     email = normalize_email(request.POST.get("email", ""))
-    password = request.POST.get("password", "")
-    context["values"] = {"first_name": first_name, "last_name": last_name, "email": email}
+    context["values"] = {"username": username, "email": email}
     errors = []
     try:
-        first_name = validate_name(first_name, "first name")
+        username = validate_username(username)
     except ValueError as exc:
         errors.append(str(exc))
     try:
-        last_name = validate_name(last_name, "last name")
-    except ValueError as exc:
-        errors.append(str(exc))
-    try:
-        email = normalize_email(email)
         validate_email(email)
     except Exception:
         errors.append("Enter a valid email address.")
+    if email and request.user.is_authenticated:
+        errors.append("You are already signed in.")
     if email and User.objects.filter(email=email).exists():
         errors.append("That email already has an account. Sign in instead.")
-    try:
-        validate_password(password)
-    except Exception as exc:
-        errors.extend(exc.messages)
     if errors:
         context["errors"] = errors
         return render(request, "core/auth.html", context, status=400)
-    user = User.objects.create_user(
-        email=email,
-        username=generate_username(first_name, last_name, email),
-        password=password,
-        first_name=first_name,
-        last_name=last_name,
-    )
-    ensure_default_collections(user)
-    login(request, user, backend="core.auth_backends.EmailBackend")
-    return redirect(next_url)
+    try:
+        return _begin_code_flow(
+            request,
+            purpose=EmailCode.SIGNUP,
+            email=email,
+            username=username,
+            next_url=next_url,
+        )
+    except CodeRequestError as exc:
+        context["errors"] = [str(exc)]
+        return render(request, "core/auth.html", context, status=429)
 
 
 @require_http_methods(["GET", "POST"])
@@ -95,7 +113,6 @@ def email_login(request):
         return render(request, "core/auth.html", context)
 
     email = normalize_email(request.POST.get("email", ""))
-    password = request.POST.get("password", "")
     context["values"] = {"email": email}
     try:
         validate_email(email)
@@ -103,12 +120,84 @@ def email_login(request):
         context["errors"] = ["Enter a valid email address."]
         return render(request, "core/auth.html", context, status=400)
 
-    user = authenticate(request, email=email, password=password)
-    if user is None:
-        context["errors"] = ["Email or password is not correct."]
+    try:
+        response = _begin_code_flow(
+            request,
+            purpose=EmailCode.LOGIN,
+            email=email,
+            next_url=next_url,
+        )
+    except CodeRequestError as exc:
+        context["errors"] = [str(exc)]
+        return render(request, "core/auth.html", context, status=429)
+    return response
+
+
+@require_http_methods(["GET", "POST"])
+def verify_code(request):
+    challenge_id = request.session.get(CHALLENGE_SESSION_KEY)
+    if not challenge_id:
+        return redirect(f"{reverse('core:login')}?next={next_url_for_query(_next_url(request))}")
+    challenge = get_object_or_404(EmailCode, pk=challenge_id)
+    next_url = _next_url(request)
+    context = {
+        "mode": "verify",
+        "next_url": next_url,
+        "email": challenge.email,
+        "purpose": challenge.purpose,
+        "username": challenge.username,
+    }
+    if request.method == "GET":
+        return render(request, "core/auth.html", context)
+
+    try:
+        user = verify_email_code(challenge_id, request.POST.get("code"))
+    except CodeVerificationError as exc:
+        context["errors"] = [str(exc)]
         return render(request, "core/auth.html", context, status=400)
-    login(request, user)
+
+    for key in (CHALLENGE_SESSION_KEY, NEXT_SESSION_KEY, MODE_SESSION_KEY):
+        request.session.pop(key, None)
+    login(request, user, backend="core.auth_backends.EmailBackend")
     return redirect(next_url)
+
+
+@require_POST
+def resend_code(request):
+    challenge_id = request.session.get(CHALLENGE_SESSION_KEY)
+    if not challenge_id:
+        return redirect(f"{reverse('core:login')}?next={next_url_for_query(_next_url(request))}")
+    challenge = get_object_or_404(EmailCode, pk=challenge_id)
+    next_url = safe_next(request.session.get(NEXT_SESSION_KEY))
+    try:
+        new_challenge = issue_email_code(
+            email=challenge.email,
+            purpose=challenge.purpose,
+            username=challenge.username,
+            request_ip=_request_ip(request),
+        )
+    except CodeRequestError as exc:
+        return render(
+            request,
+            "core/auth.html",
+            {
+                "mode": "verify",
+                "next_url": next_url,
+                "email": challenge.email,
+                "purpose": challenge.purpose,
+                "username": challenge.username,
+                "errors": [str(exc)],
+            },
+            status=429,
+        )
+    request.session[CHALLENGE_SESSION_KEY] = str(new_challenge.pk)
+    return redirect("core:verify_code")
+
+
+def next_url_for_query(value):
+    from urllib.parse import quote
+
+    return quote(value, safe="")
 
 
 @require_POST

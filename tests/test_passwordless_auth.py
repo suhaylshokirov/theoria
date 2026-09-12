@@ -1,4 +1,4 @@
-"""End-to-end tests for email-and-password auth and personal collections."""
+"""End-to-end tests for email-code auth and personal collections."""
 
 from __future__ import annotations
 
@@ -17,46 +17,60 @@ if str(DJANGO_APP_DIR) not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "theoria_site.settings")
 django.setup()
 
+from django.core import mail  # noqa: E402
 from django.contrib.auth import get_user_model  # noqa: E402
 from django.contrib.auth.hashers import check_password  # noqa: E402
 from django.test import Client, override_settings  # noqa: E402
 from django.urls import reverse  # noqa: E402
 
-from core.models import Collection, CollectionItem  # noqa: E402
+from core.models import Collection, CollectionItem, EmailCode  # noqa: E402
 
 
-TEST_EMAILS = {"password-new@example.com", "password-existing@example.com"}
+TEST_EMAILS = {"otp-new@example.com", "otp-existing@example.com"}
+
+
+def _clear_outbox():
+    getattr(mail, "outbox", []).clear()
 
 
 @pytest.fixture(autouse=True)
 def clean_test_accounts():
+    _clear_outbox()
     get_user_model().objects.filter(email__in=TEST_EMAILS).delete()
+    EmailCode.objects.filter(email__in=TEST_EMAILS).delete()
     yield
+    _clear_outbox()
     get_user_model().objects.filter(email__in=TEST_EMAILS).delete()
+    EmailCode.objects.filter(email__in=TEST_EMAILS).delete()
 
 
-@override_settings(ALLOWED_HOSTS=["testserver"])
-def test_signup_stores_password_and_logs_user_in():
+@override_settings(
+    ALLOWED_HOSTS=["testserver"],
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
+def test_signup_sends_hashed_code_and_logs_user_in():
     client = Client()
-    response = client.post(
-        reverse("core:signup"),
-        {
-            "first_name": "Ada",
-            "last_name": "Lovelace",
-            "email": "Password-New@Example.com",
-            "password": "AnalyticalEngine2026!",
-            "next": "/movies/",
-        },
-    )
+    with patch("core.services.secrets.randbelow", return_value=123456):
+        response = client.post(
+            reverse("core:signup"),
+            {"username": "new-reader", "email": "OTP-New@Example.com", "next": "/movies/"},
+        )
+
+    assert response.status_code == 302
+    assert response["Location"] == reverse("core:verify_code")
+    assert len(getattr(mail, "outbox", [])) == 1
+    assert "123456" in mail.outbox[0].body
+    challenge = EmailCode.objects.get(email="otp-new@example.com")
+    assert challenge.code_hash != "123456"
+    assert check_password("123456", challenge.code_hash)
+
+    response = client.post(reverse("core:verify_code"), {"code": "123456"})
 
     assert response.status_code == 302
     assert response["Location"] == "/movies/"
-    user = get_user_model().objects.get(email="password-new@example.com")
-    assert user.first_name == "Ada"
-    assert user.last_name == "Lovelace"
-    assert user.username == "ada-lovelace"
-    assert user.password != "AnalyticalEngine2026!"
-    assert check_password("AnalyticalEngine2026!", user.password)
+    user = get_user_model().objects.get(email="otp-new@example.com")
+    assert user.username == "new-reader"
+    assert user.has_usable_password() is False
     assert set(user.collections.values_list("kind", flat=True)) == {
         Collection.LIKED,
         Collection.WATCH_LATER,
@@ -65,34 +79,31 @@ def test_signup_stores_password_and_logs_user_in():
     assert client.session["_auth_user_id"] == str(user.pk)
 
 
-@override_settings(ALLOWED_HOSTS=["testserver"])
-def test_login_requires_correct_email_and_password():
+@override_settings(
+    ALLOWED_HOSTS=["testserver"],
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
+def test_login_requires_email_only_and_verifies_code():
     user = get_user_model().objects.create_user(
-        email="password-existing@example.com",
-        username="existing-reader",
-        password="PrivateScreening2026!",
+        email="otp-existing@example.com", username="existing-reader"
     )
     client = Client()
-    response = client.post(
-        reverse("core:login"),
-        {
-            "email": "PASSWORD-EXISTING@Example.com",
-            "password": "PrivateScreening2026!",
-            "next": "/analytics/",
-        },
-    )
+    with patch("core.services.secrets.randbelow", return_value=654321):
+        response = client.post(
+            reverse("core:login"),
+            {"email": "OTP-Existing@Example.com", "next": "/analytics/"},
+        )
+
+    assert response.status_code == 302
+    assert len(getattr(mail, "outbox", [])) == 1
+    challenge = EmailCode.objects.get(email="otp-existing@example.com")
+    assert challenge.purpose == EmailCode.LOGIN
+
+    response = client.post(reverse("core:verify_code"), {"code": "654321"})
 
     assert response.status_code == 302
     assert response["Location"] == "/analytics/"
     assert client.session["_auth_user_id"] == str(user.pk)
-
-    client.logout()
-    response = client.post(
-        reverse("core:login"),
-        {"email": "password-existing@example.com", "password": "wrong-password"},
-    )
-    assert response.status_code == 400
-    assert b"Email or password is not correct." in response.content
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
@@ -109,9 +120,7 @@ def test_protected_routes_redirect_and_public_routes_remain_open():
 @override_settings(ALLOWED_HOSTS=["testserver"])
 def test_authenticated_user_can_toggle_warehouse_content_in_collections():
     user = get_user_model().objects.create_user(
-        email="password-existing@example.com",
-        username="existing-reader",
-        password="PrivateScreening2026!",
+        email="otp-existing@example.com", username="existing-reader"
     )
     client = Client()
     client.force_login(user)
