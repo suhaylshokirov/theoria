@@ -1911,41 +1911,28 @@ def test_person_detail_merges_multi_job_credits_into_one_filmography_row():
         Credit(movie=movie, person=person, department="Directing", job="Director"),
     ]
 
-    with patch("movies.views.get_object_or_404", return_value=person), patch.object(
-        Credit, "objects", new=MagicMock()
-    ) as credit_mgr, patch.object(
-        MovieRating, "objects", new=MagicMock()
-    ) as rating_mgr:
-        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
-        # No .values(...).distinct() guard any more (Task 68) — fact_movie_rating
-        # is one row per (movie, source), so a plain filter+aggregate is correct.
-        rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
-            "avg_rating": Decimal("7.50")
-        }
-        # Same film set powers each poster's own badge — one more query,
-        # still constant regardless of filmography size (Task 68).
-        rating_mgr.using.return_value.filter.return_value.values_list.return_value = [
-            (movie.movie_id, Decimal("7.50")),
-        ]
-
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {movie.movie_id: Decimal("7.50")}):
         response = client.get("/people/test-person/")
 
     assert response.status_code == 200
     filmography = response.context["filmography"]
     # One film, one row — not three, despite three underlying credits.
     assert len(filmography) == 1
+    assert filmography[0]["kind"] == "movie"
     # Department order (Acting, Directing, Editing), and Acting shows the
     # character name rather than the literal job title "Actor".
     assert filmography[0]["job_display"] == "Hero / Director / Editor"
     # Three credits, one film — a person holding several jobs on one title.
     assert response.context["credit_count"] == 3
     assert response.context["film_count"] == 1
+    assert response.context["show_count"] == 0
     # A person with no deathday reads as Active.
     assert response.context["activity"] == "Active"
     assert response.context["avg_rating"] == Decimal("7.50")
     # The poster grid displays exactly the figure the average was computed
-    # from — the annotation attached onto the same Movie instance.
-    assert filmography[0]["movie"].imdb_rating == Decimal("7.50")
+    # from — the annotation attached onto the same title_obj instance.
+    assert filmography[0]["title_obj"].imdb_rating == Decimal("7.50")
 
 
 def test_person_detail_filmography_ratings_use_constant_number_of_queries():
@@ -1961,47 +1948,48 @@ def test_person_detail_filmography_ratings_use_constant_number_of_queries():
         for m in movies
     ]
 
-    with patch("movies.views.get_object_or_404", return_value=person), patch.object(
-        Credit, "objects", new=MagicMock()
-    ) as credit_mgr, patch.object(
-        MovieRating, "objects", new=MagicMock()
-    ) as rating_mgr:
-        credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
-        rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
-            "avg_rating": Decimal("7.00")
-        }
-        rating_mgr.using.return_value.filter.return_value.values_list.return_value = [
-            (m.movie_id, Decimal("7.00")) for m in movies
-        ]
-
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {m.movie_id: Decimal("7.00") for m in movies}):
         response = client.get("/people/test-person/")
 
     assert response.status_code == 200
     assert len(response.context["filmography"]) == 3
-    # Exactly two MovieRating queries — the avg_rating aggregate and the
-    # per-card ratings dict — however many films are in the filmography.
-    assert rating_mgr.using.return_value.filter.call_count == 2
+    assert response.context["avg_rating"] == Decimal("7.00")
     assert all(
-        row["movie"].imdb_rating == Decimal("7.00")
+        row["title_obj"].imdb_rating == Decimal("7.00")
         for row in response.context["filmography"]
     )
 
 
-def _person_detail_mocks(credits, ratings):
-    """Wire the mocked managers person_detail() reads, given a credit list and a
-    {movie_id: Decimal} rating map. Returns a contextlib.ExitStack the caller
-    uses as a `with` block; get_object_or_404 is patched separately."""
-    stack = contextlib.ExitStack()
-    credit_mgr = stack.enter_context(patch.object(Credit, "objects", new=MagicMock()))
-    rating_mgr = stack.enter_context(patch.object(MovieRating, "objects", new=MagicMock()))
-    credit_mgr.using.return_value.filter.return_value.select_related.return_value.order_by.return_value = credits
-    rating_mgr.using.return_value.filter.return_value.aggregate.return_value = {
-        "avg_rating": Decimal("7.00")
-    }
-    rating_mgr.using.return_value.filter.return_value.values_list.return_value = list(
-        ratings.items()
-    )
-    return stack
+@contextlib.contextmanager
+def _person_detail_mocks(credits, ratings, series_credits=None, series_ratings=None):
+    """Mock every manager person_detail() reads, given a movie-credit list and
+    a {movie_id: Decimal} rating map, plus (Task 89) an optional
+    series-credit list and {series_id: Decimal} rating map — both default to
+    "this person has no TV work", the case that must render byte-identically
+    to the pre-Task-89 page. Follows the same named-mocks-in-a-dict shape as
+    _series_detail_mocks; get_object_or_404 is patched separately."""
+    with patch.object(Credit, "objects", new=MagicMock()) as credit_mgr, patch.object(
+        SeriesCredit, "objects", new=MagicMock()
+    ) as series_credit_mgr, patch.object(
+        MovieRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
+        SeriesRating, "objects", new=MagicMock()
+    ) as series_rating_mgr:
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value \
+            .order_by.return_value = credits
+        series_credit_mgr.using.return_value.filter.return_value.select_related.return_value \
+            .order_by.return_value = series_credits or []
+        rating_mgr.using.return_value.filter.return_value.values_list.return_value = list(
+            ratings.items()
+        )
+        series_rating_mgr.using.return_value.filter.return_value.values_list.return_value = list(
+            (series_ratings or {}).items()
+        )
+        yield {
+            "credit": credit_mgr, "series_credit": series_credit_mgr,
+            "rating": rating_mgr, "series_rating": series_rating_mgr,
+        }
 
 
 def test_person_detail_filters_filmography_by_search():
@@ -2020,7 +2008,7 @@ def test_person_detail_filters_filmography_by_search():
 
     assert response.status_code == 200
     page = list(response.context["page_obj"])
-    assert [row["movie"].title for row in page] == ["Alpha"]
+    assert [row["title_obj"].title for row in page] == ["Alpha"]
     # Stats unchanged — both films still counted.
     assert response.context["film_count"] == 2
     assert response.context["q"] == "alph"
@@ -2083,7 +2071,7 @@ def test_person_detail_sorts_filmography_by_title():
 
     assert response.status_code == 200
     assert response.context["sort"] == "title"
-    assert [row["movie"].title for row in response.context["page_obj"]] == [
+    assert [row["title_obj"].title for row in response.context["page_obj"]] == [
         "Amadeus", "Milk", "Zodiac",
     ]
 
@@ -2105,7 +2093,7 @@ def test_person_detail_sort_by_rating_puts_unrated_films_last():
         response = client.get("/people/test-person/", {"sort": "rating"})
 
     assert response.status_code == 200
-    titles = [row["movie"].title for row in response.context["page_obj"]]
+    titles = [row["title_obj"].title for row in response.context["page_obj"]]
     assert titles == ["Film 3", "Film 1", "Film 2"]
 
 
@@ -2224,6 +2212,152 @@ def test_person_detail_no_extra_block_when_person_has_no_bio_or_links():
     assert "specimen-synopsis" not in html
     assert "Elsewhere" not in html
     assert "Born" not in html
+
+
+# --- Task 89: one filmography, films and shows together --------------------
+
+
+def test_person_detail_film_only_person_has_no_tv_markup():
+    """A person with only film credits renders the pre-Task-89 header and
+    section-note exactly — no Shows stat, and the same movies-only search
+    label and section-note text (Task 89 step 5's regression)."""
+    person = _person(name="Test Person")
+    movie = _movie(movie_id=1, title="Solo Film")
+    credits = [
+        Credit(movie=movie, person=person, department="Acting", job="Actor",
+               character_name="Lead", ordering=0),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {1: Decimal("7.0")}):
+        response = client.get("/people/test-person/")
+
+    assert response.status_code == 200
+    assert response.context["show_count"] == 0
+    html = response.content.decode()
+    assert '<span class="stat-label">Shows</span>' not in html
+    assert "aria-label=\"Search Test Person's movies by title\"" in html
+    assert '<span class="section-note">1 movie</span>' in html
+
+
+def test_person_detail_includes_series_credits_in_filmography():
+    """The third requirement of the TV Shows feature: a fact_series_credit
+    row for this person merges into the same filmography a fact_credit row
+    already does, as its own {"kind": "series", ...} entry."""
+    person = _person()
+    movie = _movie(movie_id=1, title="A Movie")
+    show = _series(series_id=1, name="A Show", slug="a-show")
+    credits = [
+        Credit(movie=movie, person=person, department="Acting", job="Actor",
+               character_name="Lead", ordering=0),
+    ]
+    series_credits = [
+        SeriesCredit(series=show, person=person, department="Directing",
+                     job="Director", character_name=""),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(
+                credits, {1: Decimal("7.0")},
+                series_credits=series_credits, series_ratings={1: Decimal("9.0")},
+            ):
+        response = client.get("/people/test-person/")
+
+    assert response.status_code == 200
+    filmography = response.context["filmography"]
+    assert len(filmography) == 2
+    assert {row["kind"] for row in filmography} == {"movie", "series"}
+    series_row = next(row for row in filmography if row["kind"] == "series")
+    assert series_row["title_obj"] is show
+    assert series_row["job_display"] == "Director"
+    assert response.context["film_count"] == 1
+    assert response.context["show_count"] == 1
+    # The header average is over both films' and shows' IMDb figures, not
+    # just the movie side (Task 89 step 4) — (7.0 + 9.0) / 2.
+    assert response.context["avg_rating"] == Decimal("8.0")
+    html = response.content.decode()
+    assert "A Show" in html
+    assert '<span class="stat-label">Shows</span>' in html
+    assert '<span class="section-note">1 movie · 1 show</span>' in html
+
+
+def test_person_detail_filmography_grid_renders_series_card_for_show_rows():
+    """A show's filmography row renders _series_card.html — linking to
+    /tv/<slug>/, not /movies/<slug>/ — with its job_display as the card's
+    sub-line (Task 89 step 3)."""
+    person = _person()
+    show = _series(series_id=1, name="A Show", slug="a-show")
+    series_credits = [
+        SeriesCredit(series=show, person=person, department="Creation",
+                     job="Creator", character_name=""),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks([], {}, series_credits=series_credits):
+        response = client.get("/people/test-person/")
+
+    assert response.status_code == 200
+    assert response.context["film_count"] == 0
+    assert response.context["show_count"] == 1
+    html = response.content.decode()
+    assert 'href="/tv/a-show/"' in html
+    assert "Creator" in html
+
+
+def test_person_detail_sort_by_release_orders_movies_and_shows_together():
+    """release reads release_date for a movie and first_air_date for a show
+    (Task 89 step 2) — both land on the same sort."""
+    person = _person()
+    movie = _movie(movie_id=1, title="Old Movie")
+    movie.release_date = date(2000, 1, 1)
+    show = _series(series_id=1, name="New Show", slug="new-show")
+    show.first_air_date = date(2020, 1, 1)
+    credits = [
+        Credit(movie=movie, person=person, department="Acting", job="Actor",
+               character_name="Lead", ordering=0),
+    ]
+    series_credits = [
+        SeriesCredit(series=show, person=person, department="Acting",
+                     job="Actor", character_name="Lead"),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {1: Decimal("7.0")}, series_credits=series_credits):
+        response = client.get("/people/test-person/", {"sort": "release"})
+
+    assert response.status_code == 200
+    names = [
+        getattr(row["title_obj"], "title", None) or getattr(row["title_obj"], "name", None)
+        for row in response.context["page_obj"]
+    ]
+    assert names == ["New Show", "Old Movie"]
+
+
+def test_person_detail_sort_by_revenue_sorts_shows_after_movies():
+    """Task 89 step 2 decision: Revenue stays a toolbar segment even once a
+    show is in the mix — TV has no revenue measure, so a show reads as a
+    missing value under this sort and sorts last, the same as a movie with
+    no revenue recorded already does, rather than the segment silently doing
+    nothing for a mixed filmography."""
+    person = _person()
+    movie = _movie(movie_id=1, title="Blockbuster")
+    show = _series(series_id=1, name="A Show", slug="a-show")
+    credits = [
+        Credit(movie=movie, person=person, department="Acting", job="Actor",
+               character_name="Lead", ordering=0),
+    ]
+    series_credits = [
+        SeriesCredit(series=show, person=person, department="Acting",
+                     job="Actor", character_name="Lead"),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks(credits, {1: Decimal("7.0")}, series_credits=series_credits):
+        response = client.get("/people/test-person/", {"sort": "revenue"})
+
+    assert response.status_code == 200
+    rows = list(response.context["page_obj"])
+    assert [row["kind"] for row in rows] == ["movie", "series"]
 
 
 # ---------------------------------------------------------------------------
