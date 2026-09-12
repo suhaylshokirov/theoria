@@ -753,6 +753,66 @@
     }
   }
 
+  /* --- Account menu -------------------------------------------------------
+     The signed-in header link (base.html's [data-account-menu]) is a real
+     <a href="/me/"> with the dropdown panel already in the DOM, hidden --
+     so with no JS it is simply a link to the reader page, no enhancement
+     required. With JS on, the trigger's click is redirected into opening the
+     panel instead of navigating. Deliberately not built on initFilterMenu's
+     buildFilterMenu(): that one *constructs* its trigger/panel from a
+     <select> it is replacing; this one only wires up markup base.html has
+     already rendered. */
+  function initAccountMenu() {
+    document.querySelectorAll("[data-account-menu]").forEach(function (wrap) {
+      var trigger = wrap.querySelector("[data-account-trigger]");
+      var panel = wrap.querySelector("[data-account-panel]");
+      if (!trigger || !panel) return;
+
+      var open = false;
+
+      function setOpen(next) {
+        open = next;
+        panel.hidden = !next;
+        trigger.setAttribute("aria-expanded", next ? "true" : "false");
+      }
+
+      function onOutside(e) {
+        if (!wrap.contains(e.target)) close();
+      }
+
+      function openMenu() {
+        if (open) return;
+        setOpen(true);
+        document.addEventListener("pointerdown", onOutside, true);
+      }
+
+      function close() {
+        if (!open) return;
+        setOpen(false);
+        document.removeEventListener("pointerdown", onOutside, true);
+      }
+
+      trigger.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (open) close();
+        else openMenu();
+      });
+
+      wrap.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          close();
+          trigger.focus();
+        }
+      });
+
+      // A back/forward-cache restore can bring the page back with the panel
+      // open, same reasoning as initFilterMenu's pageshow listener.
+      window.addEventListener("pageshow", function () {
+        close();
+      });
+    });
+  }
+
   function init() {
     syncThemeColor();
     // Covers all three ways the theme moves — the header toggle, an OS change
@@ -769,6 +829,7 @@
     initBioToggle();
     initVideoEmbeds();
     initCodeInput();
+    initAccountMenu();
   }
 
   if (document.readyState === "loading") {

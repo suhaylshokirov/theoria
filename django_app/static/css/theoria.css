@@ -1304,6 +1304,67 @@ input[type="email"]:focus {
   background: var(--lime-mark);
 }
 
+/* The signed-in header menu (Task 95) reuses .menu/.menu-trigger/.menu-panel
+   wholesale -- built for the filter dropdown, but already generic enough to
+   host an account menu with only these additions. Two of .menu's own defaults
+   are toolbar-specific and have to be overridden rather than inherited: its
+   flex:1 1 auto (meant to fill a .field row next to a search input) would
+   otherwise stretch this item across the nav bar, and vertically fill the
+   mobile menu's open column since flex-grow tracks whichever axis
+   flex-direction currently points along. */
+.account-menu {
+  flex: none;
+}
+
+.account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  background-image: none; /* no chevron -- this isn't a <select> stand-in */
+  padding-right: var(--space-4);
+}
+
+.account-disc {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--sheet-2);
+  color: var(--ink-muted);
+  font-family: var(--font-label);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.account-panel form {
+  margin: 0;
+}
+
+.account-panel .menu-option {
+  width: 100%;
+  font: inherit;
+}
+
+/* The mobile nav's `.nav-links a:last-child { border-bottom: none }` rule
+   (further down this file) targets whichever <a> is the actual last child of
+   .nav-links -- which, signed in, is .account-trigger's own parent
+   .account-menu, not an <a> at all. Left alone that strands a border-bottom
+   under both the last plain nav link and the trigger. Closed here instead of
+   editing that shared rule, since this is the one case that isn't a bare
+   <a> row. */
+@media (max-width: 680px) {
+  html.has-js .nav-links > a:has(+ .account-menu) {
+    border-bottom: none;
+  }
+
+  html.has-js .account-trigger {
+    border-bottom: none;
+  }
+}
+
 /* Match the 16px the search field takes on touch (see the pointer:coarse
    block further down), and give each row a ~48px target. */
 @media (pointer: coarse) {

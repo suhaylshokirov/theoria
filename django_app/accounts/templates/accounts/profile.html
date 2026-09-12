@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Your account — Theoria{% endblock %}
+
+{% block content %}
+{% include "movies/_sheet_header.html" with title="Your account" only %}
+
+<dl class="record-list">
+    <div class="record-row">
+        <dt class="label">Username</dt>
+        <dd>{{ user.username }}</dd>
+    </div>
+    <div class="record-row">
+        <dt class="label">Email</dt>
+        <dd>{{ user.email }}</dd>
+    </div>
+    <div class="record-row">
+        <dt class="label">Member since</dt>
+        <dd class="mono">{{ user.date_joined|date:"j M Y" }}</dd>
+    </div>
+</dl>
+{% endblock %}

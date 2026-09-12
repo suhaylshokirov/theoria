@@ -132,6 +132,24 @@
                 <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>People</a>
                 <a href="{% url 'movies:studio_list' %}"{% if vn in "studio_list,studio_detail" %} aria-current="page"{% endif %}>Studios</a>
                 <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>
+                {% if request.user.is_authenticated %}
+                <div class="menu account-menu" data-account-menu>
+                    <a href="{% url 'profile' %}" class="menu-trigger account-trigger" data-account-trigger
+                       aria-haspopup="true" aria-expanded="false"{% if vn == "profile" %} aria-current="page"{% endif %}>
+                        <span class="account-disc" aria-hidden="true">{{ request.user.username|slice:":1"|upper }}</span>
+                        <span class="menu-label">{{ request.user.username }}</span>
+                    </a>
+                    <div class="menu-panel account-panel" hidden data-account-panel>
+                        <a class="menu-option" href="{% url 'profile' %}">Your account</a>
+                        <form method="post" action="{% url 'accounts:logout' %}">
+                            {% csrf_token %}
+                            <button type="submit" class="menu-option">Sign out</button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <a href="{% url 'accounts:login' %}">Sign in</a>
+                {% endif %}
             </div>
             {% endwith %}
             <button type="button" class="theme-toggle" id="theme-toggle"
