@@ -6,6 +6,13 @@
             {% if collection_flags.liked %}Liked{% else %}Like{% endif %}
         </button>
     </form>
+    <form method="post" action="{% url 'account:toggle_collection' kind='disliked' content_type=content_type content_id=content_id %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button class="collection-action collection-action--dislike{% if collection_flags.disliked %} is-selected{% endif %}" type="submit"{% if collection_flags.disliked %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
+            {% if collection_flags.disliked %}Disliked{% else %}Dislike{% endif %}
+        </button>
+    </form>
     <form method="post" action="{% url 'account:toggle_collection' kind='watch_later' content_type=content_type content_id=content_id %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">

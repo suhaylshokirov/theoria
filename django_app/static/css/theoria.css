@@ -901,6 +901,54 @@ button.auth-signout:hover {
   margin-top: var(--space-8);
 }
 
+.account-taste {
+  margin-top: var(--space-8);
+  padding-block: var(--space-6);
+  border-top: 3px solid var(--ink);
+  border-bottom: var(--hairline);
+}
+
+.account-taste h2 {
+  margin-top: var(--space-2);
+  font-size: var(--text-lg);
+}
+
+.taste-signals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-6);
+}
+
+.taste-signal + .taste-signal {
+  border-left: var(--hairline);
+  padding-left: var(--space-6);
+}
+
+.taste-list {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.taste-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-2);
+  border-bottom: var(--hairline);
+}
+
+.taste-list strong {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--lime-deep);
+}
+
+.taste-list--avoid strong {
+  color: #a63936;
+}
+
 .account-collection {
   padding: var(--space-6);
 }
@@ -966,6 +1014,12 @@ button.auth-signout:hover {
   color: var(--ink-faint);
 }
 
+.collection-action--dislike.is-selected {
+  border-color: #a63936;
+  background: #fbe9e7;
+  color: #852d2b;
+}
+
 .collection-actions {
   display: flex;
   flex-wrap: wrap;
@@ -991,6 +1045,18 @@ button.auth-signout:hover {
 
   .collection-item__actions {
     width: 100%;
+  }
+
+  .taste-signals {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+
+  .taste-signal + .taste-signal {
+    border-left: 0;
+    border-top: var(--hairline);
+    padding-top: var(--space-5);
+    padding-left: 0;
   }
 }
 
