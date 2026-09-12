@@ -59,7 +59,6 @@ def test_signup_stores_password_and_logs_user_in():
     assert check_password("AnalyticalEngine2026!", user.password)
     assert set(user.collections.values_list("kind", flat=True)) == {
         Collection.LIKED,
-        Collection.DISLIKED,
         Collection.WATCH_LATER,
         Collection.TOP,
     }
@@ -142,37 +141,3 @@ def test_authenticated_user_can_toggle_warehouse_content_in_collections():
             {"next": "/movies/example/"},
         )
     assert not CollectionItem.objects.filter(pk=item.pk).exists()
-
-
-@override_settings(ALLOWED_HOSTS=["testserver"])
-def test_disliking_a_title_removes_its_like():
-    user = get_user_model().objects.create_user(
-        email="password-existing@example.com",
-        username="existing-reader",
-        password="PrivateScreening2026!",
-    )
-    client = Client()
-    client.force_login(user)
-    like_url = reverse(
-        "account:toggle_collection",
-        kwargs={"kind": "liked", "content_type": "movie", "content_id": 550},
-    )
-    dislike_url = reverse(
-        "account:toggle_collection",
-        kwargs={"kind": "disliked", "content_type": "movie", "content_id": 550},
-    )
-
-    with patch("core.services._content_exists", return_value=True):
-        client.post(like_url, {"next": "/movies/example/"})
-        client.post(dislike_url, {"next": "/movies/example/"})
-
-    assert not CollectionItem.objects.filter(
-        collection__user=user,
-        collection__kind=Collection.LIKED,
-        content_id=550,
-    ).exists()
-    assert CollectionItem.objects.filter(
-        collection__user=user,
-        collection__kind=Collection.DISLIKED,
-        content_id=550,
-    ).exists()

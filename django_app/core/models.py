@@ -62,12 +62,10 @@ class User(AbstractBaseUser, PermissionsMixin):
 
 class Collection(models.Model):
     LIKED = "liked"
-    DISLIKED = "disliked"
     WATCH_LATER = "watch_later"
     TOP = "top"
     KINDS = (
         (LIKED, "Liked"),
-        (DISLIKED, "Disliked"),
         (WATCH_LATER, "Watch later"),
         (TOP, "Top"),
     )

@@ -18,12 +18,11 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
-from core import account_urls, api_urls
+from core import account_urls
 
 urlpatterns = [
     path('auth/', include('core.urls')),
     path('account/', include(account_urls)),
-    path('api/account/', include(api_urls)),
     path('analytics/', include('analytics.urls')),
     path('', include('movies.urls')),
 ]

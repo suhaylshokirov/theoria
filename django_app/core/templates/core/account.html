@@ -6,57 +6,9 @@
 <section class="account-page" aria-labelledby="account-page-title">
     <div class="sheet-head">
         <span class="label">Account</span>
-        <h1 class="sheet-title" id="account-page-title">{{ request.user.get_full_name|default:request.user.username }}</h1>
+        <h1 class="sheet-title" id="account-page-title">{{ request.user.username }}</h1>
         <p class="sheet-sub">{{ request.user.email }}</p>
     </div>
-
-    <section class="account-taste" aria-labelledby="taste-title">
-        <div class="section-head">
-            <div>
-                <span class="label">Your taste</span>
-                <h2 id="taste-title">Signals for your recommendations</h2>
-            </div>
-            <span class="section-note">{{ taste_profile.counts.liked }} liked / {{ taste_profile.counts.disliked }} disliked</span>
-        </div>
-        <div class="taste-signals">
-            <div class="taste-signal">
-                <h3 class="label">Genres you favour</h3>
-                {% if taste_profile.preferred_genres %}
-                <ul class="taste-list">
-                    {% for genre in taste_profile.preferred_genres|slice:":5" %}
-                    <li><span>{{ genre.name }}</span><strong>{{ genre.title_count }}</strong></li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="empty">Like a few titles to see your strongest genres.</p>
-                {% endif %}
-            </div>
-            <div class="taste-signal">
-                <h3 class="label">Genres to avoid</h3>
-                {% if taste_profile.avoided_genres %}
-                <ul class="taste-list taste-list--avoid">
-                    {% for genre in taste_profile.avoided_genres|slice:":5" %}
-                    <li><span>{{ genre.name }}</span><strong>{{ genre.title_count }}</strong></li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="empty">Disliked titles will help filter out poor matches.</p>
-                {% endif %}
-            </div>
-            <div class="taste-signal">
-                <h3 class="label">Watch later</h3>
-                {% if taste_profile.watch_later_genres %}
-                <ul class="taste-list">
-                    {% for genre in taste_profile.watch_later_genres|slice:":5" %}
-                    <li><span>{{ genre.name }}</span><strong>{{ genre.title_count }}</strong></li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p class="empty">Save titles you want to watch next.</p>
-                {% endif %}
-            </div>
-        </div>
-    </section>
 
     <div class="account-collections">
         {% for card in cards %}
