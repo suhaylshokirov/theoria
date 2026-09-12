@@ -162,6 +162,52 @@
             <span class="mono">Source · TMDB</span>
         </div>
     </footer>
+
+    <div class="ai-assistant" data-ai-assistant>
+        <section class="ai-assistant-panel" id="ai-assistant-panel" aria-labelledby="ai-assistant-title" hidden>
+            <header class="ai-assistant-header">
+                <div>
+                    <p class="ai-assistant-kicker">THEORIA</p>
+                    <h2 class="ai-assistant-title" id="ai-assistant-title">Film guide</h2>
+                </div>
+                <button type="button" class="ai-assistant-close" data-ai-close aria-label="Close film guide" title="Close">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18"/>
+                    </svg>
+                </button>
+            </header>
+
+            <div class="ai-assistant-messages" data-ai-messages role="log" aria-live="polite" aria-relevant="additions">
+                <div class="ai-message ai-message-assistant">
+                    <p>What would you like to watch?</p>
+                </div>
+            </div>
+
+            <div class="ai-assistant-actions" data-ai-actions>
+                <button type="button" data-ai-prompt="Suggest a movie">Suggest a movie</button>
+                <button type="button" data-ai-prompt="Find by mood">Find by mood</button>
+                <button type="button" data-ai-prompt="Surprise me">Surprise me</button>
+            </div>
+
+            <form class="ai-assistant-form" data-ai-form>
+                <label class="visually-hidden" for="ai-assistant-input">Message the film guide</label>
+                <input id="ai-assistant-input" data-ai-input type="text" maxlength="300" placeholder="Describe your mood" autocomplete="off">
+                <button type="submit" class="ai-assistant-send" aria-label="Send message" title="Send" disabled>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M22 2 11 13"/>
+                        <path d="m22 2-7 20-4-9-9-4Z"/>
+                    </svg>
+                </button>
+            </form>
+        </section>
+
+        <button type="button" class="ai-assistant-trigger" data-ai-trigger aria-expanded="false" aria-controls="ai-assistant-panel" aria-label="Open film guide" title="Film guide">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3.5" y="4" width="17" height="16" rx="1.5"/>
+                <path d="M8 4v16M16 4v16M3.5 9h17M3.5 15h17"/>
+            </svg>
+        </button>
+    </div>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

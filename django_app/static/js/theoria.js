@@ -709,6 +709,92 @@
     syncFromSelect();
   }
 
+  /* --- Film guide ---------------------------------------------------------- */
+
+  function initAssistant() {
+    var root = document.querySelector("[data-ai-assistant]");
+    if (!root) return;
+
+    var trigger = root.querySelector("[data-ai-trigger]");
+    var panel = root.querySelector("#ai-assistant-panel");
+    var close = root.querySelector("[data-ai-close]");
+    var messages = root.querySelector("[data-ai-messages]");
+    var form = root.querySelector("[data-ai-form]");
+    var input = root.querySelector("[data-ai-input]");
+    var send = form.querySelector("button[type='submit']");
+    var actions = root.querySelectorAll("[data-ai-prompt]");
+
+    var replies = {
+      "Suggest a movie": "Tell me a little about your mood. I can start with something funny, thoughtful, intense, or comforting.",
+      "Find by mood": "Choose a feeling and I will narrow it down: light, romantic, thrilling, or strange.",
+      "Surprise me": "A surprise pick will be ready once your personal recommendations are connected."
+    };
+
+    function setOpen(open) {
+      panel.hidden = !open;
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      trigger.setAttribute("aria-label", open ? "Close film guide" : "Open film guide");
+      if (open) {
+        window.setTimeout(function () { input.focus(); }, 0);
+      } else {
+        trigger.focus();
+      }
+    }
+
+    function addMessage(text, role) {
+      var message = document.createElement("div");
+      message.className = "ai-message ai-message-" + role;
+      var paragraph = document.createElement("p");
+      paragraph.textContent = text;
+      message.appendChild(paragraph);
+      messages.appendChild(message);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function respond(prompt) {
+      addMessage(prompt, "user");
+      input.value = "";
+      send.disabled = true;
+      window.setTimeout(function () {
+        addMessage(replies[prompt] || "I am still in demo mode. Soon I will use your taste profile to make a personal recommendation.", "assistant");
+      }, 260);
+    }
+
+    trigger.addEventListener("click", function () {
+      setOpen(panel.hidden);
+    });
+
+    close.addEventListener("click", function () {
+      setOpen(false);
+    });
+
+    actions.forEach(function (action) {
+      action.addEventListener("click", function () {
+        respond(action.getAttribute("data-ai-prompt"));
+      });
+    });
+
+    input.addEventListener("input", function () {
+      send.disabled = !input.value.trim();
+    });
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var prompt = input.value.trim();
+      if (prompt) respond(prompt);
+    });
+
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !panel.hidden) setOpen(false);
+    });
+
+    window.addEventListener("pageshow", function () {
+      panel.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+      trigger.setAttribute("aria-label", "Open film guide");
+    });
+  }
+
   function init() {
     syncThemeColor();
     // Covers all three ways the theme moves — the header toggle, an OS change
@@ -719,6 +805,7 @@
     initCounters();
     initThemeToggle();
     initNavToggle();
+    initAssistant();
     initPagedSections();
     initFilterMenu();
     initLiveFilter();
