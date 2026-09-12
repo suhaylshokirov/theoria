@@ -11,6 +11,10 @@
 {% include "movies/_sheet_header.html" with title="Enter your code" sub="We sent a code to "|add:masked_email only %}
 
 <div class="auth-card" data-verify-form>
+    <svg class="auth-mark" viewBox="0 0 26 32" aria-hidden="true" focusable="false">
+        <ellipse cx="13" cy="16" rx="9.9" ry="13.3" fill="none" stroke="currentColor" stroke-width="6.4"/>
+        <rect x="3.6" y="12.7" width="18.8" height="6.6" fill="#a3e635"/>
+    </svg>
     <form class="auth-form" method="post" novalidate>
         {% csrf_token %}
         <div>
@@ -22,7 +26,7 @@
             {% for error in form.code.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
         </div>
 
-        <button type="submit" class="btn-block">Verify</button>
+        <button type="submit" class="btn-block" data-busy-label="Verifying…">Verify</button>
     </form>
 
     <form class="auth-resend" method="post">

@@ -13,6 +13,8 @@ re-echoed from the query string straight into a form -- see `_safe_next()`.
 
 from __future__ import annotations
 
+import logging
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
@@ -29,6 +31,8 @@ from .forms import EmailOnlyForm, SignupForm, VerifyForm
 from .models import PURPOSE_LOGIN, PURPOSE_SIGNUP
 
 User = get_user_model()
+
+logger = logging.getLogger(__name__)
 
 # Session keys carrying state between step 1 (signup/login) and step 2
 # (verify) of the flow -- never trusted from the query string or a hidden
@@ -68,6 +72,26 @@ def _mask_email(email: str) -> str:
     return f"{visible}…@{domain}"
 
 
+def _send_code_or_flash_error(request, email: str, code: str, purpose: str) -> bool:
+    """Send the code email, returning whether it went out.
+
+    `emails.send_code_email()` either sends or raises -- by its own
+    docstring's contract, the caller decides what the reader sees on
+    failure. A raised SMTP error (bad credentials, an unreachable host, a
+    timeout) must not 500 a reader who did nothing wrong; it gets logged
+    here and turned into a retry line instead, and the caller stays on its
+    current page rather than advancing to a verify step for a code that
+    never actually reached anyone.
+    """
+    try:
+        send_code_email(email, code, purpose=purpose)
+    except Exception:
+        logger.exception("Failed to send %s code email to %s", purpose, _mask_email(email))
+        messages.error(request, "We couldn't send that code — please try again in a moment.")
+        return False
+    return True
+
+
 # Phrased for a reader arriving at the sign-in page because @login_required
 # bounced them off a gated page (Task 94) -- never in terms of views, routes,
 # or table names. Falls back to a generic line for a `next` that matches
@@ -103,13 +127,13 @@ def signup(request):
 
             result, code = codes.issue(email, PURPOSE_SIGNUP, pending_username=username)
             if result is codes.IssueResult.ISSUED:
-                send_code_email(email, code, purpose=PURPOSE_SIGNUP)
-                request.session[SESSION_EMAIL] = email
-                request.session[SESSION_PURPOSE] = PURPOSE_SIGNUP
-                request.session[SESSION_NEXT] = _safe_next(request)
-                return redirect("accounts:verify")
-
-            messages.error(request, _ISSUE_ERROR_MESSAGES[result])
+                if _send_code_or_flash_error(request, email, code, PURPOSE_SIGNUP):
+                    request.session[SESSION_EMAIL] = email
+                    request.session[SESSION_PURPOSE] = PURPOSE_SIGNUP
+                    request.session[SESSION_NEXT] = _safe_next(request)
+                    return redirect("accounts:verify")
+            else:
+                messages.error(request, _ISSUE_ERROR_MESSAGES[result])
     else:
         form = SignupForm()
 
@@ -132,12 +156,13 @@ def login_view(request):
             else:
                 result, code = codes.issue(email, PURPOSE_LOGIN)
                 if result is codes.IssueResult.ISSUED:
-                    send_code_email(email, code, purpose=PURPOSE_LOGIN)
-                    request.session[SESSION_EMAIL] = email
-                    request.session[SESSION_PURPOSE] = PURPOSE_LOGIN
-                    request.session[SESSION_NEXT] = _safe_next(request)
-                    return redirect("accounts:verify")
-                messages.error(request, _ISSUE_ERROR_MESSAGES[result])
+                    if _send_code_or_flash_error(request, email, code, PURPOSE_LOGIN):
+                        request.session[SESSION_EMAIL] = email
+                        request.session[SESSION_PURPOSE] = PURPOSE_LOGIN
+                        request.session[SESSION_NEXT] = _safe_next(request)
+                        return redirect("accounts:verify")
+                else:
+                    messages.error(request, _ISSUE_ERROR_MESSAGES[result])
     else:
         form = EmailOnlyForm(initial={"email": request.GET.get("email", "")})
 
@@ -166,8 +191,8 @@ def verify(request):
             pending_username = last.pending_username if last else None
         result, code = codes.issue(email, purpose, pending_username=pending_username)
         if result is codes.IssueResult.ISSUED:
-            send_code_email(email, code, purpose=purpose)
-            messages.success(request, "A new code is on its way.")
+            if _send_code_or_flash_error(request, email, code, purpose):
+                messages.success(request, "A new code is on its way.")
         else:
             messages.error(request, _ISSUE_ERROR_MESSAGES[result])
         return redirect("accounts:verify")

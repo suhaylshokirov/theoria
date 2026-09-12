@@ -112,6 +112,12 @@
   --hairline: 1px solid var(--rule);
   --frame: 260px;         /* max content width of the page shell gutter calc */
   --measure: 1240px;
+  /* The one shadow in the system, for the one surface that sits visibly
+     above the page rather than flush on it (the auth card, Task 95 UI
+     pass). Everywhere else a --hairline border already does the job of
+     separating a sheet from the page, so this stays reserved rather than
+     becoming a general-purpose "card" treatment. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06), 0 12px 32px -8px rgba(0, 0, 0, 0.12);
 
   --z-header: 100;
   --z-skip: 200;
@@ -179,6 +185,10 @@
   --dark-rank-1: #bef264;
   --dark-rank-2: #a3e635;
   --dark-rank-3: #7cb518;
+  /* A black shadow barely registers against an already-near-black surface,
+     so the dark counterpart leans on more opacity rather than more blur to
+     stay legible as a shadow at all. */
+  --dark-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -8px rgba(0, 0, 0, 0.5);
   --dark-icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%238a867e'%3E%3Cpath d='M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z'/%3E%3C/svg%3E");
 }
 
@@ -201,6 +211,7 @@
   --rank-2: var(--dark-rank-2);
   --rank-3: var(--dark-rank-3);
   --icon-chevron: var(--dark-icon-chevron);
+  --shadow-card: var(--dark-shadow-card);
 
   color-scheme: dark;
 }
@@ -225,6 +236,7 @@
     --rank-2: var(--dark-rank-2);
     --rank-3: var(--dark-rank-3);
     --icon-chevron: var(--dark-icon-chevron);
+    --shadow-card: var(--dark-shadow-card);
 
     color-scheme: dark;
   }

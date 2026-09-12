@@ -730,7 +730,13 @@
         var digits = input.value.replace(/\D/g, "").slice(0, 6);
         input.value = digits;
         if (digits.length === 6 && input.form) {
-          input.form.submit();
+          // requestSubmit() (not submit()) deliberately: submit() bypasses
+          // the form's "submit" event entirely, which would silently skip
+          // initAuthFormSubmitState()'s loading state on exactly the path
+          // most verify attempts actually take. Falls back for the rare
+          // browser old enough not to have it.
+          if (input.form.requestSubmit) input.form.requestSubmit();
+          else input.form.submit();
         }
       });
     }
@@ -751,6 +757,71 @@
         }
       }, 1000);
     }
+  }
+
+  /* --- Auth form submit state ----------------------------------------------
+     Every .auth-form (signup, login, verify) is a plain HTML POST -- there's
+     no fetch() here to know a request finished, only that one started. So
+     rather than a real progress indicator, this swaps the submit button's
+     label for a spinner the instant the browser accepts the submission,
+     which is what keeps a real network round-trip from reading as a dead
+     click. Never blocks the submission itself: disabling the button in a
+     "submit" handler doesn't cancel a navigation already under way.
+
+     Reads its busy label from a data attribute (defaulting to "Sending…")
+     rather than hardcoding one, since "Verifying…" reads better on the code
+     form than the generic label the other two forms want. */
+  function initAuthFormSubmitState() {
+    document.querySelectorAll(".auth-form").forEach(function (form) {
+      form.addEventListener("submit", function () {
+        var btn = form.querySelector('button[type="submit"]');
+        if (!btn || btn.disabled) return;
+        var busyLabel = btn.getAttribute("data-busy-label") || "Sending…";
+        btn.disabled = true;
+        btn.innerHTML =
+          '<span class="btn-spinner" aria-hidden="true"></span><span>' + busyLabel + "</span>";
+      });
+    });
+  }
+
+  /* --- Inline email validation ----------------------------------------------
+     A malformed address is worth catching before the round trip a server
+     validation error costs -- particularly on signup, where that round trip
+     also means waiting on an email that was never going to arrive. Reuses
+     the same .form-error markup/styling a server-rendered error already
+     uses (see accounts/signup.html etc.), so a reader can't tell which kind
+     they're looking at; is-live only changes how it enters, not how it
+     looks. Scoped to email fields -- the one place a format check catches
+     something a `required` attribute alone doesn't. */
+  function initInlineValidation() {
+    document.querySelectorAll(".auth-form input[type=email]").forEach(function (input) {
+      var wrap = input.closest("div");
+      if (!wrap) return;
+
+      function clearErrors() {
+        wrap.querySelectorAll(".form-error").forEach(function (el) {
+          el.remove();
+        });
+      }
+
+      input.addEventListener("blur", function () {
+        if (input.value && !input.checkValidity()) {
+          clearErrors();
+          var p = document.createElement("p");
+          p.className = "form-error is-live";
+          p.textContent = "Enter a valid email address.";
+          wrap.appendChild(p);
+        }
+      });
+
+      // Clears on the next keystroke, not just the next blur -- including a
+      // stale server-rendered error from before this field was touched, so
+      // fixing the address is what makes the message go away, not
+      // resubmitting the form.
+      input.addEventListener("input", function () {
+        if (!input.value || input.checkValidity()) clearErrors();
+      });
+    });
   }
 
   /* --- Account menu -------------------------------------------------------
@@ -829,6 +900,8 @@
     initBioToggle();
     initVideoEmbeds();
     initCodeInput();
+    initAuthFormSubmitState();
+    initInlineValidation();
     initAccountMenu();
   }
 

@@ -1,16 +1,46 @@
-/* Auth pages (sign-up, sign-in, verify) — Task 93.
+/* Auth pages (sign-up, sign-in, verify) — Task 93, polish pass Task 95.
    Adds components; theoria.css owns every token and every shared control,
    so nothing here restyles .field, .sheet-head, or button{} — see the auth
    design notes for the one exception (input[type="email"], added to
-   theoria.css's own shared input rule, not here). */
+   theoria.css's own shared input rule, not here).
+
+   The polish pass stays inside the existing rules on purpose: lime still
+   appears nowhere but the submit button (and, now, its own loading spinner
+   — an extension of the button's state, not new decoration), and every
+   other value is a theoria.css token. What's new is depth (--shadow-card,
+   the one shadow the system defines), motion (an entrance for the card, a
+   button that visibly works while a request is in flight), and a code
+   field that reads as six boxes while staying the one real <input> the
+   autocomplete="one-time-code"/paste behaviour depends on. */
+
+.auth-mark {
+  display: block;
+  width: 2rem;
+  height: 2.46rem;
+  margin: 0 auto var(--space-6);
+  color: var(--ink-faint);
+}
 
 .auth-card {
   max-width: 30rem;
-  margin: var(--space-9) auto 0;
+  margin: var(--space-8) auto 0;
   padding: var(--space-8);
   background: var(--sheet);
   border: var(--hairline);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  animation: auth-card-in var(--dur-slow) var(--ease) both;
+}
+
+@keyframes auth-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .auth-form {
@@ -24,18 +54,80 @@
   width: 100%;
 }
 
+/* Matches .field:focus-within's own lime border-color transition (already
+   defined in theoria.css) with a matching, equally subtle lift -- the two
+   read as one motion instead of the border alone snapping over. */
+.auth-form .field {
+  transition: border-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+
+.auth-form .field:focus-within {
+  transform: translateY(-1px);
+}
+
+/* A field the browser (or the server, after submit) considers invalid gets
+   the same left-rule treatment as .form-error below, so the field itself
+   -- not just a line of text under it -- shows something is wrong. Scoped
+   to :not(:placeholder-shown) so a required-but-empty field doesn't read as
+   an error before the reader has typed anything into it. */
+.auth-form .field:has(input:invalid:not(:placeholder-shown)) {
+  border-color: var(--rule-strong);
+}
+
+.auth-form .field:has(input.is-invalid) {
+  border-color: var(--rule-strong);
+}
+
 /* The one-time-code field: a single wide-tracked numeral field, not six
    boxes -- see the auth design notes for why (autocomplete="one-time-code"
-   and paste both depend on it being one input). */
-.code-input {
+   and paste both depend on it being one input). The six-box *look* comes
+   from a repeating-gradient background plus letter-spacing/text-indent
+   tuned to the same cell width, a standard CSS-only OTP-field technique --
+   the DOM still has exactly one <input>. */
+.auth-form .field:has(.code-input) {
+  /* A long pill reads oddly at this width, and a background this literal
+     (six drawn cells) wants the squared-off corner the rest of the site's
+     sheets already use, not the rounded one reserved for compact controls.
+     width:fit-content, not auto: .field here is a normal block box (its
+     parent is a plain wrapping <div>, not a flex container -- .auth-form's
+     own flex row never reaches it), and block-level auto width means "fill
+     the containing block," not "shrink to content," so plain `auto` would
+     silently stay full-width with nothing for margin-inline:auto to centre
+     within. Only a sized box (fit-content, max-content, an explicit length)
+     leaves that spare space for the margin to distribute. */
+  border-radius: var(--radius);
+  width: fit-content;
+  margin-inline: auto;
+}
+
+/* `.auth-form .code-input`, not bare `.code-input`: theoria.css's shared
+   `input[type="text"], input[type="search"] { background: none; ... }`
+   (a type+attribute selector) outranks a single class on specificity alone,
+   so a bare `.code-input` rule here would have its background-image reset
+   right back to none by that shared rule despite loading later. Two classes
+   beats one regardless of load order or the other selector's own type
+   component -- see the CSS specificity note this cost real debugging time
+   to work out (for_learning.md, Task 95 UI pass). */
+.auth-form .code-input {
+  --cell: 2.75rem;
+  width: calc(var(--cell) * 6);
+  height: 3.25rem;
+  padding: 0;
   font-family: var(--font-mono);
-  font-size: var(--text-2xl);
-  letter-spacing: 0.5em;
-  text-align: center;
-  /* The letter-spacing pushes the last digit past centre unless the trailing
-     space it creates is compensated on the right. */
-  padding-right: calc(var(--space-5) + 0.5em);
-  width: 100%;
+  font-size: var(--text-xl);
+  text-align: left;
+  /* Centres each typed digit in its own cell: letter-spacing opens a gap
+     of (cell width − one character) after every digit, and text-indent
+     shifts the whole string right by half that gap so the first digit is
+     centred too, not flush against the left edge. */
+  letter-spacing: calc(var(--cell) - 1ch);
+  text-indent: calc((var(--cell) - 1ch) / 2);
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--rule-strong) 0 1px,
+    transparent 1px var(--cell)
+  );
+  background-size: calc(var(--cell) * 6) 100%;
 }
 
 .form-error {
@@ -46,10 +138,53 @@
   font-size: var(--text-sm);
 }
 
+/* A server-rendered error (a full page load) can afford to just be there;
+   one added by initInlineValidation() (theoria.js) appears while the
+   reader is still on the page, so it gets a small entrance instead of
+   popping in -- the same "something changed, here's where" cue the rest
+   of this file gives a field on focus. */
+.form-error.is-live {
+  animation: auth-error-in var(--dur-fast) var(--ease) both;
+}
+
+@keyframes auth-error-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .btn-block {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
   width: 100%;
   text-align: center;
+}
+
+/* The lime spinner shown in place of the label text while a submit is in
+   flight (theoria.js's initAuthFormSubmitState()) -- --ink-on-lime, the
+   same fixed colour the button's own label already uses, so it reads as
+   the button working rather than as a new element. Built, not hidden, so
+   with JS off (no class is ever added) it never exists in the DOM. */
+.btn-spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid var(--ink-on-lime);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: auth-spin 0.6s linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .auth-alt {
@@ -97,5 +232,26 @@
   .auth-card {
     margin-top: var(--space-6);
     padding: var(--space-6);
+  }
+
+  /* Six 2.75rem cells (16.5rem) plus the card's own padding no longer fits
+     a narrow phone screen at the desktop cell size, so the whole field
+     scales down as one unit -- letter-spacing/text-indent/background-size
+     all read off the same --cell custom property, so shrinking it once
+     keeps every digit centred in its (now smaller) box instead of drifting
+     out of alignment the way editing individual values here would risk.
+     `.auth-form .code-input`, not bare `.code-input`, for the same
+     specificity reason as the desktop rule above -- font-size here would
+     otherwise lose to the shared input rule's own font-size. */
+  .auth-form .code-input {
+    --cell: 2.35rem;
+    height: 2.9rem;
+    font-size: var(--text-lg);
+  }
+}
+
+@media (max-width: 360px) {
+  .auth-form .code-input {
+    --cell: 2.05rem;
   }
 }
