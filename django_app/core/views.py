@@ -17,6 +17,7 @@ from core.services import (
     normalize_email,
     remove_collection_item,
     safe_next,
+    taste_profile,
     toggle_collection_item,
     validate_name,
 )
@@ -124,7 +125,11 @@ def account(request):
     for kind, label in Collection.KINDS:
         collection, items = collection_rows(request.user, kind)
         cards.append({"collection": collection, "label": label, "items": items})
-    return render(request, "core/account.html", {"cards": cards})
+    return render(
+        request,
+        "core/account.html",
+        {"cards": cards, "taste_profile": taste_profile(request.user)},
+    )
 
 
 @login_required

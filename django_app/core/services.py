@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 from django.core.validators import validate_email
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Count, Max
 from django.utils.text import slugify
 
 from core.models import Collection, CollectionItem, User
@@ -60,6 +60,7 @@ def generate_username(first_name: str, last_name: str, email: str) -> str:
 def ensure_default_collections(user):
     names = {
         Collection.LIKED: "Liked",
+        Collection.DISLIKED: "Disliked",
         Collection.WATCH_LATER: "Watch later",
         Collection.TOP: "Top",
     }
@@ -98,6 +99,17 @@ def toggle_collection_item(user, kind, content_type, content_id):
         if existing:
             existing.delete()
             return False
+
+        if kind in {Collection.LIKED, Collection.DISLIKED}:
+            opposite = (
+                Collection.DISLIKED if kind == Collection.LIKED else Collection.LIKED
+            )
+            CollectionItem.objects.filter(
+                collection=_collection(user, opposite),
+                content_type=content_type,
+                content_id=content_id,
+            ).delete()
+
         position = collection.items.aggregate(max_position=Max("position"))["max_position"]
         CollectionItem.objects.create(
             collection=collection,
@@ -173,3 +185,58 @@ def collection_flags(user, content_type, content_id):
         ).values_list("collection__kind", flat=True)
     )
     return {kind: kind in selected for kind, _ in Collection.KINDS}
+
+
+def _genre_counts(items):
+    """Count unique saved titles by genre across the read-only warehouse."""
+    movie_ids = {item.content_id for item in items if item.content_type == CollectionItem.MOVIE}
+    series_ids = {item.content_id for item in items if item.content_type == CollectionItem.SERIES}
+    if not movie_ids and not series_ids:
+        return []
+
+    from movies.models import MovieMetrics, SeriesGenre
+
+    counts = {}
+    if movie_ids:
+        for row in (
+            MovieMetrics.objects.using("warehouse")
+            .filter(movie_id__in=movie_ids)
+            .values("genre__genre_name")
+            .annotate(title_count=Count("movie_id", distinct=True))
+        ):
+            counts[row["genre__genre_name"]] = row["title_count"]
+    if series_ids:
+        for row in (
+            SeriesGenre.objects.using("warehouse")
+            .filter(series_id__in=series_ids)
+            .values("genre__genre_name")
+            .annotate(title_count=Count("series_id", distinct=True))
+        ):
+            name = row["genre__genre_name"]
+            counts[name] = counts.get(name, 0) + row["title_count"]
+    return [
+        {"name": name, "title_count": title_count}
+        for name, title_count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0]))
+    ]
+
+
+def taste_profile(user):
+    """Return explicit saved-title signals for the account and future recommender."""
+    ensure_default_collections(user)
+    items_by_kind = {
+        kind: list(
+            CollectionItem.objects.filter(collection__user=user, collection__kind=kind)
+        )
+        for kind, _ in Collection.KINDS
+    }
+    positive_items = {
+        (item.content_type, item.content_id): item
+        for kind in (Collection.LIKED, Collection.TOP)
+        for item in items_by_kind[kind]
+    }.values()
+    return {
+        "counts": {kind: len(items) for kind, items in items_by_kind.items()},
+        "preferred_genres": _genre_counts(positive_items),
+        "avoided_genres": _genre_counts(items_by_kind[Collection.DISLIKED]),
+        "watch_later_genres": _genre_counts(items_by_kind[Collection.WATCH_LATER]),
+    }
