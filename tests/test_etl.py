@@ -14,8 +14,24 @@ from unittest.mock import MagicMock, call, patch
 import pandas as pd
 import pytest
 
+import config as _config
 from etl import s3_utils
 from etl.tmdb_client import TMDBAPIError, TMDBClient
+
+# The bucket every expected s3:// URI in this file is written against. Ingest
+# functions read config.S3_BUCKET at call time, so without this pin the tests
+# that let them build their own key assert against whatever bucket the
+# developer's .env happens to name -- passing here and failing on a clone that
+# points at a different data lake. Pinned, not read back from config, so the
+# assertion still checks the whole URI rather than agreeing with itself.
+TEST_BUCKET = "theoria-datalake"
+
+
+@pytest.fixture(autouse=True)
+def _pin_s3_bucket():
+    """Give every test in this module the same bucket, whatever .env says."""
+    with patch.object(_config, "S3_BUCKET", TEST_BUCKET):
+        yield
 
 
 # --- logging_config -----------------------------------------------------------
