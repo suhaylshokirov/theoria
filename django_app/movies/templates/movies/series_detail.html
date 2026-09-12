@@ -173,4 +173,24 @@
         {% include "movies/_pager_client.html" with label="crew" only %}
     </div>
 </section>
+
+<section class="sheet-section" id="episodes">
+    <div class="section-head">
+        <h2>Episodes</h2>
+        <span class="section-note">{{ series.number_of_seasons|default:"—" }} season{{ series.number_of_seasons|pluralize }} · {{ series.number_of_episodes|default:"—" }} episode{{ series.number_of_episodes|pluralize }}</span>
+    </div>
+    {% comment %} All seasons render every time — the picker (JS-only, see
+       _season_picker.html) is what narrows this to one at a time; a no-JS
+       reader scrolls the stacked seasons instead, each under its own
+       heading. {% endcomment %}
+    {% include "movies/_season_picker.html" with seasons=seasons only %}
+    {% for block in seasons %}
+    <div class="season-panel{% if forloop.first %} is-active{% endif %}" data-season-panel="{{ block.season.season_number }}">
+        <h3 class="credit-department">{{ block.season.name|default:"Season" }}</h3>
+        {% include "movies/_episode_table.html" with block=block only %}
+    </div>
+    {% empty %}
+    <p class="empty">No seasons recorded for this show.</p>
+    {% endfor %}
+</section>
 {% endblock %}

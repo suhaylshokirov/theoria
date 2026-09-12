@@ -1400,6 +1400,73 @@ button:hover,
   outline-offset: -2px;
 }
 
+/* --- Season picker (show page episodes, Task 88) ----------------------------
+   Same radio+label idiom as .segmented above, but each label is its own
+   pill in a wrapping row rather than sharing one clipped, bordered strip —
+   a show can carry 50+ seasons (The Daily Show, live-measured), and
+   .segmented's overflow:hidden would make most of them unreachable.
+
+   Hidden until html.has-js proves initSeasonPicker() (theoria.js) can act on
+   it: with no JS every season's table is already stacked in the page under
+   its own heading, so an inert picker would be a dead control — the same
+   posture Task 75's click-to-play trailer and .apply-btn (further up) take,
+   just inverted: this control appears only once JS is confirmed, instead of
+   only until it is. */
+.season-picker {
+  display: none;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-6);
+  border: none;
+  padding: 0;
+}
+
+html.has-js .season-picker {
+  display: flex;
+}
+
+.season-picker input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.season-picker label {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+  white-space: nowrap;
+}
+
+.season-picker label:hover { background: var(--sheet); }
+
+.season-picker input:checked + label {
+  background: var(--lime);
+  color: var(--ink-on-lime);
+  border-color: var(--lime);
+}
+
+.season-picker input:focus-visible + label {
+  outline: 2px solid var(--lime-mark);
+  outline-offset: 1px;
+}
+
+/* Gated the same way — only once JS is driving the picker above is it safe
+   to hide the seasons it isn't pointed at. */
+html.has-js .season-panel:not(.is-active) {
+  display: none;
+}
+
 /* --- Pagination ------------------------------------------------------------- */
 
 .pagination {

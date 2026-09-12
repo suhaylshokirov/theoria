@@ -544,6 +544,41 @@
     });
   }
 
+  /* --- Season picker (show page episodes) --------------------------------
+     Every season's episode table is already in the document (see
+     movies/_episode_table.html) — this only shows the one whose radio is
+     checked, by toggling .is-active (theoria.css hides every .season-panel
+     that lacks it, but only once html.has-js is set, which is also what
+     reveals .season-picker itself). No live-filter round trip: the whole
+     point, per the task brief, is that switching seasons is a repaint, the
+     same posture initPagedSection() takes for cast/crew paging. */
+
+  function initSeasonPicker() {
+    var picker = document.querySelector("[data-season-picker]");
+    if (!picker) return;
+    var panels = Array.prototype.slice.call(
+      document.querySelectorAll("[data-season-panel]")
+    );
+    if (!panels.length) return;
+
+    function show(value) {
+      panels.forEach(function (panel) {
+        panel.classList.toggle(
+          "is-active",
+          panel.getAttribute("data-season-panel") === value
+        );
+      });
+    }
+
+    picker.addEventListener("change", function (e) {
+      if (e.target.name !== "season") return;
+      show(e.target.value);
+    });
+
+    var checked = picker.querySelector("input[name=season]:checked");
+    if (checked) show(checked.value);
+  }
+
   /* --- Filter menu -----------------------------------------------------
      A <select data-menu> in a toolbar becomes a compact in-page dropdown.
      The native <select> picker on a phone opens a full-screen OS list, and
@@ -807,6 +842,7 @@
     initNavToggle();
     initAssistant();
     initPagedSections();
+    initSeasonPicker();
     initFilterMenu();
     initLiveFilter();
     initBioToggle();

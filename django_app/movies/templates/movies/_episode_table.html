@@ -1,0 +1,47 @@
+{% comment %} One season's episode list (Task 88). A plain <table> — reuses
+   theoria.css's bare table/thead/tbody rules rather than inventing chrome for
+   a component that only ever holds five columns of scalar facts, the same
+   restraint _rating_badge.html's own "renders nothing, not a dash" rule
+   follows for a missing rating.
+
+   Client-paged exactly like the movie page's cast/crew
+   (static/js/theoria.js's initPagedSection()): The Daily Show's live-measured
+   1,213-episode Season 1 is the real top end, and that's the same order of
+   magnitude the busiest film's ~1,200 credits already ships and pages
+   client-side — so no server round-trip is needed here either.
+
+   Params (pass with `only`):
+     block : {season, episodes} — episodes already carry imdb_rating /
+             imdb_vote_count, annotated in series_detail().
+{% endcomment %}
+{% if block.episodes %}
+<div data-paged data-page-size="20" data-page-items=".episode-row">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th class="num">#</th>
+                    <th>Title</th>
+                    <th>Air date</th>
+                    <th class="num">Runtime</th>
+                    <th>Rating</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for episode in block.episodes %}
+                <tr class="episode-row">
+                    <td class="num mono">{{ episode.episode_number|default:"—" }}</td>
+                    <td>{{ episode.name|default:"—" }}</td>
+                    <td class="mono">{% if episode.air_date %}{{ episode.air_date|date:"j M Y" }}{% else %}—{% endif %}</td>
+                    <td class="num mono">{% if episode.runtime %}{{ episode.runtime }} min{% else %}—{% endif %}</td>
+                    <td>{% include "movies/_rating_badge.html" with rating=episode.imdb_rating vote_count=episode.imdb_vote_count imdb_id=episode.imdb_id only %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include "movies/_pager_client.html" with label="episodes" only %}
+</div>
+{% else %}
+<p class="empty">Episodes for this season haven't been catalogued yet.</p>
+{% endif %}

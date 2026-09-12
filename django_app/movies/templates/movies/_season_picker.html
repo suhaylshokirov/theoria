@@ -1,0 +1,25 @@
+{% comment %} Season picker (Task 88): a row of radios switching which
+   season's episode table is visible. Built like .segmented (radio + label)
+   but stays display:none until static/js/theoria.js's initSeasonPicker()
+   confirms it can act on it (see the html.has-js gate in theoria.css) — a
+   control that does nothing with JS off would be exactly the "dead control"
+   Task 75's click-to-play trailer refused to ship. Without JS every season's
+   table is already stacked in the page under its own heading (see
+   series_detail.html), so there's nothing this picker alone unlocks.
+
+   flex-wrap, not .segmented's clipped single row: The Daily Show carries 31
+   seasons live, so an overflow:hidden pill would make most of them
+   unreachable.
+
+   Params (pass with `only`):
+     seasons : the same list of {season, episodes} dicts series_detail()
+               builds for _episode_table.html — only `season` is read here.
+{% endcomment %}
+<fieldset class="season-picker" data-season-picker>
+    <legend class="visually-hidden">Choose a season</legend>
+    {% for block in seasons %}
+    <input type="radio" name="season" id="season-{{ block.season.season_id }}"
+           value="{{ block.season.season_number }}" {% if forloop.first %}checked{% endif %}>
+    <label for="season-{{ block.season.season_id }}">{{ block.season.name|default:"Season" }}</label>
+    {% endfor %}
+</fieldset>

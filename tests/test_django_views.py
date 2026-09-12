@@ -30,10 +30,10 @@ from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 
 from movies.models import (  # noqa: E402
-    Company, Country, Credit, Genre, Language, Movie, MovieCompany,
+    Company, Country, Credit, Episode, Genre, Language, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieRating, MovieVideo, Network, Person,
-    Series, SeriesCompany, SeriesCountry, SeriesCredit, SeriesLanguage,
-    SeriesNetwork, SeriesRating,
+    Season, Series, SeriesCompany, SeriesCountry, SeriesCredit,
+    SeriesLanguage, SeriesNetwork, SeriesRating,
 )
 
 client = Client()
@@ -557,11 +557,12 @@ def test_series_list_genre_survives_pagination():
 
 
 @contextlib.contextmanager
-def _series_detail_mocks(series, credits=None):
+def _series_detail_mocks(series, credits=None, seasons=None, episodes=None):
     """Mock every manager series_detail() reads (Task 87 — the SeriesCredit-
-    era counterpart of _movie_detail_video_mocks), with SeriesCredit returning
-    `credits` and everything else empty. Yields the mocks by name so a test
-    can still override one of them."""
+    era counterpart of _movie_detail_video_mocks; Task 88 added Season/
+    Episode), with SeriesCredit returning `credits`, Season/Episode returning
+    `seasons`/`episodes`, and everything else empty. Yields the mocks by name
+    so a test can still override one of them."""
     with patch("movies.views.get_object_or_404", return_value=series), patch.object(
         Genre, "objects", new=MagicMock()
     ) as genre_mgr, patch.object(
@@ -576,7 +577,11 @@ def _series_detail_mocks(series, credits=None):
         SeriesCountry, "objects", new=MagicMock()
     ) as country_mgr, patch.object(
         SeriesLanguage, "objects", new=MagicMock()
-    ) as language_mgr:
+    ) as language_mgr, patch.object(
+        Season, "objects", new=MagicMock()
+    ) as season_mgr, patch.object(
+        Episode, "objects", new=MagicMock()
+    ) as episode_mgr:
         genre_mgr.using.return_value.filter.return_value.order_by.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value \
             .order_by.return_value = credits or []
@@ -587,10 +592,14 @@ def _series_detail_mocks(series, credits=None):
             .order_by.return_value = []
         country_mgr.using.return_value.filter.return_value.select_related.return_value = []
         language_mgr.using.return_value.filter.return_value.select_related.return_value = []
+        season_mgr.using.return_value.filter.return_value = seasons or []
+        episode_mgr.using.return_value.filter.return_value.annotate.return_value \
+            .order_by.return_value = episodes or []
         yield {
             "genre": genre_mgr, "credit": credit_mgr, "rating": rating_mgr,
             "network": network_mgr, "company": company_mgr,
             "country": country_mgr, "language": language_mgr,
+            "season": season_mgr, "episode": episode_mgr,
         }
 
 
@@ -606,6 +615,7 @@ def test_series_detail_returns_200_with_expected_context():
     assert response.context["cast"] == []
     assert response.context["crew"] == []
     assert response.context["creators"] == []
+    assert response.context["seasons"] == []
 
 
 def test_series_detail_404_when_missing():
@@ -713,6 +723,87 @@ def test_series_detail_sends_every_credit_for_client_side_paging():
     assert response.context["cast_count"] == 690
     assert response.context["credit_count"] == 690
     assert len(response.context["cast"]) == 690
+
+
+def _season(season_id, series, season_number, name):
+    return Season(
+        season_id=season_id, series=series, season_number=season_number,
+        name=name, episode_count=1,
+    )
+
+
+def _episode(episode_id, series, season_number, episode_number, name="Pilot",
+             air_date=None, runtime=None, imdb_rating=None, imdb_vote_count=None,
+             imdb_id=None):
+    ep = Episode(
+        episode_id=episode_id, series=series, season_number=season_number,
+        episode_number=episode_number, name=name, air_date=air_date,
+        runtime=runtime, imdb_id=imdb_id, ingestion_date=date(2026, 1, 1),
+    )
+    # annotate()'d fields, not real columns — the view attaches them via
+    # .annotate(imdb_rating=Max(...), imdb_vote_count=Max(...)); mocking the
+    # queryset means setting them here instead of computing them for real.
+    ep.imdb_rating = imdb_rating
+    ep.imdb_vote_count = imdb_vote_count
+    return ep
+
+
+def test_series_detail_groups_episodes_by_season_with_rating():
+    """Task 88 step 1: one Season query + one Episode query (annotated with
+    its IMDb rating via the fact_episode_rating reverse relation), grouped by
+    season in Python — never one query per season."""
+    show = _series()
+    season1 = _season(1, show, 1, "Season 1")
+    season2 = _season(2, show, 2, "Season 2")
+    ep1 = _episode(101, show, 1, 1, name="Pilot", imdb_rating=Decimal("8.20"),
+                    imdb_vote_count=1200, imdb_id="tt0000001")
+    ep2 = _episode(102, show, 1, 2, name="Episode Two")
+    ep3 = _episode(201, show, 2, 1, name="Season Two Opener")
+
+    with _series_detail_mocks(show, seasons=[season1, season2],
+                               episodes=[ep1, ep2, ep3]):
+        response = client.get("/tv/test-show/")
+
+    seasons = response.context["seasons"]
+    assert [s["season"] for s in seasons] == [season1, season2]
+    assert seasons[0]["episodes"] == [ep1, ep2]
+    assert seasons[1]["episodes"] == [ep3]
+
+    body = response.content.decode()
+    assert "Pilot" in body
+    assert "8.2 / 10" in body
+    assert 'href="https://www.imdb.com/title/tt0000001/"' in body
+
+
+def test_series_detail_season_with_no_episodes_renders_not_catalogued_yet():
+    """A season Task 82's TV_SEASONS_MAX_NEW cap hasn't reached yet is a real,
+    ongoing state (dim_season covers all 734 live shows; dim_episode only
+    300) — it must degrade to a quiet message, never an empty table or a
+    crash."""
+    show = _series()
+    season = _season(1, show, 1, "Season 1")
+
+    with _series_detail_mocks(show, seasons=[season], episodes=[]):
+        response = client.get("/tv/test-show/")
+
+    assert response.context["seasons"] == [{"season": season, "episodes": []}]
+    body = response.content.decode()
+    assert "haven&#x27;t been catalogued yet" in body or "haven't been catalogued yet" in body
+
+
+def test_series_detail_specials_sort_last_regardless_of_season_number():
+    """season_number 0 ('Specials') is TMDB's array position, not a viewing
+    order — it must not lead the season picker or the stacked panels."""
+    show = _series()
+    specials = _season(1, show, 0, "Specials")
+    season1 = _season(2, show, 1, "Season 1")
+    season2 = _season(3, show, 2, "Season 2")
+
+    with _series_detail_mocks(show, seasons=[specials, season1, season2]):
+        response = client.get("/tv/test-show/")
+
+    ordered = [s["season"] for s in response.context["seasons"]]
+    assert ordered == [season1, season2, specials]
 
 
 # ---------------------------------------------------------------------------
