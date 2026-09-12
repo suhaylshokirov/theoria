@@ -202,6 +202,14 @@ elif ON_VERCEL:
 
 DATABASE_ROUTERS = ['core.routers.WarehouseRouter']
 
+# Where Django's own auth machinery sends an anonymous reader (LOGIN_URL,
+# used by @login_required in Task 94), and where a reader lands after signing
+# in or out with no `next` to honour. All three are view names, not paths, so
+# they resolve correctly regardless of where /accounts/ ends up mounted.
+LOGIN_URL = 'accounts:login'
+LOGIN_REDIRECT_URL = 'movies:home'
+LOGOUT_REDIRECT_URL = 'movies:home'
+
 # Sessions stay signed in for 30 days of inactivity rather than Django's
 # default two weeks, matching a "sign in once, browse for a while" reader
 # rather than a security-sensitive account. Lax (not Strict) so following a

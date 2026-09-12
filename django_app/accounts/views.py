@@ -13,10 +13,12 @@ re-echoed from the query string straight into a form -- see `_safe_next()`.
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
+from django.contrib.auth.views import LogoutView as _LogoutView
 from django.db import IntegrityError, transaction
-from django.shortcuts import redirect, render
+from django.shortcuts import redirect, render, resolve_url
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
@@ -160,7 +162,7 @@ def verify(request):
                 login(request, user)
                 request.session.pop(SESSION_EMAIL, None)
                 request.session.pop(SESSION_PURPOSE, None)
-                next_url = request.session.pop(SESSION_NEXT, "") or reverse("movies:home")
+                next_url = request.session.pop(SESSION_NEXT, "") or resolve_url(settings.LOGIN_REDIRECT_URL)
                 messages.success(request, f"Signed in as {user.username}.")
                 return redirect(next_url)
 
@@ -209,3 +211,15 @@ def _complete_verification(request, email: str, purpose: str, code_row):
         request.session.pop(SESSION_PURPOSE, None)
         request.session[SESSION_BOUNCE_TO] = "accounts:signup"
         return None
+
+
+class LogoutView(_LogoutView):
+    """POST only -- Django's own LogoutView already refuses GET (since 4.1),
+    so no link or prefetch can sign a reader out. next_page/message both come
+    from LOGOUT_REDIRECT_URL/here rather than a query string, since a logout
+    redirect target has no legitimate reason to vary per request."""
+
+    def post(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            messages.success(request, "Signed out.")
+        return super().post(request, *args, **kwargs)
