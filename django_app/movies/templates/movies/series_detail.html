@@ -3,12 +3,12 @@
 
 {% block title %}Theoria — {{ series.name }}{% endblock %}
 
-{% comment %} A minimal record — the full show page (cast/crew, "Created by",
-   networks, studios, countries, languages, the season/episode grid) is Task
-   87-88. This exists now only so /tv/<slug>/ resolves; it reuses the same
-   .specimen shell movie_detail.html uses, so Task 87 grows this page rather
-   than replacing it. {% endcomment %}
 {% block content %}
+{% comment %} Same .specimen shell movie_detail.html uses (Task 71's judgment
+   applies equally here): a framed poster plate, the record beside it, the
+   backdrop as a thin strip below rather than behind the text. No trailer
+   slot yet — dim_series_video is Task 90; until then the backdrop always
+   shows when there is one. {% endcomment %}
 <article class="specimen">
     <div class="specimen-plate">
         {% if series.poster_path %}
@@ -54,6 +54,51 @@
                 <dt class="label">Episodes</dt>
                 <dd class="mono">{{ series.number_of_episodes|default:"—" }}</dd>
             </div>
+            <div class="record-row">
+                <dt class="label">{% if languages|length > 1 %}Languages{% else %}Language{% endif %}</dt>
+                <dd>{% if languages %}{{ languages|join:", " }}{% else %}—{% endif %}</dd>
+            </div>
+            {% if countries.countries %}
+            <div class="record-row">
+                <dt class="label">Countries</dt>
+                <dd>{{ countries.countries|join:", " }}</dd>
+            </div>
+            {% elif countries.origin or countries.production %}
+            {% if countries.origin %}
+            <div class="record-row">
+                <dt class="label">Country of origin</dt>
+                <dd>{{ countries.origin|join:", " }}</dd>
+            </div>
+            {% endif %}
+            {% if countries.production %}
+            <div class="record-row">
+                <dt class="label">Production countries</dt>
+                <dd>{{ countries.production|join:", " }}</dd>
+            </div>
+            {% endif %}
+            {% endif %}
+            {% if creators %}
+            <div class="record-row">
+                <dt class="label">Created by</dt>
+                <dd>
+                    {% for creator in creators %}<a href="{% url 'movies:person_detail' creator.slug %}">{{ creator.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                </dd>
+            </div>
+            {% endif %}
+            {% if networks %}
+            <div class="record-row">
+                <dt class="label">{% if networks|length > 1 %}Networks{% else %}Network{% endif %}</dt>
+                <dd>{% for network in networks %}{{ network.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
+            </div>
+            {% endif %}
+            {% if studios %}
+            <div class="record-row">
+                <dt class="label">Studios</dt>
+                <dd>
+                    {% for studio in studios %}<a href="{% url 'movies:studio_detail' studio.slug %}">{{ studio.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                </dd>
+            </div>
+            {% endif %}
         </dl>
 
         {% comment %} Same slug-built link contract as movie_detail.html's genre
@@ -68,4 +113,64 @@
         {% endif %}
     </div>
 </article>
+
+{% if series.backdrop_path %}
+<figure class="backdrop-strip">
+    <img src="{{ series.backdrop_path|tmdb_image:'w1280' }}" alt="" loading="lazy" decoding="async">
+</figure>
+{% endif %}
+
+<section class="sheet-section" id="cast">
+    <div class="section-head">
+        <h2>Cast</h2>
+        <span class="section-note">{{ cast_count }} cast · {{ credit_count }} credit{{ credit_count|pluralize }}</span>
+    </div>
+    {% comment %} Same client-side pager as movie_detail.html's cast section —
+       measured mean ~690 credits/show against film's ~200, well within what
+       a browser already holds for the busiest films. {% endcomment %}
+    <div data-paged data-page-size="18" data-page-items=".poster-card">
+        <div class="poster-grid is-tight">
+            {% for credit in cast %}
+            {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
+            {% empty %}
+            <p class="empty">No cast recorded for this show.</p>
+            {% endfor %}
+        </div>
+        {% include "movies/_pager_client.html" with label="cast" only %}
+    </div>
+</section>
+
+<section class="sheet-section" id="crew">
+    <div class="section-head">
+        <h2>Crew</h2>
+        <span class="section-note">{{ crew_person_count }} crew</span>
+    </div>
+    <div data-paged data-page-size="10" data-page-items=".credit-row">
+        {% for department in crew %}
+        <div data-page-group>
+            <h3 class="credit-department">{{ department.name }}</h3>
+            <ul class="credit-list">
+                {% for m in department.people %}
+                <li class="credit-row">
+                    <a class="credit-person" href="{% url 'movies:person_detail' m.person.slug %}">
+                        {% if m.person.profile_path %}
+                        <img class="credit-avatar" src="{{ m.person.profile_path|tmdb_image:'w185' }}" alt="" loading="lazy" decoding="async">
+                        {% else %}
+                        <span class="credit-avatar placeholder-person" aria-hidden="true">
+                            <svg class="person-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8z"/></svg>
+                        </span>
+                        {% endif %}
+                        <span class="credit-name">{{ m.person.name }}</span>
+                    </a>
+                    <span class="credit-jobs">{{ m.job_display }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% empty %}
+        <p class="empty">No crew recorded for this show.</p>
+        {% endfor %}
+        {% include "movies/_pager_client.html" with label="crew" only %}
+    </div>
+</section>
 {% endblock %}

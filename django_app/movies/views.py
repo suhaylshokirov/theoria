@@ -10,7 +10,8 @@ from django.utils.text import slugify
 from movies.models import (
     Company, Credit, Genre, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person,
-    Series, SeriesRating,
+    Series, SeriesCompany, SeriesCountry, SeriesCredit, SeriesLanguage,
+    SeriesNetwork, SeriesRating,
 )
 
 MOVIES_PER_PAGE = 24
@@ -456,7 +457,7 @@ def movie_detail(request, movie_slug):
         .filter(movie_id=movie_id)
         .select_related("language")
     )
-    languages = _movie_languages(movie, language_rows)
+    languages = _reconcile_languages(movie.original_language, language_rows)
 
     # fact_movie_rating (Task 66-68) is one row per (movie, source) — no
     # genre fan-out — so this is a plain lookup, replacing the old
@@ -545,20 +546,23 @@ def _country_provenance(country_rows):
     return {"origin": [], "production": [], "countries": origin or production}
 
 
-def _movie_languages(movie, language_rows):
+def _reconcile_languages(original_language, language_rows):
     """One merged, deduplicated language list, anchored on original_language.
 
-    dim_movie.original_language and bridge_movie_language (Task 57/61) are
-    two facts about the same thing rather than two different things, so this
-    reconciles them into a single ordered list instead of shipping both
-    side by side unexplained (Task 62): the original language leads if it
-    resolves to a known dim_language row, followed by any other language the
-    bridge records for the film, each name listed once.
+    dim_movie/dim_series.original_language and bridge_{movie,series}_language
+    (Task 57/61, extended to TV by Task 79) are two facts about the same thing
+    rather than two different things, so this reconciles them into a single
+    ordered list instead of shipping both side by side unexplained (Task 62):
+    the original language leads if it resolves to a known dim_language row,
+    followed by any other language the bridge records for the title, each
+    name listed once. Takes the raw language code rather than the film/show
+    itself — the two bridges carry the same shape, so one function serves
+    both movie_detail() and series_detail().
     """
     names = []
     seen = set()
     original = next(
-        (r.language for r in language_rows if r.language_id == movie.original_language),
+        (r.language for r in language_rows if r.language_id == original_language),
         None,
     )
     if original:
@@ -572,31 +576,116 @@ def _movie_languages(movie, language_rows):
 
 
 def series_detail(request, series_slug):
-    """One show: the minimal record available before the full show page.
-
-    Cast/crew, networks, studios, countries, languages and episodes are all
-    Task 87-88 work (the record block, "Created by", the season/episode
-    grid) — this exists now only so /tv/<slug>/ resolves for the index
-    card's link instead of 404ing, with the handful of facts already on
-    dim_series/bridge_series_genre/fact_series_rating shown in the meantime.
+    """One show: mirrors movie_detail() — one query for every credit, split
+    into cast/crew and merged with the same _merge_crew()/_department_rank()
+    movie_detail() uses (Task 87), plus the TV-only record fields the film
+    page has no analogue for (first/last aired, status, seasons/episodes,
+    networks) in place of the film-only ones it drops (budget, revenue,
+    runtime). Episodes are Task 88.
     """
     series = get_object_or_404(Series.objects.using("warehouse"), slug=series_slug)
+    series_id = series.series_id
 
     genres = (
         Genre.objects.using("warehouse")
-        .filter(series_genres__series_id=series.series_id)
+        .filter(series_genres__series_id=series_id)
         .order_by("genre_name")
     )
 
+    # One query for every credit on the show, cast and crew (and, since Task
+    # 87, "Creator") alike — same shape as movie_detail()'s single Credit
+    # query, just against fact_series_credit. Measured mean ~690 credits/show
+    # against film's ~200, so materializing with list() before the client
+    # pager and _merge_crew() below matters even more here.
+    credits = list(
+        SeriesCredit.objects.using("warehouse")
+        .filter(series_id=series_id)
+        .select_related("person")
+        .order_by(F("ordering").asc(nulls_last=True), "job")
+    )
+
+    cast = [c for c in credits if c.department == "Acting"]
+
+    # _merge_crew()/_department_rank() are reused unchanged from movie_detail
+    # (Task 87 step 1) — they key on person and department, never on movie,
+    # so nothing about them needed to change for a series-keyed credit list.
+    # "Creation"/"Creator" (Task 87's created_by flatten) isn't in
+    # DEPARTMENT_ORDER, so it sorts after every known department here,
+    # exactly like the "Actors" TMDB anomaly _department_rank's docstring
+    # already accounts for.
+    crew_credits = [c for c in credits if c.department != "Acting"]
+    merged_crew = _merge_crew(crew_credits)
+
+    by_department = {}
+    for m in merged_crew:
+        by_department.setdefault(m["department"], []).append(m)
+    crew = [
+        {
+            "name": name,
+            "people": sorted(rows, key=lambda m: m["person"].name),
+            "count": len(rows),
+        }
+        for name, rows in sorted(
+            by_department.items(), key=lambda kv: _department_rank(kv[0])
+        )
+    ]
+
+    # "Created by" replaces "Directed by" — a show has no director credit.
+    # Task 87 decision: created_by is stored as a department="Creation"/
+    # job="Creator" row in fact_series_credit (see
+    # etl/silver/transform_series_credits.py's module docstring for why),
+    # so this reads exactly like movie_detail()'s `directors` line.
+    creators = [c.person for c in credits if c.job == "Creator"]
+
+    networks = [
+        sn.network for sn in
+        SeriesNetwork.objects.using("warehouse")
+        .filter(series_id=series_id)
+        .select_related("network")
+        .order_by("network__name")
+    ]
+
+    studios = [
+        sc.company for sc in
+        SeriesCompany.objects.using("warehouse")
+        .filter(series_id=series_id)
+        .select_related("company")
+        .order_by("company__name")
+    ]
+
+    country_rows = list(
+        SeriesCountry.objects.using("warehouse")
+        .filter(series_id=series_id)
+        .select_related("country")
+    )
+    countries = _country_provenance(country_rows)
+
+    language_rows = list(
+        SeriesLanguage.objects.using("warehouse")
+        .filter(series_id=series_id)
+        .select_related("language")
+    )
+    languages = _reconcile_languages(series.original_language, language_rows)
+
     series_rating = (
         SeriesRating.objects.using("warehouse")
-        .filter(series_id=series.series_id, source="imdb")
+        .filter(series_id=series_id, source="imdb")
         .first()
     )
 
     context = {
         "series": series,
         "genres": genres,
+        "cast": cast,
+        "cast_count": len(cast),
+        "crew": crew,
+        "crew_person_count": len(merged_crew),
+        "credit_count": len(credits),
+        "creators": creators,
+        "networks": networks,
+        "studios": studios,
+        "countries": countries,
+        "languages": languages,
         "series_rating": series_rating,
         "year_span": _series_year_span(series),
     }

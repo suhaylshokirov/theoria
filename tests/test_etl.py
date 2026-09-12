@@ -1895,6 +1895,8 @@ def test_transform_episodes_raises_when_no_season_files():
 # --- transform_series_credits (Task 80) --------------------------------
 
 from etl.silver.transform_series_credits import (
+    _count_role_entries,
+    _extract_creator_rows,
     _extract_credit_rows,
     _extract_people_rows,
     transform_series_credits,
@@ -1959,6 +1961,66 @@ def test_extract_people_rows_one_identity_per_person():
     assert next(r for r in rows if r["person_id"] == 999)["profile_path"] is None
 
 
+def test_extract_creator_rows_flattens_created_by():
+    """created_by (Task 87) has no roles[]/jobs[] array — one row per creator,
+    at TMDB's list order, department="Creation"/job="Creator"."""
+    raw = _raw_series_with_credits(1396, created_by=[
+        {"id": 66633, "name": "Vince Gilligan", "gender": 2, "profile_path": "/vg.jpg"},
+        {"id": 12345, "name": "Co-Creator", "gender": 0, "profile_path": None},
+    ])
+    rows = _extract_creator_rows(raw)
+    assert rows == [
+        {"series_id": 1396, "person_id": 66633, "department": "Creation", "job": "Creator",
+         "character_name": "", "episode_count": None, "ordering": 0},
+        {"series_id": 1396, "person_id": 12345, "department": "Creation", "job": "Creator",
+         "character_name": "", "episode_count": None, "ordering": 1},
+    ]
+
+
+def test_extract_creator_rows_empty_when_no_created_by():
+    assert _extract_creator_rows(_raw_series_with_credits(1396)) == []
+
+
+def test_count_role_entries_includes_creators():
+    raw = _raw_series_with_credits(1396, created_by=[
+        {"id": 66633, "name": "Vince Gilligan"},
+    ])
+    # 1 (Cranston) + 2 (Twins) + 2 (Gilligan EP/Director) + 1 (creator) = 6
+    assert _count_role_entries(raw) == 6
+
+
+def test_extract_people_rows_creator_only_identity_is_sparse():
+    """A creator with no aggregate_credits row of their own gets a bare
+    identity — name/gender/profile_path, no popularity/known_for_department
+    (created_by doesn't publish either)."""
+    raw = _raw_series_with_credits(1396, created_by=[
+        {"id": 12345, "name": "Co-Creator", "gender": 0, "profile_path": None},
+    ])
+    rows = _extract_people_rows(raw)
+    creator_row = next(r for r in rows if r["person_id"] == 12345)
+    assert creator_row == {
+        "person_id": 12345, "name": "Co-Creator", "gender": 0,
+        "popularity": None, "profile_path": None, "known_for_department": None,
+    }
+
+
+def test_extract_people_rows_richer_crew_identity_wins_over_creator_row():
+    """Vince Gilligan is both created_by *and* aggregate_credits crew here —
+    the richer crew row (real popularity/known_for_department) must be the
+    one still standing after transform_series_credits' drop_duplicates(keep=
+    'last'), not the sparse creator-only row (Task 87 module docstring)."""
+    raw = _raw_series_with_credits(1396, created_by=[
+        {"id": 66633, "name": "Vince Gilligan", "gender": 2, "profile_path": "/vg.jpg"},
+    ])
+    rows = _extract_people_rows(raw)
+    gilligan_rows = [r for r in rows if r["person_id"] == 66633]
+    assert len(gilligan_rows) == 2
+    # The creator (sparse) row comes first, the crew (rich) row last.
+    assert gilligan_rows[0]["popularity"] is None
+    assert gilligan_rows[-1]["popularity"] == 5.5
+    assert gilligan_rows[-1]["known_for_department"] == "Writing"
+
+
 def test_transform_series_credits_writes_both_parquets_with_multi_role_rows():
     key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
     mock_s3 = _make_s3_mock_with_files({key: _raw_series_with_credits(1396)})
@@ -1983,6 +2045,34 @@ def test_transform_series_credits_writes_both_parquets_with_multi_role_rows():
     # one person, two characters — both survive the grain
     assert sorted(credits[credits["person_id"] == 999]["character_name"]) == ["Twin A", "Twin B"]
     assert len(people) == 3
+
+
+def test_transform_series_credits_includes_creator_row_and_dedupes_identity():
+    """End-to-end: a creator who is also crew gets one extra 'Creator' credit
+    row, and the person identity survives with the richer crew data, not the
+    sparse creator-only one."""
+    raw = _raw_series_with_credits(1396, created_by=[
+        {"id": 66633, "name": "Vince Gilligan", "gender": 2, "profile_path": "/vg.jpg"},
+    ])
+    key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    mock_s3 = _make_s3_mock_with_files({key: raw})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_series_credits(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+    written = {c[1]["Key"]: pd.read_parquet(io.BytesIO(c[1]["Body"]))
+              for c in mock_s3.put_object.call_args_list}
+    credits = written["silver/series_credits/ingestion_date=2026-09-09/series_credits.parquet"]
+    people = written["silver/series_people/ingestion_date=2026-09-09/series_people.parquet"]
+
+    creator_rows = credits[credits["job"] == "Creator"]
+    assert len(creator_rows) == 1
+    assert creator_rows.iloc[0]["person_id"] == 66633
+    assert creator_rows.iloc[0]["department"] == "Creation"
+
+    gilligan = people[people["person_id"] == 66633].iloc[0]
+    assert gilligan["known_for_department"] == "Writing"
+    assert gilligan["popularity"] == 5.5
 
 
 def test_transform_series_credits_dedups_on_the_five_column_grain():

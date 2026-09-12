@@ -12,6 +12,18 @@ a `roles[]` array (cast) or a `jobs[]` array (crew), each entry a distinct
 job of this transform.** A cast member with three characters becomes three
 rows; a crew member with two jobs becomes two.
 
+`created_by` (Task 87) is a third, separate TMDB block — the show's creator(s)
+— carrying no department/job of its own and never nested inside
+`aggregate_credits`. Rather than a new table for a fact that's one row per
+(series, person) with no measure, it's flattened here into the same shape as
+every other credit: `department="Creation"`, `job="Creator"`, `ordering` the
+creator's position in TMDB's list (co-creator billing order). That keeps
+"who created this show" on the exact same FK-resolve/quarantine/render path
+as every other credit, and lets the show page's cast/crew section reuse
+`_merge_crew()`/`_department_rank()` unchanged — a creator who also writes for
+the show just gets "Creator / Writer" on one row, like a director who also
+produces a film.
+
 S3 source:  bronze/series_details/ingestion_date=YYYY-MM-DD/<series_id>.json
 S3 output:  silver/series_credits/ingestion_date=YYYY-MM-DD/series_credits.parquet
             silver/series_people/ingestion_date=YYYY-MM-DD/series_people.parquet
@@ -21,15 +33,20 @@ series_credits columns  (grain: series_id, person_id, department, job, character
     person_id       Int64
     department      string  — "Acting" for cast; the crew member's own
                               department otherwise (Directing, Writing, …) —
-                              matching `fact_credit`'s convention exactly
-    job             string  — "Actor" for cast; the crew job title otherwise
-    character_name  string  — the part played for cast; "" for crew. Coalesced
-                              to "" (never null) because it is in the grain and
-                              `fact_series_credit`'s PK cannot hold a null.
+                              matching `fact_credit`'s convention exactly;
+                              "Creation" for a created_by row
+    job             string  — "Actor" for cast; the crew job title otherwise;
+                              "Creator" for a created_by row
+    character_name  string  — the part played for cast; "" for crew/creator.
+                              Coalesced to "" (never null) because it is in
+                              the grain and `fact_series_credit`'s PK cannot
+                              hold a null.
     episode_count   Int64   — the measure: how many episodes this person did in
                               this role/job. `fact_series_credit` is the first
                               credit table in the warehouse with a real measure.
-    ordering        Int64   — cast billing order (null for crew)
+                              Null for a created_by row — TMDB doesn't publish one.
+    ordering        Int64   — cast billing order (null for crew); co-creator
+                              billing order for a created_by row
 
 series_people columns  (grain: person_id) — the person-identity hand-off:
     person_id, name, gender, popularity, profile_path, known_for_department
@@ -37,7 +54,14 @@ series_people columns  (grain: person_id) — the person-identity hand-off:
     file (under --with-tv) and folds these rows into its own person dedupe, so
     a TV-only actor gets a `dim_person` row and then flows through the existing
     `GET /person/{id}` bio enrichment with no further change — TMDB has one
-    person namespace across film and TV.
+    person namespace across film and TV. A `created_by` entry carries only
+    name/gender/profile_path (no popularity or known_for_department, TMDB
+    doesn't publish either there); those rows are emitted *before* the
+    cast/crew rows in each payload's contribution so that a creator who is
+    also credited in `aggregate_credits` (the common case — a showrunner who
+    also writes) has their richer cast/crew row win the later
+    `drop_duplicates(keep="last")` rather than being overwritten by the
+    sparser creator-only identity.
 
 Rows with a null series_id / person_id, or an empty department/job, are dropped
 with a warning — never silently. `character_name` is never a drop reason; it is
@@ -133,12 +157,36 @@ def _extract_credit_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
-def _count_role_entries(payload: dict[str, Any]) -> int:
-    """How many (role | job) entries this payload's aggregate_credits holds.
+def _extract_creator_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Flatten one series payload's top-level `created_by` into credit rows.
 
-    The number `_extract_credit_rows` must produce for this payload before
-    dedup (a member with no array counts as 1 — the fallback row). If the two
-    ever disagree the flatten is broken and the run says so loudly.
+    One row per creator, at TMDB's own list order (co-creator billing). No
+    roles[]/jobs[] array to flatten here — created_by is already one object
+    per creator — so, unlike `_extract_credit_rows`, there's no fan-out.
+    """
+    series_id = payload.get("id")
+    return [
+        {
+            "series_id": series_id,
+            "person_id": creator.get("id"),
+            "department": "Creation",
+            "job": "Creator",
+            "character_name": "",
+            "episode_count": None,
+            "ordering": i,
+        }
+        for i, creator in enumerate(payload.get("created_by") or [])
+    ]
+
+
+def _count_role_entries(payload: dict[str, Any]) -> int:
+    """How many (role | job | creator) entries this payload must flatten to.
+
+    The number `_extract_credit_rows` + `_extract_creator_rows` must produce
+    for this payload before dedup (a cast/crew member with no array counts as
+    1 — the fallback row; each created_by entry counts as exactly 1, it has
+    no array of its own). If the two ever disagree the flatten is broken and
+    the run says so loudly.
     """
     agg = payload.get("aggregate_credits") or {}
     total = 0
@@ -146,13 +194,27 @@ def _count_role_entries(payload: dict[str, Any]) -> int:
         total += max(len(member.get("roles") or []), 1)
     for member in agg.get("crew") or []:
         total += max(len(member.get("jobs") or []), 1)
+    total += len(payload.get("created_by") or [])
     return total
 
 
 def _extract_people_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """One identity row per credited person in this series payload, cast and crew."""
+    """One identity row per credited person in this series payload: creators
+    first, then cast and crew — see the module docstring for why the order
+    matters (a richer cast/crew row must win drop_duplicates(keep="last")
+    over a sparser creator-only identity for the same person).
+    """
     agg = payload.get("aggregate_credits") or {}
     rows: list[dict[str, Any]] = []
+    for creator in payload.get("created_by") or []:
+        rows.append({
+            "person_id": creator.get("id"),
+            "name": creator.get("name"),
+            "gender": creator.get("gender"),
+            "popularity": None,
+            "profile_path": creator.get("profile_path") or None,
+            "known_for_department": None,
+        })
     for member in (*(agg.get("cast") or []), *(agg.get("crew") or [])):
         rows.append({
             "person_id": member.get("id"),
@@ -225,6 +287,7 @@ def transform_series_credits(
             if read_err is not None:
                 raise read_err
             credit_rows.extend(_extract_credit_rows(payload))
+            credit_rows.extend(_extract_creator_rows(payload))
             people_rows.extend(_extract_people_rows(payload))
             expected_role_entries += _count_role_entries(payload)
         except Exception as exc:

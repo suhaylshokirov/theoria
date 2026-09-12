@@ -31,8 +31,9 @@ from django.test.utils import setup_test_environment, teardown_test_environment 
 
 from movies.models import (  # noqa: E402
     Company, Country, Credit, Genre, Language, Movie, MovieCompany,
-    MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person,
-    Series, SeriesRating,
+    MovieCountry, MovieLanguage, MovieRating, MovieVideo, Network, Person,
+    Series, SeriesCompany, SeriesCountry, SeriesCredit, SeriesLanguage,
+    SeriesNetwork, SeriesRating,
 )
 
 client = Client()
@@ -555,22 +556,56 @@ def test_series_list_genre_survives_pagination():
     assert "genre=drama" in base_query
 
 
+@contextlib.contextmanager
+def _series_detail_mocks(series, credits=None):
+    """Mock every manager series_detail() reads (Task 87 — the SeriesCredit-
+    era counterpart of _movie_detail_video_mocks), with SeriesCredit returning
+    `credits` and everything else empty. Yields the mocks by name so a test
+    can still override one of them."""
+    with patch("movies.views.get_object_or_404", return_value=series), patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr, patch.object(
+        SeriesCredit, "objects", new=MagicMock()
+    ) as credit_mgr, patch.object(
+        SeriesRating, "objects", new=MagicMock()
+    ) as rating_mgr, patch.object(
+        SeriesNetwork, "objects", new=MagicMock()
+    ) as network_mgr, patch.object(
+        SeriesCompany, "objects", new=MagicMock()
+    ) as company_mgr, patch.object(
+        SeriesCountry, "objects", new=MagicMock()
+    ) as country_mgr, patch.object(
+        SeriesLanguage, "objects", new=MagicMock()
+    ) as language_mgr:
+        genre_mgr.using.return_value.filter.return_value.order_by.return_value = []
+        credit_mgr.using.return_value.filter.return_value.select_related.return_value \
+            .order_by.return_value = credits or []
+        rating_mgr.using.return_value.filter.return_value.first.return_value = None
+        network_mgr.using.return_value.filter.return_value.select_related.return_value \
+            .order_by.return_value = []
+        company_mgr.using.return_value.filter.return_value.select_related.return_value \
+            .order_by.return_value = []
+        country_mgr.using.return_value.filter.return_value.select_related.return_value = []
+        language_mgr.using.return_value.filter.return_value.select_related.return_value = []
+        yield {
+            "genre": genre_mgr, "credit": credit_mgr, "rating": rating_mgr,
+            "network": network_mgr, "company": company_mgr,
+            "country": country_mgr, "language": language_mgr,
+        }
+
+
 def test_series_detail_returns_200_with_expected_context():
     show = _series()
 
-    with patch("movies.views.get_object_or_404", return_value=show), patch.object(
-        Genre, "objects", new=MagicMock()
-    ) as genre_mgr, patch.object(
-        SeriesRating, "objects", new=MagicMock()
-    ) as rating_mgr:
-        genre_mgr.using.return_value.filter.return_value.order_by.return_value = []
-        rating_mgr.using.return_value.filter.return_value.first.return_value = None
-
+    with _series_detail_mocks(show):
         response = client.get("/tv/test-show/")
 
     assert response.status_code == 200
     assert response.context["series"] == show
     assert response.context["year_span"] == "2011–2019"
+    assert response.context["cast"] == []
+    assert response.context["crew"] == []
+    assert response.context["creators"] == []
 
 
 def test_series_detail_404_when_missing():
@@ -580,6 +615,104 @@ def test_series_detail_404_when_missing():
         response = client.get("/tv/does-not-exist/")
 
     assert response.status_code == 404
+
+
+def test_series_detail_cast_and_crew_reuse_movie_page_merge_logic():
+    """_merge_crew()/_department_rank() are reused unchanged from
+    movie_detail() (Task 87 step 1): a showrunner credited as both Director
+    and Writer collapses to one crew row, filed under Directing."""
+    show = _series()
+    actor = _person(person_id=1, name="Test Actor", slug="test-actor")
+    showrunner = _person(person_id=2, name="Showrunner", slug="showrunner")
+    credits = [
+        SeriesCredit(series=show, person=actor, department="Acting",
+                     job="Actor", character_name="Hero", ordering=0),
+        SeriesCredit(series=show, person=showrunner, department="Directing",
+                     job="Director", character_name=""),
+        SeriesCredit(series=show, person=showrunner, department="Writing",
+                     job="Writer", character_name=""),
+    ]
+
+    with _series_detail_mocks(show, credits=credits):
+        response = client.get("/tv/test-show/")
+
+    assert [c.person for c in response.context["cast"]] == [actor]
+    groups = response.context["crew"]
+    assert [g["name"] for g in groups] == ["Directing"]
+    assert groups[0]["people"][0]["job_display"] == "Director / Writer"
+
+
+def test_series_detail_created_by_renders_as_a_record_row_and_links_to_person():
+    """'Created by' replaces 'Directed by' — sourced from the job='Creator'
+    row Task 87 stores in fact_series_credit (see the ETL module docstring),
+    read exactly like movie_detail()'s `directors` line."""
+    show = _series()
+    creator = _person(person_id=3, name="Vince Gilligan", slug="vince-gilligan")
+    credits = [
+        SeriesCredit(series=show, person=creator, department="Creation",
+                     job="Creator", character_name="", ordering=0),
+    ]
+
+    with _series_detail_mocks(show, credits=credits):
+        response = client.get("/tv/test-show/")
+
+    assert response.context["creators"] == [creator]
+    body = response.content.decode()
+    assert "Created by" in body
+    assert 'href="/people/vince-gilligan/"' in body
+    assert "Vince Gilligan" in body
+
+
+def test_series_detail_renders_networks_studios_countries_languages():
+    show = _series()
+    network = Network(network_id=1, name="AMC", slug="amc")
+    studio = Company(company_id=1, name="Sony Pictures Television", slug="sony-pictures-television")
+    country = Country(country_code="US", name="United States of America")
+    language = Language(language_code="en", name="English", english_name="English")
+
+    with _series_detail_mocks(show) as mocks:
+        mocks["network"].using.return_value.filter.return_value.select_related.return_value \
+            .order_by.return_value = [SeriesNetwork(series=show, network=network)]
+        mocks["company"].using.return_value.filter.return_value.select_related.return_value \
+            .order_by.return_value = [SeriesCompany(series=show, company=studio)]
+        mocks["country"].using.return_value.filter.return_value.select_related.return_value = [
+            SeriesCountry(series=show, country=country, relation="origin"),
+        ]
+        mocks["language"].using.return_value.filter.return_value.select_related.return_value = [
+            SeriesLanguage(series=show, language=language),
+        ]
+
+        response = client.get("/tv/test-show/")
+
+    assert response.context["networks"] == [network]
+    assert response.context["studios"] == [studio]
+    body = response.content.decode()
+    assert "AMC" in body
+    assert 'href="/studios/sony-pictures-television/"' in body
+    assert "United States of America" in body
+    assert "English" in body
+
+
+def test_series_detail_sends_every_credit_for_client_side_paging():
+    """Same client-side-paging contract as movie_detail() — the whole credit
+    list must reach the page. Measured mean ~690 credits/show against film's
+    ~200 (task preamble), so this checks the pager holds at that top end."""
+    show = _series()
+    credits = [
+        SeriesCredit(
+            series=show,
+            person=_person(person_id=i, name=f"Actor {i}", slug=f"actor-{i}"),
+            department="Acting", job="Actor", character_name=f"Role {i}", ordering=i,
+        )
+        for i in range(1, 691)
+    ]
+
+    with _series_detail_mocks(show, credits=credits):
+        response = client.get("/tv/test-show/")
+
+    assert response.context["cast_count"] == 690
+    assert response.context["credit_count"] == 690
+    assert len(response.context["cast"]) == 690
 
 
 # ---------------------------------------------------------------------------
