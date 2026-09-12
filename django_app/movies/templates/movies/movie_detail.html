@@ -95,6 +95,8 @@
             {% endif %}
         </dl>
 
+        {% include "movies/_collection_actions.html" with content_type="movie" content_id=movie.movie_id collection_flags=collection_flags request=request only %}
+
         {% comment %} Each genre links back to the Movies index filtered to it (Task 71).
            No ?sort= on the link: /movies/ already defaults to newest-first, which
            is what a reader clicking "Horror" wants to land on. The slug is built

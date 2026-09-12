@@ -35,6 +35,7 @@ from movies.models import (  # noqa: E402
     Series, SeriesCompany, SeriesCountry, SeriesCredit, SeriesLanguage,
     SeriesNetwork, SeriesRating,
 )
+from core.models import User  # noqa: E402
 
 client = Client()
 
@@ -44,9 +45,16 @@ def setup_module(module):
     # by Django's own test runner / pytest-django, neither of which is in
     # play for these plain-pytest tests).
     setup_test_environment()
+    user, _ = User.objects.get_or_create(
+        email="views-test@example.com",
+        defaults={"username": "views-test"},
+    )
+    client.force_login(user)
 
 
 def teardown_module(module):
+    client.logout()
+    User.objects.filter(email="views-test@example.com").delete()
     teardown_test_environment()
 
 

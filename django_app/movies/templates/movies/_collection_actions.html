@@ -1,0 +1,23 @@
+<div class="collection-actions" aria-label="Personal collections">
+    <form method="post" action="{% url 'account:toggle_collection' kind='liked' content_type=content_type content_id=content_id %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button class="collection-action{% if collection_flags.liked %} is-selected{% endif %}" type="submit"{% if collection_flags.liked %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
+            {% if collection_flags.liked %}Liked{% else %}Like{% endif %}
+        </button>
+    </form>
+    <form method="post" action="{% url 'account:toggle_collection' kind='watch_later' content_type=content_type content_id=content_id %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button class="collection-action{% if collection_flags.watch_later %} is-selected{% endif %}" type="submit"{% if collection_flags.watch_later %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
+            {% if collection_flags.watch_later %}In watch later{% else %}Watch later{% endif %}
+        </button>
+    </form>
+    <form method="post" action="{% url 'account:toggle_collection' kind='top' content_type=content_type content_id=content_id %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button class="collection-action{% if collection_flags.top %} is-selected{% endif %}" type="submit"{% if collection_flags.top %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
+            {% if collection_flags.top %}In top{% else %}Add to top{% endif %}
+        </button>
+    </form>
+</div>
