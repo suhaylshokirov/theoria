@@ -53,6 +53,7 @@ from etl.silver.transform_episodes import transform_episodes
 from etl.silver.transform_series import transform_series
 from etl.silver.transform_series_credits import transform_series_credits
 from etl.silver.transform_series_links import transform_series_links
+from etl.silver.transform_series_videos import transform_series_videos
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
 
@@ -205,11 +206,12 @@ def run_pipeline(
     The TV series path runs unconditionally (Task 85 removed the `--with-tv`
     gate that Tasks 77–84 hid it behind): Bronze (discover_tv + series_details
     + seasons + the TV genre list), Silver (transform_series,
-    transform_series_links, transform_series_credits, transform_episodes, the
-    TV half of transform_genres / transform_imdb_ratings / run_silver_checks,
-    and transform_people folding in TV-only people), and the warehouse
-    (load_dimensions / load_facts self-load dim_series, dim_network, dim_season,
-    dim_episode, the series bridges and the series/episode facts). The
+    transform_series_links, transform_series_credits, transform_episodes,
+    transform_series_videos (Task 90), the TV half of transform_genres /
+    transform_imdb_ratings / run_silver_checks, and transform_people folding
+    in TV-only people), and the warehouse (load_dimensions / load_facts
+    self-load dim_series, dim_network, dim_season, dim_episode,
+    dim_series_video, the series bridges and the series/episode facts). The
     warehouse loaders and warehouse_checks still self-degrade when a partition
     has no series Silver files, so a pre-Task-85 partition replays unchanged.
     """
@@ -319,6 +321,7 @@ def run_pipeline(
     transform_series_links(ingestion_date=ingestion_date)
     transform_series_credits(ingestion_date=ingestion_date)
     transform_episodes(ingestion_date=ingestion_date)
+    transform_series_videos(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date, with_tv=True)
     transform_people_details(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date, with_tv=True)

@@ -3,12 +3,14 @@
 
 {% block title %}Theoria — {{ series.name }}{% endblock %}
 
+{% comment %} Same YouTube preconnect handshake as movie_detail.html — only a
+   show page with a trailer loads a still. {% endcomment %}
+{% block extra_head %}{% if trailer %}<link rel="preconnect" href="https://img.youtube.com">{% endif %}{% endblock %}
+
 {% block content %}
 {% comment %} Same .specimen shell movie_detail.html uses (Task 71's judgment
    applies equally here): a framed poster plate, the record beside it, the
-   backdrop as a thin strip below rather than behind the text. No trailer
-   slot yet — dim_series_video is Task 90; until then the backdrop always
-   shows when there is one. {% endcomment %}
+   backdrop as a thin strip below rather than behind the text. {% endcomment %}
 <article class="specimen">
     <div class="specimen-plate">
         {% if series.poster_path %}
@@ -114,7 +116,14 @@
     </div>
 </article>
 
-{% if series.backdrop_path %}
+{% comment %} A trailer and a backdrop compete for the same slot, same
+   judgment as movie_detail.html (Task 75/90): the trailer takes it when
+   there is one, the backdrop stays only otherwise. {% endcomment %}
+{% if trailer %}
+<figure class="video-strip">
+    {% include "movies/_video_embed.html" with video=trailer kind="trailer" only %}
+</figure>
+{% elif series.backdrop_path %}
 <figure class="backdrop-strip">
     <img src="{{ series.backdrop_path|tmdb_image:'w1280' }}" alt="" loading="lazy" decoding="async">
 </figure>

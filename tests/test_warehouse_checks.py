@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 26  # 14 movie/person (2 fact_collaboration checks dropped, Task 87) + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81) + 3 episode grain (84)
+    assert len(results) == 27  # 14 movie/person (2 fact_collaboration checks dropped, Task 87) + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81) + 3 episode grain (84) + 1 dim_series_video (90)
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 25
+    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 26
 
     results = check_fk_integrity(mock_session)
 
@@ -907,6 +907,81 @@ def test_check_row_count_sanity_skips_series_credits_when_no_silver_file():
         results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
 
     assert not any(r.check.startswith("rowcount:series_credits") for r in results)
+
+
+# --- Task 90: dim_series_video row-count sanity ----------------------------
+
+def _silver_series_videos_df(series_ids):
+    n = len(series_ids)
+    return pd.DataFrame({
+        "series_id": list(series_ids),
+        "video_id": [f"v{i}" for i in range(n)],
+        "name": ["x"] * n, "key": ["k"] * n, "site": ["YouTube"] * n,
+        "type": ["Trailer"] * n, "official": [True] * n, "size": [1080] * n,
+        "iso_639_1": ["en"] * n, "iso_3166_1": ["US"] * n,
+        "published_at": ["2016-01-01T00:00:00Z"] * n,
+    })
+
+
+def _series_videos_branch(series_ids) -> dict[str, bytes]:
+    buf = io.BytesIO()
+    _silver_series_videos_df(series_ids).to_parquet(buf, engine="pyarrow", index=False)
+    return {"/series_videos/": buf.getvalue()}
+
+
+def test_check_row_count_sanity_series_videos_compares_distinct_series_ids():
+    """silver/series_videos is one row per (series_id, video_id) — a show with
+    8 clips is 8 Silver rows but must compare against nunique(series_id), the
+    same movie_videos guard (Task 58) applied to the TV side."""
+    mock_s3 = _mock_s3_for_full_row_count_sanity(
+        _series_videos_branch([1396, 1396, 1396, 60625])
+    )
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 4  # >= 2 distinct series_ids
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    s2w = next(r for r in results if r.check == "rowcount:series_videos:silver_to_warehouse")
+    load = next(r for r in results if r.check == "rowcount:series_videos:load")
+    assert s2w.passed is True
+    assert "Silver distinct series_id=2" in s2w.detail
+    assert load.passed is True
+
+
+def test_check_row_count_sanity_series_videos_fails_when_load_produced_nothing():
+    mock_s3 = _mock_s3_for_full_row_count_sanity(_series_videos_branch([1396, 60625]))
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 0  # nothing loaded
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    load = next(r for r in results if r.check == "rowcount:series_videos:load")
+    assert load.passed is False
+    assert "0 row(s)" in load.detail
+
+
+def test_check_row_count_sanity_skips_series_videos_when_no_silver_file():
+    """A warehouse with no TV Silver at all has no series_videos result —
+    the same explicit-skip shape as dim_series/series_credits, not
+    movie_videos' always-on nunique(...)-defaults-to-0 shape (see the
+    production code's comment for why that distinction matters here)."""
+    mock_s3 = _mock_s3_for_full_row_count_sanity({})
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 50
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = check_row_count_sanity(mock_session, "bucket", dt.date(2026, 9, 9))
+
+    assert not any(r.check.startswith("rowcount:series_videos") for r in results)
+
+
+def test_check_fk_integrity_covers_dim_series_video():
+    mock_session = MagicMock()
+    mock_session.execute.return_value.scalar.return_value = 0
+    names = {r.check for r in check_fk_integrity(mock_session)}
+    assert "fk:dim_series_video.series_id->dim_series.series_id" in names
 
 
 def test_check_fk_integrity_covers_fact_series_credit():

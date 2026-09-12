@@ -1,3 +1,4 @@
+import itertools
 from datetime import date
 
 from django.core.paginator import Paginator
@@ -11,7 +12,7 @@ from movies.models import (
     Company, Credit, Episode, Genre, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person, Season,
     Series, SeriesCompany, SeriesCountry, SeriesCredit, SeriesLanguage,
-    SeriesNetwork, SeriesRating,
+    SeriesNetwork, SeriesRating, SeriesVideo,
 )
 
 MOVIES_PER_PAGE = 24
@@ -85,15 +86,45 @@ def home(request):
         .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
         .order_by(F("release_date").desc(nulls_last=True))[:12]
     )
+    # Task 90: TV's "what's new" analogue orders by *last* air date, not
+    # first — a long-running show that just aired a new episode is genuinely
+    # "recently aired" in a way a canceled show that merely premiered the
+    # same year is not. A movie has one date that means both things at once;
+    # a show doesn't, so this can't just reuse newest's ordering.
+    recently_aired = (
+        Series.objects.using("warehouse")
+        .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
+        .order_by(F("last_air_date").desc(nulls_last=True))[:12]
+    )
+    for show in recently_aired:
+        show.year_span = _series_year_span(show)
 
-    # The mosaic only holds films that actually have a poster — a missing
-    # image would punch a hole in the sheet. It never renders through
-    # _movie_card.html (see home.html), so it doesn't need imdb_rating.
-    mosaic = (
+    # The mosaic mixes movies and shows now (Task 90) — it's meant to read as
+    # "the whole catalog at once" (MOSAIC_LIMIT's own docstring), and TV is
+    # part of that catalog. A fixed 100:20 split, not the live ~5:3 catalog
+    # ratio (1,217 movies : 734 shows) — movies stay the dominant surface of
+    # the site (nav order, the "world of movies" hero copy) while TV still
+    # gets a real, visibly-present slice rather than a token single tile.
+    # Only films/shows with a poster (a missing image would punch a hole in
+    # the sheet); neither list renders through a card partial, so neither
+    # needs its imdb_rating annotated.
+    movie_tiles = [
+        {"kind": "movie", "slug": slug, "poster_path": poster_path}
+        for slug, poster_path in
         Movie.objects.using("warehouse")
         .filter(poster_path__isnull=False)
-        .order_by(F("release_date").desc(nulls_last=True))[:MOSAIC_LIMIT]
-    )
+        .order_by(F("release_date").desc(nulls_last=True))
+        .values_list("slug", "poster_path")[:100]
+    ]
+    series_tiles = [
+        {"kind": "series", "slug": slug, "poster_path": poster_path}
+        for slug, poster_path in
+        Series.objects.using("warehouse")
+        .filter(poster_path__isnull=False)
+        .order_by(F("first_air_date").desc(nulls_last=True))
+        .values_list("slug", "poster_path")[:20]
+    ]
+    mosaic = _interleave_mosaic(movie_tiles, series_tiles, ratio=5)
 
     context = {
         # Shown as "1,200+" etc. — an approximate figure, not an exact count.
@@ -110,9 +141,27 @@ def home(request):
         ).aggregate(avg_rating=Avg("rating"))["avg_rating"],
         "top_rated": top_rated,
         "newest": newest,
+        "recently_aired": recently_aired,
         "mosaic": mosaic,
     }
     return render(request, "movies/home.html", context)
+
+
+def _interleave_mosaic(primary, secondary, ratio):
+    """Merge two home-mosaic tile lists so `secondary` tiles are spaced
+    roughly one every `ratio` positions among `primary`'s, rather than
+    clumped at one end of the (decorative, aria-hidden) collage (Task 90)."""
+    merged = []
+    primary_iter = iter(primary)
+    secondary_iter = iter(secondary)
+    while True:
+        merged.extend(itertools.islice(primary_iter, ratio))
+        try:
+            merged.append(next(secondary_iter))
+        except StopIteration:
+            merged.extend(primary_iter)
+            break
+    return merged
 
 
 def movie_list(request):
@@ -581,8 +630,9 @@ def series_detail(request, series_slug):
     movie_detail() uses (Task 87), plus the TV-only record fields the film
     page has no analogue for (first/last aired, status, seasons/episodes,
     networks) in place of the film-only ones it drops (budget, revenue,
-    runtime), and every episode grouped by season with its own IMDb rating
-    (Task 88) — the one thing a film page has no analogue for at all.
+    runtime), every episode grouped by season with its own IMDb rating
+    (Task 88), and a trailer via dim_series_video (Task 90) reusing
+    movie_detail()'s _pick_trailer() unchanged.
     """
     series = get_object_or_404(Series.objects.using("warehouse"), slug=series_slug)
     series_id = series.series_id
@@ -674,6 +724,18 @@ def series_detail(request, series_slug):
         .first()
     )
 
+    # dim_series_video (Task 90): the movie page's trailer pipeline, reused
+    # unchanged — same query shape as movie_detail()'s, same _pick_trailer()
+    # ladder, same _video_embed.html partial. No clips section here either
+    # (that feature was removed from the film page by user request 2026-09-07,
+    # so it was never built for TV in the first place).
+    videos = list(
+        SeriesVideo.objects.using("warehouse")
+        .filter(series_id=series_id, site="YouTube")
+        .order_by(F("published_at").desc(nulls_last=True), "video_id")
+    )
+    trailer = _pick_trailer(videos)
+
     seasons = sorted(
         Season.objects.using("warehouse").filter(series_id=series_id),
         # "Specials" (season_number 0) reads last, not first, matching the
@@ -729,6 +791,7 @@ def series_detail(request, series_slug):
         "series_rating": series_rating,
         "seasons": seasons,
         "year_span": _series_year_span(series),
+        "trailer": trailer,
     }
     return render(request, "movies/series_detail.html", context)
 

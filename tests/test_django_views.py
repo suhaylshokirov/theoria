@@ -33,7 +33,7 @@ from movies.models import (  # noqa: E402
     Company, Country, Credit, Episode, Genre, Language, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieRating, MovieVideo, Network, Person,
     Season, Series, SeriesCompany, SeriesCountry, SeriesCredit,
-    SeriesLanguage, SeriesNetwork, SeriesRating,
+    SeriesLanguage, SeriesNetwork, SeriesRating, SeriesVideo,
 )
 
 client = Client()
@@ -70,8 +70,11 @@ def _movie(movie_id=1, title="Test Movie"):
 
 def test_home_returns_200_with_expected_context():
     movie = _movie()
+    show = _series()
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr, patch.object(
         Person, "objects", new=MagicMock()
     ) as person_mgr, patch.object(
         MovieRating, "objects", new=MagicMock()
@@ -82,8 +85,17 @@ def test_home_returns_200_with_expected_context():
         # (Task 68), so both hit this same chain regardless of which order_by
         # expression each actually orders by.
         using.annotate.return_value.order_by.return_value.__getitem__.return_value = [movie]
-        # mosaic: .filter(poster_path__isnull=False).order_by(...)[:120]
-        using.filter.return_value.order_by.return_value.__getitem__.return_value = [movie]
+        # the mosaic's movie tiles: .filter(...).order_by(...).values_list(...)[:100]
+        using.filter.return_value.order_by.return_value.values_list.return_value \
+            .__getitem__.return_value = [(movie.slug, movie.poster_path)]
+
+        series_using = series_mgr.using.return_value
+        # recently_aired: .annotate(imdb_rating=...).order_by(...)[:12]
+        series_using.annotate.return_value.order_by.return_value.__getitem__.return_value = [show]
+        # the mosaic's series tiles: .filter(...).order_by(...).values_list(...)[:20]
+        series_using.filter.return_value.order_by.return_value.values_list.return_value \
+            .__getitem__.return_value = [(show.slug, show.poster_path)]
+
         person_mgr.using.return_value.count.return_value = 122685
         # avg_rating now reads fact_movie_rating filtered to source="imdb"
         # instead of averaging every fact_movie_metrics row (Task 68).
@@ -102,7 +114,12 @@ def test_home_returns_200_with_expected_context():
     assert response.context["avg_rating"] == Decimal("6.84")
     assert list(response.context["top_rated"]) == [movie]
     assert list(response.context["newest"]) == [movie]
-    assert list(response.context["mosaic"]) == [movie]
+    assert list(response.context["recently_aired"]) == [show]
+    # The mosaic mixes both kinds (Task 90) — one movie tile, one show tile.
+    mosaic = response.context["mosaic"]
+    assert {t["kind"] for t in mosaic} == {"movie", "series"}
+    assert {"kind": "movie", "slug": movie.slug, "poster_path": movie.poster_path} in mosaic
+    assert {"kind": "series", "slug": show.slug, "poster_path": show.poster_path} in mosaic
 
 
 def test_home_approx_rounds_counts_down():
@@ -557,11 +574,12 @@ def test_series_list_genre_survives_pagination():
 
 
 @contextlib.contextmanager
-def _series_detail_mocks(series, credits=None, seasons=None, episodes=None):
+def _series_detail_mocks(series, credits=None, seasons=None, episodes=None, videos=None):
     """Mock every manager series_detail() reads (Task 87 — the SeriesCredit-
     era counterpart of _movie_detail_video_mocks; Task 88 added Season/
-    Episode), with SeriesCredit returning `credits`, Season/Episode returning
-    `seasons`/`episodes`, and everything else empty. Yields the mocks by name
+    Episode; Task 90 added SeriesVideo), with SeriesCredit returning
+    `credits`, Season/Episode returning `seasons`/`episodes`, SeriesVideo
+    returning `videos`, and everything else empty. Yields the mocks by name
     so a test can still override one of them."""
     with patch("movies.views.get_object_or_404", return_value=series), patch.object(
         Genre, "objects", new=MagicMock()
@@ -581,7 +599,9 @@ def _series_detail_mocks(series, credits=None, seasons=None, episodes=None):
         Season, "objects", new=MagicMock()
     ) as season_mgr, patch.object(
         Episode, "objects", new=MagicMock()
-    ) as episode_mgr:
+    ) as episode_mgr, patch.object(
+        SeriesVideo, "objects", new=MagicMock()
+    ) as video_mgr:
         genre_mgr.using.return_value.filter.return_value.order_by.return_value = []
         credit_mgr.using.return_value.filter.return_value.select_related.return_value \
             .order_by.return_value = credits or []
@@ -595,11 +615,12 @@ def _series_detail_mocks(series, credits=None, seasons=None, episodes=None):
         season_mgr.using.return_value.filter.return_value = seasons or []
         episode_mgr.using.return_value.filter.return_value.annotate.return_value \
             .order_by.return_value = episodes or []
+        video_mgr.using.return_value.filter.return_value.order_by.return_value = videos or []
         yield {
             "genre": genre_mgr, "credit": credit_mgr, "rating": rating_mgr,
             "network": network_mgr, "company": company_mgr,
             "country": country_mgr, "language": language_mgr,
-            "season": season_mgr, "episode": episode_mgr,
+            "season": season_mgr, "episode": episode_mgr, "video": video_mgr,
         }
 
 
@@ -804,6 +825,59 @@ def test_series_detail_specials_sort_last_regardless_of_season_number():
 
     ordered = [s["season"] for s in response.context["seasons"]]
     assert ordered == [season1, season2, specials]
+
+
+def _series_video(video_id, *, type="Trailer", official=True, name=None, key=None):
+    return SeriesVideo(
+        series=_series(), video_id=video_id, name=name or f"{type} {video_id}",
+        key=key or f"key_{video_id}", site="YouTube", type=type,
+        official=official, size=1080, ingestion_date=date(2026, 9, 9),
+    )
+
+
+def test_series_detail_trailer_takes_the_backdrop_slot():
+    """Task 90: dim_series_video reuses movie_detail()'s _pick_trailer()
+    ladder and _video_embed.html unchanged."""
+    show = _series()
+    show.backdrop_path = "/bd.jpg"
+    trailer = _series_video("t1", key="TRAILERKEY")
+
+    with _series_detail_mocks(show, videos=[trailer]):
+        response = client.get("/tv/test-show/")
+
+    assert response.status_code == 200
+    assert response.context["trailer"] is trailer
+    body = response.content.decode()
+    assert 'class="video-strip"' in body
+    assert "img.youtube.com/vi/TRAILERKEY/hqdefault.jpg" in body
+    assert 'class="backdrop-strip"' not in body
+
+
+def test_series_detail_keeps_backdrop_when_there_is_no_trailer():
+    show = _series()
+    show.backdrop_path = "/bd.jpg"
+
+    with _series_detail_mocks(show, videos=[]):
+        response = client.get("/tv/test-show/")
+
+    assert response.context["trailer"] is None
+    body = response.content.decode()
+    assert 'class="backdrop-strip"' in body
+    assert 'class="video-strip"' not in body
+
+
+def test_series_detail_no_video_blocks_when_show_has_no_videos():
+    show = _series()
+    show.backdrop_path = None
+
+    with _series_detail_mocks(show, videos=[]):
+        response = client.get("/tv/test-show/")
+
+    assert response.status_code == 200
+    assert response.context["trailer"] is None
+    body = response.content.decode()
+    assert 'class="video-strip"' not in body
+    assert 'class="backdrop-strip"' not in body
 
 
 # ---------------------------------------------------------------------------
@@ -2716,6 +2790,18 @@ def test_analytics_dashboard_returns_200_with_expected_context():
         "films_by_production_country.sql": [
             {"country_name": "Japan", "film_count": 7, "avg_rating": Decimal("7.4")}
         ],
+        # Task 90: TV panels.
+        "series_by_decade.sql": [{"decade": 2010, "series_count": 40, "avg_rating": Decimal("7.8")}],
+        "episode_rating_by_season.sql": [
+            {"season_number": 1, "show_count": 300, "avg_rating": Decimal("7.6")}
+        ],
+        "longest_running_series.sql": [
+            {"series_slug": "test-show", "series_name": "Test Show", "years_on_air": 50,
+             "number_of_seasons": 52, "number_of_episodes": 1018, "avg_rating": Decimal("8.0")}
+        ],
+        "top_networks_by_series.sql": [
+            {"network_name": "Netflix", "series_count": 84, "avg_rating": Decimal("7.79")}
+        ],
     }
 
     with patch("analytics.views._run_query", side_effect=lambda fname: fake_rows[fname]):
@@ -2731,6 +2817,12 @@ def test_analytics_dashboard_returns_200_with_expected_context():
         "genre_revenue",
         "top_studios_by_revenue",
         "films_by_production_country",
+        "series_by_decade",
+        "episode_rating_by_season",
+        "longest_running_series",
+        "top_networks_by_series",
+        "season_labels",
+        "season_avg_ratings",
     ):
         assert key in response.context
 
@@ -2740,6 +2832,8 @@ def test_analytics_dashboard_returns_200_with_expected_context():
     assert response.context["genre_revenue"] == [1000.0]
     assert response.context["top_studios_by_revenue"][0]["studio_slug"] == "test-studio"
     assert response.context["films_by_production_country"][0]["country_name"] == "Japan"
+    assert response.context["season_labels"] == [1]
+    assert response.context["season_avg_ratings"] == [7.6]
 
     body = response.content.decode()
     assert "Top studios by revenue" in body
@@ -2747,6 +2841,12 @@ def test_analytics_dashboard_returns_200_with_expected_context():
     assert "Movies by production country" in body
     assert "Studio output by decade" not in body
     assert "Non-English cinema over time" not in body
+    assert "Shows by decade" in body
+    assert "Rating by season" in body
+    assert "Longest-running shows" in body
+    assert 'href="/tv/test-show/"' in body
+    assert "Top networks by series" in body
+    assert "Netflix" in body
 
 
 # ---------------------------------------------------------------------------

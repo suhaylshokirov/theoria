@@ -603,6 +603,39 @@ class EpisodeRating(models.Model):
         return f"{self.episode_id}/{self.source}"
 
 
+class SeriesVideo(models.Model):
+    """dim_series_video: a show's trailers and clips (Task 90).
+
+    An exact copy of MovieVideo, series_id in place of movie_id — same
+    fake-single-PK workaround (`series` carries primary_key=True; the real PK
+    is the composite (series_id, video_id) in Postgres) and the same
+    REPLACE-on-load loader (see warehouse/ddl/24_series_videos.sql).
+    """
+
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id",
+        primary_key=True, related_name="videos",
+    )
+    video_id = models.CharField(max_length=24)
+    name = models.TextField(null=True)
+    key = models.TextField(null=True)
+    site = models.TextField(null=True)
+    type = models.TextField(null=True)
+    official = models.BooleanField(null=True)
+    size = models.IntegerField(null=True)
+    iso_639_1 = models.CharField(max_length=8, null=True)
+    iso_3166_1 = models.CharField(max_length=8, null=True)
+    published_at = models.DateTimeField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "dim_series_video"
+
+    def __str__(self):
+        return f"{self.series_id}/{self.video_id}"
+
+
 class SeriesGenre(models.Model):
     """bridge_series_genre: which genres a show belongs to (Task 79).
 

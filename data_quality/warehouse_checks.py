@@ -107,6 +107,10 @@ _FK_CHECKS = [
     ("dim_season", "series_id", "dim_series", "series_id"),
     ("dim_episode", "series_id", "dim_series", "series_id"),
     ("fact_episode_rating", "episode_id", "dim_episode", "episode_id"),
+    # Task 90: dim_series_video, the dim_movie_video precedent's TV twin.
+    # Empty on a warehouse with no series videos loaded yet, so this passes
+    # trivially until the first load.
+    ("dim_series_video", "series_id", "dim_series", "series_id"),
 ]
 
 
@@ -506,6 +510,59 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             results.append(CheckResult(load_name, False,
                 f"dim_movie_video has 0 row(s) for ingestion_date={ingestion_date} despite "
                 f"{len(videos_df)} Silver movie_videos row(s)"))
+            logger.error("[%s] FAIL — 0 rows loaded", load_name)
+        else:
+            results.append(CheckResult(load_name, True,
+                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+            logger.info("[%s] OK (%d rows)", load_name, loaded)
+
+    # dim_series_video (Task 90): the show counterpart of dim_movie_video above.
+    # Uses the dim_series/series_credits defensive shape (an explicit "no
+    # series_id column" skip) rather than movie_videos' — movie_videos can
+    # lean on nunique(...) defaulting to 0 for an absent column because a
+    # movie-only run still legitimately produces this check (it's never
+    # optional the way every TV entity is); series_videos would otherwise
+    # produce a spurious always-passing result on a warehouse with no TV
+    # Silver at all, and its check name would collide with "rowcount:series"
+    # for anything doing a startswith() scan the way check_row_count_sanity's
+    # own tests do.
+    try:
+        sv_df = _read_silver_parquet(
+            bucket, "series_videos", ingestion_date, "series_videos.parquet"
+        )
+    except Exception as exc:
+        logger.info(
+            "[rowcount:series_videos] no Silver series_videos for %s (%s) — skipped",
+            ingestion_date, exc,
+        )
+        sv_df = None
+    if sv_df is not None and "series_id" not in sv_df.columns:
+        logger.info(
+            "[rowcount:series_videos] Silver series_videos has no series_id column — skipped"
+        )
+        sv_df = None
+    if sv_df is not None:
+        distinct_video_series = sv_df["series_id"].nunique()
+        s2w_name = "rowcount:series_videos:silver_to_warehouse"
+        warehouse_count = _table_row_count(session, "dim_series_video")
+        if warehouse_count < distinct_video_series:
+            results.append(CheckResult(s2w_name, False,
+                f"dim_series_video has only {warehouse_count} row(s), fewer than the "
+                f"{distinct_video_series} distinct series_id(s) just loaded from Silver"))
+            logger.error("[%s] FAIL — warehouse=%d < silver_distinct=%d",
+                          s2w_name, warehouse_count, distinct_video_series)
+        else:
+            results.append(CheckResult(s2w_name, True,
+                f"Silver distinct series_id={distinct_video_series}, "
+                f"dim_series_video={warehouse_count}"))
+            logger.info("[%s] OK", s2w_name)
+
+        load_name = "rowcount:series_videos:load"
+        loaded = _fact_ingestion_date_count(session, "dim_series_video", ingestion_date)
+        if len(sv_df) > 0 and loaded == 0:
+            results.append(CheckResult(load_name, False,
+                f"dim_series_video has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"{len(sv_df)} Silver series_videos row(s)"))
             logger.error("[%s] FAIL — 0 rows loaded", load_name)
         else:
             results.append(CheckResult(load_name, True,
