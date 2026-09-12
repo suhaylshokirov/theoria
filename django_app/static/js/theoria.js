@@ -725,7 +725,7 @@
     var actions = root.querySelectorAll("[data-ai-prompt]");
 
     var replies = {
-      "Suggest a movie": "Tell me a little about your mood. I can start with something funny, thoughtful, intense, or comforting.",
+      "Pick for tonight": "Tell me a little about your mood. I can start with something funny, thoughtful, intense, or comforting.",
       "Find by mood": "Choose a feeling and I will narrow it down: light, romantic, thrilling, or strange.",
       "Surprise me": "A surprise pick will be ready once your personal recommendations are connected."
     };
