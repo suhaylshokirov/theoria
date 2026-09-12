@@ -153,6 +153,13 @@
     </header>
 
     <main class="container" id="content">
+        {% if messages %}
+        <ul class="notice-list">
+            {% for message in messages %}
+            <li class="notice{% if message.tags %} notice--{{ message.tags }}{% endif %}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
         {% block content %}{% endblock %}
     </main>
 

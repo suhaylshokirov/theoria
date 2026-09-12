@@ -1,0 +1,101 @@
+/* Auth pages (sign-up, sign-in, verify) — Task 93.
+   Adds components; theoria.css owns every token and every shared control,
+   so nothing here restyles .field, .sheet-head, or button{} — see the auth
+   design notes for the one exception (input[type="email"], added to
+   theoria.css's own shared input rule, not here). */
+
+.auth-card {
+  max-width: 30rem;
+  margin: var(--space-9) auto 0;
+  padding: var(--space-8);
+  background: var(--sheet);
+  border: var(--hairline);
+  border-radius: var(--radius);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-top: var(--space-7);
+}
+
+.auth-form .field {
+  width: 100%;
+}
+
+/* The one-time-code field: a single wide-tracked numeral field, not six
+   boxes -- see the auth design notes for why (autocomplete="one-time-code"
+   and paste both depend on it being one input). */
+.code-input {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xl);
+  letter-spacing: 0.5em;
+  text-align: center;
+  /* The letter-spacing pushes the last digit past centre unless the trailing
+     space it creates is compensated on the right. */
+  padding-right: calc(var(--space-5) + 0.5em);
+  width: 100%;
+}
+
+.form-error {
+  color: var(--ink);
+  background: var(--sheet-2);
+  border-left: 2px solid var(--rule-strong);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.btn-block {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.auth-alt {
+  margin-top: var(--space-7);
+  padding-top: var(--space-6);
+  border-top: var(--hairline);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* The resend control reads as a quiet text link, not a second call to
+   action -- the code-entry button above is the one lime element on the
+   page (see the design notes: lime marks a measurement, not a form). */
+.auth-resend {
+  margin-top: var(--space-5);
+  text-align: center;
+}
+
+.auth-resend button {
+  background: none;
+  border: none;
+  color: var(--ink-muted);
+  font-family: inherit;
+  font-weight: inherit;
+  font-stretch: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  padding: 0;
+  cursor: pointer;
+}
+
+.auth-resend button:hover:not(:disabled) {
+  color: var(--ink);
+  background: none;
+  text-decoration: underline;
+}
+
+.auth-resend button:disabled {
+  color: var(--ink-faint);
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .auth-card {
+    margin-top: var(--space-6);
+    padding: var(--space-6);
+  }
+}

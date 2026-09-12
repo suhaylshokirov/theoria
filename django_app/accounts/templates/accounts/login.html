@@ -1,28 +1,28 @@
 {% extends "base.html" %}
-
-{% comment %} Deliberately plain for now -- see the note in signup.html;
-   Task 93 replaces this markup with the shared auth-page vocabulary. {% endcomment %}
+{% load static %}
 
 {% block title %}Sign in — Theoria{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
 
 {% block content %}
 {% include "movies/_sheet_header.html" with title="Sign in" sub="We'll email you a code — no password." only %}
 
-{% if messages %}
-<ul>
-    {% for message in messages %}<li>{{ message }}</li>{% endfor %}
-</ul>
-{% endif %}
+<div class="auth-card">
+    <form class="auth-form" method="post" novalidate>
+        {% csrf_token %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
 
-<form method="post" novalidate>
-    {% csrf_token %}
-    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <div>
+            <p class="field"><input type="email" name="email" value="{{ form.email.value|default:'' }}" placeholder="Email" autocomplete="email" required autofocus></p>
+            {% for error in form.email.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+        </div>
 
-    <p class="field"><input type="email" name="email" value="{{ form.email.value|default:'' }}" placeholder="Email" autocomplete="email" required autofocus></p>
-    {% for error in form.email.errors %}<p>{{ error }}</p>{% endfor %}
+        <button type="submit" class="btn-block">Send code</button>
+    </form>
 
-    <p><button type="submit">Send code</button></p>
-</form>
-
-<p>No account yet? <a href="{% url 'accounts:signup' %}">Sign up</a></p>
+    <p class="auth-alt">No account yet? <a href="{% url 'accounts:signup' %}">Sign up</a></p>
+</div>
 {% endblock %}

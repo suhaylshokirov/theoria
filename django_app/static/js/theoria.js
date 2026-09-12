@@ -709,6 +709,50 @@
     syncFromSelect();
   }
 
+  /* --- Verify-code auto-advance --------------------------------------------
+     The code field (accounts/verify.html) is one input, not six boxes, so
+     autocomplete="one-time-code" and paste both work -- see the auth design
+     notes. This only adds the JS-only conveniences on top of a control that
+     already works without it: strip anything typed that isn't a digit, and
+     submit automatically once six are in, so the reader never has to find
+     the button. The resend button gets a live countdown mirroring the
+     server's 60-second cooldown (accounts/codes.py's RESEND_COOLDOWN); with
+     JS off the button is simply always enabled, and the server-side cooldown
+     still refuses an early click with its own message. */
+
+  function initCodeInput() {
+    var card = document.querySelector("[data-verify-form]");
+    if (!card) return;
+
+    var input = card.querySelector(".code-input");
+    if (input) {
+      input.addEventListener("input", function () {
+        var digits = input.value.replace(/\D/g, "").slice(0, 6);
+        input.value = digits;
+        if (digits.length === 6 && input.form) {
+          input.form.submit();
+        }
+      });
+    }
+
+    var resendBtn = card.querySelector("[data-resend-button]");
+    if (resendBtn) {
+      var seconds = 60;
+      var label = resendBtn.textContent;
+      resendBtn.disabled = true;
+      var timer = setInterval(function () {
+        seconds -= 1;
+        if (seconds <= 0) {
+          clearInterval(timer);
+          resendBtn.disabled = false;
+          resendBtn.textContent = label;
+        } else {
+          resendBtn.textContent = label + " (" + seconds + "s)";
+        }
+      }, 1000);
+    }
+  }
+
   function init() {
     syncThemeColor();
     // Covers all three ways the theme moves — the header toggle, an OS change
@@ -724,6 +768,7 @@
     initLiveFilter();
     initBioToggle();
     initVideoEmbeds();
+    initCodeInput();
   }
 
   if (document.readyState === "loading") {

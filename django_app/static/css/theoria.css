@@ -1107,11 +1107,14 @@ td[data-meter] .meter-fill {
 }
 
 input[type="text"],
-input[type="search"] {
+input[type="search"],
+input[type="email"] {
   /* Safari styles input[type=search] as a native rounded field and refuses
      several of the declarations below until the native appearance is dropped;
      the reset is what makes the control render identically in all four
-     engines rather than only in Chrome and Firefox. */
+     engines rather than only in Chrome and Firefox. Extending a shared
+     control (rather than styling input[type=email] on its own in a page
+     stylesheet) is theoria.css's job -- see the auth pages' design notes. */
   -webkit-appearance: none;
   appearance: none;
   border: none;
@@ -1147,7 +1150,8 @@ input[type="search"]::-webkit-search-results-button {
 }
 
 input[type="text"]:focus,
-input[type="search"]:focus {
+input[type="search"]:focus,
+input[type="email"]:focus {
   outline: none;
 }
 
@@ -1989,6 +1993,30 @@ html.has-js .bio-body.is-collapsed {
   /* Empty states are usually a {% empty %} clause inside a grid, so without
      this they'd be sized to a single poster column. */
   grid-column: 1 / -1;
+}
+
+/* --- Notices ---------------------------------------------------------------
+   django.contrib.messages, rendered once here in base.html so every flow
+   that queues one (the accounts app, so far) gets it for free. One quiet
+   style for every level, in the same --ink on --sheet-2 vocabulary the auth
+   pages' own form errors use: a message is information, not a measurement,
+   so it never reaches for lime or an invented red. */
+
+.notice-list {
+  list-style: none;
+  margin: 0 0 var(--space-7);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.notice {
+  color: var(--ink);
+  background: var(--sheet-2);
+  border-left: 2px solid var(--rule-strong);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
 }
 
 /* --- Error pages ---------------------------------------------------------------
