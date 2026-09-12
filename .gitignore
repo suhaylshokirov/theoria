@@ -27,6 +27,10 @@ logs/*.log.*
 # Django
 db.sqlite3
 django_app/**/migrations/0*.py
+# accounts is the one Django app with real, managed tables (everything else
+# is managed = False against the read-only warehouse) -- its migrations are
+# the DDL for those tables and must ship with the code that depends on them.
+!django_app/accounts/migrations/0*.py
 staticfiles/
 
 # graphify stuff

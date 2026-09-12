@@ -91,7 +91,12 @@ INSTALLED_APPS = [
     'core',
     'movies',
     'analytics',
+    'accounts',
 ]
+
+# The one custom user model, set before any migration or account row exists
+# -- AUTH_USER_MODEL cannot be changed later without a painful data migration.
+AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
