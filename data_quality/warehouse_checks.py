@@ -75,8 +75,6 @@ _FK_CHECKS = [
     ("fact_movie_metrics", "genre_id", "dim_genre", "genre_id"),
     ("fact_credit", "movie_id", "dim_movie", "movie_id"),
     ("fact_credit", "person_id", "dim_person", "person_id"),
-    ("fact_collaboration", "person_a_id", "dim_person", "person_id"),
-    ("fact_collaboration", "person_b_id", "dim_person", "person_id"),
     ("bridge_movie_company", "movie_id", "dim_movie", "movie_id"),
     ("bridge_movie_company", "company_id", "dim_company", "company_id"),
     ("bridge_movie_country", "movie_id", "dim_movie", "movie_id"),
@@ -730,8 +728,7 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
 # 2. Row-count sanity — Gold
 # ---------------------------------------------------------------------------
 
-_GOLD_DATASETS = ["genre_metrics", "decade_stats", "actor_filmography", "director_ratings",
-                  "collaboration_edges"]
+_GOLD_DATASETS = ["genre_metrics", "decade_stats", "actor_filmography", "director_ratings"]
 
 
 def check_gold_sanity(bucket: str, ingestion_date: dt.date, silver_movies_count: int) -> list[CheckResult]:

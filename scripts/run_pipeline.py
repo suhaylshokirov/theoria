@@ -55,7 +55,6 @@ from etl.silver.transform_series_credits import transform_series_credits
 from etl.silver.transform_series_links import transform_series_links
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
-from etl.warehouse_loader.load_gold import load_gold
 
 logger = logging.getLogger(__name__)
 
@@ -340,9 +339,6 @@ def run_pipeline(
 
     load_dimensions(ingestion_date=ingestion_date)
     load_facts(ingestion_date=ingestion_date)
-    # Gold last: fact_collaboration's FKs point at dim_person, so the dimension
-    # load has to have committed first.
-    load_gold(ingestion_date=ingestion_date)
 
     warehouse_results = run_warehouse_checks(ingestion_date=ingestion_date)
     warehouse_failed = [r for r in warehouse_results if not r.passed]

@@ -63,7 +63,9 @@ CREATE TABLE IF NOT EXISTS dim_person (
     CONSTRAINT pk_dim_person PRIMARY KEY (person_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_person_slug ON dim_person (slug);
-CREATE INDEX IF NOT EXISTS idx_dim_person_imdb_id ON dim_person (imdb_id);
+-- idx_dim_person_imdb_id was dropped in 23_reclaim_warehouse_storage.sql:
+-- imdb_id is only ever displayed (a link to IMDb), never filtered or joined
+-- on anywhere in the app or the pipeline — confirmed by grep before dropping.
 
 -- also_known_as is a list, so it can't be a column on dim_person without
 -- breaking 1NF. Named plainly — not fact_ (no measure), not bridge_ (attaches

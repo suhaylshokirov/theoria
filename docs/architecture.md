@@ -37,7 +37,7 @@ Silver (S3, cleaned & typed Parquet)
    │  flatten, dedupe, cast types, quarantine bad rows
    ▼
 Gold (S3, pre-aggregated Parquet)
-   │  genre metrics, decade stats, filmography, director ratings, collaboration edges
+   │  genre metrics, decade stats, filmography, director ratings
    ▼
 PostgreSQL warehouse (star schema)
    │  dimensions + facts, upserted, watermark-tracked
@@ -83,10 +83,11 @@ different population.
   the data-quality gate (`data_quality/silver_checks.py`) all happen here — once, in one place —
   rather than being re-implemented ad hoc by every downstream consumer.
 - **Gold exists for read patterns that don't map cleanly onto the star schema**, or that are
-  expensive to recompute per-request (e.g. the collaboration graph, §3.3). The warehouse is the
-  primary read path for Django; most of Gold's output isn't loaded into Postgres (only
-  `collaboration_edges` is, as of Task 49) — the rest mainly demonstrates the aggregation step
-  you'd wire into a warehouse load in a larger system.
+  expensive to recompute per-request — the collaboration graph (§3.3) was exactly that case from
+  Task 49 until it was retired alongside Task 87 (2026-09-12, §3.3 has the full story). The
+  warehouse is the primary read path for Django; none of Gold's output is loaded into Postgres any
+  more — every dataset it writes now mainly demonstrates the aggregation step you'd wire into a
+  warehouse load in a larger system.
 
 ### 2.3 Why partitioning by `ingestion_date`
 
@@ -112,11 +113,10 @@ gives:
                          ┌─────────────┐                │
 ┌────────────┐           │ fact_credit │◀───────────────┘
 │ dim_person │──────────▶│             │
-└─────┬──────┘           └─────────────┘
-      │                  ┌────────────────────┐
-      └─────────────────▶│ fact_collaboration │  (both FKs -> dim_person)
-                         └────────────────────┘
+└────────────┘           └─────────────┘
 ```
+
+(`fact_collaboration`, both FKs → `dim_person`, was dropped 2026-09-12 — see §3.3.)
 
 **Dimensions** (`warehouse/ddl/01_dimensions.sql`): `dim_movie`, `dim_person`, `dim_collection`,
 `dim_genre`, `dim_date`, `dim_company` (Phase 13; its detail columns — description, headquarters,
@@ -148,8 +148,6 @@ why a bridge is right here where a plain column was right for `dim_collection`.
 - `fact_credit(movie_id, person_id, department, job, character_name, ordering, ingestion_date)` —
   one row per credit, at the grain TMDB actually publishes. A director who also wrote and produced
   a film is three rows, and the PK says so.
-- `fact_collaboration(person_a_id, person_b_id, films_together, first_year, last_year)` — derived
-  in Gold rather than loaded from Silver; see §3.3.
 - `fact_movie_rating(movie_id, source, rating, vote_count, ingestion_date)` — one row per film per
   rating source (`'imdb'` / `'tmdb'`), the rating of record; see §3.8.
 
@@ -220,6 +218,20 @@ been written on every pipeline run since Task 14 and consumed by nothing. The ho
 whether a dataset belongs there is: expensive to compute, cheap to serve, and shaped for a read the
 star schema can't answer directly. A quadratic expansion over every film is all three; the other
 four Gold datasets fail that test, which is exactly why nothing reads them.
+
+**Retired 2026-09-12, ad hoc alongside Task 87.** Passing the "honest test" above doesn't stay true
+forever: checked live before an unrelated storage-pressure cleanup, `fact_collaboration` had zero
+readers left — no Django view imported the `Collaboration` model, and the one analytics query that
+read it (`warehouse/queries/actor_collaboration_frequency.sql`, deleted alongside it) had never
+been wired into `django_app/analytics/views.py`. It cost real weight to keep: 37 MB in the
+warehouse, plus the most expensive single computation in `build_gold_datasets.py` (the quadratic
+pair expansion above) run nightly for a Parquet file nothing read either. When Neon's free-tier
+512 MB project cap started to bind (a bulk `dim_person` slug backfill during Task 87 pushed it to
+94%), this was the table this section itself had already earmarked as the thing to cut — a design
+note from Task 49 doing its job five phases later. `warehouse/ddl/23_reclaim_warehouse_storage.sql`
+has the drop; `etl/warehouse_loader/load_gold.py` and this section's scoping logic
+(`_build_collaboration_edges()`/`_key_credits()` in `build_gold_datasets.py`) are recoverable from
+git history if a real "people who worked together" feature ever gets built on top of it.
 
 ### 3.4 Franchises: `dim_collection`
 
@@ -661,7 +673,7 @@ Django never writes to the warehouse. This is enforced at three levels, not just
    tables; `warehouse` (Postgres) holds only the star schema. Views explicitly call
    `.using("warehouse")`.
 
-All three composite-PK fact tables (`fact_movie_metrics`, `fact_credit`, `fact_collaboration`) don't
+All three composite-PK fact tables (`fact_movie_metrics`, `fact_credit`, `fact_movie_rating`) don't
 fit Django's one-primary-key-per-model assumption. Each model marks its `movie` FK as
 `primary_key=True` purely to satisfy that constraint — the real uniqueness lives only in the
 database's actual composite PK, and the resulting `fields.W342` warning is intentionally silenced

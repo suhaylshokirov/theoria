@@ -62,7 +62,6 @@ WAREHOUSE_TABLES = [
     "fact_movie_metrics",
     "fact_movie_rating",
     "fact_credit",
-    "fact_collaboration",
     # TV facts (Tasks 80/81/84).
     "fact_series_credit",
     "fact_series_rating",

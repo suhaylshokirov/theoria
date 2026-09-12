@@ -20,10 +20,9 @@ TMDB API  →  Bronze (raw JSON)  →  Silver (typed Parquet)  →  Gold (aggreg
 | Films | **1,215** spanning 1930–2026 |
 | Credited people | **123,405** — every person in every department, not just cast and directors |
 | Credits | **239,089** across 13 departments and 858 distinct job titles |
-| Collaboration edges | **194,372** repeat working relationships, derived in Gold |
 | Film series | **365** |
 | Ratings | IMDb and TMDB, **1,211 / 1,215** films carry an IMDb score |
-| Warehouse tables | **18** — 9 dimensions, 4 facts, 3 bridges, 1 repeating-attribute, 1 operational |
+| Warehouse tables | **17** — 9 dimensions, 3 facts, 3 bridges, 1 repeating-attribute, 1 operational |
 | Test suite | **371** tests, no network or live database required |
 
 The corpus is deliberate rather than incidental. TMDB's `movie/popular` endpoint returns whatever
@@ -52,7 +51,7 @@ extraction step never collected it.
 |---|---|---|
 | **Bronze** | Raw JSON, one file per API response | Immutable and append-only. Never edited, never overwritten. It is the system of record every other layer can be rebuilt from. |
 | **Silver** | Typed Parquet | Owns correctness — flattening, type casting, deduplication at the true grain. Bad rows are **quarantined**, never silently dropped. |
-| **Gold** | Aggregated Parquet | Pre-computed analytical datasets, including the collaboration graph loaded into the warehouse. |
+| **Gold** | Aggregated Parquet | Pre-computed analytical datasets, demonstrating the layer even though the Django views and analytics SQL recompute the same numbers live. |
 
 Everything is partitioned by `ingestion_date=YYYY-MM-DD`. That single convention is what makes
 re-runs idempotent and incremental loads possible: a partition is a unit of work that can be
@@ -66,15 +65,15 @@ reprocessed in isolation without touching anything else.
             └────┬─────┘             │              ▼             ▼             ▼
                  ▼                   ▼      bridge_movie_company  bridge_movie_country
  dim_person ─► fact_credit ─► dim_movie ◄─ fact_movie_metrics    bridge_movie_language
-      │                          ▲         (revenue, budget,             │
-      ├──► fact_collaboration    └── fact_movie_rating ◄────────────────┘
-      │    (derived in Gold)         (imdb / tmdb — the rating of record)
+                                  ▲         (revenue, budget,             │
+                                  └── fact_movie_rating ◄────────────────┘
+                                      (imdb / tmdb — the rating of record)
 ```
 
 **Dimensions** — `dim_movie`, `dim_person`, `dim_genre`, `dim_collection`, `dim_date`,
 `dim_company`, `dim_country`, `dim_language`, `dim_movie_video` (a film's trailers/clips —
 a multi-valued attribute of `dim_movie`, loaded by *replace* not upsert; Phase "Trailers & clips")
-**Facts** — `fact_movie_metrics`, `fact_credit`, `fact_collaboration`, `fact_movie_rating`
+**Facts** — `fact_movie_metrics`, `fact_credit`, `fact_movie_rating`
 **Bridges** — `bridge_movie_company` (Phase 13), `bridge_movie_country`, `bridge_movie_language`
 (Phase 14). Factless join tables — no measure, just the existence of a relationship — named
 `bridge_` rather than `fact_` to keep that distinction visible in the schema itself. They are the
@@ -161,7 +160,7 @@ missing one still stops the process before it does any work — it is just the r
 ### 2. Create the warehouse schema
 
 Apply the three bootstrap files in order against an empty database. Together they build the
-**current** 30-table schema; all statements are `IF NOT EXISTS`, so re-running is safe.
+**current** 29-table schema; all statements are `IF NOT EXISTS`, so re-running is safe.
 
 ```bash
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/01_dimensions.sql
@@ -169,11 +168,11 @@ psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/02_facts.sql
 psql "$DATABASE_URL_WITHOUT_DRIVER_PREFIX" -f warehouse/ddl/03_watermark.sql
 ```
 
-> **Do not run `04`–`22` on a fresh database.** Those are the historical migrations that brought an
+> **Do not run `04`–`23` on a fresh database.** Those are the historical migrations that brought an
 > already-live warehouse to this shape, and they are only correct applied in order to a database
 > that predates them — `11_drop_legacy_person_tables.sql` drops tables `01` no longer creates. Once
 > a migration drops something, "run every DDL file in order" stops being the same instruction as
-> "build the current schema". Use `04`–`22` only to migrate an existing Theoria warehouse.
+> "build the current schema". Use `04`–`23` only to migrate an existing Theoria warehouse.
 
 `slug` columns are declared empty by the DDL and populated by `load_dimensions()`.
 
@@ -194,9 +193,8 @@ For a given `ingestion_date`, this runs:
    are logged per film ID and returned for retry; completed work is never discarded.
 2. **Silver** — `transform_movies`, `transform_people`, `transform_genres`,
    `transform_credits_bridge`, then `run_silver_checks` as a gate.
-3. **Gold** — `build_gold_datasets` (genre metrics, decade stats, filmography, director ratings,
-   collaboration edges).
-4. **Warehouse** — `load_dimensions`, `load_facts`, `load_gold`, then `run_warehouse_checks`.
+3. **Gold** — `build_gold_datasets` (genre metrics, decade stats, filmography, director ratings).
+4. **Warehouse** — `load_dimensions`, `load_facts`, then `run_warehouse_checks`.
 
 Every stage logs record counts and duration, and the run ends with a one-line summary. Re-running
 the same date is safe: loads upsert via `ON CONFLICT DO UPDATE`.
@@ -339,7 +337,7 @@ etl/
 data_quality/             Silver and warehouse check suites; rejected/ holds quarantined rows
 warehouse/
   db.py                   engine and session management
-  ddl/                    01–03 bootstrap, 04–22 migrations
+  ddl/                    01–03 bootstrap, 04–23 migrations
   queries/                analytics SQL — never inline in application code
 django_app/               core (settings, router) · movies · analytics
 scripts/

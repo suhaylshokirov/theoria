@@ -38,32 +38,22 @@ CREATE TABLE IF NOT EXISTS fact_credit (
     CONSTRAINT fk_fcredit_person FOREIGN KEY (person_id) REFERENCES dim_person (person_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_fcredit_movie_id       ON fact_credit (movie_id);
-CREATE INDEX IF NOT EXISTS idx_fcredit_person_id      ON fact_credit (person_id);
+-- idx_fcredit_person_id (person_id alone) and a plain idx_fcredit_movie_id
+-- were dropped in 23_reclaim_warehouse_storage.sql: pk_fact_credit already
+-- leads with movie_id and idx_fcredit_person_dept already leads with
+-- person_id, so both were pure prefix-duplicates of an existing index.
 CREATE INDEX IF NOT EXISTS idx_fcredit_department     ON fact_credit (department);
 CREATE INDEX IF NOT EXISTS idx_fcredit_ingestion_date ON fact_credit (ingestion_date);
 CREATE INDEX IF NOT EXISTS idx_fcredit_person_dept    ON fact_credit (person_id, department);
 
 
--- fact_collaboration is derived in Gold rather than loaded from Silver — see
--- 09_collaboration.sql and etl/warehouse_loader/load_gold.py for why it lives
--- there and what "collaboration" is scoped to mean.
-CREATE TABLE IF NOT EXISTS fact_collaboration (
-    person_a_id    INTEGER  NOT NULL,
-    person_b_id    INTEGER  NOT NULL,
-    films_together INTEGER  NOT NULL,
-    first_year     SMALLINT,
-    last_year      SMALLINT,
-    CONSTRAINT pk_fact_collaboration PRIMARY KEY (person_a_id, person_b_id),
-    CONSTRAINT ck_fcollab_ordered CHECK (person_a_id < person_b_id),
-    CONSTRAINT fk_fcollab_person_a FOREIGN KEY (person_a_id) REFERENCES dim_person (person_id),
-    CONSTRAINT fk_fcollab_person_b FOREIGN KEY (person_b_id) REFERENCES dim_person (person_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_fcollab_person_a ON fact_collaboration (person_a_id);
-CREATE INDEX IF NOT EXISTS idx_fcollab_person_b ON fact_collaboration (person_b_id);
-CREATE INDEX IF NOT EXISTS idx_fcollab_a_rank ON fact_collaboration (person_a_id, films_together DESC);
-CREATE INDEX IF NOT EXISTS idx_fcollab_b_rank ON fact_collaboration (person_b_id, films_together DESC);
+-- fact_collaboration (derived in Gold — see 09_collaboration.sql for the
+-- original rationale) was dropped in 23_reclaim_warehouse_storage.sql: fully
+-- derived, confirmed dead (no Django view or wired-up analytics query ever
+-- read it), and the cheapest real weight to shed once Neon's free-tier
+-- storage cap started to bind (Task 87). Rebuild it from
+-- etl/gold/build_gold_datasets.py + etl/warehouse_loader/load_gold.py's git
+-- history if a "who worked together" feature ever gets built for real.
 
 
 -- fact_movie_rating (Phase 15) is the rating of record, at each film's true
@@ -107,8 +97,10 @@ CREATE TABLE IF NOT EXISTS fact_series_credit (
     CONSTRAINT fk_fsc_person FOREIGN KEY (person_id) REFERENCES dim_person (person_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_fsc_series_id      ON fact_series_credit (series_id);
-CREATE INDEX IF NOT EXISTS idx_fsc_person_id      ON fact_series_credit (person_id);
+-- idx_fsc_series_id and idx_fsc_person_id (alone) were dropped in
+-- 23_reclaim_warehouse_storage.sql — the same prefix-duplicate reasoning as
+-- fact_credit above: pk_fact_series_credit leads with series_id, and
+-- idx_fsc_person_dept already leads with person_id.
 CREATE INDEX IF NOT EXISTS idx_fsc_department     ON fact_series_credit (department);
 CREATE INDEX IF NOT EXISTS idx_fsc_ingestion_date ON fact_series_credit (ingestion_date);
 CREATE INDEX IF NOT EXISTS idx_fsc_person_dept    ON fact_series_credit (person_id, department);

@@ -162,33 +162,6 @@ class Credit(models.Model):
         return f"{self.movie_id}/{self.person_id}/{self.job}"
 
 
-class Collaboration(models.Model):
-    """How often two people have worked together. Derived in Gold.
-
-    Pairs are canonical (person_a_id < person_b_id), so a lookup for one person
-    has to check both columns — see views.person_detail.
-    """
-
-    person_a = models.ForeignKey(
-        Person, on_delete=models.DO_NOTHING, db_column="person_a_id",
-        primary_key=True, related_name="collaborations_as_a",
-    )
-    person_b = models.ForeignKey(
-        Person, on_delete=models.DO_NOTHING, db_column="person_b_id",
-        related_name="collaborations_as_b",
-    )
-    films_together = models.IntegerField()
-    first_year = models.SmallIntegerField(null=True)
-    last_year = models.SmallIntegerField(null=True)
-
-    class Meta:
-        managed = False
-        db_table = "fact_collaboration"
-
-    def __str__(self):
-        return f"{self.person_a_id}+{self.person_b_id} ({self.films_together})"
-
-
 class MovieMetrics(models.Model):
     # unique=True is implied by primary_key=True but is not actually true in
     # the data (one row per movie/date/genre) — see module docstring. The

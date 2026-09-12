@@ -143,10 +143,22 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> **30 tables** on the live Neon warehouse (and the local replica) as of 2026-09-11. The **18
+> **29 tables** on the live Neon warehouse (and the local replica) as of 2026-09-12. The **18
 > movie-side tables** were verified 2026-09-06 against `information_schema` and a fresh scratch DB
 > from `01`–`03` (they match table-for-table): 9 dimensions, 4 facts, 3 bridges, 1
-> repeating-attribute (`person_alias`, Task 72), 1 operational (`etl_watermarks`). Task 74 added
+> repeating-attribute (`person_alias`, Task 72), 1 operational (`etl_watermarks`). **`fact_collaboration`
+> was dropped 2026-09-12** (`23_reclaim_warehouse_storage.sql`, folded out of `02`): confirmed dead
+> — no Django view and no wired-up analytics query had read it since it was built in Task 49 — and
+> Neon's free-tier 512 MB project cap was at 94% after Task 87's live backfill. The movie side is
+> now 17 tables / 3 facts; `warehouse/queries/actor_collaboration_frequency.sql` (the one query that
+> read it) was deleted alongside it, and `etl/warehouse_loader/load_gold.py` + Gold's
+> `_build_collaboration_edges()` step (which existed only to feed this one table — the most
+> expensive computation in `build_gold_datasets.py`, a quadratic pair expansion) went with it too:
+> `build_gold_datasets()` now writes four datasets, not five, since nothing was left to read the
+> fifth either in S3 or in Postgres. The same migration also dropped 5 redundant secondary
+> indexes on `fact_credit`/`fact_series_credit`
+> (each a prefix-duplicate of a composite index already covering it) and `dim_person`'s unused
+> `imdb_id` index — ~46 MB reclaimed with zero query-plan or behavior change. Task 74 added
 > `dim_movie_video`; Task 76's live `run_refresh` populated it (~17.3k rows / ~1.2k films as of
 > 2026-09-07, replace-loaded nightly). **Task 85 applied and populated the 12 TV tables** —
 > `dim_series`, `dim_network`, `dim_season`, `dim_episode`, `fact_series_credit`,
@@ -157,7 +169,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > `dim_episode` 52,612 (across the first `TV_SEASONS_MAX_NEW`-capped 300 series; the rest fill over
 > subsequent nightly runs), `fact_series_credit` 386,326. `dim_actor`, `dim_director`, `fact_cast`
 > and `fact_crew` were dropped in Task 53; `fact_casting` was replaced in Task 35.
-> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`22` are migrations for an existing DB (once
+> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`23` are migrations for an existing DB (once
 > `11` drops tables, "run every file in order" ≠ "build the current schema" — see README §2).
 
 **Dimensions (9):**
@@ -171,11 +183,15 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - `dim_language(language_code PK, name, english_name)` — Task 61, ISO code is the PK
 - `dim_movie_video(movie_id FK, video_id, name, key, site, type, official, size, iso_639_1, iso_3166_1, published_at, ingestion_date)` — PK `(movie_id, video_id)` on TMDB's `video_id` (not `key`, unique only within a site); index `(movie_id, type)`. Task 74. A film's trailers/clips — a multi-valued attribute of `dim_movie`, so `dim_` (not `fact_` — `size` is a resolution, no measure; not `bridge_` — no `dim_video` to join to). **Loaded by REPLACE, not upsert**: `common._replace_by_parent()` deletes every row for the partition's `movie_id`s then re-inserts, so a film's video set can *shrink* when TMDB drops a video or a YouTube key rots.
 
-**Facts (4):**
+**Facts (3):**
 - `fact_movie_metrics(movie_id FK, date_id FK, genre_id FK, rating, vote_count, revenue, budget, popularity, ingestion_date)` — PK `(movie_id, date_id, genre_id)`, so a multi-genre film repeats its movie-level measures once per genre. Any query aggregating `revenue`/`popularity` must collapse it with `SELECT DISTINCT movie_id, …` first. **`rating`/`vote_count` have had no readers since Task 69** — every rating now comes from `fact_movie_rating`; the loader still writes them, a knowingly-retained write-only path (same posture as `dim_collection`).
 - `fact_credit(movie_id FK, person_id FK, department, job, character_name, ordering, ingestion_date)` — PK `(movie_id, person_id, department, job)`, the grain TMDB publishes.
-- `fact_collaboration(person_a_id FK, person_b_id FK, films_together, first_year, last_year)` — derived in Gold, `CHECK (person_a_id < person_b_id)`.
 - `fact_movie_rating(movie_id FK, source, rating, vote_count, ingestion_date)` — PK `(movie_id, source)`, `CHECK (source IN ('imdb','tmdb'))`. Task 67. One row per film per source, so `AVG(rating)` needs no de-dup guard. IMDb (from the daily `title.ratings.tsv.gz` bulk file) is the rating of record on the site; TMDB kept for comparison.
+
+`fact_collaboration(person_a_id FK, person_b_id FK, films_together, first_year, last_year)` —
+derived in Gold, `CHECK (person_a_id < person_b_id)` — was dropped 2026-09-12 (see the schema
+header above): fully derived, confirmed dead, and the cheapest real storage to reclaim once Neon's
+free-tier cap started to bind.
 
 **Bridges (3):** factless join tables — `bridge_` not `fact_` because they carry no measure, only that a relationship exists.
 - `bridge_movie_company(movie_id FK, company_id FK, ingestion_date)` — PK `(movie_id, company_id)`. Task 58.
@@ -202,7 +218,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - **Never `SELECT *` in app code.** Name columns explicitly.
 - **Index FK columns** used in joins (PostgreSQL).
 - **One task = one commit.** Message format: `Task N: short description`
-- **Never surface internal implementation names in the UI.** No table/column names (`dim_movie`, `fact_credit`, `fact_collaboration`, ...), no `.sql` filenames (`movies_by_decade.sql`), no raw surrogate keys (`movie.movie_id`), no query/script names — anywhere a user-facing template renders a caption, section-note, or label. These are pipeline/warehouse internals and mean nothing to a reader of the site. If a section needs a caption, describe what the section *shows* ("by decade", "release order", "connectivity"), not where the data came from internally.
+- **Never surface internal implementation names in the UI.** No table/column names (`dim_movie`, `fact_credit`, `fact_movie_rating`, ...), no `.sql` filenames (`movies_by_decade.sql`), no raw surrogate keys (`movie.movie_id`), no query/script names — anywhere a user-facing template renders a caption, section-note, or label. These are pipeline/warehouse internals and mean nothing to a reader of the site. If a section needs a caption, describe what the section *shows* ("by decade", "release order", "connectivity"), not where the data came from internally.
 
 ---
 

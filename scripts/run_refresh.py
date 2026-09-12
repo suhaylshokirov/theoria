@@ -73,7 +73,6 @@ from etl.silver.transform_series_credits import transform_series_credits
 from etl.silver.transform_series_links import transform_series_links
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
-from etl.warehouse_loader.load_gold import load_gold
 from scripts.run_pipeline import (
     _extract_company_ids,
     _extract_person_ids,
@@ -177,7 +176,6 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
 
     load_dimensions(ingestion_date=ingestion_date)
     load_facts(ingestion_date=ingestion_date)
-    load_gold(ingestion_date=ingestion_date)
 
     warehouse_results = run_warehouse_checks(ingestion_date=ingestion_date)
     warehouse_failed = [r for r in warehouse_results if not r.passed]

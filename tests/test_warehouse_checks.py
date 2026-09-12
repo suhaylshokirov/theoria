@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 28  # 16 movie/person + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81) + 3 episode grain (84)
+    assert len(results) == 26  # 14 movie/person (2 fact_collaboration checks dropped, Task 87) + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81) + 3 episode grain (84)
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 27
+    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 25
 
     results = check_fk_integrity(mock_session)
 
@@ -1058,7 +1058,7 @@ def test_check_gold_sanity_passes_when_all_datasets_non_empty():
     with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
         results = check_gold_sanity("bucket", dt.date(2026, 6, 22), silver_movies_count=5)
 
-    assert len(results) == 5
+    assert len(results) == 4
     assert all(r.passed for r in results)
 
 
