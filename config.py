@@ -160,10 +160,20 @@ GOOGLE_CLIENT_SECRET = _optional("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = _optional("GOOGLE_REDIRECT_URI", "")
 
 # --- Email delivery --------------------------------------------------------
+# Local default prints the verification code to the runserver terminal — no
+# credentials needed to develop the sign-up/sign-in flow. Point EMAIL_BACKEND
+# at 'django.core.mail.backends.smtp.EmailBackend' and fill in EMAIL_HOST_*
+# for a real transactional provider (any SMTP-speaking one: Resend, Brevo,
+# Mailgun, SES, ...) in deployed environments.
 EMAIL_BACKEND = _optional(
     "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
 )
 DEFAULT_FROM_EMAIL = _optional("DEFAULT_FROM_EMAIL", "Theoria <no-reply@localhost>")
+EMAIL_HOST = _optional("EMAIL_HOST", "")
+EMAIL_PORT = int(_optional("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = _optional("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = _optional("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = _optional("EMAIL_USE_TLS", "True").lower() in ("1", "true", "yes")
 
 
 # --- Fail loud -------------------------------------------------------------

@@ -110,10 +110,22 @@ GOOGLE_CLIENT_SECRET = config.GOOGLE_CLIENT_SECRET
 GOOGLE_REDIRECT_URI = config.GOOGLE_REDIRECT_URI
 
 AUTH_USER_MODEL = 'core.User'
-AUTHENTICATION_BACKENDS = ['core.auth_backends.EmailBackend']
+# EmailBackend never authenticates on its own (see its docstring) — it only
+# resolves a session back to a user after passwordless/Google login. Django's
+# stock ModelBackend stays in the list so a superuser created with a real
+# password (createsuperuser) can still sign in to /admin/.
+AUTHENTICATION_BACKENDS = [
+    'core.auth_backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 LOGIN_URL = '/auth/login/'
 EMAIL_BACKEND = config.EMAIL_BACKEND
 DEFAULT_FROM_EMAIL = config.DEFAULT_FROM_EMAIL
+EMAIL_HOST = config.EMAIL_HOST
+EMAIL_PORT = config.EMAIL_PORT
+EMAIL_HOST_USER = config.EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD = config.EMAIL_HOST_PASSWORD
+EMAIL_USE_TLS = config.EMAIL_USE_TLS
 
 ROOT_URLCONF = 'theoria_site.urls'
 

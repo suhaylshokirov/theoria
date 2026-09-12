@@ -875,6 +875,15 @@ button.auth-signout:hover {
   margin-top: var(--space-2);
 }
 
+.auth-info {
+  margin-bottom: var(--space-6);
+  border-left: 2px solid var(--rule-strong);
+  background: var(--sheet);
+  color: var(--ink-muted);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
+}
+
 .auth-divider {
   display: flex;
   align-items: center;

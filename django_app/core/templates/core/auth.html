@@ -21,6 +21,11 @@
         {% elif mode == "verify" %}
         <h1 class="auth-dialog__title" id="auth-page-title">Enter your code</h1>
         <p class="auth-dialog__intro">We sent a six-digit code to <strong>{{ email }}</strong>. It expires in 10 minutes.</p>
+        {% if info %}
+        <div class="auth-info" role="status">
+            <p>{{ info }}</p>
+        </div>
+        {% endif %}
         {% if errors %}
         <div class="auth-errors" role="alert">
             {% for error in errors %}<p>{{ error }}</p>{% endfor %}

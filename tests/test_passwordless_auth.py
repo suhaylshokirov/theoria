@@ -150,3 +150,68 @@ def test_authenticated_user_can_toggle_warehouse_content_in_collections():
             {"next": "/movies/example/"},
         )
     assert not CollectionItem.objects.filter(pk=item.pk).exists()
+
+
+@override_settings(
+    ALLOWED_HOSTS=["testserver"],
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
+def test_resend_within_cooldown_reuses_challenge_instead_of_erroring():
+    """Clicking "Resend code" (or double-submitting the signup form) well
+    within the 60s cooldown must not surface a rate-limit error — it should
+    silently keep the same still-valid challenge so the user can keep
+    verifying with the code they already have."""
+    client = Client()
+    with patch("core.services.secrets.randbelow", return_value=111111):
+        client.post(
+            reverse("core:signup"),
+            {"username": "resend-reader", "email": "otp-new@example.com", "next": "/"},
+        )
+    first_challenge_id = client.session["email_auth_challenge"]
+    assert len(mail.outbox) == 1
+
+    response = client.post(reverse("core:resend_code"))
+
+    assert response.status_code == 302
+    assert response["Location"] == reverse("core:verify_code")
+    # Same challenge reused — no new row, no second email sent.
+    assert client.session["email_auth_challenge"] == first_challenge_id
+    assert len(mail.outbox) == 1
+    assert EmailCode.objects.filter(email="otp-new@example.com").count() == 1
+
+    # The original code (from the first, only, email) still verifies.
+    response = client.post(reverse("core:verify_code"), {"code": "111111"})
+    assert response.status_code == 302
+    assert get_user_model().objects.filter(email="otp-new@example.com").exists()
+
+
+@override_settings(
+    ALLOWED_HOSTS=["testserver"],
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+)
+def test_signup_verify_reports_a_clean_error_on_username_race():
+    """A username/email can pass the free-form validation at signup-request
+    time and still collide by the time the code is verified — a concurrent
+    request for the same email wins the create_user() INSERT first. The
+    exists()-check ahead of it is what should have caught this, so patch it
+    away to reproduce the exact race window and confirm the IntegrityError
+    guard turns it into a clean form error rather than a 500."""
+    client = Client()
+    with patch("core.services.secrets.randbelow", return_value=222222):
+        client.post(
+            reverse("core:signup"),
+            {"username": "race-reader", "email": "otp-new@example.com", "next": "/"},
+        )
+
+    # Someone else's signup for the same email lands between the request and
+    # the verify step.
+    get_user_model().objects.create_user(
+        email="otp-new@example.com", username="already-here"
+    )
+
+    with patch("core.services.User.objects.filter") as mock_filter:
+        mock_filter.return_value.exists.return_value = False
+        response = client.post(reverse("core:verify_code"), {"code": "222222"})
+
+    assert response.status_code == 400
+    assert "just taken" in response.content.decode()

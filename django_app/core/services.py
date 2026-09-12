@@ -9,10 +9,11 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
-from django.core.mail import send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Max
+from django.template.loader import render_to_string
 from django.utils import timezone
 
 from core.models import Collection, CollectionItem, EmailCode, User
@@ -82,13 +83,25 @@ def issue_email_code(*, email, purpose, username="", request_ip=None):
         )
         if ip_recent.count() >= MAX_CODES_PER_IP_HOUR:
             raise CodeRequestError("Too many codes requested. Try again later.")
-    if EmailCode.objects.filter(
-        email=email,
-        purpose=purpose,
-        created_at__gte=now - RESEND_COOLDOWN,
-        consumed_at__isnull=True,
-    ).exists():
-        raise CodeRequestError("A code was already sent. Check your email or wait a minute.")
+
+    # Inside the cooldown, a still-valid unconsumed challenge already exists
+    # for this email+purpose — reuse it instead of raising. This is the
+    # ordinary path for a double form submit AND for the "Resend code" button
+    # (which is meant to be clickable well within a minute of the first
+    # send): both should redirect back to the same verify screen, not surface
+    # a rate-limit error for doing the expected thing.
+    existing = (
+        EmailCode.objects.filter(
+            email=email,
+            purpose=purpose,
+            created_at__gte=now - RESEND_COOLDOWN,
+            consumed_at__isnull=True,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if existing:
+        return existing
 
     raw_code = f"{secrets.randbelow(1_000_000):06d}"
     with transaction.atomic():
@@ -108,16 +121,23 @@ def issue_email_code(*, email, purpose, username="", request_ip=None):
     # response does not reveal whether an account exists, but no mail is sent.
     should_send = purpose == EmailCode.SIGNUP or User.objects.filter(email=email).exists()
     if should_send:
-        send_mail(
-            subject="Your Theoria sign-in code",
-            message=(
-                f"Your Theoria verification code is {raw_code}.\n\n"
-                "It expires in 10 minutes and can be used once."
-            ),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-        )
+        _send_code_email(email, raw_code)
     return challenge
+
+
+def _send_code_email(email, raw_code):
+    ttl_minutes = int(CODE_TTL.total_seconds() // 60)
+    context = {"code": raw_code, "ttl_minutes": ttl_minutes}
+    text_body = render_to_string("core/email/verification_code.txt", context)
+    html_body = render_to_string("core/email/verification_code.html", context)
+    message = EmailMultiAlternatives(
+        subject="Your Theoria sign-in code",
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[email],
+    )
+    message.attach_alternative(html_body, "text/html")
+    message.send()
 
 
 def verify_email_code(challenge_id, raw_code):
@@ -150,10 +170,23 @@ def verify_email_code(challenge_id, raw_code):
         if challenge.purpose == EmailCode.SIGNUP:
             if User.objects.filter(email=challenge.email).exists():
                 raise CodeVerificationError("That email already has an account. Sign in instead.")
-            user = User.objects.create_user(
-                email=challenge.email,
-                username=challenge.username,
-            )
+            # validate_username() at form-submission time (services.py's
+            # signup form handler) already checked this username was free,
+            # but time passes between that check and this creation — another
+            # signup for the same email or username can complete in between.
+            # The challenge is already consumed above either way, so a racer
+            # who loses here must start over with a fresh code rather than
+            # get a 500.
+            try:
+                with transaction.atomic():
+                    user = User.objects.create_user(
+                        email=challenge.email,
+                        username=challenge.username,
+                    )
+            except IntegrityError as exc:
+                raise CodeVerificationError(
+                    "That email or username was just taken. Start over."
+                ) from exc
             ensure_default_collections(user)
         else:
             user = User.objects.filter(email=challenge.email, is_active=True).first()

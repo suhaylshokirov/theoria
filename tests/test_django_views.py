@@ -2890,3 +2890,47 @@ def test_custom_404_page_renders_message_and_home_link():
     assert 'href="/"' in body
     assert "Back to homepage" in body
 
+
+# ---------------------------------------------------------------------------
+# Sign-in gating — detail pages and analytics require an authenticated
+# session; list/index pages stay open to anonymous browsing. login_required
+# redirects before the view body runs, so these need no queryset mocks — an
+# anonymous request never reaches the database.
+# ---------------------------------------------------------------------------
+
+
+def test_gated_detail_pages_redirect_anonymous_to_login():
+    anon = Client()
+    gated = [
+        ("movies:movie_detail", {"movie_slug": "any-slug"}),
+        ("movies:series_detail", {"series_slug": "any-slug"}),
+        ("movies:person_detail", {"person_slug": "any-slug"}),
+        ("movies:actor_detail", {"actor_slug": "any-slug"}),
+        ("movies:director_detail", {"director_slug": "any-slug"}),
+        ("movies:studio_detail", {"company_slug": "any-slug"}),
+        ("analytics:dashboard", {}),
+    ]
+    for url_name, kwargs in gated:
+        from django.urls import reverse
+
+        url = reverse(url_name, kwargs=kwargs)
+        response = anon.get(url)
+        assert response.status_code == 302, url_name
+        assert response["Location"] == f"/auth/login/?next={url}", url_name
+
+
+def test_list_and_index_pages_stay_open_to_anonymous():
+    anon = Client()
+    open_urls = [
+        "/",
+        "/movies/",
+        "/tv/",
+        "/people/",
+        "/actors/",
+        "/directors/",
+        "/studios/",
+    ]
+    for url in open_urls:
+        response = anon.get(url)
+        assert response.status_code == 200, url
+

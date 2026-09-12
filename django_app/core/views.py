@@ -27,6 +27,7 @@ from core.services import (
 CHALLENGE_SESSION_KEY = "email_auth_challenge"
 NEXT_SESSION_KEY = "email_auth_next"
 MODE_SESSION_KEY = "email_auth_mode"
+RESEND_NOTE_SESSION_KEY = "email_auth_resend_note"
 
 
 def _next_url(request):
@@ -148,6 +149,8 @@ def verify_code(request):
         "username": challenge.username,
     }
     if request.method == "GET":
+        if request.session.pop(RESEND_NOTE_SESSION_KEY, None):
+            context["info"] = "We already sent that code — check your inbox."
         return render(request, "core/auth.html", context)
 
     try:
@@ -190,6 +193,10 @@ def resend_code(request):
             },
             status=429,
         )
+    # issue_email_code() returns the existing challenge, unchanged, when one
+    # is still active within the resend cooldown — no new code was mailed.
+    if new_challenge.pk == challenge.pk:
+        request.session[RESEND_NOTE_SESSION_KEY] = True
     request.session[CHALLENGE_SESSION_KEY] = str(new_challenge.pk)
     return redirect("core:verify_code")
 

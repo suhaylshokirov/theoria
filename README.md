@@ -142,7 +142,9 @@ pip install -r requirements-etl.txt   # superset: web runtime + pipeline + tests
 cp .env.example .env              # fill in API key, AWS credentials, DATABASE_URL
 python -c "import config"         # fails loud, listing every missing variable at once
 python -c "import config; config.require_etl()"   # same, for the pipeline's own set
-pytest                            # full suite; no network or database needed
+pytest                            # full suite; the ETL/data-quality tests need no network or
+                                   # database, but the Django auth/view tests do run against
+                                   # the real APP_DATABASE_URL below (see step 4)
 ```
 
 `config.py` is the only place that reads the environment. No script hardcodes a key, path or URL.
@@ -255,9 +257,20 @@ client/server gap).
 
 ### 4. Run the site
 
+User accounts, email codes, sessions and collections live in their own durable database — never
+in the ETL-owned warehouse. Create it once and apply Django's migrations to it before first run:
+
 ```bash
-cd django_app && python manage.py runserver
+createdb theoria_app                          # or any name; match it in APP_DATABASE_URL
+cd django_app && python manage.py migrate     # core, auth, sessions, admin — never `movies`/`analytics`
+python manage.py runserver
 ```
+
+Set `APP_DATABASE_URL` in `.env` explicitly (see `.env.example`) rather than relying on the
+`theoria_app` name Django derives when it's blank — that derivation only supplies the *name*, not
+the migration; a database that exists but was never migrated fails on the first request that
+touches it (`django_session`, sign-up, sign-in). `manage.py serve` (see Local read replica above)
+checks this and fails loud before starting the server rather than 500ing on the first page view.
 
 | Route | What it serves |
 |---|---|

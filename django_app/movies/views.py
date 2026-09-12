@@ -856,6 +856,7 @@ def studio_list(request):
     return render(request, "movies/studio_list.html", context)
 
 
+@login_required
 def studio_detail(request, company_slug):
     """One studio: header stats over its whole output, plus a searchable,
     sortable, paginated filmography — the same movie-browsing toolbar as
