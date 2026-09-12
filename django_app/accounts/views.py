@@ -67,6 +67,25 @@ def _mask_email(email: str) -> str:
     return f"{visible}…@{domain}"
 
 
+# Phrased for a reader arriving at the sign-in page because @login_required
+# bounced them off a gated page (Task 94) -- never in terms of views, routes,
+# or table names. Falls back to a generic line for a `next` that matches
+# none of these (or none at all, i.e. a reader who came here on their own).
+_GATE_SUB_LINES = (
+    ("/movies/", "Sign in to open a film's record."),
+    ("/tv/", "Sign in to open a show's record."),
+    ("/people/", "Sign in to open a person's record."),
+    ("/analytics/", "Sign in to see the analytics."),
+)
+
+
+def _login_sub_line(next_url: str) -> str:
+    for prefix, sub in _GATE_SUB_LINES:
+        if next_url.startswith(prefix):
+            return sub
+    return "We'll email you a code — no password."
+
+
 def signup(request):
     if request.method == "POST":
         form = SignupForm(request.POST)
@@ -121,7 +140,12 @@ def login_view(request):
     else:
         form = EmailOnlyForm(initial={"email": request.GET.get("email", "")})
 
-    return render(request, "accounts/login.html", {"form": form, "next": _safe_next(request)})
+    next_url = _safe_next(request)
+    return render(
+        request,
+        "accounts/login.html",
+        {"form": form, "next": next_url, "sub": _login_sub_line(next_url)},
+    )
 
 
 def verify(request):

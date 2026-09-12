@@ -8,6 +8,7 @@ lives in .sql files, so the dashboard reads and executes them as-is.
 
 from pathlib import Path
 
+from django.contrib.auth.decorators import login_required
 from django.db import connections
 from django.shortcuts import render
 
@@ -23,6 +24,7 @@ def _run_query(filename):
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
+@login_required
 def dashboard(request):
     movies_by_decade = _run_query("movies_by_decade.sql")
     revenue_by_genre = _run_query("revenue_by_genre.sql")
