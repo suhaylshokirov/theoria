@@ -30,6 +30,7 @@ django_app/**/migrations/0*.py
 # Core now owns durable application tables, so its migration must travel with
 # the code. The warehouse mirror apps remain migration-free.
 !django_app/core/migrations/0001_initial.py
+!django_app/core/migrations/0002_password_auth.py
 staticfiles/
 
 # graphify stuff
