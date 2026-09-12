@@ -104,3 +104,47 @@ class User(AbstractBaseUser, PermissionsMixin):
         # time.
         self.email = self.email.lower()
         super().save(*args, **kwargs)
+
+
+PURPOSE_SIGNUP = "signup"
+PURPOSE_LOGIN = "login"
+PURPOSE_CHOICES = [(PURPOSE_SIGNUP, "Sign up"), (PURPOSE_LOGIN, "Log in")]
+
+
+class LoginCode(models.Model):
+    """One row per 6-digit code issued. Keyed by `email`, not by `User` --
+    at sign-up no user row exists yet, since Task 91 deliberately refuses to
+    create one before the address is proven.
+
+    All rule enforcement (expiry, attempt cap, throttles, hashing) lives in
+    `accounts/codes.py`; this model is just the row shape.
+    """
+
+    email = models.EmailField()
+    purpose = models.CharField(max_length=10, choices=PURPOSE_CHOICES)
+    # HMAC-SHA256 hex digest of the code under SECRET_KEY -- the code itself
+    # is never stored in plaintext anywhere, including here.
+    code_hash = models.CharField(max_length=64)
+    pending_username = models.CharField(max_length=30, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    # Doubles as "this row was superseded by a newer code" (Task 89's
+    # issue() sets it on the prior outstanding row) and "this row was
+    # successfully verified" -- both mean the same thing to verify(): dead,
+    # never reusable.
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["email", "purpose", "-created_at"], name="idx_logincode_lookup"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(purpose__in=[PURPOSE_SIGNUP, PURPOSE_LOGIN]),
+                name="ck_logincode_purpose",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.email} ({self.purpose})"
