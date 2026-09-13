@@ -45,13 +45,18 @@
         </div>
     </div>
 
+    {% comment %} Task 90: the mosaic mixes movies and shows — it reads as
+       "the whole catalog at once" (see MOSAIC_LIMIT's docstring in
+       views.py), and TV is now part of that catalog. Each tile is a plain
+       {kind, slug, poster_path} dict from home(), so the href branches on
+       kind rather than assuming every tile is a Movie. {% endcomment %}
     <div class="contact-sheet" aria-hidden="true">
-        {% for movie in mosaic %}
+        {% for tile in mosaic %}
         <a class="frame"
-           href="{% url 'movies:movie_detail' movie.slug %}"
+           href="{% if tile.kind == 'series' %}{% url 'movies:series_detail' tile.slug %}{% else %}{% url 'movies:movie_detail' tile.slug %}{% endif %}"
            tabindex="-1"
            style="--i: {{ forloop.counter0 }}">
-            <img src="{{ movie.poster_path|tmdb_image:'w185' }}" alt="" loading="lazy" decoding="async">
+            <img src="{{ tile.poster_path|tmdb_image:'w185' }}" alt="" loading="lazy" decoding="async">
         </a>
         {% endfor %}
     </div>
@@ -81,6 +86,27 @@
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
         <p class="empty">No movies loaded yet. Run the pipeline to fill the catalog.</p>
+        {% endfor %}
+    </div>
+</section>
+
+{% comment %} TV gets its own strip rather than folding into "See what's
+   new" (Task 90) — a heading a reader scans expecting one comparable kind
+   of card; mixing movies and shows under it would need a per-card kind cue
+   just to avoid confusion, and the person page's Task 89 "separate stats,
+   not one merged count" call already set that precedent. Ordered by *last*
+   air date, not first — see _series_year_span()'s caller in views.py for why
+   that's the right "new" for a show. {% endcomment %}
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>Recently aired</h2>
+        <span class="section-note">by last air date</span>
+    </div>
+    <div class="poster-grid">
+        {% for series in recently_aired %}
+        {% include "movies/_series_card.html" with series=series only %}
+        {% empty %}
+        <p class="empty">No shows loaded yet. Run the pipeline to fill the catalog.</p>
         {% endfor %}
     </div>
 </section>

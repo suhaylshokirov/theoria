@@ -71,6 +71,7 @@ from etl.silver.transform_people_details import transform_people_details
 from etl.silver.transform_series import transform_series
 from etl.silver.transform_series_credits import transform_series_credits
 from etl.silver.transform_series_links import transform_series_links
+from etl.silver.transform_series_videos import transform_series_videos
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
 from scripts.run_pipeline import (
@@ -153,6 +154,7 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
     transform_series_links(ingestion_date=ingestion_date)
     transform_series_credits(ingestion_date=ingestion_date)
     transform_episodes(ingestion_date=ingestion_date)
+    transform_series_videos(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date, with_tv=True)
     transform_people_details(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date, with_tv=True)

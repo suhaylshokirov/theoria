@@ -143,7 +143,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> **29 tables** on the live Neon warehouse (and the local replica) as of 2026-09-12. The **18
+> **30 tables** on the live Neon warehouse (and the local replica) as of 2026-09-12. The **18
 > movie-side tables** were verified 2026-09-06 against `information_schema` and a fresh scratch DB
 > from `01`–`03` (they match table-for-table): 9 dimensions, 4 facts, 3 bridges, 1
 > repeating-attribute (`person_alias`, Task 72), 1 operational (`etl_watermarks`). **`fact_collaboration`
@@ -160,16 +160,19 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > (each a prefix-duplicate of a composite index already covering it) and `dim_person`'s unused
 > `imdb_id` index — ~46 MB reclaimed with zero query-plan or behavior change. Task 74 added
 > `dim_movie_video`; Task 76's live `run_refresh` populated it (~17.3k rows / ~1.2k films as of
-> 2026-09-07, replace-loaded nightly). **Task 85 applied and populated the 12 TV tables** —
+> 2026-09-07, replace-loaded nightly). **Task 85 applied and populated 12 TV tables** —
 > `dim_series`, `dim_network`, `dim_season`, `dim_episode`, `fact_series_credit`,
 > `fact_series_rating`, `fact_episode_rating`, and `bridge_series_{genre,company,country,language,
 > network}` — on **both** Neon and the replica (DDL `19`–`22`, also folded into `01`/`02`); their
 > columns and indexes are documented in the `### Feature — TV Shows` block in `tasks.md` and each
 > DDL file's header. Live-populated 2026-09-11 via `weekly-discovery`: `dim_series` 734,
 > `dim_episode` 52,612 (across the first `TV_SEASONS_MAX_NEW`-capped 300 series; the rest fill over
-> subsequent nightly runs), `fact_series_credit` 386,326. `dim_actor`, `dim_director`, `fact_cast`
-> and `fact_crew` were dropped in Task 53; `fact_casting` was replaced in Task 35.
-> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`23` are migrations for an existing DB (once
+> subsequent nightly runs), `fact_series_credit` 386,326. **Task 90 added a 13th TV table,
+> `dim_series_video`** — a straight copy of `dim_movie_video` keyed on `series_id`, same
+> replace-on-load strategy (`24_series_videos.sql`, also folded into `01`). `dim_actor`,
+> `dim_director`, `fact_cast` and `fact_crew` were dropped in Task 53; `fact_casting` was replaced in
+> Task 35.
+> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`24` are migrations for an existing DB (once
 > `11` drops tables, "run every file in order" ≠ "build the current schema" — see README §2).
 
 **Dimensions (9):**
@@ -182,6 +185,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 - `dim_country(country_code PK, name)` — Task 61, ISO code is the PK (no surrogate, no slug)
 - `dim_language(language_code PK, name, english_name)` — Task 61, ISO code is the PK
 - `dim_movie_video(movie_id FK, video_id, name, key, site, type, official, size, iso_639_1, iso_3166_1, published_at, ingestion_date)` — PK `(movie_id, video_id)` on TMDB's `video_id` (not `key`, unique only within a site); index `(movie_id, type)`. Task 74. A film's trailers/clips — a multi-valued attribute of `dim_movie`, so `dim_` (not `fact_` — `size` is a resolution, no measure; not `bridge_` — no `dim_video` to join to). **Loaded by REPLACE, not upsert**: `common._replace_by_parent()` deletes every row for the partition's `movie_id`s then re-inserts, so a film's video set can *shrink* when TMDB drops a video or a YouTube key rots.
+- `dim_series_video(series_id FK, video_id, name, key, site, type, official, size, iso_639_1, iso_3166_1, published_at, ingestion_date)` — PK `(series_id, video_id)`. Task 90; a straight copy of `dim_movie_video` above, same PK/index/REPLACE-load shape, one row per show's trailer/clip. Counted among the 12 (now 13) TV tables in the schema header, not in this dimension's "9" — that count is the movie-side dimensions only.
 
 **Facts (3):**
 - `fact_movie_metrics(movie_id FK, date_id FK, genre_id FK, rating, vote_count, revenue, budget, popularity, ingestion_date)` — PK `(movie_id, date_id, genre_id)`, so a multi-genre film repeats its movie-level measures once per genre. Any query aggregating `revenue`/`popularity` must collapse it with `SELECT DISTINCT movie_id, …` first. **`rating`/`vote_count` have had no readers since Task 69** — every rating now comes from `fact_movie_rating`; the loader still writes them, a knowingly-retained write-only path (same posture as `dim_collection`).

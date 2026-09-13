@@ -89,6 +89,13 @@ S3_BUCKET = _require("S3_BUCKET", role="etl")
 #   * in the nightly GitHub Actions job, the Neon instance (the source of truth).
 DATABASE_URL = _require("DATABASE_URL")
 
+# --- PostgreSQL application database --------------------------------------
+# User accounts, email challenges, sessions and collections must not live in
+# the ETL-owned warehouse. Local development derives a sibling database name
+# in settings.py when this is blank; deployed environments provide this URL
+# explicitly so account data is durable and independently backed up.
+APP_DATABASE_URL = _optional("APP_DATABASE_URL", "")
+
 # NEON_DATABASE_URL is only set locally, and only used by
 # scripts/sync_warehouse_from_neon.py to pull Neon -> the local replica. The
 # cloud job never sets it (it writes Neon directly via DATABASE_URL), so it is
@@ -160,19 +167,29 @@ IMDB_EPISODES_URL = _optional("IMDB_EPISODES_URL", "https://datasets.imdbws.com/
 DJANGO_SECRET_KEY = _require("DJANGO_SECRET_KEY", role="web")
 DJANGO_DEBUG = _optional("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 
-# --- Email (Task 90) ---------------------------------------------------------
-# All optional: settings.py derives the *backend* from DJANGO_DEBUG rather than
-# a flag here. Locally (DEBUG) the console backend prints the code to the
-# terminal and none of these need a value. Deployed (not DEBUG), settings.py
-# requires EMAIL_HOST to be set -- an empty value there is a misconfiguration,
-# not a silent fallback, since the whole feature depends on this email
-# actually reaching an inbox.
+# --- Google OAuth -----------------------------------------------------------
+# These remain optional so the catalog can still boot in environments that do
+# not enable sign-in. The auth routes return a clear configuration error until
+# both OAuth credentials are supplied.
+GOOGLE_CLIENT_ID = _optional("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = _optional("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI = _optional("GOOGLE_REDIRECT_URI", "")
+
+# --- Email delivery --------------------------------------------------------
+# Local default prints the verification code to the runserver terminal — no
+# credentials needed to develop the sign-up/sign-in flow. Point EMAIL_BACKEND
+# at 'django.core.mail.backends.smtp.EmailBackend' and fill in EMAIL_HOST_*
+# for a real transactional provider (any SMTP-speaking one: Resend, Brevo,
+# Mailgun, SES, ...) in deployed environments.
+EMAIL_BACKEND = _optional(
+    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
+)
+DEFAULT_FROM_EMAIL = _optional("DEFAULT_FROM_EMAIL", "Theoria <no-reply@localhost>")
 EMAIL_HOST = _optional("EMAIL_HOST", "")
 EMAIL_PORT = int(_optional("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = _optional("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = _optional("EMAIL_HOST_PASSWORD", "")
 EMAIL_USE_TLS = _optional("EMAIL_USE_TLS", "True").lower() in ("1", "true", "yes")
-DEFAULT_FROM_EMAIL = _optional("DEFAULT_FROM_EMAIL", "Theoria <no-reply@example.com>")
 
 
 # --- Fail loud -------------------------------------------------------------

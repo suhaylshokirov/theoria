@@ -130,6 +130,119 @@
         {% endif %}
     </section>
 
+    <section class="panel is-wide" aria-labelledby="series-decade-h">
+        <div class="section-head">
+            <h2 id="series-decade-h">Shows by decade</h2>
+            <span class="section-note">by decade</span>
+        </div>
+        {% if series_by_decade %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col">Decade</th><th scope="col" class="num">Shows</th><th scope="col" class="num">Avg rating</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in series_by_decade %}
+                    <tr>
+                        <th scope="row" class="mono">{{ row.decade }}</th>
+                        <td class="num" data-meter>{{ row.series_count }}</td>
+                        <td class="num">{{ row.avg_rating|floatformat:2|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No shows loaded yet. Run the pipeline to fill the warehouse.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel is-wide" aria-labelledby="season-rating-h">
+        <div class="section-head">
+            <h2 id="season-rating-h">Rating by season</h2>
+            <span class="section-note">does a show decline?</span>
+        </div>
+        {% if episode_rating_by_season %}
+        <div class="chart-stage">
+            <canvas id="season-chart" role="img" aria-label="Average episode rating by season number, line chart"></canvas>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col">Season</th><th scope="col" class="num">Shows</th><th scope="col" class="num">Avg rating</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in episode_rating_by_season %}
+                    <tr>
+                        <th scope="row" class="mono">{{ row.season_number }}</th>
+                        <td class="num" data-meter>{{ row.show_count }}</td>
+                        <td class="num">{{ row.avg_rating|floatformat:2|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No episode ratings loaded yet. Run the pipeline to fill the warehouse.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel is-wide" aria-labelledby="longest-running-h">
+        <div class="section-head">
+            <h2 id="longest-running-h">Longest-running shows</h2>
+            <span class="section-note">by calendar span</span>
+        </div>
+        {% if longest_running_series %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col">Show</th><th scope="col" class="num">Years on air</th><th scope="col" class="num">Seasons</th><th scope="col" class="num">Episodes</th><th scope="col" class="num">Avg rating</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in longest_running_series %}
+                    <tr>
+                        <th scope="row"><a href="{% url 'movies:series_detail' row.series_slug %}">{{ row.series_name }}</a></th>
+                        <td class="num" data-meter>{{ row.years_on_air|default:"—" }}</td>
+                        <td class="num">{{ row.number_of_seasons|default:"—" }}</td>
+                        <td class="num">{{ row.number_of_episodes|default:"—" }}</td>
+                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:2 }}{% else %}—{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No shows loaded yet. Run the pipeline to fill the warehouse.</p>
+        {% endif %}
+    </section>
+
+    <section class="panel is-wide" aria-labelledby="networks-h">
+        <div class="section-head">
+            <h2 id="networks-h">Top networks by series</h2>
+            <span class="section-note">3+ shows</span>
+        </div>
+        {% if top_networks_by_series %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th scope="col">Network</th><th scope="col" class="num">Shows</th><th scope="col" class="num">Avg rating</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in top_networks_by_series %}
+                    <tr>
+                        <th scope="row">{{ row.network_name }}</th>
+                        <td class="num" data-meter>{{ row.series_count }}</td>
+                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:2 }}{% else %}—{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="empty">No networks loaded yet. Run the pipeline to fill the warehouse.</p>
+        {% endif %}
+    </section>
+
 </div>
 {% endblock %}
 
@@ -138,6 +251,8 @@
 {{ decade_avg_ratings|json_script:"decade-avg-ratings" }}
 {{ genre_labels|json_script:"genre-labels" }}
 {{ genre_revenue|json_script:"genre-revenue" }}
+{{ season_labels|json_script:"season-labels" }}
+{{ season_avg_ratings|json_script:"season-avg-ratings" }}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script src="{% static 'js/analytics.js' %}"></script>

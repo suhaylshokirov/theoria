@@ -411,6 +411,12 @@ def _tv_entity_dfs() -> dict[str, pd.DataFrame]:
             {"episode_id": 62085, "source": "imdb", "rating": 8.9, "vote_count": 32000},
             {"episode_id": 62085, "source": "tmdb", "rating": 8.2, "vote_count": 250},
         ]),
+        "series_videos": pd.DataFrame([
+            {"series_id": 1396, "video_id": "533ec654c3a36854480003ec", "name": "Trailer",
+             "key": "HhesaQXLuRY", "site": "YouTube", "type": "Trailer", "official": True,
+             "size": 1080, "iso_639_1": "en", "iso_3166_1": "US",
+             "published_at": "2013-07-14T19:15:32.000Z"},
+        ]),
     }
 
 

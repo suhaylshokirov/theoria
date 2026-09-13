@@ -108,6 +108,32 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
+# Sessions belong to the durable application database. The warehouse remains
+# read-only and never receives Django migrations.
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
+GOOGLE_CLIENT_ID = config.GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET = config.GOOGLE_CLIENT_SECRET
+GOOGLE_REDIRECT_URI = config.GOOGLE_REDIRECT_URI
+
+AUTH_USER_MODEL = 'core.User'
+# EmailBackend never authenticates on its own (see its docstring) — it only
+# resolves a session back to a user after passwordless/Google login. Django's
+# stock ModelBackend stays in the list so a superuser created with a real
+# password (createsuperuser) can still sign in to /admin/.
+AUTHENTICATION_BACKENDS = [
+    'core.auth_backends.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+LOGIN_URL = '/auth/login/'
+EMAIL_BACKEND = config.EMAIL_BACKEND
+DEFAULT_FROM_EMAIL = config.DEFAULT_FROM_EMAIL
+EMAIL_HOST = config.EMAIL_HOST
+EMAIL_PORT = config.EMAIL_PORT
+EMAIL_HOST_USER = config.EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD = config.EMAIL_HOST_PASSWORD
+EMAIL_USE_TLS = config.EMAIL_USE_TLS
+
 ROOT_URLCONF = 'theoria_site.urls'
 
 TEMPLATES = [
@@ -121,6 +147,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.auth_options',
             ],
         },
     },
@@ -133,7 +160,7 @@ WSGI_APPLICATION = 'theoria_site.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 #
 # Two databases:
-# - 'default' (sqlite) owns Django's own tables (auth, sessions, admin).
+# - 'default' owns Django's application tables (auth, sessions, admin, users).
 # - 'warehouse' is the PostgreSQL star schema built by the ETL pipeline.
 #   It is read-only from Django's side: app models on it use
 #   `managed = False` (see Task 24) and DATABASE_ROUTERS below refuses
@@ -141,17 +168,27 @@ WSGI_APPLICATION = 'theoria_site.wsgi.application'
 
 _warehouse_url = urlparse(config.DATABASE_URL.replace('postgresql+psycopg2', 'postgresql'))
 
-# Nothing this site serves reads the 'default' database: no view touches
-# sessions, messages or auth, and the router sends every warehouse model to
-# 'warehouse'. It still has to point somewhere Django can open, and the
-# deployed filesystem is read-only apart from /tmp -- so on Vercel it points
-# at an ephemeral file that is expected to stay empty.
-_default_sqlite = Path('/tmp/db.sqlite3') if ON_VERCEL else BASE_DIR / 'db.sqlite3'
+if config.APP_DATABASE_URL:
+    _app_url = urlparse(config.APP_DATABASE_URL.replace('postgresql+psycopg2', 'postgresql'))
+elif not ON_VERCEL:
+    # Keep the local bootstrap usable without adding a credential-bearing line
+    # to .env. This is a different database from the warehouse, not a schema
+    # inside it.
+    _app_url = _warehouse_url._replace(path='/theoria_app')
+else:
+    raise config.ConfigError('APP_DATABASE_URL is required for deployed auth data.')
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': _default_sqlite,
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': _app_url.path.lstrip('/'),
+        'USER': _app_url.username,
+        'PASSWORD': _app_url.password,
+        'HOST': _app_url.hostname,
+        'PORT': _app_url.port,
+        'CONN_MAX_AGE': 600 if ON_VERCEL else 0,
+        'CONN_HEALTH_CHECKS': ON_VERCEL,
+        'OPTIONS': {'sslmode': 'require'} if ON_VERCEL else {},
     },
     'warehouse': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -202,22 +239,13 @@ elif ON_VERCEL:
 
 DATABASE_ROUTERS = ['core.routers.WarehouseRouter']
 
-# Where Django's own auth machinery sends an anonymous reader (LOGIN_URL,
-# used by @login_required in Task 94), and where a reader lands after signing
-# in or out with no `next` to honour. All three are view names, not paths, so
-# they resolve correctly regardless of where /accounts/ ends up mounted.
-LOGIN_URL = 'accounts:login'
-LOGIN_REDIRECT_URL = 'movies:home'
-LOGOUT_REDIRECT_URL = 'movies:home'
-
-# Sessions stay signed in for 30 days of inactivity rather than Django's
-# default two weeks, matching a "sign in once, browse for a while" reader
-# rather than a security-sensitive account. Lax (not Strict) so following a
-# link from an email client or another site still arrives signed in.
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 30
-SESSION_COOKIE_SAMESITE = 'Lax'
-# SESSION_COOKIE_SECURE is set to True under ON_VERCEL in the transport
-# security block below, alongside CSRF_COOKIE_SECURE.
+# These apps mirror the ETL-owned warehouse only. Keeping their migration
+# modules disabled makes the ownership boundary explicit to makemigrations as
+# well as to the router and each model's managed = False flag.
+MIGRATION_MODULES = {
+    'movies': None,
+    'analytics': None,
+}
 
 
 # Transport security

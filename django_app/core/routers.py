@@ -2,7 +2,8 @@
 
 `movies` and `analytics` models are unmanaged mirrors of the star schema
 built by the ETL pipeline (see docs/architecture.md). Everything else
-(auth, sessions, admin) stays on Django's own sqlite database.
+(auth, sessions, admin and user-owned data) stays on Django's application
+database, separate from the warehouse.
 """
 
 WAREHOUSE_APPS = {"movies", "analytics"}

@@ -1,6 +1,7 @@
-// Analytics charts. Two readouts, one series each — so per the chart rules
-// they take a single hue, not a categorical palette, and neither needs a
-// legend (the panel heading names the series).
+// Analytics charts. Three readouts, one series each (Task 90 added the
+// season-rating line) — so per the chart rules they take a single hue, not a
+// categorical palette, and none needs a legend (the panel heading names the
+// series).
 //
 // The palette is READ FROM CSS rather than hardcoded here, so the design
 // tokens in theoria.css stay the single source of truth. Previously this
@@ -132,6 +133,38 @@
             {
               label: "Avg rating",
               data: decadeRatings,
+              borderColor: MARK,
+              borderWidth: 2,
+              pointRadius: 4,
+              pointHoverRadius: 7,
+              pointHitRadius: 16,
+              pointBackgroundColor: MARK,
+              pointBorderColor: PAPER,
+              pointBorderWidth: 2,
+              backgroundColor: WASH,
+              fill: true,
+              tension: 0.25,
+            },
+          ],
+        },
+        options: baseOptions(function (v) {
+          return "★ " + Number(v).toFixed(2);
+        }),
+      }));
+    }
+
+    var seasonLabels = readJSON("season-labels");
+    var seasonRatings = readJSON("season-avg-ratings");
+    var seasonCanvas = document.getElementById("season-chart");
+    if (seasonCanvas && seasonLabels && seasonLabels.length) {
+      charts.push(new Chart(seasonCanvas, {
+        type: "line",
+        data: {
+          labels: seasonLabels,
+          datasets: [
+            {
+              label: "Avg rating",
+              data: seasonRatings,
               borderColor: MARK,
               borderWidth: 2,
               pointRadius: 4,

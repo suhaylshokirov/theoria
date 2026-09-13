@@ -1,7 +1,12 @@
 {% comment %} A show as a frame on the sheet, mirroring _movie_card.html.
    Params (pass with `only`):
-     series : a Series, with .year_span and .imdb_rating already set by the
-              calling view (series_list()'s per-page loop and annotation). {% endcomment %}
+     series   : a Series, with .imdb_rating already set by the calling view's
+                annotation. .year_span is only read when card_sub is absent
+                (series_list()'s per-page loop sets it there).
+     card_sub : optional sub-line replacing the year/season-count line — the
+                person page's filmography grid uses it for the job/role held
+                on the show (Task 89), same as _movie_card.html's param of
+                the same name. {% endcomment %}
 {% load tmdb_images %}
 <div class="poster-card is-film">
     <a href="{% url 'movies:series_detail' series.slug %}">
@@ -12,9 +17,13 @@
         {% endif %}
         <div class="card-body">
             <span class="card-title">{{ series.name }}</span>
+            {% if card_sub %}
+            <span class="card-role">{{ card_sub }}</span>
+            {% else %}
             <span class="card-sub">
                 {{ series.year_span|default:"—" }}{% if series.number_of_seasons %} · {{ series.number_of_seasons }} season{{ series.number_of_seasons|pluralize }}{% endif %}
             </span>
+            {% endif %}
             {% include "movies/_rating_badge.html" with rating=series.imdb_rating only %}
         </div>
     </a>

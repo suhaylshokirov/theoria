@@ -1,4 +1,6 @@
-{% comment %} Click-to-play YouTube embed for the movie-page trailer.
+{% comment %} Click-to-play YouTube embed for the movie- or show-page trailer
+   (Task 90 reuses this unchanged for dim_series_video — nothing here reads a
+   movie-specific field).
 
    Renders NOTHING without a video (Task 56/68 — "only when there's something to
    say"): a film with no trailer gets no block, no empty frame, no placeholder.
@@ -9,7 +11,7 @@
    video via the plain link rather than a dead button.
 
    Params (pass with `only`):
-     video : a MovieVideo (dim_movie_video row). Falsy -> nothing renders.
+     video : a MovieVideo or SeriesVideo row. Falsy -> nothing renders.
      kind  : label for the play control's accessible name (e.g. "trailer").
 {% endcomment %}
 {% if video %}

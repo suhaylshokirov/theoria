@@ -3,7 +3,16 @@
    Params (pass with `only`):
      person       : a Person
      film_count, avg_rating, activity : the measured stats
-     ("activity" is "Active" or "Retired") {% endcomment %}
+     ("activity" is "Active" or "Retired")
+     show_count   : optional (Task 89) — a Shows stat renders only when this
+                    is truthy, the same "only shown when it differs" posture
+                    credit_count already has below; a person with no TV
+                    credits keeps the pre-Task-89 three-stat header exactly.
+     title_count  : optional (Task 89), only needed alongside credit_count —
+                    film_count + show_count, computed in the view rather
+                    than with a template-side `add` (which silently returns
+                    "" when show_count isn't passed at all, as the legacy
+                    actor/director pages don't — see the Credits guard below). {% endcomment %}
 {% load tmdb_images %}
 <header class="person-head">
     <div class="person-plate">
@@ -24,6 +33,16 @@
                 <span class="stat-value" data-count="{{ film_count }}">{{ film_count }}</span>
                 <span class="stat-label">Movies</span>
             </div>
+            {% comment %} Task 89: a person's filmography can include shows now
+               — kept as its own stat, alongside Movies, rather than folded
+               into one merged figure, so this header never states a title
+               count that isn't literally true of either kind. {% endcomment %}
+            {% if show_count %}
+            <div class="stat">
+                <span class="stat-value" data-count="{{ show_count }}">{{ show_count }}</span>
+                <span class="stat-label">Shows</span>
+            </div>
+            {% endif %}
             <div class="stat">
                 <span class="stat-value">{% if avg_rating %}★ {{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
                 <span class="stat-label">Avg rating</span>
@@ -34,11 +53,16 @@
                 <span class="stat-value">{{ activity }}</span>
                 <span class="stat-label">Status</span>
             </div>
-            {% comment %} Credits and films differ whenever someone holds more than one
-               job on a film — a director who also wrote and produced it is
-               one film and three credits. Only shown when it's been
-               passed, so the legacy actor/director pages are unaffected. {% endcomment %}
-            {% if credit_count and credit_count != film_count %}
+            {% comment %} Credits and titles differ whenever someone holds more than one
+               job on a title — a director who also wrote and produced a film
+               is one title and three credits. Compared against title_count
+               (film_count + show_count, Task 89) so a person with exactly
+               one job on every title they hold — one movie, one show, no
+               double-counted credit — doesn't get a spurious Credits stat
+               just because their titles span both kinds. Only shown when
+               it's been passed, so the legacy actor/director pages (which
+               pass neither credit_count nor title_count) are unaffected. {% endcomment %}
+            {% if credit_count and credit_count != title_count %}
             <div class="stat">
                 <span class="stat-value" data-count="{{ credit_count }}">{{ credit_count }}</span>
                 <span class="stat-label">Credits</span>

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — Your account{% endblock %}
+
+{% block content %}
+<section class="account-page" aria-labelledby="account-page-title">
+    <div class="sheet-head">
+        <span class="label">Account</span>
+        <h1 class="sheet-title" id="account-page-title">{{ request.user.username }}</h1>
+        <p class="sheet-sub">{{ request.user.email }}</p>
+    </div>
+
+    <div class="account-collections">
+        {% for card in cards %}
+        <section class="panel account-collection" aria-labelledby="collection-{{ card.collection.kind }}">
+            <div class="section-head">
+                <h2 id="collection-{{ card.collection.kind }}">{{ card.label }}</h2>
+                <span class="section-note">{{ card.items|length }} title{{ card.items|length|pluralize }}</span>
+            </div>
+            {% if card.items %}
+            <ol class="collection-list">
+                {% for item in card.items %}
+                <li class="collection-item">
+                    <div>
+                        {% if item.content_type == "movie" %}
+                        <a href="{% url 'movies:movie_detail' item.content.slug %}">{{ item.content.title }}</a>
+                        {% else %}
+                        <a href="{% url 'movies:series_detail' item.content.slug %}">{{ item.content.name }}</a>
+                        {% endif %}
+                        <span class="collection-item__type label">{{ item.get_content_type_display }}</span>
+                    </div>
+                    <div class="collection-item__actions">
+                        {% if card.collection.kind == "top" %}
+                        <form method="post" action="{% url 'account:move_item' card.collection.kind item.id 'up' %}">{% csrf_token %}<button type="submit" aria-label="Move {{ item.content.title|default:item.content.name }} up">↑</button></form>
+                        <form method="post" action="{% url 'account:move_item' card.collection.kind item.id 'down' %}">{% csrf_token %}<button type="submit" aria-label="Move {{ item.content.title|default:item.content.name }} down">↓</button></form>
+                        {% endif %}
+                        <form method="post" action="{% url 'account:remove_item' card.collection.kind item.id %}">{% csrf_token %}<button class="collection-remove" type="submit">Remove</button></form>
+                    </div>
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="empty">Nothing here yet.</p>
+            {% endif %}
+        </section>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

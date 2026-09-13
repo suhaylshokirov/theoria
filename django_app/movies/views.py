@@ -1,18 +1,22 @@
+import itertools
 from datetime import date
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.contrib.auth.decorators import login_required
 from django.db.models import Avg, Count, F, Max, Min, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 from django.utils.text import slugify
 
+from core.models import CollectionItem
+from core.services import collection_flags
 
 from movies.models import (
-    Company, Credit, Genre, Movie, MovieCompany,
-    MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person,
+    Company, Credit, Episode, Genre, Movie, MovieCompany,
+    MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person, Season,
     Series, SeriesCompany, SeriesCountry, SeriesCredit, SeriesLanguage,
-    SeriesNetwork, SeriesRating,
+    SeriesNetwork, SeriesRating, SeriesVideo,
 )
 
 MOVIES_PER_PAGE = 24
@@ -86,15 +90,45 @@ def home(request):
         .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
         .order_by(F("release_date").desc(nulls_last=True))[:12]
     )
+    # Task 90: TV's "what's new" analogue orders by *last* air date, not
+    # first — a long-running show that just aired a new episode is genuinely
+    # "recently aired" in a way a canceled show that merely premiered the
+    # same year is not. A movie has one date that means both things at once;
+    # a show doesn't, so this can't just reuse newest's ordering.
+    recently_aired = (
+        Series.objects.using("warehouse")
+        .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
+        .order_by(F("last_air_date").desc(nulls_last=True))[:12]
+    )
+    for show in recently_aired:
+        show.year_span = _series_year_span(show)
 
-    # The mosaic only holds films that actually have a poster — a missing
-    # image would punch a hole in the sheet. It never renders through
-    # _movie_card.html (see home.html), so it doesn't need imdb_rating.
-    mosaic = (
+    # The mosaic mixes movies and shows now (Task 90) — it's meant to read as
+    # "the whole catalog at once" (MOSAIC_LIMIT's own docstring), and TV is
+    # part of that catalog. A fixed 100:20 split, not the live ~5:3 catalog
+    # ratio (1,217 movies : 734 shows) — movies stay the dominant surface of
+    # the site (nav order, the "world of movies" hero copy) while TV still
+    # gets a real, visibly-present slice rather than a token single tile.
+    # Only films/shows with a poster (a missing image would punch a hole in
+    # the sheet); neither list renders through a card partial, so neither
+    # needs its imdb_rating annotated.
+    movie_tiles = [
+        {"kind": "movie", "slug": slug, "poster_path": poster_path}
+        for slug, poster_path in
         Movie.objects.using("warehouse")
         .filter(poster_path__isnull=False)
-        .order_by(F("release_date").desc(nulls_last=True))[:MOSAIC_LIMIT]
-    )
+        .order_by(F("release_date").desc(nulls_last=True))
+        .values_list("slug", "poster_path")[:100]
+    ]
+    series_tiles = [
+        {"kind": "series", "slug": slug, "poster_path": poster_path}
+        for slug, poster_path in
+        Series.objects.using("warehouse")
+        .filter(poster_path__isnull=False)
+        .order_by(F("first_air_date").desc(nulls_last=True))
+        .values_list("slug", "poster_path")[:20]
+    ]
+    mosaic = _interleave_mosaic(movie_tiles, series_tiles, ratio=5)
 
     context = {
         # Shown as "1,200+" etc. — an approximate figure, not an exact count.
@@ -111,9 +145,27 @@ def home(request):
         ).aggregate(avg_rating=Avg("rating"))["avg_rating"],
         "top_rated": top_rated,
         "newest": newest,
+        "recently_aired": recently_aired,
         "mosaic": mosaic,
     }
     return render(request, "movies/home.html", context)
+
+
+def _interleave_mosaic(primary, secondary, ratio):
+    """Merge two home-mosaic tile lists so `secondary` tiles are spaced
+    roughly one every `ratio` positions among `primary`'s, rather than
+    clumped at one end of the (decorative, aria-hidden) collage (Task 90)."""
+    merged = []
+    primary_iter = iter(primary)
+    secondary_iter = iter(secondary)
+    while True:
+        merged.extend(itertools.islice(primary_iter, ratio))
+        try:
+            merged.append(next(secondary_iter))
+        except StopIteration:
+            merged.extend(primary_iter)
+            break
+    return merged
 
 
 def movie_list(request):
@@ -503,6 +555,9 @@ def movie_detail(request, movie_slug):
         "languages": languages,
         "movie_rating": movie_rating,
         "trailer": trailer,
+        "collection_flags": collection_flags(
+            request.user, CollectionItem.MOVIE, movie_id
+        ),
     }
     return render(request, "movies/movie_detail.html", context)
 
@@ -584,7 +639,9 @@ def series_detail(request, series_slug):
     movie_detail() uses (Task 87), plus the TV-only record fields the film
     page has no analogue for (first/last aired, status, seasons/episodes,
     networks) in place of the film-only ones it drops (budget, revenue,
-    runtime). Episodes are Task 88.
+    runtime), every episode grouped by season with its own IMDb rating
+    (Task 88), and a trailer via dim_series_video (Task 90) reusing
+    movie_detail()'s _pick_trailer() unchanged.
     """
     series = get_object_or_404(Series.objects.using("warehouse"), slug=series_slug)
     series_id = series.series_id
@@ -676,6 +733,57 @@ def series_detail(request, series_slug):
         .first()
     )
 
+    # dim_series_video (Task 90): the movie page's trailer pipeline, reused
+    # unchanged — same query shape as movie_detail()'s, same _pick_trailer()
+    # ladder, same _video_embed.html partial. No clips section here either
+    # (that feature was removed from the film page by user request 2026-09-07,
+    # so it was never built for TV in the first place).
+    videos = list(
+        SeriesVideo.objects.using("warehouse")
+        .filter(series_id=series_id, site="YouTube")
+        .order_by(F("published_at").desc(nulls_last=True), "video_id")
+    )
+    trailer = _pick_trailer(videos)
+
+    seasons = sorted(
+        Season.objects.using("warehouse").filter(series_id=series_id),
+        # "Specials" (season_number 0) reads last, not first, matching the
+        # convention every streaming app already uses — TMDB's season stub
+        # numbers it 0 because that's its position in the API array, not
+        # because a reader wants to watch it before Season 1.
+        key=lambda s: (s.season_number == 0, s.season_number),
+    )
+
+    # One query for every episode on the show, joined to its IMDb rating via
+    # the fact_episode_rating reverse relation (Task 88 step 1) — the same
+    # "one query, not one per season" posture as the credits query above, and
+    # the same filtered-Max annotation Task 68 used for fact_movie_rating, so
+    # sorting and display can never disagree here either.
+    episodes = (
+        Episode.objects.using("warehouse")
+        .filter(series_id=series_id)
+        .annotate(
+            imdb_rating=Max("episoderating__rating", filter=Q(episoderating__source="imdb")),
+            imdb_vote_count=Max(
+                "episoderating__vote_count", filter=Q(episoderating__source="imdb")
+            ),
+        )
+        .order_by("episode_number")
+    )
+    episodes_by_season = {}
+    for episode in episodes:
+        episodes_by_season.setdefault(episode.season_number, []).append(episode)
+
+    # A season with no entry here isn't an error — Task 82's TV_SEASONS_MAX_NEW
+    # cap means dim_season already lists every season TMDB knows about while
+    # dim_episode only covers the 300/734 shows backfilled so far (Task 85).
+    # _episode_table.html renders that as a quiet "not catalogued yet" state,
+    # never an empty table.
+    seasons = [
+        {"season": season, "episodes": episodes_by_season.get(season.season_number, [])}
+        for season in seasons
+    ]
+
     context = {
         "series": series,
         "genres": genres,
@@ -690,7 +798,12 @@ def series_detail(request, series_slug):
         "countries": countries,
         "languages": languages,
         "series_rating": series_rating,
+        "seasons": seasons,
         "year_span": _series_year_span(series),
+        "trailer": trailer,
+        "collection_flags": collection_flags(
+            request.user, CollectionItem.SERIES, series.series_id
+        ),
     }
     return render(request, "movies/series_detail.html", context)
 
@@ -744,6 +857,7 @@ def studio_list(request):
     return render(request, "movies/studio_list.html", context)
 
 
+@login_required
 def studio_detail(request, company_slug):
     """One studio: header stats over its whole output, plus a searchable,
     sortable, paginated filmography — the same movie-browsing toolbar as
@@ -902,61 +1016,101 @@ def _merge_crew(credits):
     return merged
 
 
-# ?sort= values accepted by person_detail's filmography toolbar, each mapped to
-# (Movie attribute, descending?). The same four segments as the /movies/ and
-# studio-page toolbars (MOVIE_SORTS), but applied in Python rather than the ORM:
-# a person's filmography is a merged list of {"movie", "job_display"} dicts —
-# one row per film, carrying every job held on it — not a queryset, so it can't
-# be reordered with .order_by().
+# ?sort= values accepted by person_detail's filmography toolbar: each name
+# maps to a sort direction only (descending?). The same four segments as the
+# /movies/ and studio-page toolbars (MOVIE_SORTS), applied in Python rather
+# than the ORM — a person's filmography is a merged list of dicts, not a
+# queryset, so it can't be reordered with .order_by(). Task 89 mixed movies
+# and shows into one filmography, so there is no longer one fixed attribute
+# name per sort (a movie's release_date/revenue have no analogue on a show);
+# _filmography_sort_key() below resolves the right attribute per row's kind.
+# Revenue is kept as a segment rather than hidden once a show is present —
+# TV has no revenue measure (see 21_series_ratings.sql's fact_series_metrics
+# omission), so every show's revenue reads as a missing value and sorts to
+# the end under this sort, exactly like a movie with no revenue figure
+# already does. That's an existing, understood behavior on this toolbar, not
+# a new one a Revenue sort with shows in the mix would silently introduce.
 FILMOGRAPHY_SORTS = {
-    "release": ("release_date", True),
-    "rating": ("imdb_rating", True),
-    "revenue": ("revenue", True),
-    "title": ("title", False),
+    "release": True,
+    "rating": True,
+    "revenue": True,
+    "title": False,
 }
 
 
-def _sorted_filmography(rows, sort):
-    """Order merged filmography rows by one Movie attribute, nulls always last.
+def _filmography_title(title_obj):
+    """A title's display name, read generically since Task 89 mixed a
+    movie's `.title` and a show's `.name` into one filmography list."""
+    return getattr(title_obj, "title", None) or getattr(title_obj, "name", None) or ""
 
-    Mirrors MOVIE_SORTS' nulls_last=True: a film missing the sort field (no
-    IMDb rating yet, no revenue figure) sorts after every film that has one,
-    whichever direction the sort runs — rather than a null leading a
-    descending list. `imdb_rating` is the attribute person_detail() attaches
-    to each row's Movie just below _merge_person_credits().
+
+def _filmography_sort_key(row, sort):
+    """The value _sorted_filmography() orders one row on. `title_obj` is
+    either a Movie or a Series (Task 89) — release reads release_date or
+    first_air_date, rating reads the imdb_rating annotation person_detail()
+    attaches to either kind, and revenue reads Movie.revenue (None, via
+    getattr's default, for every show — see FILMOGRAPHY_SORTS' comment)."""
+    obj = row["title_obj"]
+    if sort == "title":
+        return _filmography_title(obj).lower()
+    if sort == "release":
+        return getattr(obj, "release_date", None) or getattr(obj, "first_air_date", None)
+    if sort == "rating":
+        return getattr(obj, "imdb_rating", None)
+    return getattr(obj, "revenue", None)  # sort == "revenue"
+
+
+def _sorted_filmography(rows, sort):
+    """Order merged filmography rows, nulls always last.
+
+    Mirrors MOVIE_SORTS' nulls_last=True: a row missing the sort field (no
+    IMDb rating yet, no revenue figure — every show, for revenue) sorts
+    after every row that has one, whichever direction the sort runs, rather
+    than a null leading a descending list.
     """
-    attr, descending = FILMOGRAPHY_SORTS[sort]
-    if attr == "title":
-        return sorted(rows, key=lambda r: (r["movie"].title or "").lower())
-    present = [r for r in rows if getattr(r["movie"], attr) is not None]
-    missing = [r for r in rows if getattr(r["movie"], attr) is None]
-    present.sort(key=lambda r: getattr(r["movie"], attr), reverse=descending)
+    descending = FILMOGRAPHY_SORTS[sort]
+    if sort == "title":
+        return sorted(rows, key=lambda r: _filmography_sort_key(r, sort))
+    present = [r for r in rows if _filmography_sort_key(r, sort) is not None]
+    missing = [r for r in rows if _filmography_sort_key(r, sort) is None]
+    present.sort(key=lambda r: _filmography_sort_key(r, sort), reverse=descending)
     return present + missing
 
 
 def _merge_person_credits(credits):
-    """Collapse a person's several credits on one film into one filmography row.
+    """Collapse a person's several credits on one title into one filmography
+    row. `credits` can mix fact_credit and fact_series_credit rows (Task 89)
+    — a Credit carries `.movie_id`/`.movie`, a SeriesCredit carries
+    `.series_id`/`.series`, and nothing else distinguishes them structurally,
+    so `kind` is read off which one a row has.
 
-    Same shape of problem as _merge_crew, keyed by movie instead of person: an
-    actor who also directed or wrote the same film would otherwise appear as
-    duplicate entries in separate department sections (Acting, Directing, ...).
-    One row per movie, with every job on it joined in department order, so a
-    director who also wrote the script reads "Director / Screenplay" once,
-    under one poster, rather than twice under two.
+    Same shape of problem as _merge_crew, keyed by (kind, id) instead of
+    person: an actor who also directed or wrote the same title would
+    otherwise appear as duplicate entries in separate department sections
+    (Acting, Directing, ...). One row per title, with every job on it joined
+    in department order, so a director who also wrote the script reads
+    "Director / Screenplay" once, under one poster, rather than twice under
+    two.
     """
-    by_movie = {}
+    by_key = {}
     for credit in credits:
-        by_movie.setdefault(credit.movie_id, []).append(credit)
+        if hasattr(credit, "movie_id"):
+            key = ("movie", credit.movie_id)
+        else:
+            key = ("series", credit.series_id)
+        by_key.setdefault(key, []).append(credit)
 
     merged = []
-    for movie_id, rows in by_movie.items():
+    for (kind, _id), rows in by_key.items():
         rows_sorted = sorted(rows, key=lambda c: _department_rank(c.department))
         labels = [
             c.character_name if c.department == "Acting" and c.character_name else c.job
             for c in rows_sorted
         ]
+        title_obj = rows_sorted[0].movie if kind == "movie" else rows_sorted[0].series
         merged.append({
-            "movie": rows_sorted[0].movie,
+            "kind": kind,
+            "title_obj": title_obj,
             "job_display": " / ".join(labels),
         })
     return merged
@@ -977,21 +1131,25 @@ def _redirect_to_person(slug):
     return redirect("movies:person_detail", person_slug=person.slug, permanent=True)
 
 
+@login_required
 def actor_detail(request, actor_slug):
     return _redirect_to_person(actor_slug)
 
 
+@login_required
 def director_detail(request, director_slug):
     return _redirect_to_person(director_slug)
 
 
 @login_required
 def person_detail(request, person_slug):
-    """One person, every film they worked on, and what they did there."""
+    """One person, every title they worked on — film or show (Task 89 folded
+    fact_series_credit into the same filmography fact_credit already fed),
+    and what they did there."""
     person = get_object_or_404(Person.objects.using("warehouse"), slug=person_slug)
     person_id = person.person_id
 
-    # One query for every credit, joined to its film. Merging happens in
+    # One query for every film credit, joined to its film. Merging happens in
     # Python below, since a GROUP BY can't return the rows themselves.
     credits = list(
         Credit.objects.using("warehouse")
@@ -1000,34 +1158,56 @@ def person_detail(request, person_slug):
         .order_by(F("movie__release_date").desc(nulls_last=True))
     )
 
-    filmography = _merge_person_credits(credits)
-
-    movie_ids = {c.movie_id for c in credits}
-
-    # fact_movie_rating is one row per (movie, source) — no genre fan-out —
-    # so, unlike the old fact_movie_metrics read this replaces, there's no
-    # .values(...).distinct() dedupe guard to port here (Task 68).
-    avg_rating = (
-        MovieRating.objects.using("warehouse")
-        .filter(movie_id__in=movie_ids, source="imdb")
-        .aggregate(avg_rating=Avg("rating"))["avg_rating"]
+    # A second, symmetric query against fact_series_credit (Task 89) — always
+    # issued, even for a person with no TV work, so there is one code path
+    # rather than a branch on "does this person have any shows"; an empty
+    # result here changes nothing about what renders below.
+    series_credits = list(
+        SeriesCredit.objects.using("warehouse")
+        .filter(person_id=person_id)
+        .select_related("series")
+        .order_by(F("series__first_air_date").desc(nulls_last=True))
     )
 
-    # One more query gives every poster in the filmography grid its own IMDb
-    # figure, without turning the grid into one query per card (Task 68) —
-    # same film set as the aggregate above, so this stays a constant number
-    # of queries regardless of how many films this person has.
-    imdb_ratings = dict(
+    filmography = _merge_person_credits(credits + series_credits)
+
+    movie_ids = {c.movie_id for c in credits}
+    series_ids = {c.series_id for c in series_credits}
+
+    # fact_movie_rating/fact_series_rating are each one row per (title,
+    # source) — no genre fan-out — so, unlike the old fact_movie_metrics read
+    # this replaces, there's no .values(...).distinct() dedupe guard to port
+    # here (Task 68). These two dicts also give every poster in the grid its
+    # own IMDb figure (below), without turning the grid into one query per
+    # card — a constant number of queries regardless of how many titles this
+    # person has, whichever mix of films and shows they are.
+    movie_ratings = dict(
         MovieRating.objects.using("warehouse")
         .filter(movie_id__in=movie_ids, source="imdb")
         .values_list("movie_id", "rating")
     )
+    series_ratings = dict(
+        SeriesRating.objects.using("warehouse")
+        .filter(series_id__in=series_ids, source="imdb")
+        .values_list("series_id", "rating")
+    )
     for row in filmography:
-        row["movie"].imdb_rating = imdb_ratings.get(row["movie"].movie_id)
+        obj = row["title_obj"]
+        if row["kind"] == "movie":
+            obj.imdb_rating = movie_ratings.get(obj.movie_id)
+        else:
+            obj.imdb_rating = series_ratings.get(obj.series_id)
+
+    # The average is taken over exactly the figures the two dicts above hand
+    # to the grid (Task 89 step 4), rather than a separate aggregate query
+    # against each rating table — the header number can't drift from what
+    # the cards show, by construction, and it costs no extra query.
+    all_ratings = list(movie_ratings.values()) + list(series_ratings.values())
+    avg_rating = sum(all_ratings) / len(all_ratings) if all_ratings else None
 
     # Search + reorder the filmography, the same toolbar /studios/<slug>/ puts
     # over its filmography (Task 62). Done in Python: the list above is already
-    # merged one-row-per-film and fully in memory, and a filmography is small
+    # merged one-row-per-title and fully in memory, and a filmography is small
     # (a few hundred rows for the most prolific person here). The header stats
     # are computed over the whole filmography above and never move as this
     # narrows — the same contract the studio page keeps.
@@ -1038,7 +1218,7 @@ def person_detail(request, person_slug):
 
     rows = filmography
     if q:
-        rows = [r for r in rows if q.lower() in r["movie"].title.lower()]
+        rows = [r for r in rows if q.lower() in _filmography_title(r["title_obj"]).lower()]
     rows = _sorted_filmography(rows, sort)
 
     page_obj = Paginator(rows, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
@@ -1051,7 +1231,9 @@ def person_detail(request, person_slug):
         "sort": sort,
         "base_query": urlencode({"q": q, "sort": sort}),
         "film_count": len(movie_ids),
-        "credit_count": len(credits),
+        "show_count": len(series_ids),
+        "title_count": len(movie_ids) + len(series_ids),
+        "credit_count": len(credits) + len(series_credits),
         "avg_rating": avg_rating,
         # Activity is deliberately just two states: "Retired" once TMDB records
         # a death date, "Active" otherwise. The catalogue is too thin for

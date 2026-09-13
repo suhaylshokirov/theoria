@@ -2673,6 +2673,130 @@ def test_ingest_movie_details_appends_videos():
     assert mock_client.get_movie_credits.call_count == 0  # still no second call
 
 
+# --- transform_series_videos (Task 90) --------------------------------------
+
+from etl.silver.transform_series_videos import (
+    _extract_video_rows as _extract_series_video_rows,
+    transform_series_videos,
+)
+
+_SERIES_VIDEO_COLUMNS = {
+    "series_id", "video_id", "name", "key", "site", "type", "official",
+    "size", "iso_639_1", "iso_3166_1", "published_at",
+}
+
+
+def _raw_series_with_videos(series_id: int, results: list[dict] | None = None) -> dict:
+    """A series-detail payload with the append_to_response=videos block folded in
+    (present since Task 77 — every bronze/series_details payload has this key)."""
+    raw = _raw_series(series_id)
+    raw["videos"] = {
+        "id": series_id,
+        "results": results if results is not None else [
+            _video("v1", type="Trailer"),
+            _video("v2", type="Clip", key="def456", official=False),
+        ],
+    }
+    return raw
+
+
+def test_extract_series_video_rows_one_row_per_video():
+    rows = _extract_series_video_rows(_raw_series_with_videos(1396))
+    assert len(rows) == 2
+    assert {r["video_id"] for r in rows} == {"v1", "v2"}
+    assert all(r["series_id"] == 1396 for r in rows)
+
+
+def test_extract_series_video_rows_none_when_videos_key_absent():
+    assert _extract_series_video_rows(_raw_series(1396)) is None
+
+
+def test_extract_series_video_rows_empty_list_when_show_has_no_videos():
+    assert _extract_series_video_rows(_raw_series_with_videos(1396, results=[])) == []
+
+
+def test_transform_series_videos_writes_silver_parquet():
+    key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_series_with_videos(1396)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        uri = transform_series_videos(
+            ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake"
+        )
+
+    assert uri == (
+        "s3://theoria-datalake/silver/series_videos/"
+        "ingestion_date=2026-09-09/series_videos.parquet"
+    )
+    mock_s3.put_object.assert_called_once()
+    _, kwargs = mock_s3.put_object.call_args
+    assert kwargs["Key"] == "silver/series_videos/ingestion_date=2026-09-09/series_videos.parquet"
+    df = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert set(df.columns) == _SERIES_VIDEO_COLUMNS
+    assert set(df["video_id"]) == {"v1", "v2"}
+    assert df["series_id"].dtype.name == "Int64"
+    assert df["size"].dtype.name == "Int64"
+
+
+def test_transform_series_videos_deduplicates_on_true_grain():
+    key1 = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    key2 = "bronze/series_details/ingestion_date=2026-09-09/1396_dup.json"
+    payload = _raw_series_with_videos(1396)
+    mock_s3 = _make_s3_mock_with_files({key1: payload, key2: dict(payload)})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_series_videos(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+    _, kwargs = mock_s3.put_object.call_args
+    df = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df) == 2  # still 2, not 4
+
+
+def test_transform_series_videos_drops_null_video_id_with_warning(caplog):
+    import logging
+    raw = _raw_series_with_videos(1396, results=[_video(None), _video("v2")])
+    key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    mock_s3 = _make_s3_mock_with_files({key: raw})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with caplog.at_level(logging.WARNING):
+            transform_series_videos(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+    assert any("null video_id" in r.message for r in caplog.records)
+    _, kwargs = mock_s3.put_object.call_args
+    df = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert list(df["video_id"]) == ["v2"]
+
+
+def test_transform_series_videos_show_with_no_videos_writes_empty_wellformed_parquet(caplog):
+    """A genuinely video-less show still writes a valid empty Parquet with
+    every column, never an exception — the everyday empty case here (unlike
+    movie_videos, there's no pre-feature partition gap to also cover)."""
+    key = "bronze/series_details/ingestion_date=2026-09-09/1396.json"
+    mock_s3 = _make_s3_mock_with_files({key: _raw_series_with_videos(1396, results=[])})
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_series_videos(ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake")
+
+    _, kwargs = mock_s3.put_object.call_args
+    df = pd.read_parquet(io.BytesIO(kwargs["Body"]))
+    assert len(df) == 0
+    assert set(df.columns) == _SERIES_VIDEO_COLUMNS
+
+
+def test_transform_series_videos_raises_when_no_bronze_files():
+    mock_s3 = MagicMock()
+    paginator = MagicMock()
+    paginator.paginate.return_value = [{"Contents": []}]
+    mock_s3.get_paginator.return_value = paginator
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        with pytest.raises(FileNotFoundError):
+            transform_series_videos(
+                ingestion_date=dt.date(2026, 9, 9), bucket="theoria-datalake"
+            )
+
+
 # --- transform_imdb_ratings -----------------------------------------------------
 
 import gzip

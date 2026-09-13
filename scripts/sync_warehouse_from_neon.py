@@ -59,6 +59,8 @@ WAREHOUSE_TABLES = [
     "dim_network",
     "dim_season",
     "dim_episode",
+    # Task 90: a show's trailers/clips, same shape as dim_movie_video above.
+    "dim_series_video",
     "fact_movie_metrics",
     "fact_movie_rating",
     "fact_credit",

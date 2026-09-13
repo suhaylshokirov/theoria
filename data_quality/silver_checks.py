@@ -363,6 +363,23 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "vote_count": (0, None),
         },
     },
+    # Task 90: the show counterpart of movie_videos — same shape, series_id in
+    # place of movie_id. Unlike movie_videos there is no pre-feature partition
+    # gap: every bronze/series_details payload has carried a videos key since
+    # Task 77, so an empty partition here means "no shows have videos yet",
+    # not "written before the feature shipped".
+    "series_videos": {
+        "parquet": "series_videos.parquet",
+        "pk_cols": ["series_id", "video_id"],
+        "required_cols": ["series_id", "video_id"],
+        "expected_cols": [
+            "series_id", "video_id", "name", "key", "site", "type", "official",
+            "size", "iso_639_1", "iso_3166_1", "published_at",
+        ],
+        "ranges": {
+            "size": (0, None),
+        },
+    },
 }
 
 # TV series entities. Checked by default (Task 85); skipped only when
@@ -371,7 +388,7 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
 _TV_ENTITIES = frozenset({
     "series", "series_companies", "series_countries", "series_languages",
     "series_networks", "networks", "series_genres", "series_credits",
-    "series_ratings", "seasons", "episodes", "episode_ratings",
+    "series_ratings", "seasons", "episodes", "episode_ratings", "series_videos",
 })
 
 

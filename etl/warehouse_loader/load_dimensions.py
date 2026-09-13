@@ -24,6 +24,7 @@ S3 sources:
     silver/movie_languages/ingestion_date=YYYY-MM-DD/movie_languages.parquet
     silver/person_details/ingestion_date=YYYY-MM-DD/person_details.parquet  (optional)
     silver/movie_videos/ingestion_date=YYYY-MM-DD/movie_videos.parquet  (optional)
+    silver/series_videos/ingestion_date=YYYY-MM-DD/series_videos.parquet  (optional)
 
 Usage:
     python -m etl.warehouse_loader.load_dimensions
@@ -490,6 +491,63 @@ def load_dim_episode(
     return count, rejects
 
 
+# --- Task 90: dim_series_video ---------------------------------------------
+
+_SERIES_VIDEO_COLS = [
+    "series_id", "video_id", "name", "key", "site", "type", "official",
+    "size", "iso_639_1", "iso_3166_1", "published_at",
+]
+
+
+def load_dim_series_video(
+    session: Session, videos_df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Replace (not upsert) every video row for the shows in this Silver partition.
+
+    An exact copy of load_dim_movie_video()'s logic, series_id in place of
+    movie_id — same reasoning: TMDB removes videos and YouTube keys rot, so a
+    pure upsert would leave a dead embed on the show page forever.
+    _replace_by_parent() deletes every existing row for the series_ids present
+    in this partition, then inserts the current set.
+
+    series_id is resolved against dim_series; a row whose series_id has no
+    dimension row is quarantined, never dropped. Returns (count, rejects).
+    """
+    valid_series_ids = _existing_ids(session, "dim_series", "series_id")
+
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+    for record in videos_df.to_dict("records"):
+        series_id = record.get("series_id")
+        if pd.isna(series_id) or int(series_id) not in valid_series_ids:
+            rejects.append({**record, "rejection_reason": "unknown series_id"})
+            continue
+
+        video_id = record.get("video_id")
+        if video_id is None or pd.isna(video_id) or not str(video_id).strip():
+            rejects.append({**record, "rejection_reason": "missing video_id"})
+            continue
+
+        row = {col: record.get(col) for col in _SERIES_VIDEO_COLS}
+        row["series_id"] = int(series_id)
+        row["video_id"] = str(video_id)
+        row["official"] = None if pd.isna(record.get("official")) else bool(record.get("official"))
+        row["size"] = None if pd.isna(record.get("size")) else int(record.get("size"))
+        row["ingestion_date"] = ingestion_date
+        rows.append({k: (None if pd.isna(v) else v) for k, v in row.items()})
+
+    parent_ids = sorted({r["series_id"] for r in rows})
+    columns = _SERIES_VIDEO_COLS + ["ingestion_date"]
+    count = _replace_by_parent(
+        session, "dim_series_video", "series_id", parent_ids, columns, rows
+    )
+    logger.info(
+        "dim_series_video: replaced %d row(s) across %d show(s), rejected %d row(s)",
+        count, len(parent_ids), len(rejects),
+    )
+    return count, rejects
+
+
 def _slugify(name: str) -> str:
     """Lowercase, ASCII, hyphenated form of a name/title for use in a URL.
 
@@ -701,9 +759,17 @@ def load_dimensions(
     # load and the 22_episodes.sql migration need not be applied yet.
     seasons_df = _optional_silver(bucket, "seasons", ingestion_date, "seasons.parquet")
     episodes_df = _optional_silver(bucket, "episodes", ingestion_date, "episodes.parquet")
+    # Task 90: show trailers/clips. Optional in the same way as movie_videos —
+    # a pre-Task-77 partition (there is none live, but the same posture as
+    # every other optional Silver source here) simply has no series_videos
+    # file and degrades to "no series videos loaded".
+    series_videos_df = _optional_silver(
+        bucket, "series_videos", ingestion_date, "series_videos.parquet"
+    )
 
     counts: dict[str, int] = {}
     video_rejects: list[dict[str, Any]] = []
+    series_video_rejects: list[dict[str, Any]] = []
     season_rejects: list[dict[str, Any]] = []
     episode_rejects: list[dict[str, Any]] = []
     with get_session() as session:
@@ -728,6 +794,16 @@ def load_dimensions(
                 counts["dim_network"] = load_dim_network(session, networks_df)
             else:
                 counts["dim_network"] = 0
+            # Task 90: dim_series_video has an FK to dim_series, so it runs
+            # after the load_dim_series() call above committed (in-transaction)
+            # its rows — the dim_season/dim_episode ordering below, and the
+            # dim_movie_video precedent for the movie side.
+            if series_videos_df is not None and not series_videos_df.empty:
+                counts["dim_series_video"], series_video_rejects = load_dim_series_video(
+                    session, series_videos_df, ingestion_date
+                )
+            else:
+                counts["dim_series_video"] = 0
         # Task 84: dim_season / dim_episode have an FK to dim_series, so they
         # run after the load_dim_series() above committed (in-transaction) its
         # rows. Gated on their own Silver files, like dim_movie_video — a
@@ -760,6 +836,7 @@ def load_dimensions(
             counts["dim_network_slugs"] = assign_slugs(session, "dim_network", "network_id", "name")
 
     _write_rejects(video_rejects, "dim_movie_video", ingestion_date, rejected_dir)
+    _write_rejects(series_video_rejects, "dim_series_video", ingestion_date, rejected_dir)
     _write_rejects(season_rejects, "dim_season", ingestion_date, rejected_dir)
     _write_rejects(episode_rejects, "dim_episode", ingestion_date, rejected_dir)
 

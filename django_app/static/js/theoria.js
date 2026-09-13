@@ -240,6 +240,74 @@
     });
   }
 
+  /* --- Account dialog -----------------------------------------------------
+     Google is a normal link so the OAuth redirect remains browser-native.
+     The email row is a disabled placeholder until that separate provider is
+     implemented. Native dialog methods provide focus management and Escape
+     handling, while the attribute fallback keeps the trigger usable in older
+     engines. */
+
+  function initAuthDialog() {
+    var trigger = document.getElementById("account-trigger");
+    var dialog = document.getElementById("auth-dialog");
+    if (!trigger || !dialog) return;
+
+    var closeButtons = dialog.querySelectorAll("[data-auth-close]");
+    var supportsModal = typeof dialog.showModal === "function";
+
+    function setExpanded(open) {
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+
+    function close(restoreFocus) {
+      if (dialog.open && typeof dialog.close === "function") {
+        dialog.close();
+      } else {
+        dialog.removeAttribute("open");
+        dialog.classList.remove("is-open");
+      }
+      setExpanded(false);
+      if (restoreFocus) trigger.focus();
+    }
+
+    function open() {
+      if (supportsModal) dialog.showModal();
+      else dialog.setAttribute("open", "");
+      dialog.classList.add("is-open");
+      setExpanded(true);
+      var first = dialog.querySelector("[data-auth-close], a[href], button:not([disabled])");
+      if (first) first.focus();
+    }
+
+    trigger.addEventListener("click", function () {
+      if (dialog.open) close(true);
+      else open();
+    });
+
+    closeButtons.forEach(function (button) {
+      button.addEventListener("click", function () {
+        close(true);
+      });
+    });
+
+    dialog.addEventListener("click", function (e) {
+      if (e.target === dialog) close(true);
+    });
+
+    dialog.addEventListener("close", function () {
+      dialog.classList.remove("is-open");
+      setExpanded(false);
+    });
+
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && dialog.open && !supportsModal) close(true);
+    });
+
+    window.addEventListener("pageshow", function () {
+      if (dialog.open) close(false);
+    });
+  }
+
   /* --- Client-side paging ----------------------------------------------------
      Used by the movie page for cast and crew. Everything is already in the
      document; this only shows a window of it, so "Next" is a repaint rather
@@ -544,6 +612,41 @@
     });
   }
 
+  /* --- Season picker (show page episodes) --------------------------------
+     Every season's episode table is already in the document (see
+     movies/_episode_table.html) — this only shows the one whose radio is
+     checked, by toggling .is-active (theoria.css hides every .season-panel
+     that lacks it, but only once html.has-js is set, which is also what
+     reveals .season-picker itself). No live-filter round trip: the whole
+     point, per the task brief, is that switching seasons is a repaint, the
+     same posture initPagedSection() takes for cast/crew paging. */
+
+  function initSeasonPicker() {
+    var picker = document.querySelector("[data-season-picker]");
+    if (!picker) return;
+    var panels = Array.prototype.slice.call(
+      document.querySelectorAll("[data-season-panel]")
+    );
+    if (!panels.length) return;
+
+    function show(value) {
+      panels.forEach(function (panel) {
+        panel.classList.toggle(
+          "is-active",
+          panel.getAttribute("data-season-panel") === value
+        );
+      });
+    }
+
+    picker.addEventListener("change", function (e) {
+      if (e.target.name !== "season") return;
+      show(e.target.value);
+    });
+
+    var checked = picker.querySelector("input[name=season]:checked");
+    if (checked) show(checked.value);
+  }
+
   /* --- Filter menu -----------------------------------------------------
      A <select data-menu> in a toolbar becomes a compact in-page dropdown.
      The native <select> picker on a phone opens a full-screen OS list, and
@@ -709,178 +812,89 @@
     syncFromSelect();
   }
 
-  /* --- Verify-code auto-advance --------------------------------------------
-     The code field (accounts/verify.html) is one input, not six boxes, so
-     autocomplete="one-time-code" and paste both work -- see the auth design
-     notes. This only adds the JS-only conveniences on top of a control that
-     already works without it: strip anything typed that isn't a digit, and
-     submit automatically once six are in, so the reader never has to find
-     the button. The resend button gets a live countdown mirroring the
-     server's 60-second cooldown (accounts/codes.py's RESEND_COOLDOWN); with
-     JS off the button is simply always enabled, and the server-side cooldown
-     still refuses an early click with its own message. */
+  /* --- Film guide ---------------------------------------------------------- */
 
-  function initCodeInput() {
-    var card = document.querySelector("[data-verify-form]");
-    if (!card) return;
+  function initAssistant() {
+    var root = document.querySelector("[data-ai-assistant]");
+    if (!root) return;
 
-    var input = card.querySelector(".code-input");
-    if (input) {
-      input.addEventListener("input", function () {
-        var digits = input.value.replace(/\D/g, "").slice(0, 6);
-        input.value = digits;
-        if (digits.length === 6 && input.form) {
-          // requestSubmit() (not submit()) deliberately: submit() bypasses
-          // the form's "submit" event entirely, which would silently skip
-          // initAuthFormSubmitState()'s loading state on exactly the path
-          // most verify attempts actually take. Falls back for the rare
-          // browser old enough not to have it.
-          if (input.form.requestSubmit) input.form.requestSubmit();
-          else input.form.submit();
-        }
-      });
+    var trigger = root.querySelector("[data-ai-trigger]");
+    var panel = root.querySelector("#ai-assistant-panel");
+    var close = root.querySelector("[data-ai-close]");
+    var messages = root.querySelector("[data-ai-messages]");
+    var form = root.querySelector("[data-ai-form]");
+    var input = root.querySelector("[data-ai-input]");
+    var send = form.querySelector("button[type='submit']");
+    var actions = root.querySelectorAll("[data-ai-prompt]");
+
+    var replies = {
+      "Pick for tonight": "Tell me a little about your mood. I can start with something funny, thoughtful, intense, or comforting.",
+      "Find by mood": "Choose a feeling and I will narrow it down: light, romantic, thrilling, or strange.",
+      "Surprise me": "A surprise pick will be ready once your personal recommendations are connected."
+    };
+
+    function setOpen(open) {
+      panel.hidden = !open;
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      trigger.setAttribute("aria-label", open ? "Close film guide" : "Open film guide");
+      if (open) {
+        window.setTimeout(function () { input.focus(); }, 0);
+      } else {
+        trigger.focus();
+      }
     }
 
-    var resendBtn = card.querySelector("[data-resend-button]");
-    if (resendBtn) {
-      var seconds = 60;
-      var label = resendBtn.textContent;
-      resendBtn.disabled = true;
-      var timer = setInterval(function () {
-        seconds -= 1;
-        if (seconds <= 0) {
-          clearInterval(timer);
-          resendBtn.disabled = false;
-          resendBtn.textContent = label;
-        } else {
-          resendBtn.textContent = label + " (" + seconds + "s)";
-        }
-      }, 1000);
+    function addMessage(text, role) {
+      var message = document.createElement("div");
+      message.className = "ai-message ai-message-" + role;
+      var paragraph = document.createElement("p");
+      paragraph.textContent = text;
+      message.appendChild(paragraph);
+      messages.appendChild(message);
+      messages.scrollTop = messages.scrollHeight;
     }
-  }
 
-  /* --- Auth form submit state ----------------------------------------------
-     Every .auth-form (signup, login, verify) is a plain HTML POST -- there's
-     no fetch() here to know a request finished, only that one started. So
-     rather than a real progress indicator, this swaps the submit button's
-     label for a spinner the instant the browser accepts the submission,
-     which is what keeps a real network round-trip from reading as a dead
-     click. Never blocks the submission itself: disabling the button in a
-     "submit" handler doesn't cancel a navigation already under way.
+    function respond(prompt) {
+      addMessage(prompt, "user");
+      input.value = "";
+      send.disabled = true;
+      window.setTimeout(function () {
+        addMessage(replies[prompt] || "I am still in demo mode. Soon I will use your taste profile to make a personal recommendation.", "assistant");
+      }, 260);
+    }
 
-     Reads its busy label from a data attribute (defaulting to "Sending…")
-     rather than hardcoding one, since "Verifying…" reads better on the code
-     form than the generic label the other two forms want. */
-  function initAuthFormSubmitState() {
-    document.querySelectorAll(".auth-form").forEach(function (form) {
-      form.addEventListener("submit", function () {
-        var btn = form.querySelector('button[type="submit"]');
-        if (!btn || btn.disabled) return;
-        var busyLabel = btn.getAttribute("data-busy-label") || "Sending…";
-        btn.disabled = true;
-        btn.innerHTML =
-          '<span class="btn-spinner" aria-hidden="true"></span><span>' + busyLabel + "</span>";
+    trigger.addEventListener("click", function () {
+      setOpen(panel.hidden);
+    });
+
+    close.addEventListener("click", function () {
+      setOpen(false);
+    });
+
+    actions.forEach(function (action) {
+      action.addEventListener("click", function () {
+        respond(action.getAttribute("data-ai-prompt"));
       });
     });
-  }
 
-  /* --- Inline email validation ----------------------------------------------
-     A malformed address is worth catching before the round trip a server
-     validation error costs -- particularly on signup, where that round trip
-     also means waiting on an email that was never going to arrive. Reuses
-     the same .form-error markup/styling a server-rendered error already
-     uses (see accounts/signup.html etc.), so a reader can't tell which kind
-     they're looking at; is-live only changes how it enters, not how it
-     looks. Scoped to email fields -- the one place a format check catches
-     something a `required` attribute alone doesn't. */
-  function initInlineValidation() {
-    document.querySelectorAll(".auth-form input[type=email]").forEach(function (input) {
-      var wrap = input.closest("div");
-      if (!wrap) return;
-
-      function clearErrors() {
-        wrap.querySelectorAll(".form-error").forEach(function (el) {
-          el.remove();
-        });
-      }
-
-      input.addEventListener("blur", function () {
-        if (input.value && !input.checkValidity()) {
-          clearErrors();
-          var p = document.createElement("p");
-          p.className = "form-error is-live";
-          p.textContent = "Enter a valid email address.";
-          wrap.appendChild(p);
-        }
-      });
-
-      // Clears on the next keystroke, not just the next blur -- including a
-      // stale server-rendered error from before this field was touched, so
-      // fixing the address is what makes the message go away, not
-      // resubmitting the form.
-      input.addEventListener("input", function () {
-        if (!input.value || input.checkValidity()) clearErrors();
-      });
+    input.addEventListener("input", function () {
+      send.disabled = !input.value.trim();
     });
-  }
 
-  /* --- Account menu -------------------------------------------------------
-     The signed-in header link (base.html's [data-account-menu]) is a real
-     <a href="/me/"> with the dropdown panel already in the DOM, hidden --
-     so with no JS it is simply a link to the reader page, no enhancement
-     required. With JS on, the trigger's click is redirected into opening the
-     panel instead of navigating. Deliberately not built on initFilterMenu's
-     buildFilterMenu(): that one *constructs* its trigger/panel from a
-     <select> it is replacing; this one only wires up markup base.html has
-     already rendered. */
-  function initAccountMenu() {
-    document.querySelectorAll("[data-account-menu]").forEach(function (wrap) {
-      var trigger = wrap.querySelector("[data-account-trigger]");
-      var panel = wrap.querySelector("[data-account-panel]");
-      if (!trigger || !panel) return;
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var prompt = input.value.trim();
+      if (prompt) respond(prompt);
+    });
 
-      var open = false;
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape" && !panel.hidden) setOpen(false);
+    });
 
-      function setOpen(next) {
-        open = next;
-        panel.hidden = !next;
-        trigger.setAttribute("aria-expanded", next ? "true" : "false");
-      }
-
-      function onOutside(e) {
-        if (!wrap.contains(e.target)) close();
-      }
-
-      function openMenu() {
-        if (open) return;
-        setOpen(true);
-        document.addEventListener("pointerdown", onOutside, true);
-      }
-
-      function close() {
-        if (!open) return;
-        setOpen(false);
-        document.removeEventListener("pointerdown", onOutside, true);
-      }
-
-      trigger.addEventListener("click", function (e) {
-        e.preventDefault();
-        if (open) close();
-        else openMenu();
-      });
-
-      wrap.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") {
-          close();
-          trigger.focus();
-        }
-      });
-
-      // A back/forward-cache restore can bring the page back with the panel
-      // open, same reasoning as initFilterMenu's pageshow listener.
-      window.addEventListener("pageshow", function () {
-        close();
-      });
+    window.addEventListener("pageshow", function () {
+      panel.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+      trigger.setAttribute("aria-label", "Open film guide");
     });
   }
 
@@ -894,7 +908,10 @@
     initCounters();
     initThemeToggle();
     initNavToggle();
+    initAssistant();
+    initAuthDialog();
     initPagedSections();
+    initSeasonPicker();
     initFilterMenu();
     initLiveFilter();
     initBioToggle();

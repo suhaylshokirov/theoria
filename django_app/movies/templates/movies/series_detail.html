@@ -3,12 +3,14 @@
 
 {% block title %}Theoria — {{ series.name }}{% endblock %}
 
+{% comment %} Same YouTube preconnect handshake as movie_detail.html — only a
+   show page with a trailer loads a still. {% endcomment %}
+{% block extra_head %}{% if trailer %}<link rel="preconnect" href="https://img.youtube.com">{% endif %}{% endblock %}
+
 {% block content %}
 {% comment %} Same .specimen shell movie_detail.html uses (Task 71's judgment
    applies equally here): a framed poster plate, the record beside it, the
-   backdrop as a thin strip below rather than behind the text. No trailer
-   slot yet — dim_series_video is Task 90; until then the backdrop always
-   shows when there is one. {% endcomment %}
+   backdrop as a thin strip below rather than behind the text. {% endcomment %}
 <article class="specimen">
     <div class="specimen-plate">
         {% if series.poster_path %}
@@ -101,6 +103,8 @@
             {% endif %}
         </dl>
 
+        {% include "movies/_collection_actions.html" with content_type="series" content_id=series.series_id collection_flags=collection_flags request=request only %}
+
         {% comment %} Same slug-built link contract as movie_detail.html's genre
            chips (Task 71) — the slug comes from the same django.utils.text.slugify
            the view's genre_choices map uses, so the two can't drift. {% endcomment %}
@@ -114,7 +118,14 @@
     </div>
 </article>
 
-{% if series.backdrop_path %}
+{% comment %} A trailer and a backdrop compete for the same slot, same
+   judgment as movie_detail.html (Task 75/90): the trailer takes it when
+   there is one, the backdrop stays only otherwise. {% endcomment %}
+{% if trailer %}
+<figure class="video-strip">
+    {% include "movies/_video_embed.html" with video=trailer kind="trailer" only %}
+</figure>
+{% elif series.backdrop_path %}
 <figure class="backdrop-strip">
     <img src="{{ series.backdrop_path|tmdb_image:'w1280' }}" alt="" loading="lazy" decoding="async">
 </figure>
@@ -172,5 +183,25 @@
         {% endfor %}
         {% include "movies/_pager_client.html" with label="crew" only %}
     </div>
+</section>
+
+<section class="sheet-section" id="episodes">
+    <div class="section-head">
+        <h2>Episodes</h2>
+        <span class="section-note">{{ series.number_of_seasons|default:"—" }} season{{ series.number_of_seasons|pluralize }} · {{ series.number_of_episodes|default:"—" }} episode{{ series.number_of_episodes|pluralize }}</span>
+    </div>
+    {% comment %} All seasons render every time — the picker (JS-only, see
+       _season_picker.html) is what narrows this to one at a time; a no-JS
+       reader scrolls the stacked seasons instead, each under its own
+       heading. {% endcomment %}
+    {% include "movies/_season_picker.html" with seasons=seasons only %}
+    {% for block in seasons %}
+    <div class="season-panel{% if forloop.first %} is-active{% endif %}" data-season-panel="{{ block.season.season_number }}">
+        <h3 class="credit-department">{{ block.season.name|default:"Season" }}</h3>
+        {% include "movies/_episode_table.html" with block=block only %}
+    </div>
+    {% empty %}
+    <p class="empty">No seasons recorded for this show.</p>
+    {% endfor %}
 </section>
 {% endblock %}
