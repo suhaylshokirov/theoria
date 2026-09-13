@@ -148,7 +148,10 @@
                     </div>
                 </div>
                 {% else %}
-                <a href="{% url 'accounts:login' %}">Sign in</a>
+                <a href="{% url 'accounts:login' %}" class="signin-btn">
+                    <span class="signin-icon" aria-hidden="true"></span>
+                    Sign in
+                </a>
                 {% endif %}
             </div>
             {% endwith %}

@@ -137,7 +137,7 @@ def _login_sub_line(next_url: str) -> str:
     for prefix, sub in _GATE_SUB_LINES:
         if next_url.startswith(prefix):
             return sub
-    return "We'll email you a code — no password."
+    return "We'll email you a code."
 
 
 def signup(request):

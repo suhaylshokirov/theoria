@@ -1455,6 +1455,87 @@ input[type="email"]:focus {
   font-weight: 600;
 }
 
+/* Signed-out visitors get a lime-tinted outline chip instead of a plain
+   text link, so "Sign in" doesn't read as just another item alongside
+   Movies/TV Shows/People. A solid lime-filled pill (the first pass here)
+   read as too heavy a "cover" next to the plain nav links -- this instead
+   borrows the site's own quieter "lime means selectable/special" language:
+   the outline-plus-wash-on-hover .collection-action already uses elsewhere
+   (border var(--lime-mark), fill var(--lime-wash), text var(--lime-deep)
+   on interaction) and the lime-text/lime-mark pairing .menu-option's
+   selected row uses for label + marker. No fill at rest, so it sits at the
+   same visual weight as its siblings and stands out by colour, not mass.
+   The icon is docs/icons/account_circle, copied into static/img/icons/ and
+   masked the same way auth.css's field icons are.
+   `.nav-links a` (color/padding-block, above) is one class + one type
+   selector, which outranks a bare `.signin-btn` class rule -- the extra
+   `.nav-links a.signin-btn` specificity below is what makes the lime color
+   win instead of the muted nav-link grey. */
+.signin-btn {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: var(--space-2);
+  margin-left: var(--space-2);
+  padding-inline: var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.nav-links a.signin-btn {
+  color: var(--lime-text);
+  font-weight: 600;
+  border-color: var(--lime-mark);
+  background: transparent;
+  padding-block: var(--space-2);
+}
+
+.nav-links a.signin-btn:hover {
+  color: var(--lime-deep);
+  border-color: var(--lime-mark);
+  background: var(--lime-wash);
+  text-decoration: none;
+}
+
+.signin-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: none;
+  background-color: var(--lime-mark);
+  -webkit-mask-image: url("../img/icons/account-circle.png");
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: url("../img/icons/account-circle.png");
+  mask-mode: alpha;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+.nav-links a.signin-btn:hover .signin-icon {
+  background-color: var(--lime-deep);
+}
+
+/* A touch target needs more room than the mouse-row chip above gives it --
+   same reasoning as .menu-trigger/.menu-option's own coarse-pointer bump
+   further down. */
+@media (pointer: coarse) {
+  .nav-links a.signin-btn {
+    padding-block: var(--space-3);
+    padding-inline: var(--space-5);
+  }
+
+  .signin-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
 .account-panel form {
   margin: 0;
 }
@@ -1467,17 +1548,27 @@ input[type="email"]:focus {
 /* The mobile nav's `.nav-links a:last-child { border-bottom: none }` rule
    (further down this file) targets whichever <a> is the actual last child of
    .nav-links -- which, signed in, is .account-trigger's own parent
-   .account-menu, not an <a> at all. Left alone that strands a border-bottom
-   under both the last plain nav link and the trigger. Closed here instead of
-   editing that shared rule, since this is the one case that isn't a bare
-   <a> row. */
+   .account-menu, not an <a> at all; signed out, it's .signin-btn itself
+   (already the last child, but it's a lime outline chip, not a plain text
+   row, so it shouldn't pick up the shared padding-block/border-bottom
+   treatment either). Left alone that strands a border-bottom under the last
+   plain nav link and draws a stray rule under the chip. Closed here instead
+   of editing that shared rule, since these are the two cases that aren't a
+   bare <a> row. The chip's own align-self: center (above) already keeps it
+   sized to content instead of stretching full-width in the column layout. */
 @media (max-width: 680px) {
   html.has-js .nav-links > a:has(+ .account-menu) {
     border-bottom: none;
   }
 
-  html.has-js .account-trigger {
+  html.has-js .account-trigger,
+  html.has-js .nav-links a.signin-btn {
     border-bottom: none;
+  }
+
+  html.has-js .nav-links a.signin-btn {
+    margin-left: 0;
+    margin-top: var(--space-2);
   }
 }
 

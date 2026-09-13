@@ -211,6 +211,10 @@ free-tier cap started to bind.
 
 ## Coding Rules (apply always)
 
+- **Always use the `/frontend-design` skill for any frontend/UI work.** Invoke it before touching
+  any Django template or `django_app/static/css/*.css` file — new UI, reshaping existing UI, or
+  even a small visual tweak (a nav item, a button, an icon). Deliberate design decisions, not
+  templated defaults.
 - **One module, one responsibility.** No business logic inside `if __name__ == "__main__"`.
 - **All config from `config.py`.** No hardcoded keys, paths, or URLs anywhere.
 - **Every ETL script must be idempotent.** Re-running it twice gives the same result.

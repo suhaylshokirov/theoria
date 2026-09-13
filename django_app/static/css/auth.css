@@ -69,6 +69,16 @@
   }
 }
 
+/* .sheet-head is the shared page-title header (movie/person/studio pages,
+   the account page too), left-aligned there by default; centered here
+   because on this card, sitting above a centered form with nothing beside
+   it to align against, a left-aligned heading reads as adrift rather than
+   anchored. Scoped to .auth-card so the shared class's own default is
+   untouched everywhere else it's used. */
+.auth-card .sheet-head {
+  text-align: center;
+}
+
 /* The gallery: home.css's .contact-sheet recipe (gap, stagger, desaturate/
    hover treatment) at a taller tile floor -- 116px, the same value
    theoria.css's own .poster-grid.is-tight already uses, not a new number
