@@ -830,6 +830,181 @@
     });
   }
 
+  /* --- Verify-code auto-advance --------------------------------------------
+     The code field (accounts/verify.html) is one input, not six boxes, so
+     autocomplete="one-time-code" and paste both work -- see the auth design
+     notes. This only adds the JS-only conveniences on top of a control that
+     already works without it: strip anything typed that isn't a digit, and
+     submit automatically once six are in, so the reader never has to find
+     the button. The resend button gets a live countdown mirroring the
+     server's 60-second cooldown (accounts/codes.py's RESEND_COOLDOWN); with
+     JS off the button is simply always enabled, and the server-side cooldown
+     still refuses an early click with its own message. */
+
+  function initCodeInput() {
+    var card = document.querySelector("[data-verify-form]");
+    if (!card) return;
+
+    var input = card.querySelector(".code-input");
+    if (input) {
+      input.addEventListener("input", function () {
+        var digits = input.value.replace(/\D/g, "").slice(0, 6);
+        input.value = digits;
+        if (digits.length === 6 && input.form) {
+          // requestSubmit() (not submit()) deliberately: submit() bypasses
+          // the form's "submit" event entirely, which would silently skip
+          // initAuthFormSubmitState()'s loading state on exactly the path
+          // most verify attempts actually take. Falls back for the rare
+          // browser old enough not to have it.
+          if (input.form.requestSubmit) input.form.requestSubmit();
+          else input.form.submit();
+        }
+      });
+    }
+
+    var resendBtn = card.querySelector("[data-resend-button]");
+    if (resendBtn) {
+      var seconds = 60;
+      var label = resendBtn.textContent;
+      resendBtn.disabled = true;
+      var timer = setInterval(function () {
+        seconds -= 1;
+        if (seconds <= 0) {
+          clearInterval(timer);
+          resendBtn.disabled = false;
+          resendBtn.textContent = label;
+        } else {
+          resendBtn.textContent = label + " (" + seconds + "s)";
+        }
+      }, 1000);
+    }
+  }
+
+  /* --- Auth form submit state ----------------------------------------------
+     Every .auth-form (signup, login, verify) is a plain HTML POST -- there's
+     no fetch() here to know a request finished, only that one started. So
+     rather than a real progress indicator, this swaps the submit button's
+     label for a spinner the instant the browser accepts the submission,
+     which is what keeps a real network round-trip from reading as a dead
+     click. Never blocks the submission itself: disabling the button in a
+     "submit" handler doesn't cancel a navigation already under way.
+
+     Reads its busy label from a data attribute (defaulting to "Sending…")
+     rather than hardcoding one, since "Verifying…" reads better on the code
+     form than the generic label the other two forms want. */
+  function initAuthFormSubmitState() {
+    document.querySelectorAll(".auth-form").forEach(function (form) {
+      form.addEventListener("submit", function () {
+        var btn = form.querySelector('button[type="submit"]');
+        if (!btn || btn.disabled) return;
+        var busyLabel = btn.getAttribute("data-busy-label") || "Sending…";
+        btn.disabled = true;
+        btn.innerHTML =
+          '<span class="btn-spinner" aria-hidden="true"></span><span>' + busyLabel + "</span>";
+      });
+    });
+  }
+
+  /* --- Inline email validation ----------------------------------------------
+     A malformed address is worth catching before the round trip a server
+     validation error costs -- particularly on signup, where that round trip
+     also means waiting on an email that was never going to arrive. Reuses
+     the same .form-error markup/styling a server-rendered error already
+     uses (see accounts/signup.html etc.), so a reader can't tell which kind
+     they're looking at; is-live only changes how it enters, not how it
+     looks. Scoped to email fields -- the one place a format check catches
+     something a `required` attribute alone doesn't. */
+  function initInlineValidation() {
+    document.querySelectorAll(".auth-form input[type=email]").forEach(function (input) {
+      var wrap = input.closest("div");
+      if (!wrap) return;
+
+      function clearErrors() {
+        wrap.querySelectorAll(".form-error").forEach(function (el) {
+          el.remove();
+        });
+      }
+
+      input.addEventListener("blur", function () {
+        if (input.value && !input.checkValidity()) {
+          clearErrors();
+          var p = document.createElement("p");
+          p.className = "form-error is-live";
+          p.textContent = "Enter a valid email address.";
+          wrap.appendChild(p);
+        }
+      });
+
+      // Clears on the next keystroke, not just the next blur -- including a
+      // stale server-rendered error from before this field was touched, so
+      // fixing the address is what makes the message go away, not
+      // resubmitting the form.
+      input.addEventListener("input", function () {
+        if (!input.value || input.checkValidity()) clearErrors();
+      });
+    });
+  }
+
+  /* --- Account menu -------------------------------------------------------
+     The signed-in header link (base.html's [data-account-menu]) is a real
+     <a href="/me/"> with the dropdown panel already in the DOM, hidden --
+     so with no JS it is simply a link to the reader page, no enhancement
+     required. With JS on, the trigger's click is redirected into opening the
+     panel instead of navigating. Deliberately not built on initFilterMenu's
+     buildFilterMenu(): that one *constructs* its trigger/panel from a
+     <select> it is replacing; this one only wires up markup base.html has
+     already rendered. */
+  function initAccountMenu() {
+    document.querySelectorAll("[data-account-menu]").forEach(function (wrap) {
+      var trigger = wrap.querySelector("[data-account-trigger]");
+      var panel = wrap.querySelector("[data-account-panel]");
+      if (!trigger || !panel) return;
+
+      var open = false;
+
+      function setOpen(next) {
+        open = next;
+        panel.hidden = !next;
+        trigger.setAttribute("aria-expanded", next ? "true" : "false");
+      }
+
+      function onOutside(e) {
+        if (!wrap.contains(e.target)) close();
+      }
+
+      function openMenu() {
+        if (open) return;
+        setOpen(true);
+        document.addEventListener("pointerdown", onOutside, true);
+      }
+
+      function close() {
+        if (!open) return;
+        setOpen(false);
+        document.removeEventListener("pointerdown", onOutside, true);
+      }
+
+      trigger.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (open) close();
+        else openMenu();
+      });
+
+      wrap.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") {
+          close();
+          trigger.focus();
+        }
+      });
+
+      // A back/forward-cache restore can bring the page back with the panel
+      // open, same reasoning as initFilterMenu's pageshow listener.
+      window.addEventListener("pageshow", function () {
+        close();
+      });
+    });
+  }
+
   function init() {
     syncThemeColor();
     // Covers all three ways the theme moves — the header toggle, an OS change

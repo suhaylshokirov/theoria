@@ -29,6 +29,7 @@ django.setup()
 from django.contrib.auth import get_user_model  # noqa: E402
 from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
+from django.urls import reverse  # noqa: E402
 
 from movies.models import (  # noqa: E402
     Company, Country, Credit, Episode, Genre, Language, Movie, MovieCompany,
@@ -46,9 +47,8 @@ client = Client()
 # shared `client` is signed in for the whole module -- being authenticated
 # never changes what an *ungated* view renders, so this is safe for the
 # anonymous-only tests here too. Anonymous-vs-signed-in gating behaviour
-# itself (the 302, the `next` round-trip) is covered separately in
-# tests/test_accounts.py once Task 96 adds the database these tests need.
-_TEST_USER_EMAIL = "test-django-views@example.com"
+# itself (the 302, the `next` round-trip) is covered by the gating tests
+# at the bottom of this file.
 
 
 def setup_module(module):
@@ -656,6 +656,12 @@ def test_series_detail_returns_200_with_expected_context():
     assert response.context["crew"] == []
     assert response.context["creators"] == []
     assert response.context["seasons"] == []
+    # The collection-actions include must receive csrf_token despite `only`,
+    # or every Like/Watch later/Top click on this page 403s. base.html's own
+    # sign-out form always renders one token, so a plain "in" check can't
+    # tell the two apart -- count instead: 1 (sign-out) + 3 (Like/Watch
+    # later/Top) with the include fixed, 1 without it.
+    assert response.content.count(b"csrfmiddlewaretoken") == 4
 
 
 def test_series_detail_404_when_missing():
@@ -1077,6 +1083,12 @@ def test_movie_detail_returns_200_with_expected_context():
     assert [d["name"] for d in response.context["crew"]] == ["Directing"]
     assert response.context["crew"][0]["people"][0]["person"] == director
     assert response.context["movie_rating"].rating == Decimal("8.50")
+    # The collection-actions include must receive csrf_token despite `only`,
+    # or every Like/Watch later/Top click on this page 403s. base.html's own
+    # sign-out form always renders one token, so a plain "in" check can't
+    # tell the two apart -- count instead: 1 (sign-out) + 3 (Like/Watch
+    # later/Top) with the include fixed, 1 without it.
+    assert response.content.count(b"csrfmiddlewaretoken") == 4
 
 
 def test_movie_detail_renders_studios_as_links():
@@ -2922,8 +2934,6 @@ def test_gated_detail_pages_redirect_anonymous_to_login():
         ("analytics:dashboard", {}),
     ]
     for url_name, kwargs in gated:
-        from django.urls import reverse
-
         url = reverse(url_name, kwargs=kwargs)
         response = anon.get(url)
         assert response.status_code == 302, url_name

@@ -22,7 +22,7 @@ from django.utils import timezone
 # must never collide with a real path on the site, so these are refused at
 # the model layer rather than left to be discovered as a routing bug later.
 RESERVED_USERNAMES = frozenset({
-    "me", "admin", "accounts", "login", "signup", "logout", "static",
+    "me", "admin", "accounts", "account", "login", "signup", "logout", "static",
     "movies", "tv", "people", "actors", "directors", "studios", "analytics",
 })
 

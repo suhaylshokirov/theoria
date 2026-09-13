@@ -18,8 +18,8 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
-from accounts.views import profile
 from core import account_urls
+from core import views as core_views
 
 urlpatterns = [
     path('account/', include(account_urls)),
@@ -28,7 +28,7 @@ urlpatterns = [
     # /me/, not /accounts/me/: the reader page reads as a site-level route
     # (the username's own reserved slot -- see the accounts.User username
     # blocklist), not as belonging to the accounts app's own URL space.
-    path('me/', profile, name='profile'),
+    path('me/', core_views.account, name='profile'),
     path('', include('movies.urls')),
 ]
 

@@ -5,7 +5,6 @@ from core import views
 app_name = "account"
 
 urlpatterns = [
-    path("", views.account, name="index"),
     path(
         "collections/<str:kind>/<str:content_type>/<int:content_id>/toggle/",
         views.toggle_collection,

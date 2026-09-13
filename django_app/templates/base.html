@@ -141,7 +141,6 @@
                     </a>
                     <div class="menu-panel account-panel" hidden data-account-panel>
                         <a class="menu-option" href="{% url 'profile' %}">Your account</a>
-                        <a class="menu-option" href="{% url 'account:index' %}">Your collections</a>
                         <form method="post" action="{% url 'accounts:logout' %}">
                             {% csrf_token %}
                             <button type="submit" class="menu-option">Sign out</button>

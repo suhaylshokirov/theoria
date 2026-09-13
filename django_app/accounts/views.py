@@ -18,7 +18,6 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LogoutView as _LogoutView
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render, resolve_url
@@ -273,10 +272,3 @@ class LogoutView(_LogoutView):
         if request.user.is_authenticated:
             messages.success(request, "Signed out.")
         return super().post(request, *args, **kwargs)
-
-
-@login_required
-def profile(request):
-    """The reader page: thin on purpose -- the landing spot after sign-in,
-    and the shelf the Phase F collections feature will fill."""
-    return render(request, "accounts/profile.html")

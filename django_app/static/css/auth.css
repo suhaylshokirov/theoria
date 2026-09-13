@@ -74,10 +74,6 @@
   border-color: var(--rule-strong);
 }
 
-.auth-form .field:has(input.is-invalid) {
-  border-color: var(--rule-strong);
-}
-
 /* The one-time-code field: a single wide-tracked numeral field, not six
    boxes -- see the auth design notes for why (autocomplete="one-time-code"
    and paste both depend on it being one input). The six-box *look* comes

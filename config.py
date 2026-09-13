@@ -161,14 +161,12 @@ DJANGO_SECRET_KEY = _require("DJANGO_SECRET_KEY", role="web")
 DJANGO_DEBUG = _optional("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 
 # --- Email delivery --------------------------------------------------------
-# Local default prints the verification code to the runserver terminal — no
-# credentials needed to develop the sign-up/sign-in flow. Point EMAIL_BACKEND
-# at 'django.core.mail.backends.smtp.EmailBackend' and fill in EMAIL_HOST_*
-# for a real transactional provider (any SMTP-speaking one: Resend, Brevo,
-# Mailgun, SES, ...) in deployed environments.
-EMAIL_BACKEND = _optional(
-    "EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
-)
+# settings.py picks the backend itself, based on whether EMAIL_HOST is set --
+# there is no EMAIL_BACKEND variable here. Leave EMAIL_HOST blank locally and
+# verification codes print to the runserver terminal (console backend). Set
+# EMAIL_HOST (plus EMAIL_PORT/EMAIL_HOST_USER/EMAIL_HOST_PASSWORD/EMAIL_USE_TLS)
+# to a real transactional provider (any SMTP-speaking one: Resend, Brevo,
+# Mailgun, SES, ...) for deployed environments, where it's required.
 DEFAULT_FROM_EMAIL = _optional("DEFAULT_FROM_EMAIL", "Theoria <no-reply@localhost>")
 EMAIL_HOST = _optional("EMAIL_HOST", "")
 EMAIL_PORT = int(_optional("EMAIL_PORT", "587"))

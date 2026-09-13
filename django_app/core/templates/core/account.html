@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Theoria — Your account{% endblock %}
+{% block title %}Your account — Theoria{% endblock %}
 
 {% block content %}
 <section class="account-page" aria-labelledby="account-page-title">
@@ -8,6 +8,7 @@
         <span class="label">Account</span>
         <h1 class="sheet-title" id="account-page-title">{{ request.user.username }}</h1>
         <p class="sheet-sub">{{ request.user.email }}</p>
+        <p class="sheet-sub">Member since {{ request.user.date_joined|date:"j M Y" }}</p>
     </div>
 
     <div class="account-collections">

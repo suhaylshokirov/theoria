@@ -103,7 +103,7 @@
             {% endif %}
         </dl>
 
-        {% include "movies/_collection_actions.html" with content_type="series" content_id=series.series_id collection_flags=collection_flags request=request only %}
+        {% include "movies/_collection_actions.html" with content_type="series" content_id=series.series_id collection_flags=collection_flags request=request csrf_token=csrf_token only %}
 
         {% comment %} Same slug-built link contract as movie_detail.html's genre
            chips (Task 71) — the slug comes from the same django.utils.text.slugify

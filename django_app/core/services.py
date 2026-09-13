@@ -7,26 +7,10 @@ signed-in user's `Collection`/`CollectionItem` rows.
 
 from __future__ import annotations
 
-from urllib.parse import urlsplit
-
 from django.db import transaction
 from django.db.models import Max
 
 from core.models import Collection, CollectionItem
-
-
-def safe_next(candidate: str | None) -> str:
-    """Allow only a host-relative path after authentication."""
-    candidate = candidate or "/"
-    if (
-        not candidate.startswith("/")
-        or candidate.startswith("//")
-        or "\\" in candidate
-        or urlsplit(candidate).scheme
-        or urlsplit(candidate).netloc
-    ):
-        return "/"
-    return candidate
 
 
 def ensure_default_collections(user):
@@ -136,7 +120,6 @@ def collection_rows(user, kind):
 def collection_flags(user, content_type, content_id):
     if not user.is_authenticated:
         return {kind: False for kind, _ in Collection.KINDS}
-    ensure_default_collections(user)
     selected = set(
         CollectionItem.objects.filter(
             collection__user=user,

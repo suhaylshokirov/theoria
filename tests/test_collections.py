@@ -68,3 +68,38 @@ def test_authenticated_user_can_toggle_warehouse_content_in_collections():
         assert not CollectionItem.objects.filter(pk=item.pk).exists()
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_remove_item_with_no_next_falls_back_to_profile():
+    """account.html's remove forms send no `next` -- the reader should land
+    back on /me/, not the homepage safe_next used to fall back to."""
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="collections-reader")
+    client = Client()
+    client.force_login(user)
+    try:
+        with patch("core.services._content_exists", return_value=True):
+            client.post(
+                reverse(
+                    "account:toggle_collection",
+                    kwargs={"kind": "liked", "content_type": "movie", "content_id": 550},
+                ),
+                {"next": "/movies/example/"},
+            )
+        item = CollectionItem.objects.get(
+            collection__user=user,
+            collection__kind=Collection.LIKED,
+            content_type=CollectionItem.MOVIE,
+            content_id=550,
+        )
+
+        response = client.post(
+            reverse("account:remove_item", kwargs={"kind": "liked", "item_id": item.pk})
+        )
+
+        assert response.status_code == 302
+        assert response["Location"] == "/me/"
+        assert not CollectionItem.objects.filter(pk=item.pk).exists()
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
