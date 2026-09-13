@@ -17,6 +17,7 @@ uses, not anything Task 96 specifically adds.
 """
 
 import os
+import re
 import sys
 from datetime import timedelta
 from pathlib import Path
@@ -33,6 +34,7 @@ django.setup()
 
 from django.contrib.auth import get_user_model  # noqa: E402
 from django.core import mail  # noqa: E402
+from django.core.cache import cache  # noqa: E402
 from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 from django.utils import timezone  # noqa: E402
@@ -57,6 +59,7 @@ def teardown_module(module):
 
 def setup_function(function):
     mail.outbox = []
+    cache.clear()
 
 
 def test_send_code_email_signup_renders_code_and_purpose_subject():
@@ -152,6 +155,112 @@ def test_login_send_failure_does_not_500_and_does_not_advance_to_verify():
 
     LoginCode.objects.filter(email=email).delete()
     user.delete()
+
+
+# ---------------------------------------------------------------------------
+# Signup hardening: case-insensitive uniqueness, the combined "username or
+# email already exists" message, SQL-injection-style input, the IP rate
+# limit, and the next-page redirect after verification.
+# ---------------------------------------------------------------------------
+
+
+def test_signup_rejects_a_username_that_differs_only_by_case():
+    User.objects.filter(username__iexact="qwerty123").delete()
+    owner = User.objects.create_user(email="qwerty-owner@example.com", username="qwerty123")
+
+    response = client.post(
+        "/accounts/signup/",
+        {"username": "QWerty123", "email": "someone-else@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.context["form"].errors["__all__"] == ["Username or email already exists."]
+    assert not User.objects.filter(email="someone-else@example.com").exists()
+
+    owner.delete()
+
+
+def test_signup_duplicate_email_gives_the_same_combined_message_not_a_hint():
+    email = "dupe-email@example.com"
+    User.objects.filter(email=email).delete()
+    owner = User.objects.create_user(email=email, username="dupeemailowner")
+
+    response = client.post(
+        "/accounts/signup/",
+        {"username": "brandnewhandle", "email": email},
+    )
+
+    assert response.status_code == 200
+    errors = response.context["form"].errors
+    # One combined, non-field error -- never a field-specific "username taken"
+    # or "email taken" that would tell a prober which one matched.
+    assert list(errors.keys()) == ["__all__"]
+    assert errors["__all__"] == ["Username or email already exists."]
+
+    owner.delete()
+
+
+def test_signup_rejects_sql_injection_style_username_safely():
+    payload = "robert'); DROP TABLE accounts_user;--"
+    email = "sqli-test@example.com"
+    User.objects.filter(email=email).delete()
+
+    response = client.post("/accounts/signup/", {"username": payload, "email": email})
+
+    # Django's ORM parameterizes every query it builds, so the payload is
+    # just an ordinary (invalid) string -- rejected by the username format
+    # validator, never executed as SQL. The table surviving is the real
+    # assertion: a working User.objects.count() call proves it's intact.
+    assert response.status_code == 200
+    assert not User.objects.filter(email=email).exists()
+    assert User.objects.count() >= 0
+
+
+def test_signup_rate_limits_repeated_posts_from_one_ip():
+    for email in ("rl-1@example.com", "rl-2@example.com", "rl-3@example.com"):
+        User.objects.filter(email=email).delete()
+        LoginCode.objects.filter(email=email).delete()
+
+    with patch("accounts.views.SIGNUP_RATE_LIMIT", 2):
+        client.post("/accounts/signup/", {"username": "ratelimitone", "email": "rl-1@example.com"})
+        client.post("/accounts/signup/", {"username": "ratelimittwo", "email": "rl-2@example.com"})
+        response = client.post(
+            "/accounts/signup/", {"username": "ratelimitthree", "email": "rl-3@example.com"}
+        )
+
+    assert response.status_code == 200
+    assert any("Too many sign-up attempts" in str(m) for m in response.context["messages"])
+    assert not User.objects.filter(email="rl-3@example.com").exists()
+
+    for email in ("rl-1@example.com", "rl-2@example.com", "rl-3@example.com"):
+        LoginCode.objects.filter(email=email).delete()
+        User.objects.filter(email=email).delete()
+
+
+def test_signup_then_verify_redirects_to_the_page_the_reader_came_from():
+    email = "next-redirect@example.com"
+    username = "nextredirectuser"
+    User.objects.filter(email=email).delete()
+    LoginCode.objects.filter(email=email).delete()
+
+    response = client.post(
+        "/accounts/signup/?next=/movies/42/",
+        {"username": username, "email": email, "next": "/movies/42/"},
+    )
+    assert response.status_code == 302
+    assert response.url == "/accounts/verify/"
+
+    assert len(mail.outbox) == 1
+    match = re.search(r"\b(\d{6})\b", mail.outbox[0].body)
+    assert match, "no 6-digit code found in the signup email body"
+
+    verify_response = client.post("/accounts/verify/", {"code": match.group(1)})
+    assert verify_response.status_code == 302
+    assert verify_response.url == "/movies/42/"
+    assert User.objects.filter(email=email, username=username).exists()
+
+    LoginCode.objects.filter(email=email).delete()
+    User.objects.filter(email=email).delete()
 
 
 def test_resend_send_failure_does_not_500_and_reports_the_same_error():

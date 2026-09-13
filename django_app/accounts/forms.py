@@ -17,14 +17,25 @@ class SignupForm(forms.Form):
     )
     email = forms.EmailField()
 
-    def clean_username(self):
-        username = self.cleaned_data["username"]
-        if User.objects.filter(username__iexact=username).exists():
-            raise forms.ValidationError("That username is taken.")
-        return username
-
     def clean_email(self):
         return self.cleaned_data["email"].lower()
+
+    def clean(self):
+        # A single combined error, not "username taken" / "email taken"
+        # separately -- either one existing is reported the same way, so a
+        # reader probing for registered addresses learns nothing more than
+        # "something here is already registered."
+        cleaned = super().clean()
+        username = cleaned.get("username")
+        email = cleaned.get("email")
+        if username and email:
+            taken = (
+                User.objects.filter(username__iexact=username).exists()
+                or User.objects.filter(email=email).exists()
+            )
+            if taken:
+                raise forms.ValidationError("Username or email already exists.")
+        return cleaned
 
 
 class EmailOnlyForm(forms.Form):

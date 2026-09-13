@@ -1,30 +1,56 @@
-/* Auth pages (sign-up, sign-in, verify) — Task 93, polish pass Task 95.
+/* Auth pages (sign-up, sign-in, verify) — Task 93, polish pass Task 95,
+   two-column layout pass (the form beside a poster gallery, mirroring the
+   homepage's .sheet-hero: content column left, catalog visual right).
    Adds components; theoria.css owns every token and every shared control,
    so nothing here restyles .field, .sheet-head, or button{} — see the auth
    design notes for the one exception (input[type="email"], added to
    theoria.css's own shared input rule, not here).
 
-   The polish pass stays inside the existing rules on purpose: lime still
-   appears nowhere but the submit button (and, now, its own loading spinner
-   — an extension of the button's state, not new decoration), and every
-   other value is a theoria.css token. What's new is depth (--shadow-card,
-   the one shadow the system defines), motion (an entrance for the card, a
-   button that visibly works while a request is in flight), and a code
-   field that reads as six boxes while staying the one real <input> the
-   autocomplete="one-time-code"/paste behaviour depends on. */
+   Lime still appears nowhere but the submit button (and its own loading
+   spinner), and every other value is a theoria.css token. Depth
+   (--shadow-card), an entrance for the card, and a code field that reads
+   as six boxes while staying the one real <input> the
+   autocomplete="one-time-code"/paste behaviour depends on. No Theoria
+   wordmark on these pages -- the card's own "Sign up"/"Sign in"/"Enter your
+   code" heading is identity enough, and one less thing between a reader and
+   the form. */
 
-.auth-mark {
-  display: block;
-  width: 2rem;
-  height: 2.46rem;
-  margin: 0 auto var(--space-6);
-  color: var(--ink-faint);
+/* Two columns at the width home.css's .sheet-hero already uses this
+   container at (1240px, minus padding): the card on a plain background,
+   a poster gallery filling the other side. Grid's own default align-items
+   (stretch) is left alone deliberately -- both columns fill the full row
+   height, so the card reads as a real panel the size of the gallery beside
+   it, not a small box floating in a tall row. Below the breakpoint the
+   gallery becomes a short band under the card, the same move .sheet-hero
+   makes for .contact-sheet. */
+.auth-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--space-9);
+  min-height: min(80vh, 680px);
+  margin-bottom: var(--space-9);
 }
 
+.auth-panel {
+  display: flex;
+}
+
+/* Square, like every other sheet on the site (--radius: 2px, "sheets and
+   plates, not pills" -- theoria.css). An earlier pass gave this card its
+   own 20px rounded corner as a deliberate exception; tried edgy instead
+   (matching the sitewide sheet convention explicitly, not just leaving
+   border-radius unset -- unset would mean a literal 0, a different, new
+   value nothing else on the site uses either). */
 .auth-card {
-  max-width: 30rem;
-  margin: var(--space-8) auto 0;
-  padding: var(--space-8);
+  display: flex;
+  flex-direction: column;
+  /* Stretched to fill the panel (its own height, from .auth-panel's flex
+     stretch); centering the form vertically inside that is what actually
+     reads as "a real panel," not just a wider box. */
+  justify-content: center;
+  width: 100%;
+  max-width: 36rem;
+  padding: var(--space-9);
   background: var(--sheet);
   border: var(--hairline);
   border-radius: var(--radius);
@@ -43,15 +69,180 @@
   }
 }
 
+/* The gallery: home.css's .contact-sheet recipe (gap, stagger, desaturate/
+   hover treatment) at a taller tile floor -- 116px, the same value
+   theoria.css's own .poster-grid.is-tight already uses, not a new number
+   invented for this file. .contact-sheet's own 84px is tuned for a sheet
+   that runs the width of the whole homepage and is meant to read as "the
+   entire catalog, dense"; in this narrower column at 84px the posters were
+   too small to actually look at. Two more differences: plain tiles, not
+   links (this one is decorative in a way a stray click shouldn't be able
+   to leave the sign-up/sign-in flow over), so the hover cue below is
+   motion only, never lime -- lime marks something actionable everywhere
+   else on the site (see .auth-resend's own note), and a tile here isn't. */
+.auth-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 4px;
+  align-content: center;
+  height: 100%;
+  max-height: min(80vh, 680px);
+  overflow: hidden;
+}
+
+.auth-tile {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  background: var(--sheet-2);
+  overflow: hidden;
+  opacity: 0;
+  animation: auth-tile-in var(--dur-slow) var(--ease) forwards;
+  animation-delay: calc(var(--i, 0) * 9ms);
+}
+
+.auth-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.82) contrast(0.96);
+  transition: filter var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
+.auth-tile:hover img {
+  filter: none;
+  transform: scale(1.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .auth-tile img {
+    filter: saturate(0.95) brightness(0.86);
+  }
+
+  .auth-tile:hover img {
+    filter: none;
+  }
+}
+
+@keyframes auth-tile-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-tile {
+    opacity: 1;
+    animation: none;
+  }
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
   margin-top: var(--space-7);
+  /* Carried as mask sources -- docs/icons/ (Material Symbols PNG exports the
+     user supplied), copied into static/img/icons/ under short names since
+     Django only serves what's under static/. Masked rather than plain
+     <img>s so each stays tinted per theme/state (--ink-faint below) like
+     every other icon on the site: the source PNGs are baked a flat light
+     grey meant for a dark surface, and would all but disappear on this
+     card in light mode used as-is. Scoped to this file/class rather than
+     theoria.css's shared :root: only the auth pages use them. */
+  --icon-at: url("../img/icons/alternate-email.png");
+  --icon-mail: url("../img/icons/mail.png");
+  --icon-code: url("../img/icons/key.png");
+}
+
+/* The small uppercase label above a field -- Theoria's own type language
+   (the same var(--font-label) tracked-caps treatment button{} already
+   uses), not the reference screenshot's plain sentence-case one. */
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+}
+
+/* PNG mask sources default to luminance mode in the spec (a flat light-grey
+   glyph reads as "mostly opaque" there too, so it happens to look right
+   either way, but alpha is the actually-correct mode for a transparent-
+   background source and the one WebKit's own -webkit-mask historically
+   assumed) -- set explicitly rather than relying on browsers agreeing. */
+.field-label-icon {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: none;
+  background-color: var(--ink-faint);
+  -webkit-mask-image: var(--icon-code);
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: var(--icon-code);
+  mask-mode: alpha;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
 }
 
 .auth-form .field {
   width: 100%;
+}
+
+/* Username and email get a leading icon inside the pill, the same
+   mask-on-::before technique theoria.css's own search field already uses
+   (.field:has(input[type="search"])::before) -- scoped to .auth-form so it
+   never touches an email field anywhere else on the site. The code field
+   below deliberately does NOT get one this way: it's sized to fit-content
+   and centred as a unit (see its own rule below), and adding a fourth
+   element to that flex row would throw its careful centring off --  its
+   icon lives in its label instead. */
+.auth-form .field:has(input[name="username"])::before {
+  content: "";
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin-left: var(--space-4);
+  background-color: var(--ink-faint);
+  -webkit-mask-image: var(--icon-at);
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: var(--icon-at);
+  mask-mode: alpha;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+.auth-form .field:has(input[type="email"])::before {
+  content: "";
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin-left: var(--space-4);
+  background-color: var(--ink-faint);
+  -webkit-mask-image: var(--icon-mail);
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-image: var(--icon-mail);
+  mask-mode: alpha;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+/* The icon already supplies the left inset, same as search's own rule. */
+.auth-form .field:has(input[name="username"]) input[name="username"],
+.auth-form .field:has(input[type="email"]) input[type="email"] {
+  padding-left: var(--space-3);
 }
 
 /* Matches .field:focus-within's own lime border-color transition (already
@@ -82,8 +273,9 @@
    the DOM still has exactly one <input>. */
 .auth-form .field:has(.code-input) {
   /* A long pill reads oddly at this width, and a background this literal
-     (six drawn cells) wants the squared-off corner the rest of the site's
-     sheets already use, not the rounded one reserved for compact controls.
+     (six drawn cells) wants a crisp, squared-off corner -- matching the
+     card's own squared corner now, not the pill fields/buttons around it:
+     a code is read digit by digit, not skimmed like a field.
      width:fit-content, not auto: .field here is a normal block box (its
      parent is a plain wrapping <div>, not a flex container -- .auth-form's
      own flex row never reaches it), and block-level auto width means "fill
@@ -224,9 +416,26 @@
   cursor: default;
 }
 
+@media (max-width: 900px) {
+  .auth-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+    min-height: 0;
+  }
+
+  .auth-panel {
+    justify-content: center;
+  }
+
+  .auth-gallery {
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+    max-height: 220px;
+  }
+}
+
 @media (max-width: 720px) {
   .auth-card {
-    margin-top: var(--space-6);
+    max-width: none;
     padding: var(--space-6);
   }
 
