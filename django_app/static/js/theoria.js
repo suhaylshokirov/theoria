@@ -961,6 +961,13 @@
       if (!trigger || !panel) return;
 
       var open = false;
+      // Hover opens are provisional (leaving closes them); a click pins the
+      // panel open until an outside click, Escape, or a second click.
+      var hoverOpened = false;
+      var closeTimer = null;
+      // Hover only where there is a real hovering pointer and the desktop
+      // dropdown layout -- inside the phone menu the panel is an inline list.
+      var canHover = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 681px)");
 
       function setOpen(next) {
         open = next;
@@ -972,29 +979,59 @@
         if (!wrap.contains(e.target)) close();
       }
 
+      // On the document, not the wrap: a hover-opened panel never received
+      // focus, so a keydown on the wrap would never see this Escape.
+      function onKeydown(e) {
+        if (e.key !== "Escape") return;
+        var hadFocus = wrap.contains(document.activeElement);
+        close();
+        if (hadFocus) trigger.focus();
+      }
+
       function openMenu() {
         if (open) return;
         setOpen(true);
         document.addEventListener("pointerdown", onOutside, true);
+        document.addEventListener("keydown", onKeydown);
       }
 
       function close() {
+        clearTimeout(closeTimer);
+        hoverOpened = false;
         if (!open) return;
         setOpen(false);
         document.removeEventListener("pointerdown", onOutside, true);
+        document.removeEventListener("keydown", onKeydown);
       }
 
       trigger.addEventListener("click", function (e) {
         e.preventDefault();
-        if (open) close();
-        else openMenu();
+        if (open && !hoverOpened) {
+          close();
+        } else {
+          openMenu();
+          hoverOpened = false;
+        }
       });
 
-      wrap.addEventListener("keydown", function (e) {
-        if (e.key === "Escape") {
-          close();
-          trigger.focus();
+      wrap.addEventListener("pointerenter", function (e) {
+        if (e.pointerType !== "mouse" || !canHover.matches) return;
+        clearTimeout(closeTimer);
+        if (!open) {
+          openMenu();
+          hoverOpened = true;
         }
+      });
+
+      // A short grace period so the pointer can cross the gap between the
+      // trigger and the panel without the panel snapping shut.
+      wrap.addEventListener("pointerleave", function (e) {
+        if (e.pointerType !== "mouse" || !hoverOpened) return;
+        closeTimer = setTimeout(close, 200);
+      });
+
+      wrap.addEventListener("focusout", function (e) {
+        if (open && !wrap.contains(e.relatedTarget)) close();
       });
 
       // A back/forward-cache restore can bring the page back with the panel

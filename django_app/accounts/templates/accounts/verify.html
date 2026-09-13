@@ -16,7 +16,7 @@
         <div class="auth-card" data-verify-form>
             <header class="sheet-head">
                 <h1 class="sheet-title">Enter your code</h1>
-                <p class="sheet-sub">{{ "We sent a code to "|add:masked_email }}</p>
+                <p class="sheet-sub">We sent a code to <span class="nowrap">{{ masked_email }}</span></p>
             </header>
 
             <form class="auth-form" method="post" novalidate>

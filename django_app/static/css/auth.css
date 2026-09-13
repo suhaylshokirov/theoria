@@ -79,6 +79,15 @@
   text-align: center;
 }
 
+.auth-card .sheet-sub {
+  margin-inline: auto;
+  text-wrap: balance;
+}
+
+.auth-card .nowrap {
+  white-space: nowrap;
+}
+
 /* The gallery: home.css's .contact-sheet recipe (gap, stagger, desaturate/
    hover treatment) at a taller tile floor -- 116px, the same value
    theoria.css's own .poster-grid.is-tight already uses, not a new number
@@ -94,17 +103,20 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
   gap: 4px;
-  align-content: center;
+  align-content: start;
   height: 100%;
   max-height: min(80vh, 680px);
   overflow: hidden;
 }
 
+/* overflow: clip, not hidden: a hidden tile becomes a scroll container, whose
+   automatic minimum height is 0, and the height-capped grid then squeezed every
+   row into overlapping strips. clip still contains the hover zoom. */
 .auth-tile {
   position: relative;
   aspect-ratio: 2 / 3;
   background: var(--sheet-2);
-  overflow: hidden;
+  overflow: clip;
   opacity: 0;
   animation: auth-tile-in var(--dur-slow) var(--ease) forwards;
   animation-delay: calc(var(--i, 0) * 9ms);
@@ -268,10 +280,11 @@
 
 /* A field the browser (or the server, after submit) considers invalid gets
    the same red as .form-error below, so the field itself
-   -- not just a line of text under it -- shows something is wrong. Scoped
-   to :not(:placeholder-shown) so a required-but-empty field doesn't read as
-   an error before the reader has typed anything into it. */
-.auth-form .field:has(input:invalid:not(:placeholder-shown)),
+   -- not just a line of text under it -- shows something is wrong.
+   :user-invalid, not :invalid, so a required-but-empty field (the code field
+   has no placeholder to test against) doesn't read as an error before the
+   reader has touched it. */
+.auth-form .field:has(input:user-invalid),
 .auth-form div:has(> .form-error) > .field {
   border-color: var(--danger);
 }
@@ -341,6 +354,11 @@
 
 .auth-form > .form-error {
   margin-top: 0;
+  text-align: center;
+}
+
+/* The code field is centred as a unit, so its error is too. */
+.auth-form div:has(.code-input) > .form-error {
   text-align: center;
 }
 
@@ -445,9 +463,19 @@
     justify-content: center;
   }
 
+  /* Stacked, the gallery is a band of exactly two full rows: a fixed five
+     columns and ten tiles, so no width ever shows a sliver of a third row.
+     height:auto, not the desktop 100% -- with no grid row to fill, a
+     percentage height squeezed each 2:3 tile into overlapping strips. */
   .auth-gallery {
-    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
-    max-height: 220px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-content: start;
+    height: auto;
+    max-height: none;
+  }
+
+  .auth-tile:nth-child(n + 11) {
+    display: none;
   }
 }
 
@@ -455,6 +483,10 @@
   .auth-card {
     max-width: none;
     padding: var(--space-6);
+  }
+
+  .auth-card .sheet-sub {
+    font-size: var(--text-base);
   }
 
   /* Six 2.75rem cells (16.5rem) plus the card's own padding no longer fits

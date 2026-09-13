@@ -115,9 +115,9 @@
   --hairline: 1px solid var(--rule);
   --frame: 260px;         /* max content width of the page shell gutter calc */
   --measure: 1240px;
-  /* The one shadow in the system, for the one surface that sits visibly
+  /* The one shadow in the system, for the few surfaces that sit visibly
      above the page rather than flush on it (the auth card, Task 95 UI
-     pass). Everywhere else a --hairline border already does the job of
+     pass, and the account popover). Everywhere else a --hairline border already does the job of
      separating a sheet from the page, so this stays reserved rather than
      becoming a general-purpose "card" treatment. */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06), 0 12px 32px -8px rgba(0, 0, 0, 0.12);
@@ -1491,7 +1491,8 @@ input[type="email"]:focus {
               color var(--dur-fast) var(--ease);
 }
 
-.nav-links a.signin-btn {
+.nav-links a.signin-btn,
+.signin-btn--header {
   color: var(--lime-text);
   font-weight: 600;
   border-color: var(--lime-mark);
@@ -1499,11 +1500,19 @@ input[type="email"]:focus {
   padding-block: var(--space-2);
 }
 
-.nav-links a.signin-btn:hover {
+.nav-links a.signin-btn:hover,
+.signin-btn--header:hover {
   color: var(--lime-deep);
   border-color: var(--lime-mark);
   background: var(--lime-wash);
   text-decoration: none;
+}
+
+/* Only shown at phone widths -- see the mobile nav block. */
+.signin-btn--header {
+  display: none;
+  font-size: var(--text-sm);
+  white-space: nowrap;
 }
 
 .signin-icon {
@@ -1523,7 +1532,8 @@ input[type="email"]:focus {
   transition: background-color var(--dur-fast) var(--ease);
 }
 
-.nav-links a.signin-btn:hover .signin-icon {
+.nav-links a.signin-btn:hover .signin-icon,
+.signin-btn--header:hover .signin-icon {
   background-color: var(--lime-deep);
 }
 
@@ -1546,35 +1556,123 @@ input[type="email"]:focus {
   margin: 0;
 }
 
+/* A floating popover rather than the filter menu's squared list: rounded,
+   lifted off the page, centred under the username that opens it (`translate`,
+   not `transform`, so the entrance animation's transform can't undo the
+   centring), and eased in when it opens. */
+.account-panel {
+  left: 50%;
+  right: auto;
+  translate: -50% 0;
+  min-width: 12.5rem;
+  padding: var(--space-2);
+  background: var(--paper);
+  border: var(--hairline);
+  border-radius: 0.875rem;
+  box-shadow: var(--shadow-card);
+  transform-origin: top center;
+}
+
+.account-panel:not([hidden]) {
+  animation: account-panel-in var(--dur) var(--ease);
+}
+
+@keyframes account-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-panel:not([hidden]) {
+    animation: none;
+  }
+}
+
 .account-panel .menu-option {
   width: 100%;
   font: inherit;
+  border-radius: 0.5rem;
+  padding: var(--space-3) var(--space-4);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 
-/* The mobile nav's `.nav-links a:last-child { border-bottom: none }` rule
-   (further down this file) targets whichever <a> is the actual last child of
-   .nav-links -- which, signed in, is .account-trigger's own parent
-   .account-menu, not an <a> at all; signed out, it's .signin-btn itself
-   (already the last child, but it's a lime outline chip, not a plain text
-   row, so it shouldn't pick up the shared padding-block/border-bottom
-   treatment either). Left alone that strands a border-bottom under the last
-   plain nav link and draws a stray rule under the chip. Closed here instead
-   of editing that shared rule, since these are the two cases that aren't a
-   bare <a> row. The chip's own align-self: center (above) already keeps it
-   sized to content instead of stretching full-width in the column layout. */
+.account-panel .menu-option:hover,
+.account-panel .menu-option:focus-visible {
+  background: var(--sheet-2);
+}
+
+/* Each row leads with its icon (docs/icons, masked so it tints with the row's
+   text) in the slot the filter menu uses for its selection dot. */
+.account-panel .account-option::before {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 0;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-mode: alpha;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+.account-panel .account-option--profile::before {
+  -webkit-mask-image: url("../img/icons/account-circle.png");
+  mask-image: url("../img/icons/account-circle.png");
+}
+
+/* Red for the one row that ends the session, with a faint red wash on hover
+   instead of the neutral one. */
+.account-panel .account-option--signout {
+  color: var(--danger);
+  margin-top: var(--space-1);
+}
+
+.account-panel .account-option--signout:hover,
+.account-panel .account-option--signout:focus-visible {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.account-panel .account-option--signout::before {
+  -webkit-mask-image: url("../img/icons/logout.png");
+  mask-image: url("../img/icons/logout.png");
+}
+
+/* Inside the open mobile menu the account menu is one more stacked section,
+   not a dropdown: its panel opens in place under the username instead of
+   floating over the page below the menu. `html.has-js .nav-links a` gives
+   every menu link a row divider at (0,2,2) specificity, so these overrides
+   carry the extra .account-menu class to outrank it -- including the <a>
+   right before the menu, which would otherwise double the header's rule. */
 @media (max-width: 680px) {
-  html.has-js .nav-links > a:has(+ .account-menu) {
+  html.has-js .nav-links > a:has(+ .account-menu),
+  html.has-js .nav-links .account-menu a {
     border-bottom: none;
   }
 
-  html.has-js .account-trigger,
-  html.has-js .nav-links a.signin-btn {
-    border-bottom: none;
+  html.has-js .nav-links .account-menu {
+    flex-direction: column;
+    border-top: var(--hairline);
   }
 
-  html.has-js .nav-links a.signin-btn {
-    margin-left: 0;
-    margin-top: var(--space-2);
+  html.has-js .nav-links .account-panel {
+    position: static;
+    translate: none;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: none;
+    margin: 0 0 var(--space-3);
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    animation: none;
   }
 }
 
@@ -2701,6 +2799,26 @@ html.has-js .bio-body.is-collapsed {
     margin-left: auto;
   }
 
+  /* Signed out, Sign in stays in the header row beside the hamburger rather
+     than behind it: the one action a new visitor is here to find. Matches the
+     34px icon buttons' height so the row reads as one set of controls. */
+  html.has-js .signin-btn--header {
+    display: inline-flex;
+    order: 1;
+    margin-left: auto;
+    height: 34px;
+    padding-block: 0;
+  }
+
+  html.has-js .nav-links a.signin-btn {
+    display: none;
+  }
+
+  /* The chip already took the auto margin; pull the hamburger in beside it. */
+  html.has-js .signin-btn--header + .nav-toggle {
+    margin-left: calc(var(--space-2) - var(--space-4));
+  }
+
   html.has-js .theme-toggle {
     order: 3;
   }
@@ -2737,6 +2855,43 @@ html.has-js .bio-body.is-collapsed {
 
   html.has-js .nav-links a[aria-current="page"] {
     color: var(--lime-text);
+  }
+}
+
+/* Just above the hamburger breakpoint the full nav, the Sign in chip and the
+   theme toggle overflow one row, so the links close up until there's room. */
+@media (min-width: 681px) and (max-width: 800px) {
+  .nav-links {
+    gap: var(--space-4);
+  }
+
+  .nav-links a.signin-btn {
+    margin-left: 0;
+  }
+
+  /* Too close to the viewport edge to centre under a short username. */
+  .account-panel {
+    left: auto;
+    right: 0;
+    translate: none;
+    transform-origin: top right;
+  }
+}
+
+/* The smallest phones (320px) can't fit the wordmark, the chip and both icon
+   buttons on one row, so the chip sheds its icon and the controls close up. */
+@media (max-width: 359px) {
+  html.has-js .signin-btn--header {
+    padding-inline: var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  html.has-js .signin-btn--header .signin-icon {
+    display: none;
+  }
+
+  html.has-js .signin-btn--header ~ .theme-toggle {
+    margin-left: calc(var(--space-2) - var(--space-4));
   }
 }
 

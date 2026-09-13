@@ -106,6 +106,15 @@
                 </svg>
                 Theoria
             </a>
+            {% if not request.user.is_authenticated %}
+            {% comment %} Phone-width twin of the nav's Sign in chip, kept in the
+               header row so it isn't buried behind the hamburger. CSS shows
+               exactly one of the two at any width. {% endcomment %}
+            <a href="{% url 'accounts:login' %}" class="signin-btn signin-btn--header">
+                <span class="signin-icon" aria-hidden="true"></span>
+                Sign in
+            </a>
+            {% endif %}
             {% comment %} Hamburger, mobile-only (see the has-js CSS gate on
                .nav-toggle). Two glyphs stacked and opacity-swapped by
                aria-expanded, same device as the theme toggle below so the
@@ -140,10 +149,10 @@
                         <span class="menu-label">{{ request.user.username }}</span>
                     </a>
                     <div class="menu-panel account-panel" hidden data-account-panel>
-                        <a class="menu-option" href="{% url 'profile' %}">Your account</a>
+                        <a class="menu-option account-option account-option--profile" href="{% url 'profile' %}">Your account</a>
                         <form method="post" action="{% url 'accounts:logout' %}">
                             {% csrf_token %}
-                            <button type="submit" class="menu-option">Sign out</button>
+                            <button type="submit" class="menu-option account-option account-option--signout">Sign out</button>
                         </form>
                     </div>
                 </div>
