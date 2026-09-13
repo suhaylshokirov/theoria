@@ -1,60 +1,18 @@
-"""Application services for email-code authentication and personal lists."""
+"""Application services for personal lists (Liked / Watch later / Top).
+
+Identity (sign-up, sign-in, email codes) lives in the `accounts` app — see
+`accounts/codes.py` and `accounts/views.py`. This module only manages a
+signed-in user's `Collection`/`CollectionItem` rows.
+"""
 
 from __future__ import annotations
 
-import re
-import secrets
-from datetime import timedelta
 from urllib.parse import urlsplit
 
-from django.conf import settings
-from django.contrib.auth.hashers import check_password, make_password
-from django.core.mail import EmailMultiAlternatives
-from django.core.validators import validate_email
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import Max
-from django.template.loader import render_to_string
-from django.utils import timezone
 
-from core.models import Collection, CollectionItem, EmailCode, User
-
-CODE_TTL = timedelta(minutes=10)
-RESEND_COOLDOWN = timedelta(seconds=60)
-EMAIL_WINDOW = timedelta(hours=1)
-MAX_CODES_PER_HOUR = 8
-MAX_CODES_PER_IP_HOUR = 30
-MAX_ATTEMPTS = 5
-USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{2,29}$")
-RESERVED_USERNAMES = {"admin", "account", "accounts", "auth", "login", "logout", "theoria"}
-
-
-class CodeRequestError(Exception):
-    """Raised when a code cannot safely be issued."""
-
-
-class CodeVerificationError(Exception):
-    """Raised when a code is invalid, expired or already consumed."""
-
-
-def normalize_email(value: str) -> str:
-    return value.strip().casefold()
-
-
-def validate_username(value: str) -> str:
-    username = value.strip()
-    if not USERNAME_RE.fullmatch(username):
-        raise ValueError("Use 3–30 letters, numbers, dots, hyphens or underscores.")
-    if username.casefold() in RESERVED_USERNAMES:
-        raise ValueError("That username is reserved.")
-    if User.objects.filter(username__iexact=username).exists():
-        raise ValueError("That username is already in use.")
-    return username
-
-
-def validate_and_normalize_email(value: str) -> str:
-    email = normalize_email(value)
-    validate_email(email)
-    return email
+from core.models import Collection, CollectionItem
 
 
 def safe_next(candidate: str | None) -> str:
@@ -69,130 +27,6 @@ def safe_next(candidate: str | None) -> str:
     ):
         return "/"
     return candidate
-
-
-def issue_email_code(*, email, purpose, username="", request_ip=None):
-    email = validate_and_normalize_email(email)
-    now = timezone.now()
-    recent = EmailCode.objects.filter(email=email, created_at__gte=now - EMAIL_WINDOW)
-    if recent.count() >= MAX_CODES_PER_HOUR:
-        raise CodeRequestError("Too many codes requested. Try again later.")
-    if request_ip:
-        ip_recent = EmailCode.objects.filter(
-            request_ip=request_ip, created_at__gte=now - EMAIL_WINDOW
-        )
-        if ip_recent.count() >= MAX_CODES_PER_IP_HOUR:
-            raise CodeRequestError("Too many codes requested. Try again later.")
-
-    # Inside the cooldown, a still-valid unconsumed challenge already exists
-    # for this email+purpose — reuse it instead of raising. This is the
-    # ordinary path for a double form submit AND for the "Resend code" button
-    # (which is meant to be clickable well within a minute of the first
-    # send): both should redirect back to the same verify screen, not surface
-    # a rate-limit error for doing the expected thing.
-    existing = (
-        EmailCode.objects.filter(
-            email=email,
-            purpose=purpose,
-            created_at__gte=now - RESEND_COOLDOWN,
-            consumed_at__isnull=True,
-        )
-        .order_by("-created_at")
-        .first()
-    )
-    if existing:
-        return existing
-
-    raw_code = f"{secrets.randbelow(1_000_000):06d}"
-    with transaction.atomic():
-        EmailCode.objects.filter(
-            email=email, purpose=purpose, consumed_at__isnull=True
-        ).update(consumed_at=now)
-        challenge = EmailCode.objects.create(
-            email=email,
-            purpose=purpose,
-            username=username,
-            code_hash=make_password(raw_code),
-            expires_at=now + CODE_TTL,
-            request_ip=request_ip,
-        )
-
-    # Login challenges for unknown addresses are still recorded so the public
-    # response does not reveal whether an account exists, but no mail is sent.
-    should_send = purpose == EmailCode.SIGNUP or User.objects.filter(email=email).exists()
-    if should_send:
-        _send_code_email(email, raw_code)
-    return challenge
-
-
-def _send_code_email(email, raw_code):
-    ttl_minutes = int(CODE_TTL.total_seconds() // 60)
-    context = {"code": raw_code, "ttl_minutes": ttl_minutes}
-    text_body = render_to_string("core/email/verification_code.txt", context)
-    html_body = render_to_string("core/email/verification_code.html", context)
-    message = EmailMultiAlternatives(
-        subject="Your Theoria sign-in code",
-        body=text_body,
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=[email],
-    )
-    message.attach_alternative(html_body, "text/html")
-    message.send()
-
-
-def verify_email_code(challenge_id, raw_code):
-    code = str(raw_code or "").strip()
-    if not re.fullmatch(r"\d{6}", code):
-        raise CodeVerificationError("Enter the six-digit code from your email.")
-
-    now = timezone.now()
-    with transaction.atomic():
-        try:
-            challenge = EmailCode.objects.select_for_update().get(pk=challenge_id)
-        except EmailCode.DoesNotExist as exc:
-            raise CodeVerificationError("That code is no longer available.") from exc
-
-        if challenge.consumed_at or challenge.expires_at <= now:
-            raise CodeVerificationError("That code has expired. Request a new one.")
-        if challenge.attempts >= MAX_ATTEMPTS:
-            raise CodeVerificationError("Too many attempts. Request a new code.")
-
-        challenge.attempts += 1
-        if not check_password(code, challenge.code_hash):
-            challenge.save(update_fields=["attempts"])
-            if challenge.attempts >= MAX_ATTEMPTS:
-                raise CodeVerificationError("Too many attempts. Request a new code.")
-            raise CodeVerificationError("That code is not correct.")
-
-        challenge.consumed_at = now
-        challenge.save(update_fields=["attempts", "consumed_at"])
-
-        if challenge.purpose == EmailCode.SIGNUP:
-            if User.objects.filter(email=challenge.email).exists():
-                raise CodeVerificationError("That email already has an account. Sign in instead.")
-            # validate_username() at form-submission time (services.py's
-            # signup form handler) already checked this username was free,
-            # but time passes between that check and this creation — another
-            # signup for the same email or username can complete in between.
-            # The challenge is already consumed above either way, so a racer
-            # who loses here must start over with a fresh code rather than
-            # get a 500.
-            try:
-                with transaction.atomic():
-                    user = User.objects.create_user(
-                        email=challenge.email,
-                        username=challenge.username,
-                    )
-            except IntegrityError as exc:
-                raise CodeVerificationError(
-                    "That email or username was just taken. Start over."
-                ) from exc
-            ensure_default_collections(user)
-        else:
-            user = User.objects.filter(email=challenge.email, is_active=True).first()
-            if user is None:
-                raise CodeVerificationError("That code is not correct.")
-    return user
 
 
 def ensure_default_collections(user):

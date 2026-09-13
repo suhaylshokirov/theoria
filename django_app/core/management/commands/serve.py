@@ -55,28 +55,27 @@ class Command(BaseCommand):
     def _check_app_database(self):
         """Fail loud, before runserver binds a port, if ``default`` (accounts,
         sessions, collections) either can't be reached or hasn't had
-        migrations applied — the state a fresh ``APP_DATABASE_URL`` is in
-        until someone runs ``migrate``. Left unchecked, this surfaces instead
-        as an OperationalError traceback on the first page that touches a
-        session or the auth tables (i.e. every page).
+        migrations applied. Left unchecked, this surfaces instead as an
+        OperationalError traceback on the first page that touches a session
+        or the accounts tables (i.e. every page). Local development defaults
+        to a SQLite file here (created on first ``migrate``); AUTH_DATABASE_URL
+        points this at Postgres instead, required once deployed.
         """
         connection = connections["default"]
         try:
             executor = MigrationExecutor(connection)
         except Exception as exc:
             raise CommandError(
-                "Could not reach the application database (APP_DATABASE_URL "
-                f"in .env): {exc}\n"
-                "Create it and apply migrations — see README 'Run the site':\n"
-                "    createdb theoria_app\n"
-                "    python manage.py migrate"
+                "Could not reach the application database (AUTH_DATABASE_URL "
+                f"in .env, if set): {exc}\n"
+                "Run `python manage.py migrate` to create/update it."
             ) from exc
 
         plan = executor.migration_plan(executor.loader.graph.leaf_nodes())
         if plan:
             pending = ", ".join(f"{m.app_label}.{m.name}" for m, _ in plan)
             raise CommandError(
-                "The application database (APP_DATABASE_URL) has unapplied "
-                f"migrations: {pending}.\nRun `python manage.py migrate` "
-                "before starting the server — see README 'Run the site'."
+                "The application database (default: db.sqlite3, or "
+                f"AUTH_DATABASE_URL if set) has unapplied migrations: {pending}."
+                "\nRun `python manage.py migrate` before starting the server."
             )

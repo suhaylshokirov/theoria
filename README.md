@@ -144,7 +144,7 @@ python -c "import config"         # fails loud, listing every missing variable a
 python -c "import config; config.require_etl()"   # same, for the pipeline's own set
 pytest                            # full suite; the ETL/data-quality tests need no network or
                                    # database, but the Django auth/view tests do run against
-                                   # the real APP_DATABASE_URL below (see step 4)
+                                   # the real accounts database below (see step 4)
 ```
 
 `config.py` is the only place that reads the environment. No script hardcodes a key, path or URL.
@@ -258,19 +258,20 @@ client/server gap).
 ### 4. Run the site
 
 User accounts, email codes, sessions and collections live in their own durable database — never
-in the ETL-owned warehouse. Create it once and apply Django's migrations to it before first run:
+in the ETL-owned warehouse. Locally this defaults to a SQLite file (no setup needed); apply
+Django's migrations to it before first run:
 
 ```bash
-createdb theoria_app                          # or any name; match it in APP_DATABASE_URL
-cd django_app && python manage.py migrate     # core, auth, sessions, admin — never `movies`/`analytics`
+cd django_app && python manage.py migrate     # accounts, core, auth, sessions, admin —
+                                               # never `movies`/`analytics`
 python manage.py runserver
 ```
 
-Set `APP_DATABASE_URL` in `.env` explicitly (see `.env.example`) rather than relying on the
-`theoria_app` name Django derives when it's blank — that derivation only supplies the *name*, not
-the migration; a database that exists but was never migrated fails on the first request that
-touches it (`django_session`, sign-up, sign-in). `manage.py serve` (see Local read replica above)
-checks this and fails loud before starting the server rather than 500ing on the first page view.
+Set `AUTH_DATABASE_URL` in `.env` (see `.env.example`) to point this at Postgres instead — required
+once deployed, since Vercel's filesystem is ephemeral and would silently lose every account between
+cold starts. A database that exists but was never migrated fails on the first request that touches
+it (`django_session`, sign-up, sign-in); `manage.py serve` (see Local read replica above) checks
+this and fails loud before starting the server rather than 500ing on the first page view.
 
 | Route | What it serves |
 |---|---|
@@ -310,10 +311,14 @@ visitor gets a 500 until the column exists. Preview deployments read the product
 — safe, since the site cannot write to it, but it does mean a preview of a new-column feature
 stays broken until the DDL is applied.
 
-Environment variables to set on the project: `DATABASE_URL` (the Neon **pooled** endpoint),
-`DJANGO_SECRET_KEY` (a fresh one — not the local development key), and optionally
-`DJANGO_ALLOWED_HOSTS` for a custom domain. No TMDB or AWS credentials: the site never calls
-either, and `config.py` no longer demands them of a process that doesn't.
+Environment variables to set on the project: `DATABASE_URL` (the Neon **pooled** endpoint, the
+warehouse), `AUTH_DATABASE_URL` (a *separate* Neon database for accounts/sessions — required here;
+without it `settings.py` refuses to boot rather than silently point Django at Vercel's ephemeral
+filesystem), `DJANGO_SECRET_KEY` (a fresh one — not the local development key), `EMAIL_HOST` +
+`EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD`/`EMAIL_PORT`/`EMAIL_USE_TLS` (a real SMTP provider — sign-up
+codes have nowhere to go without one) and `DEFAULT_FROM_EMAIL`, and optionally `DJANGO_ALLOWED_HOSTS`
+for a custom domain. No TMDB or AWS credentials: the site never calls either, and `config.py` no
+longer demands them of a process that doesn't.
 
 Settings adapt on their own via the platform's own `VERCEL` variable — `DEBUG` is forced off,
 `ALLOWED_HOSTS` picks up `.vercel.app` (so preview URLs work without being listed in advance),

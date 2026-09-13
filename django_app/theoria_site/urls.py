@@ -18,10 +18,10 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
+from accounts.views import profile
 from core import account_urls
 
 urlpatterns = [
-    path('auth/', include('core.urls')),
     path('account/', include(account_urls)),
     path('analytics/', include('analytics.urls')),
     path('accounts/', include('accounts.urls')),

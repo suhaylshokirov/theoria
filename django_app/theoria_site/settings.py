@@ -96,6 +96,9 @@ INSTALLED_APPS = [
 
 # The one custom user model, set before any migration or account row exists
 # -- AUTH_USER_MODEL cannot be changed later without a painful data migration.
+# Identity (sign-up, sign-in, email codes) lives entirely in `accounts`;
+# `core` only owns the Collection/CollectionItem models, referencing this by
+# string rather than importing accounts.models.User directly.
 AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
@@ -112,27 +115,16 @@ MIDDLEWARE = [
 # read-only and never receives Django migrations.
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 
-GOOGLE_CLIENT_ID = config.GOOGLE_CLIENT_ID
-GOOGLE_CLIENT_SECRET = config.GOOGLE_CLIENT_SECRET
-GOOGLE_REDIRECT_URI = config.GOOGLE_REDIRECT_URI
-
-AUTH_USER_MODEL = 'core.User'
-# EmailBackend never authenticates on its own (see its docstring) — it only
-# resolves a session back to a user after passwordless/Google login. Django's
-# stock ModelBackend stays in the list so a superuser created with a real
-# password (createsuperuser) can still sign in to /admin/.
-AUTHENTICATION_BACKENDS = [
-    'core.auth_backends.EmailBackend',
-    'django.contrib.auth.backends.ModelBackend',
-]
-LOGIN_URL = '/auth/login/'
-EMAIL_BACKEND = config.EMAIL_BACKEND
-DEFAULT_FROM_EMAIL = config.DEFAULT_FROM_EMAIL
-EMAIL_HOST = config.EMAIL_HOST
-EMAIL_PORT = config.EMAIL_PORT
-EMAIL_HOST_USER = config.EMAIL_HOST_USER
-EMAIL_HOST_PASSWORD = config.EMAIL_HOST_PASSWORD
-EMAIL_USE_TLS = config.EMAIL_USE_TLS
+# No custom AUTHENTICATION_BACKENDS: accounts.views logs a user in directly
+# after a verified email code (never via authenticate()), and with Django's
+# default single ModelBackend, login() picks it automatically without
+# needing `user.backend` pre-set. accounts.User.set_unusable_password()
+# means ModelBackend.authenticate() (used by /admin/, and by
+# createsuperuser's password prompt) still can't be used to sign in as an
+# ordinary account.
+LOGIN_URL = 'accounts:login'
+LOGIN_REDIRECT_URL = 'profile'
+LOGOUT_REDIRECT_URL = '/'
 
 ROOT_URLCONF = 'theoria_site.urls'
 
@@ -147,7 +139,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'core.context_processors.auth_options',
             ],
         },
     },
@@ -160,7 +151,7 @@ WSGI_APPLICATION = 'theoria_site.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 #
 # Two databases:
-# - 'default' owns Django's application tables (auth, sessions, admin, users).
+# - 'default' owns Django's application tables (accounts, sessions, admin).
 # - 'warehouse' is the PostgreSQL star schema built by the ETL pipeline.
 #   It is read-only from Django's side: app models on it use
 #   `managed = False` (see Task 24) and DATABASE_ROUTERS below refuses
@@ -168,27 +159,14 @@ WSGI_APPLICATION = 'theoria_site.wsgi.application'
 
 _warehouse_url = urlparse(config.DATABASE_URL.replace('postgresql+psycopg2', 'postgresql'))
 
-if config.APP_DATABASE_URL:
-    _app_url = urlparse(config.APP_DATABASE_URL.replace('postgresql+psycopg2', 'postgresql'))
-elif not ON_VERCEL:
-    # Keep the local bootstrap usable without adding a credential-bearing line
-    # to .env. This is a different database from the warehouse, not a schema
-    # inside it.
-    _app_url = _warehouse_url._replace(path='/theoria_app')
-else:
-    raise config.ConfigError('APP_DATABASE_URL is required for deployed auth data.')
-
 DATABASES = {
+    # Overridden below by AUTH_DATABASE_URL whenever it's set (always true on
+    # Vercel — see the block after this dict). Left as SQLite here so local
+    # development needs no second Postgres database: dev accounts are
+    # throwaway, and standing up Postgres just for this isn't worth it.
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': _app_url.path.lstrip('/'),
-        'USER': _app_url.username,
-        'PASSWORD': _app_url.password,
-        'HOST': _app_url.hostname,
-        'PORT': _app_url.port,
-        'CONN_MAX_AGE': 600 if ON_VERCEL else 0,
-        'CONN_HEALTH_CHECKS': ON_VERCEL,
-        'OPTIONS': {'sslmode': 'require'} if ON_VERCEL else {},
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     },
     'warehouse': {
         'ENGINE': 'django.db.backends.postgresql',

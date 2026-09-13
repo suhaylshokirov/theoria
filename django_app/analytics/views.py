@@ -10,7 +10,6 @@ from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
 from django.db import connections
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
 QUERIES_DIR = Path(__file__).resolve().parent.parent.parent / "warehouse" / "queries"

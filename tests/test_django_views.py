@@ -36,7 +36,7 @@ from movies.models import (  # noqa: E402
     Season, Series, SeriesCompany, SeriesCountry, SeriesCredit,
     SeriesLanguage, SeriesNetwork, SeriesRating, SeriesVideo,
 )
-from core.models import User  # noqa: E402
+User = get_user_model()
 
 client = Client()
 
@@ -2927,7 +2927,7 @@ def test_gated_detail_pages_redirect_anonymous_to_login():
         url = reverse(url_name, kwargs=kwargs)
         response = anon.get(url)
         assert response.status_code == 302, url_name
-        assert response["Location"] == f"/auth/login/?next={url}", url_name
+        assert response["Location"] == f"/accounts/login/?next={url}", url_name
 
 
 def test_list_and_index_pages_stay_open_to_anonymous():
