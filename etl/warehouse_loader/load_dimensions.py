@@ -456,6 +456,15 @@ def load_dim_episode(
     delete is scoped to the series_ids present in this partition, never a
     blanket wipe.
 
+    fact_episode_rating has an FK to dim_episode and is loaded separately
+    afterwards (load_facts, a plain upsert with no delete of its own), so a
+    withdrawn/renumbered episode's rating row from a prior run can still be
+    sitting there when this DELETE runs and block it with a FK violation.
+    Clear those rating rows for the series being replaced first, in the same
+    transaction — any that still apply get re-upserted fresh a moment later
+    when load_facts runs; the ones for episodes that no longer exist just
+    disappear along with the episode, which is correct.
+
     series_id is resolved against dim_series; a row whose series_id has no
     dimension row is quarantined, never dropped. Returns (count, rejects).
     """
@@ -480,6 +489,14 @@ def load_dim_episode(
         rows.append({k: (None if pd.isna(v) else v) for k, v in row.items()})
 
     parent_ids = sorted({r["series_id"] for r in rows})
+    if parent_ids:
+        session.execute(
+            text(
+                "DELETE FROM fact_episode_rating WHERE episode_id IN "
+                "(SELECT episode_id FROM dim_episode WHERE series_id = ANY(:parent_ids))"
+            ),
+            {"parent_ids": parent_ids},
+        )
     columns = _DIM_EPISODE_COLS + ["ingestion_date"]
     count = _replace_by_parent(
         session, "dim_episode", "series_id", parent_ids, columns, rows

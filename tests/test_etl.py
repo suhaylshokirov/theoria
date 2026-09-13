@@ -4060,9 +4060,11 @@ def test_load_dim_episode_replaces_by_series_and_quarantines(monkeypatch):
     assert count == 3
     assert [r["rejection_reason"] for r in rejects] == ["unknown series_id"]
     calls = mock_session.execute.call_args_list
-    assert "DELETE FROM dim_episode WHERE series_id = ANY(:parent_ids)" in str(calls[0][0][0])
+    assert "DELETE FROM fact_episode_rating" in str(calls[0][0][0])
     assert calls[0][0][1] == {"parent_ids": [1396]}
-    (ins_stmt, ins_params), _ = calls[1]
+    assert "DELETE FROM dim_episode WHERE series_id = ANY(:parent_ids)" in str(calls[1][0][0])
+    assert calls[1][0][1] == {"parent_ids": [1396]}
+    (ins_stmt, ins_params), _ = calls[2]
     assert "INSERT INTO dim_episode" in str(ins_stmt)
     assert [r["episode_id"] for r in ins_params] == [1, 2, 3]
     assert all(r["ingestion_date"] == dt.date(2026, 9, 9) for r in ins_params)
@@ -4086,10 +4088,11 @@ def test_load_dim_episode_a_series_episode_set_can_shrink(monkeypatch):
 
     assert count == 2
     calls = session.execute.call_args_list
-    assert len(calls) == 2  # one DELETE, one INSERT
-    assert "DELETE FROM dim_episode" in str(calls[0][0][0])
+    assert len(calls) == 3  # fact_episode_rating DELETE, dim_episode DELETE, INSERT
+    assert "DELETE FROM fact_episode_rating" in str(calls[0][0][0])
+    assert "DELETE FROM dim_episode" in str(calls[1][0][0])
     assert calls[0][0][1] == {"parent_ids": [1396]}
-    (_, ins_params), _ = calls[1]
+    (_, ins_params), _ = calls[2]
     assert [r["episode_id"] for r in ins_params] == [1, 2]
 
 
