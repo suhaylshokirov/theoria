@@ -112,6 +112,12 @@
   --hairline: 1px solid var(--rule);
   --frame: 260px;         /* max content width of the page shell gutter calc */
   --measure: 1240px;
+  /* The one shadow in the system, for the one surface that sits visibly
+     above the page rather than flush on it (the auth card, Task 95 UI
+     pass). Everywhere else a --hairline border already does the job of
+     separating a sheet from the page, so this stays reserved rather than
+     becoming a general-purpose "card" treatment. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.06), 0 12px 32px -8px rgba(0, 0, 0, 0.12);
 
   --z-header: 100;
   --z-assistant: 150;
@@ -180,6 +186,10 @@
   --dark-rank-1: #bef264;
   --dark-rank-2: #a3e635;
   --dark-rank-3: #7cb518;
+  /* A black shadow barely registers against an already-near-black surface,
+     so the dark counterpart leans on more opacity rather than more blur to
+     stay legible as a shadow at all. */
+  --dark-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 16px 40px -8px rgba(0, 0, 0, 0.5);
   --dark-icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%238a867e'%3E%3Cpath d='M480-345 240-585l56-56 184 184 184-184 56 56-240 240Z'/%3E%3C/svg%3E");
 }
 
@@ -202,6 +212,7 @@
   --rank-2: var(--dark-rank-2);
   --rank-3: var(--dark-rank-3);
   --icon-chevron: var(--dark-icon-chevron);
+  --shadow-card: var(--dark-shadow-card);
 
   color-scheme: dark;
 }
@@ -226,6 +237,7 @@
     --rank-2: var(--dark-rank-2);
     --rank-3: var(--dark-rank-3);
     --icon-chevron: var(--dark-icon-chevron);
+    --shadow-card: var(--dark-shadow-card);
 
     color-scheme: dark;
   }
@@ -1622,11 +1634,14 @@ td[data-meter] .meter-fill {
 }
 
 input[type="text"],
-input[type="search"] {
+input[type="search"],
+input[type="email"] {
   /* Safari styles input[type=search] as a native rounded field and refuses
      several of the declarations below until the native appearance is dropped;
      the reset is what makes the control render identically in all four
-     engines rather than only in Chrome and Firefox. */
+     engines rather than only in Chrome and Firefox. Extending a shared
+     control (rather than styling input[type=email] on its own in a page
+     stylesheet) is theoria.css's job -- see the auth pages' design notes. */
   -webkit-appearance: none;
   appearance: none;
   border: none;
@@ -1662,7 +1677,8 @@ input[type="search"]::-webkit-search-results-button {
 }
 
 input[type="text"]:focus,
-input[type="search"]:focus {
+input[type="search"]:focus,
+input[type="email"]:focus {
   outline: none;
 }
 
@@ -1813,6 +1829,67 @@ input[type="search"]:focus {
 
 .menu-option[aria-selected="true"]::before {
   background: var(--lime-mark);
+}
+
+/* The signed-in header menu (Task 95) reuses .menu/.menu-trigger/.menu-panel
+   wholesale -- built for the filter dropdown, but already generic enough to
+   host an account menu with only these additions. Two of .menu's own defaults
+   are toolbar-specific and have to be overridden rather than inherited: its
+   flex:1 1 auto (meant to fill a .field row next to a search input) would
+   otherwise stretch this item across the nav bar, and vertically fill the
+   mobile menu's open column since flex-grow tracks whichever axis
+   flex-direction currently points along. */
+.account-menu {
+  flex: none;
+}
+
+.account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  background-image: none; /* no chevron -- this isn't a <select> stand-in */
+  padding-right: var(--space-4);
+}
+
+.account-disc {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--sheet-2);
+  color: var(--ink-muted);
+  font-family: var(--font-label);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+}
+
+.account-panel form {
+  margin: 0;
+}
+
+.account-panel .menu-option {
+  width: 100%;
+  font: inherit;
+}
+
+/* The mobile nav's `.nav-links a:last-child { border-bottom: none }` rule
+   (further down this file) targets whichever <a> is the actual last child of
+   .nav-links -- which, signed in, is .account-trigger's own parent
+   .account-menu, not an <a> at all. Left alone that strands a border-bottom
+   under both the last plain nav link and the trigger. Closed here instead of
+   editing that shared rule, since this is the one case that isn't a bare
+   <a> row. */
+@media (max-width: 680px) {
+  html.has-js .nav-links > a:has(+ .account-menu) {
+    border-bottom: none;
+  }
+
+  html.has-js .account-trigger {
+    border-bottom: none;
+  }
 }
 
 /* Match the 16px the search field takes on touch (see the pointer:coarse
@@ -2571,6 +2648,30 @@ html.has-js .bio-body.is-collapsed {
   /* Empty states are usually a {% empty %} clause inside a grid, so without
      this they'd be sized to a single poster column. */
   grid-column: 1 / -1;
+}
+
+/* --- Notices ---------------------------------------------------------------
+   django.contrib.messages, rendered once here in base.html so every flow
+   that queues one (the accounts app, so far) gets it for free. One quiet
+   style for every level, in the same --ink on --sheet-2 vocabulary the auth
+   pages' own form errors use: a message is information, not a measurement,
+   so it never reaches for lime or an invented red. */
+
+.notice-list {
+  list-style: none;
+  margin: 0 0 var(--space-7);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.notice {
+  color: var(--ink);
+  background: var(--sheet-2);
+  border-left: 2px solid var(--rule-strong);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
 }
 
 /* --- Error pages ---------------------------------------------------------------

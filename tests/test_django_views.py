@@ -26,6 +26,7 @@ if str(DJANGO_APP_DIR) not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "theoria_site.settings")
 django.setup()
 
+from django.contrib.auth import get_user_model  # noqa: E402
 from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 
@@ -38,6 +39,16 @@ from movies.models import (  # noqa: E402
 from core.models import User  # noqa: E402
 
 client = Client()
+
+# movie_detail/series_detail/person_detail/dashboard are gated behind
+# @login_required as of Task 94; every other view this file exercises is
+# not. Rather than force_login a fresh Client per gated test, the one
+# shared `client` is signed in for the whole module -- being authenticated
+# never changes what an *ungated* view renders, so this is safe for the
+# anonymous-only tests here too. Anonymous-vs-signed-in gating behaviour
+# itself (the 302, the `next` round-trip) is covered separately in
+# tests/test_accounts.py once Task 96 adds the database these tests need.
+_TEST_USER_EMAIL = "test-django-views@example.com"
 
 
 def setup_module(module):

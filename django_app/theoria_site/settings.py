@@ -71,9 +71,11 @@ CSRF_TRUSTED_ORIGINS = [
 
 # The /admin/ route is served only where it can actually work. Nothing in the
 # warehouse is registered with it (every model is managed = False and
-# read-only), and the deployed function has no persistent database behind
-# django.contrib.auth -- so on Vercel the route would be a guaranteed 500 on
-# a public URL. Local development keeps it.
+# read-only) -- and now that AUTH_DATABASE_URL gives 'default' a real,
+# persistent home on Vercel too (see DATABASES above), the route would no
+# longer 500 there. It still stays local-only, deliberately: a public admin
+# login form is attack surface this site has no use for, since nothing an
+# admin would manage is reachable from a deployed instance anyway.
 ADMIN_ENABLED = not ON_VERCEL
 
 
@@ -89,7 +91,12 @@ INSTALLED_APPS = [
     'core',
     'movies',
     'analytics',
+    'accounts',
 ]
+
+# The one custom user model, set before any migration or account row exists
+# -- AUTH_USER_MODEL cannot be changed later without a painful data migration.
+AUTH_USER_MODEL = 'accounts.User'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -200,6 +207,36 @@ DATABASES = {
     },
 }
 
+# 'default' is Django's own database -- the accounts app, sessions, and (local
+# only) the admin. Unlike 'warehouse' it is NOT read-only and DOES take real
+# migrations, so it needs a durable home once deployed rather than the SQLite
+# file above.
+#
+# ON_VERCEL with no AUTH_DATABASE_URL is refused outright rather than falling
+# back to the SQLite default: that file lives on Vercel's ephemeral /tmp,
+# wiped between invocations, so a reader who signs up would silently lose
+# their account on the next cold start. Failing loud here, before Django
+# touches a request, is cheaper than debugging vanished users later.
+if config.AUTH_DATABASE_URL:
+    _auth_url = urlparse(config.AUTH_DATABASE_URL.replace('postgresql+psycopg2', 'postgresql'))
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': _auth_url.path.lstrip('/'),
+        'USER': _auth_url.username,
+        'PASSWORD': _auth_url.password,
+        'HOST': _auth_url.hostname,
+        'PORT': _auth_url.port,
+        'CONN_MAX_AGE': 600 if ON_VERCEL else 0,
+        'CONN_HEALTH_CHECKS': ON_VERCEL,
+        'OPTIONS': {'sslmode': 'require'} if ON_VERCEL else {},
+    }
+elif ON_VERCEL:
+    raise config.ConfigError(
+        "AUTH_DATABASE_URL is required when deployed: without it, Django's "
+        "own database (accounts, sessions) would point at Vercel's ephemeral "
+        "/tmp filesystem and lose every row between cold starts."
+    )
+
 DATABASE_ROUTERS = ['core.routers.WarehouseRouter']
 
 # These apps mirror the ETL-owned warehouse only. Keeping their migration
@@ -227,6 +264,42 @@ if ON_VERCEL:
     # caches and honours for its full duration, so a misconfiguration is not
     # quickly reversible; vercel.app is already HSTS-preloaded, so the header
     # would buy nothing here. Set it deliberately if a custom domain is added.
+
+
+# Email (Task 90)
+#
+# The backend is derived from whether EMAIL_HOST is actually set, not from
+# DEBUG alone: SMTP wins whenever a host is configured -- including locally,
+# so a developer can point .env at a real provider (Resend, Brevo, Gmail...)
+# and get real inbox delivery while developing. Only a genuinely unconfigured
+# EMAIL_HOST falls back to anything, and even then only under DEBUG, where it
+# becomes the console backend (the code just prints to the terminal, so a
+# reader signing up needs no SMTP credentials to exercise the flow). Outside
+# DEBUG (always the case when deployed -- see DEBUG above), an empty
+# EMAIL_HOST is refused outright rather than silently falling back to the
+# console backend, since the deployed site printing a reader's code to a
+# serverless function's logs instead of mailing it would be a silent feature
+# outage, not a usable default.
+#
+# (An earlier version of this branched on DEBUG first, which meant an
+# EMAIL_HOST set in a local .env was silently ignored -- DEBUG defaults to
+# True locally, so the console backend always won regardless. That's exactly
+# backwards from "let a developer opt into real delivery.")
+DEFAULT_FROM_EMAIL = config.DEFAULT_FROM_EMAIL
+if config.EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = config.EMAIL_HOST
+    EMAIL_PORT = config.EMAIL_PORT
+    EMAIL_HOST_USER = config.EMAIL_HOST_USER
+    EMAIL_HOST_PASSWORD = config.EMAIL_HOST_PASSWORD
+    EMAIL_USE_TLS = config.EMAIL_USE_TLS
+elif DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    raise config.ConfigError(
+        "EMAIL_HOST is required outside DEBUG: without it, a reader has no "
+        "way to receive the sign-in code the whole accounts feature depends on."
+    )
 
 
 # Password validation

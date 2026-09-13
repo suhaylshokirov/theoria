@@ -1,6 +1,7 @@
 import itertools
 from datetime import date
 
+from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.db.models import Avg, Count, F, Max, Min, Q, Sum

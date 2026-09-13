@@ -916,6 +916,10 @@
     initLiveFilter();
     initBioToggle();
     initVideoEmbeds();
+    initCodeInput();
+    initAuthFormSubmitState();
+    initInlineValidation();
+    initAccountMenu();
   }
 
   if (document.readyState === "loading") {

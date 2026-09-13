@@ -8,6 +8,7 @@ lives in .sql files, so the dashboard reads and executes them as-is.
 
 from pathlib import Path
 
+from django.contrib.auth.decorators import login_required
 from django.db import connections
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
