@@ -52,6 +52,9 @@
      stay fixed rather than swap with --ink — in dark mode --ink turns near-
      white, which is illegible on lime. Never redefined under [data-theme]. */
   --ink-on-lime: #0b0b0b;
+  /* Form errors only -- the one place a reader must act before going on.
+     6.2:1 on --sheet. */
+  --danger: #b91c1c;
   /* Chart area fill, read by analytics.js. */
   --chart-wash: rgba(163, 230, 53, 0.18);
 
@@ -182,6 +185,7 @@
   --dark-lime-mark: #a3e635;
   --dark-lime-deep: #d9f99d;
   --dark-lime-hover: #bef264;
+  --dark-danger: #f87171;
   --dark-chart-wash: rgba(163, 230, 53, 0.10);
   --dark-rank-1: #bef264;
   --dark-rank-2: #a3e635;
@@ -207,6 +211,7 @@
   --lime-mark: var(--dark-lime-mark);
   --lime-deep: var(--dark-lime-deep);
   --lime-hover: var(--dark-lime-hover);
+  --danger: var(--dark-danger);
   --chart-wash: var(--dark-chart-wash);
   --rank-1: var(--dark-rank-1);
   --rank-2: var(--dark-rank-2);
@@ -232,6 +237,7 @@
     --lime-mark: var(--dark-lime-mark);
     --lime-deep: var(--dark-lime-deep);
     --lime-hover: var(--dark-lime-hover);
+    --danger: var(--dark-danger);
     --chart-wash: var(--dark-chart-wash);
     --rank-1: var(--dark-rank-1);
     --rank-2: var(--dark-rank-2);

@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="{% static 'css/auth.css' %}">
 {% endblock %}
 
+{% block messages %}{% endblock %}
+
 {% block content %}
 <section class="auth-hero">
     <div class="auth-panel">
@@ -22,6 +24,7 @@
                 {% if request.GET.next %}<input type="hidden" name="next" value="{{ request.GET.next }}">{% endif %}
 
                 {% for error in form.non_field_errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                {% for message in messages %}<p class="form-error" role="alert">{{ message }}</p>{% endfor %}
 
                 <div>
                     <label class="field-label" for="id_username">Username</label>

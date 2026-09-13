@@ -267,12 +267,13 @@
 }
 
 /* A field the browser (or the server, after submit) considers invalid gets
-   the same left-rule treatment as .form-error below, so the field itself
+   the same red as .form-error below, so the field itself
    -- not just a line of text under it -- shows something is wrong. Scoped
    to :not(:placeholder-shown) so a required-but-empty field doesn't read as
    an error before the reader has typed anything into it. */
-.auth-form .field:has(input:invalid:not(:placeholder-shown)) {
-  border-color: var(--rule-strong);
+.auth-form .field:has(input:invalid:not(:placeholder-shown)),
+.auth-form div:has(> .form-error) > .field {
+  border-color: var(--danger);
 }
 
 /* The one-time-code field: a single wide-tracked numeral field, not six
@@ -328,12 +329,19 @@
   background-size: calc(var(--cell) * 6) 100%;
 }
 
+/* Red text inside the card, right where the reader is looking -- field
+   errors, form-wide errors, and queued messages (base.html's sitewide notice
+   list is suppressed on these pages) all share it. */
 .form-error {
-  color: var(--ink);
-  background: var(--sheet-2);
-  border-left: 2px solid var(--rule-strong);
-  padding: var(--space-3) var(--space-4);
+  margin-top: var(--space-2);
+  color: var(--danger);
   font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.auth-form > .form-error {
+  margin-top: 0;
+  text-align: center;
 }
 
 /* A server-rendered error (a full page load) can afford to just be there;

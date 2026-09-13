@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="{% static 'css/auth.css' %}">
 {% endblock %}
 
+{% block messages %}{% endblock %}
+
 {% block content %}
 <section class="auth-hero">
     <div class="auth-panel">
@@ -19,6 +21,7 @@
 
             <form class="auth-form" method="post" novalidate>
                 {% csrf_token %}
+                {% for message in messages %}<p class="form-error" role="alert">{{ message }}</p>{% endfor %}
                 <div>
                     {% comment %} The code field is centred as a unit (see
                        .auth-form .field:has(.code-input) in auth.css) -- an
