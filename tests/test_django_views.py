@@ -658,10 +658,11 @@ def test_series_detail_returns_200_with_expected_context():
     assert response.context["seasons"] == []
     # The collection-actions include must receive csrf_token despite `only`,
     # or every Like/Watch later/Top click on this page 403s. base.html's own
-    # sign-out form always renders one token, so a plain "in" check can't
-    # tell the two apart -- count instead: 1 (sign-out) + 3 (Like/Watch
-    # later/Top) with the include fixed, 1 without it.
-    assert response.content.count(b"csrfmiddlewaretoken") == 4
+    # sign-out forms (desktop account popover + mobile header menu) always
+    # render two tokens, so a plain "in" check can't tell them apart -- count
+    # instead: 2 (sign-out) + 3 (Like/Watch later/Top) with the include
+    # fixed, 2 without it.
+    assert response.content.count(b"csrfmiddlewaretoken") == 5
 
 
 def test_series_detail_404_when_missing():
@@ -1110,10 +1111,11 @@ def test_movie_detail_returns_200_with_expected_context():
     assert response.context["movie_rating"].rating == Decimal("8.50")
     # The collection-actions include must receive csrf_token despite `only`,
     # or every Like/Watch later/Top click on this page 403s. base.html's own
-    # sign-out form always renders one token, so a plain "in" check can't
-    # tell the two apart -- count instead: 1 (sign-out) + 3 (Like/Watch
-    # later/Top) with the include fixed, 1 without it.
-    assert response.content.count(b"csrfmiddlewaretoken") == 4
+    # sign-out forms (desktop account popover + mobile header menu) always
+    # render two tokens, so a plain "in" check can't tell them apart -- count
+    # instead: 2 (sign-out) + 3 (Like/Watch later/Top) with the include
+    # fixed, 2 without it.
+    assert response.content.count(b"csrfmiddlewaretoken") == 5
 
 
 def test_movie_detail_renders_studios_as_links():

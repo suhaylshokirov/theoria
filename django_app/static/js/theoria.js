@@ -926,13 +926,35 @@
      form than the generic label the other two forms want. */
   function initAuthFormSubmitState() {
     document.querySelectorAll(".auth-form").forEach(function (form) {
-      form.addEventListener("submit", function () {
-        var btn = form.querySelector('button[type="submit"]');
-        if (!btn || btn.disabled) return;
+      var btn = form.querySelector('button[type="submit"]');
+      var idleLabel = btn ? btn.innerHTML : "";
+      var submitting = false;
+
+      form.addEventListener("submit", function (event) {
+        // One POST per page load. On the verify form the auto-submit at six
+        // digits and an Enter/click can both fire: the first signs the reader
+        // in and rotates the CSRF token, so the second would land as a 403.
+        if (submitting) {
+          event.preventDefault();
+          return;
+        }
+        submitting = true;
+        if (!btn) return;
         var busyLabel = btn.getAttribute("data-busy-label") || "Sending…";
         btn.disabled = true;
         btn.innerHTML =
           '<span class="btn-spinner" aria-hidden="true"></span><span>' + busyLabel + "</span>";
+      });
+
+      // A back/forward-cache restore brings the page back mid-submit; unlock
+      // it so the form isn't stuck on a spinner that will never resolve.
+      window.addEventListener("pageshow", function (event) {
+        if (!event.persisted || !submitting) return;
+        submitting = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = idleLabel;
+        }
       });
     });
   }
