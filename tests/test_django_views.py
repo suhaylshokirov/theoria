@@ -692,10 +692,35 @@ def test_series_detail_cast_and_crew_reuse_movie_page_merge_logic():
     with _series_detail_mocks(show, credits=credits):
         response = client.get("/tv/test-show/")
 
-    assert [c.person for c in response.context["cast"]] == [actor]
+    assert [c["person"] for c in response.context["cast"]] == [actor]
     groups = response.context["crew"]
     assert [g["name"] for g in groups] == ["Directing"]
     assert groups[0]["people"][0]["job_display"] == "Director / Writer"
+
+
+def test_series_detail_merges_split_character_credit_into_one_cast_card():
+    """fact_series_credit keys on character_name, so an actor credited under
+    more than one string for the same role across a show's run (Stranger
+    Things: Millie Bobby Brown as "Eleven" then "Eleven / Jane Hopper") used
+    to render as two separate cast cards for the same person. _merge_cast()
+    collapses them into one card with a deduplicated character label."""
+    show = _series()
+    actor = _person(person_id=1, name="Millie Bobby Brown", slug="millie-bobby-brown")
+    credits = [
+        SeriesCredit(series=show, person=actor, department="Acting",
+                     job="Actor", character_name="Eleven", ordering=3),
+        SeriesCredit(series=show, person=actor, department="Acting",
+                     job="Actor", character_name="Eleven / Jane Hopper", ordering=3),
+    ]
+
+    with _series_detail_mocks(show, credits=credits):
+        response = client.get("/tv/test-show/")
+
+    cast = response.context["cast"]
+    assert len(cast) == 1
+    assert cast[0]["person"] == actor
+    assert cast[0]["character_name"] == "Eleven / Jane Hopper"
+    assert response.context["cast_count"] == 1
 
 
 def test_series_detail_created_by_renders_as_a_record_row_and_links_to_person():
@@ -2407,6 +2432,30 @@ def test_person_detail_filmography_grid_renders_series_card_for_show_rows():
     html = response.content.decode()
     assert 'href="/tv/a-show/"' in html
     assert "Creator" in html
+
+
+def test_person_detail_merges_split_character_credit_into_one_label():
+    """A show crediting the same role under two strings across its run
+    (fact_series_credit keys on character_name — see movies.views._merge_cast)
+    used to read as "Eleven / Eleven / Jane Hopper" on the actor's own
+    filmography row; it should collapse to the deduplicated character name,
+    the same as _merge_cast() does for the show's cast grid."""
+    person = _person()
+    show = _series(series_id=1, name="A Show", slug="a-show")
+    series_credits = [
+        SeriesCredit(series=show, person=person, department="Acting",
+                     job="Actor", character_name="Eleven"),
+        SeriesCredit(series=show, person=person, department="Acting",
+                     job="Actor", character_name="Eleven / Jane Hopper"),
+    ]
+
+    with patch("movies.views.get_object_or_404", return_value=person), \
+            _person_detail_mocks([], {}, series_credits=series_credits):
+        response = client.get("/people/test-person/")
+
+    filmography = response.context["filmography"]
+    assert len(filmography) == 1
+    assert filmography[0]["job_display"] == "Eleven / Jane Hopper"
 
 
 def test_person_detail_sort_by_release_orders_movies_and_shows_together():

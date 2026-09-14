@@ -663,7 +663,11 @@ def series_detail(request, series_slug):
         .order_by(F("ordering").asc(nulls_last=True), "job")
     )
 
-    cast = [c for c in credits if c.department == "Acting"]
+    # Unlike movie_detail's cast (fact_credit has no character_name in its
+    # PK), fact_series_credit keys on character_name too, so the same person
+    # can arrive as more than one Acting row — _merge_cast() collapses them
+    # back to one card per actor (see its docstring for why).
+    cast = _merge_cast(c for c in credits if c.department == "Acting")
 
     # _merge_crew()/_department_rank() are reused unchanged from movie_detail
     # (Task 87 step 1) — they key on person and department, never on movie,
@@ -996,7 +1000,9 @@ def _merge_crew(credits):
 
     Cast is untouched by this — fact_credit's job is the literal "Actor" for
     every one of the 62,713 Acting rows, so cast is already one row per
-    person; merging is purely a crew-department concern.
+    person; merging is purely a crew-department concern on the movie side.
+    fact_series_credit's cast needs the analogous _merge_cast() below instead
+    — see its docstring for why.
     """
     by_person = {}
     for credit in credits:
@@ -1011,6 +1017,55 @@ def _merge_crew(credits):
             "department": rows_sorted[0].department,
             "jobs": jobs,
             "job_display": " / ".join(jobs),
+        })
+    return merged
+
+
+def _merge_character_names(character_names):
+    """Collapse several credited character-name strings for one person on one
+    title into one deduplicated label.
+
+    TMDB sometimes credits an actor's single role under more than one string
+    across a show's run (Stranger Things credits Millie Bobby Brown as
+    "Eleven" for early episodes and "Eleven / Jane Hopper" once the show
+    reveals her surname) as well as under genuinely different characters
+    (Orphan Black's Tatiana Maslany, one row per clone). Splitting every
+    credited string on "/" and deduplicating the resulting tokens in the
+    order first seen handles both: a renamed role collapses to itself, and
+    real multiple roles keep every distinct name.
+    """
+    seen = []
+    for name in character_names:
+        for token in name.split("/"):
+            token = token.strip()
+            if token and token not in seen:
+                seen.append(token)
+    return " / ".join(seen)
+
+
+def _merge_cast(credits):
+    """Collapse a person's several Acting credits on one show into one card.
+
+    fact_series_credit's PK includes character_name (20_series_credits.sql,
+    unlike fact_credit's) so that a genuine multi-role actor gets one row per
+    character — but the same key also splits a single role into two rows
+    whenever TMDB credits it under more than one string over a show's run
+    (see _merge_character_names), which rendered as the same actor twice in
+    the cast grid. Grouping by person_id and merging character names
+    collapses both cases into one card, in the billing order the rows
+    already arrive in.
+    """
+    by_person = {}
+    for credit in credits:
+        by_person.setdefault(credit.person_id, []).append(credit)
+
+    merged = []
+    for person_id, rows in by_person.items():
+        merged.append({
+            "person": rows[0].person,
+            "character_name": _merge_character_names(
+                c.character_name for c in rows if c.character_name
+            ),
         })
     return merged
 
@@ -1090,6 +1145,11 @@ def _merge_person_credits(credits):
     in department order, so a director who also wrote the script reads
     "Director / Screenplay" once, under one poster, rather than twice under
     two.
+
+    A title's several Acting rows (fact_series_credit only — see
+    _merge_cast()'s docstring) are merged first with _merge_character_names
+    into a single label, so a mid-run character rename reads as one role,
+    not "Eleven / Eleven / Jane Hopper".
     """
     by_key = {}
     for credit in credits:
@@ -1102,10 +1162,12 @@ def _merge_person_credits(credits):
     merged = []
     for (kind, _id), rows in by_key.items():
         rows_sorted = sorted(rows, key=lambda c: _department_rank(c.department))
-        labels = [
-            c.character_name if c.department == "Acting" and c.character_name else c.job
-            for c in rows_sorted
-        ]
+        acting_rows = [c for c in rows_sorted if c.department == "Acting" and c.character_name]
+        other_rows = [c for c in rows_sorted if not (c.department == "Acting" and c.character_name)]
+        labels = []
+        if acting_rows:
+            labels.append(_merge_character_names(c.character_name for c in acting_rows))
+        labels += [c.job for c in other_rows]
         title_obj = rows_sorted[0].movie if kind == "movie" else rows_sorted[0].series
         merged.append({
             "kind": kind,
