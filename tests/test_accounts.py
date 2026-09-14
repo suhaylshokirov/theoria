@@ -60,6 +60,9 @@ def teardown_module(module):
 def setup_function(function):
     mail.outbox = []
     cache.clear()
+    # A completed verify signs the shared client in, and the auth pages now
+    # redirect signed-in readers away -- start every test signed out.
+    client.logout()
 
 
 def test_send_code_email_signup_renders_code_and_purpose_subject():
@@ -338,4 +341,57 @@ def test_resend_send_failure_does_not_500_and_reports_the_same_error():
     assert any(_SEND_FAILURE_MESSAGE in str(m) for m in response.context["messages"])
 
     LoginCode.objects.filter(email=email).delete()
+    User.objects.filter(email=email).delete()
+
+
+def _signed_in_client(email: str, username: str) -> Client:
+    User.objects.filter(email=email).delete()
+    user = User.objects.create_user(username=username, email=email)
+    signed_in = Client()
+    signed_in.force_login(user)
+    return signed_in
+
+
+def test_signed_in_reader_is_sent_away_from_every_auth_page():
+    email = "signed-in-auth-pages@example.com"
+    signed_in = _signed_in_client(email, "signedinauthpages")
+
+    for url in ("/accounts/login/", "/accounts/signup/", "/accounts/verify/"):
+        response = signed_in.get(url)
+        assert response.status_code == 302, url
+        assert response.url == "/me/", url
+
+        # A POST is refused the same way -- no code issued, no email sent.
+        post = signed_in.post(url, {"email": email, "username": "signedinauthpages", "code": "123456"})
+        assert post.status_code == 302, url
+
+    assert mail.outbox == []
+    assert not LoginCode.objects.filter(email=email).exists()
+
+    User.objects.filter(email=email).delete()
+
+
+def test_signed_in_reader_is_sent_to_a_safe_next_not_an_external_one():
+    email = "signed-in-next@example.com"
+    signed_in = _signed_in_client(email, "signedinnext")
+
+    response = signed_in.get("/accounts/login/?next=/movies/42/")
+    assert response.url == "/movies/42/"
+
+    external = signed_in.get("/accounts/login/?next=https://evil.example.com/")
+    assert external.url == "/me/"
+
+    User.objects.filter(email=email).delete()
+
+
+def test_auth_pages_are_never_cached_so_back_asks_the_server_again():
+    for url in ("/accounts/login/", "/accounts/signup/"):
+        response = client.get(url)
+        assert response.status_code == 200, url
+        assert "no-store" in response["Cache-Control"], url
+
+    # Signed-in redirects carry it too, or the browser could cache the hop.
+    email = "signed-in-no-store@example.com"
+    signed_in = _signed_in_client(email, "signedinnostore")
+    assert "no-store" in signed_in.get("/accounts/login/")["Cache-Control"]
     User.objects.filter(email=email).delete()

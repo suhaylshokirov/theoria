@@ -14,6 +14,7 @@ re-echoed from the query string straight into a form -- see `_safe_next()`.
 from __future__ import annotations
 
 import logging
+from functools import wraps
 
 from django.conf import settings
 from django.contrib import messages
@@ -21,6 +22,7 @@ from django.contrib.auth import get_user_model, login
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render, resolve_url
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.cache import never_cache
 
 from movies.models import Movie
 
@@ -93,6 +95,27 @@ def _safe_next(request) -> str:
     return ""
 
 
+def signed_out_only(view):
+    """Keep a signed-in reader off the sign-up/sign-in/verify pages.
+
+    The back button after signing in walks straight back through these
+    pages. Without this, a signed-in reader lands on a blank sign-in form
+    (or, from /verify/, gets bounced to one). With it, the server sends them
+    on to `next`, or to their profile page. never_cache (no-store) makes the
+    browser actually ask the server again. Without it, the back-forward cache
+    would show the old snapshot of the form without asking the server at all.
+    """
+
+    @never_cache
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        if request.user.is_authenticated:
+            return redirect(_safe_next(request) or resolve_url(settings.LOGIN_REDIRECT_URL))
+        return view(request, *args, **kwargs)
+
+    return wrapper
+
+
 def _mask_email(email: str) -> str:
     local, _, domain = email.partition("@")
     if not domain:
@@ -140,6 +163,7 @@ def _login_sub_line(next_url: str) -> str:
     return "We'll email you a code."
 
 
+@signed_out_only
 def signup(request):
     if request.method == "POST":
         form = SignupForm(request.POST)
@@ -166,6 +190,7 @@ def signup(request):
     return render(request, "accounts/signup.html", {"form": form, "gallery_posters": _gallery_posters()})
 
 
+@signed_out_only
 def login_view(request):
     if request.method == "POST":
         form = EmailOnlyForm(request.POST)
@@ -200,6 +225,7 @@ def login_view(request):
     )
 
 
+@signed_out_only
 def verify(request):
     email = request.session.get(SESSION_EMAIL)
     purpose = request.session.get(SESSION_PURPOSE)
