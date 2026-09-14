@@ -200,6 +200,57 @@ def test_signup_duplicate_email_gives_the_same_combined_message_not_a_hint():
     owner.delete()
 
 
+def test_signup_rejects_a_username_shorter_than_three_characters():
+    response = client.post(
+        "/accounts/signup/", {"username": "ab", "email": "too-short@example.com"}
+    )
+
+    assert response.status_code == 200
+    assert response.context["form"].errors["username"] == [
+        "Usernames must be 3-30 characters: letters, numbers, and underscores only."
+    ]
+    assert not User.objects.filter(email="too-short@example.com").exists()
+
+
+def test_signup_rejects_a_username_longer_than_thirty_characters():
+    response = client.post(
+        "/accounts/signup/", {"username": "a" * 31, "email": "too-long@example.com"}
+    )
+
+    assert response.status_code == 200
+    # A 31-character value fails both the field's own max_length=30 (Django's
+    # built-in message) and the {3,30} regex validator -- Django's
+    # run_validators() collects every failing validator, not just the first.
+    assert response.context["form"].errors["username"] == [
+        "Usernames must be 3-30 characters: letters, numbers, and underscores only.",
+        "Ensure this value has at most 30 characters (it has 31).",
+    ]
+    assert not User.objects.filter(email="too-long@example.com").exists()
+
+
+def test_signup_accepts_usernames_at_the_three_and_thirty_character_boundaries():
+    # A valid signup redirects to the verify page rather than re-rendering
+    # the form, so success here is "redirected", not "no form errors".
+    User.objects.filter(username__in=["abc", "a" * 30]).delete()
+    for email in ("min-boundary@example.com", "max-boundary@example.com"):
+        LoginCode.objects.filter(email=email).delete()
+
+    short_response = client.post(
+        "/accounts/signup/", {"username": "abc", "email": "min-boundary@example.com"}
+    )
+    assert short_response.status_code == 302
+
+    cache.clear()  # avoid the per-IP signup rate limit between these two posts
+
+    long_response = client.post(
+        "/accounts/signup/", {"username": "a" * 30, "email": "max-boundary@example.com"}
+    )
+    assert long_response.status_code == 302
+
+    LoginCode.objects.filter(email__in=["min-boundary@example.com", "max-boundary@example.com"]).delete()
+    User.objects.filter(username__in=["abc", "a" * 30]).delete()
+
+
 def test_signup_rejects_sql_injection_style_username_safely():
     payload = "robert'); DROP TABLE accounts_user;--"
     email = "sqli-test@example.com"
