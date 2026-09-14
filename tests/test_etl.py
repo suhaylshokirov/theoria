@@ -4115,7 +4115,7 @@ def test_assign_slugs_numbers_name_collisions_in_id_order():
     """Two rows with the same name must get distinct slugs, numbered by id order."""
     mock_session = MagicMock()
     mock_session.execute.return_value.fetchall.return_value = [
-        (1, "John Smith"), (2, "John Smith"), (3, "Jane Doe"),
+        (1, "John Smith", None), (2, "John Smith", None), (3, "Jane Doe", None),
     ]
 
     count = assign_slugs(mock_session, "dim_actor", "actor_id", "name")
@@ -4134,7 +4134,7 @@ def test_assign_slugs_numbers_name_collisions_in_id_order():
 def test_assign_slugs_is_stable_across_reruns():
     """Re-running assign_slugs() over the same rows must produce the same slugs."""
     mock_session = MagicMock()
-    rows = [(1, "John Smith"), (2, "John Smith"), (3, "Jane Doe")]
+    rows = [(1, "John Smith", None), (2, "John Smith", None), (3, "Jane Doe", None)]
     mock_session.execute.return_value.fetchall.return_value = rows
 
     assign_slugs(mock_session, "dim_actor", "actor_id", "name")
@@ -4157,15 +4157,52 @@ def test_assign_slugs_clears_slugs_before_rewriting_them():
     """
     mock_session = MagicMock()
     mock_session.execute.return_value.fetchall.return_value = [
-        (1, "Dee Wallace"), (2, "Dee Wallace"),
+        (1, "Dee Wallace", None), (2, "Dee Wallace", None),
     ]
 
     assign_slugs(mock_session, "dim_person", "person_id", "name")
 
     statements = [str(call.args[0]) for call in mock_session.execute.call_args_list]
     assert "SET slug = NULL" in statements[1]
+    assert "= ANY(:ids)" in statements[1]
     assert "SET slug = v.slug" in statements[2]
     assert "FROM (VALUES" in statements[2]
+
+
+def test_assign_slugs_only_touches_changed_rows():
+    """A row whose computed slug already matches what's stored must not be
+    cleared or rewritten — the fix for the dim_person heap bloat that filled
+    Neon's free tier: a full-table rewrite on every run, even when nothing
+    about a person's name changed.
+    """
+    mock_session = MagicMock()
+    mock_session.execute.return_value.fetchall.return_value = [
+        (1, "John Smith", "john-smith"),   # already correct — must not be touched
+        (2, "Jane Doe", "jane-doe-old"),   # stale — must be cleared + rewritten
+    ]
+
+    count = assign_slugs(mock_session, "dim_actor", "actor_id", "name")
+
+    assert count == 2
+    clear_stmt, clear_params = mock_session.execute.call_args_list[1].args
+    assert "SET slug = NULL" in str(clear_stmt)
+    assert clear_params == {"ids": [2]}
+    apply_stmt, apply_params = mock_session.execute.call_args_list[2].args
+    assert "FROM (VALUES" in str(apply_stmt)
+    assert apply_params == {"id_0": 2, "slug_0": "jane-doe"}
+
+
+def test_assign_slugs_noop_when_all_slugs_already_match():
+    """When every computed slug matches the stored one, no UPDATE is issued at all."""
+    mock_session = MagicMock()
+    mock_session.execute.return_value.fetchall.return_value = [
+        (1, "John Smith", "john-smith"), (2, "Jane Doe", "jane-doe"),
+    ]
+
+    count = assign_slugs(mock_session, "dim_actor", "actor_id", "name")
+
+    assert count == 2
+    mock_session.execute.assert_called_once()  # only the initial SELECT
 
 
 def test_build_calendar_computes_surrogate_key_and_decade():

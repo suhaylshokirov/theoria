@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import Column, MetaData, Table, text
+from sqlalchemy import Column, MetaData, Table, text, tuple_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -63,16 +63,25 @@ def _upsert(session: Session, table: str, pk_cols: list[str], columns: list[str]
     itself. A ``text()`` executemany falls through to one round-trip per row —
     fine on a local socket, but ~2 minutes per 1,000 rows against a database in
     another region, and ``dim_person`` / ``fact_credit`` are 120k+ rows each.
+
+    A conflicting row is only updated when at least one update column actually
+    differs (``WHERE (target...) IS DISTINCT FROM (excluded...)``) — otherwise
+    every re-run rewrites the whole table even when nothing changed, which is
+    exactly what left Neon's dim_person heap at ~4x its live size (dead tuples
+    can't be reclaimed until the transaction commits).
     """
     if not records:
         return 0
     update_cols = [c for c in columns if c not in pk_cols]
     tbl = Table(table, MetaData(), *(Column(c) for c in columns))
     stmt = pg_insert(tbl)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=pk_cols,
-        set_={c: stmt.excluded[c] for c in update_cols},
-    )
+    set_ = {c: stmt.excluded[c] for c in update_cols}
+    on_conflict_kwargs: dict[str, Any] = {"index_elements": pk_cols, "set_": set_}
+    if update_cols:
+        target = tuple_(*(tbl.c[c] for c in update_cols))
+        excluded = tuple_(*(stmt.excluded[c] for c in update_cols))
+        on_conflict_kwargs["where"] = target.is_distinct_from(excluded)
+    stmt = stmt.on_conflict_do_update(**on_conflict_kwargs)
     session.execute(stmt, records)
     return len(records)
 

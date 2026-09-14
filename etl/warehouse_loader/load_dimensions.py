@@ -590,33 +590,45 @@ def assign_slugs(session: Session, table: str, id_col: str, name_col: str) -> in
     (always a new, larger id) can only ever be appended after the existing
     numbering, never insert itself ahead of it.
 
-    The slugs are cleared before they are rewritten. Recomputing over the whole
-    table can *permute* slugs — when a newly loaded person with a lower id takes
-    a base slug, its previous owner moves to `-2` — and the rewrite is a batched
-    executemany, so the unique index is checked after every individual row. The
-    row that gains the slug can therefore be written before the row that gives
-    it up, and Postgres rejects that transient duplicate even though the final
-    state is perfectly unique. Clearing first removes the intermediate collision
-    (the index permits many NULLs); both statements run in the caller's
-    transaction, so no reader ever observes the table without slugs.
+    Only rows whose computed slug differs from what's stored are touched —
+    the vast majority of a rerun recomputes to the same slug it already has,
+    and rewriting every row anyway (the previous behavior) was most of the
+    dead-tuple bloat that filled Neon's free tier. The changed rows are
+    cleared to NULL before they're rewritten. Recomputing can *permute*
+    slugs — when a newly loaded person with a lower id takes a base slug,
+    its previous owner moves to `-2` — and the rewrite is a batched
+    executemany, so the unique index is checked after every individual row.
+    The row that gains the slug can therefore be written before the row that
+    gives it up, and Postgres rejects that transient duplicate even though
+    the final state is perfectly unique. Clearing the changed rows first
+    removes the intermediate collision (the index permits many NULLs) without
+    needing to touch rows that aren't part of any permutation; both
+    statements run in the caller's transaction, so no reader ever observes
+    the table without a slug it previously had.
     """
     rows = session.execute(
-        text(f"SELECT {id_col}, {name_col} FROM {table} ORDER BY {id_col}")
+        text(f"SELECT {id_col}, {name_col}, slug FROM {table} ORDER BY {id_col}")
     ).fetchall()
 
     seen: dict[str, int] = {}
     records = []
-    for row_id, name in rows:
+    changed = []
+    for row_id, name, current_slug in rows:
         base = _slugify(name or "")
         n = seen.get(base, 0) + 1
         seen[base] = n
         slug = base if n == 1 else f"{base}-{n}"
         records.append({"id": row_id, "slug": slug})
+        if slug != current_slug:
+            changed.append({"id": row_id, "slug": slug})
 
-    if records:
-        session.execute(text(f"UPDATE {table} SET slug = NULL WHERE slug IS NOT NULL"))
-        _apply_slugs(session, table, id_col, records)
-    logger.info("%s: assigned %d slug(s)", table, len(records))
+    if changed:
+        session.execute(
+            text(f"UPDATE {table} SET slug = NULL WHERE {id_col} = ANY(:ids)"),
+            {"ids": [r["id"] for r in changed]},
+        )
+        _apply_slugs(session, table, id_col, changed)
+    logger.info("%s: %d slug(s), %d changed", table, len(records), len(changed))
     return len(records)
 
 
