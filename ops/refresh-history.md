@@ -29,3 +29,4 @@ Format: `<UTC timestamp>  <status>  <run label>  (<trigger>)`
 2026-09-11T08:49:21Z  success  discovery run 4  (workflow_dispatch)
 2026-09-11T10:35:00Z  success  discovery run 5  (workflow_dispatch)
 2026-09-13T12:56:57Z  failure  run 22  (workflow_dispatch)
+2026-09-14T07:57:29Z  cancelled  run 23  (workflow_dispatch)
