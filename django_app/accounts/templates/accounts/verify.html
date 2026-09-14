@@ -23,18 +23,25 @@
                 {% csrf_token %}
                 {% for message in messages %}<p class="form-error" role="alert">{{ message }}</p>{% endfor %}
                 <div>
-                    {% comment %} The code field is centred as a unit (see
-                       .auth-form .field:has(.code-input) in auth.css) -- an
-                       inline leading icon like username/email's would throw
-                       that off, so the icon sits in the label instead. {% endcomment %}
-                    <label class="field-label" for="id_code">
-                        <span class="field-label-icon" aria-hidden="true"></span>
-                        Code
-                    </label>
                     <p class="field">
+                        {% comment %} One real input carries the value and renders the
+                           digits themselves (autocomplete="one-time-code" and paste
+                           both depend on it staying a single field -- see auth.css).
+                           The six boxes behind it are decorative spans theoria.js
+                           marks with .is-active at the caret position -- see
+                           initCodeInput(). aria-label stands in for the visible
+                           label this field doesn't have. {% endcomment %}
                         <input id="id_code" class="code-input" type="text" name="code" inputmode="numeric"
                                autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"
-                               required autofocus>
+                               aria-label="Code" required autofocus>
+                        <span class="code-cells" aria-hidden="true">
+                            <span class="code-cell"></span>
+                            <span class="code-cell"></span>
+                            <span class="code-cell"></span>
+                            <span class="code-cell"></span>
+                            <span class="code-cell"></span>
+                            <span class="code-cell"></span>
+                        </span>
                     </p>
                     {% for error in form.code.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
                 </div>

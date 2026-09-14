@@ -831,25 +831,46 @@
   }
 
   /* --- Verify-code auto-advance --------------------------------------------
-     The code field (accounts/verify.html) is one input, not six boxes, so
-     autocomplete="one-time-code" and paste both work -- see the auth design
-     notes. This only adds the JS-only conveniences on top of a control that
-     already works without it: strip anything typed that isn't a digit, and
-     submit automatically once six are in, so the reader never has to find
-     the button. The resend button gets a live countdown mirroring the
-     server's 60-second cooldown (accounts/codes.py's RESEND_COOLDOWN); with
-     JS off the button is simply always enabled, and the server-side cooldown
-     still refuses an early click with its own message. */
+     The code field (accounts/verify.html) is one real input, not six, so
+     autocomplete="one-time-code" and paste both work, and it renders its own
+     digits -- see the auth design notes. On top of a control that already
+     works with JS off, this: strips anything typed that isn't a digit and
+     submits automatically once six are in, so the reader never has to find
+     the button; and marks whichever one of the six decorative `.code-cell`
+     boxes drawn behind the input (auth.css) holds the most recently typed
+     digit with .is-active, so each box's border turns lime the instant its
+     digit lands -- a highlight only, never what makes a typed digit visible
+     in the first place. The resend button gets a live
+     countdown mirroring the server's 60-second cooldown (accounts/codes.py's
+     RESEND_COOLDOWN); with JS off the button is simply always enabled, and
+     the server-side cooldown still refuses an early click with its own
+     message. */
 
   function initCodeInput() {
     var card = document.querySelector("[data-verify-form]");
     if (!card) return;
 
     var input = card.querySelector(".code-input");
-    if (input) {
+    var cells = card.querySelectorAll(".code-cell");
+    if (input && cells.length) {
+      // Re-run on every event that can move the caret without changing the
+      // value (arrow keys, a click) as well as on "input" itself. Highlights
+      // the cell just *behind* the caret -- the one holding the digit most
+      // recently typed -- not the empty one still waiting for it, so typing
+      // a digit is what lights its own box up (an empty value has nothing
+      // behind the caret, so that case falls back to cell 0, ready to type).
+      var syncActiveCell = function () {
+        var pos = input.selectionStart == null ? input.value.length : input.selectionStart;
+        var caretIndex = Math.min(Math.max(pos - 1, 0), cells.length - 1);
+        cells.forEach(function (cell, i) {
+          cell.classList.toggle("is-active", document.activeElement === input && i === caretIndex);
+        });
+      };
+
       input.addEventListener("input", function () {
         var digits = input.value.replace(/\D/g, "").slice(0, 6);
         input.value = digits;
+        syncActiveCell();
         if (digits.length === 6 && input.form) {
           // requestSubmit() (not submit()) deliberately: submit() bypasses
           // the form's "submit" event entirely, which would silently skip
@@ -860,6 +881,17 @@
           else input.form.submit();
         }
       });
+
+      ["keyup", "click", "focus"].forEach(function (evt) {
+        input.addEventListener(evt, syncActiveCell);
+      });
+      input.addEventListener("blur", function () {
+        cells.forEach(function (cell) {
+          cell.classList.remove("is-active");
+        });
+      });
+
+      syncActiveCell();
     }
 
     var resendBtn = card.querySelector("[data-resend-button]");
