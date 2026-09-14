@@ -1515,6 +1515,39 @@ input[type="email"]:focus {
   white-space: nowrap;
 }
 
+/* The signed-in twin of .signin-btn--header, same reasoning: hidden here,
+   shown only in the mobile nav block below. Trimmed to the icon-buttons'
+   34px row height the way that chip is.
+
+   Unlike that fixed-text chip, a username is arbitrary length, and it turns
+   out flex-shrink alone can't be trusted to keep it off a second line: with
+   .nav's own flex-wrap, the browser decides what fits on row one using each
+   item's *un-shrunk* hypothetical size, then wraps whatever doesn't fit
+   (here, the theme toggle) to row two -- shrinking only resolves items that
+   already made the cut. A max-width, by contrast, is a real ceiling on that
+   hypothetical size (CSS Flexbox §9.2), so it's what actually keeps row one
+   from overflowing in the first place -- confirmed against a live phone
+   width sweep (320-680px) with a 10-character username, the length that
+   first broke this. Sized to leave room for a short name, not a long one,
+   which still ellipsizes rather than reading in full -- the disc alone
+   (flex:none, never shrinks) is what stays reliably tappable and
+   identifiable at every width. */
+.account-menu--header {
+  display: none;
+}
+
+.account-menu--header .account-trigger {
+  height: 34px;
+  padding-block: 0;
+  padding-right: var(--space-3);
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.account-menu--header .menu-label {
+  max-width: 4.5rem;
+}
+
 .signin-icon {
   width: 0.85rem;
   height: 0.85rem;
@@ -1642,37 +1675,13 @@ input[type="email"]:focus {
   mask-image: url("../img/icons/logout.png");
 }
 
-/* Inside the open mobile menu the account menu is one more stacked section,
-   not a dropdown: its panel opens in place under the username instead of
-   floating over the page below the menu. `html.has-js .nav-links a` gives
-   every menu link a row divider at (0,2,2) specificity, so these overrides
-   carry the extra .account-menu class to outrank it -- including the <a>
-   right before the menu, which would otherwise double the header's rule. */
+/* Inside the open mobile menu the account menu doesn't appear at all -- the
+   .account-menu--header twin in the header row (base.html) covers a signed-
+   in reader instead, the same way .nav-links a.signin-btn below cedes to
+   .signin-btn--header. */
 @media (max-width: 680px) {
-  html.has-js .nav-links > a:has(+ .account-menu),
-  html.has-js .nav-links .account-menu a {
-    border-bottom: none;
-  }
-
   html.has-js .nav-links .account-menu {
-    flex-direction: column;
-    border-top: var(--hairline);
-  }
-
-  html.has-js .nav-links .account-panel {
-    position: static;
-    translate: none;
-    width: auto;
-    min-width: 0;
-    max-width: none;
-    max-height: none;
-    margin: 0 0 var(--space-3);
-    padding: 0;
-    border: none;
-    border-radius: 0;
-    background: none;
-    box-shadow: none;
-    animation: none;
+    display: none;
   }
 }
 
@@ -2814,8 +2823,19 @@ html.has-js .bio-body.is-collapsed {
     display: none;
   }
 
-  /* The chip already took the auto margin; pull the hamburger in beside it. */
-  html.has-js .signin-btn--header + .nav-toggle {
+  /* Signed in, the account trigger takes the same spot the Sign in chip
+     would -- the reader's own account is exactly as findable either way,
+     never a hamburger-menu-only affordance. */
+  html.has-js .account-menu--header {
+    display: inline-flex;
+    order: 1;
+    margin-left: auto;
+  }
+
+  /* Whichever chip is actually in the DOM (signed out vs. signed in) took
+     the auto margin; pull the hamburger in beside it either way. */
+  html.has-js .signin-btn--header + .nav-toggle,
+  html.has-js .account-menu--header + .nav-toggle {
     margin-left: calc(var(--space-2) - var(--space-4));
   }
 
@@ -2890,7 +2910,29 @@ html.has-js .bio-body.is-collapsed {
     display: none;
   }
 
-  html.has-js .signin-btn--header ~ .theme-toggle {
+  /* The disc alone still opens the menu and still identifies the account;
+     the username itself goes the .visually-hidden route (theoria.css's own
+     recipe, inlined here) rather than display:none, so it's still there for
+     a screen reader even though the row has no room left to show it. */
+  html.has-js .account-menu--header .menu-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  html.has-js .account-menu--header .account-trigger {
+    gap: 0;
+    padding-right: var(--space-3);
+  }
+
+  html.has-js .signin-btn--header ~ .theme-toggle,
+  html.has-js .account-menu--header ~ .theme-toggle {
     margin-left: calc(var(--space-2) - var(--space-4));
   }
 }

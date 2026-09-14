@@ -114,6 +114,30 @@
                 <span class="signin-icon" aria-hidden="true"></span>
                 Sign in
             </a>
+            {% else %}
+            {% comment %} Phone-width twin of the nav's account menu, same
+               reasoning as the Sign in chip above: a signed-in reader's own
+               account is not something a hamburger should be able to hide.
+               A second, independent instance of the same
+               trigger/panel markup (initAccountMenu() wires up every
+               [data-account-menu] it finds), not a CSS repositioning of the
+               one inside .nav-links -- that one stacks inline for the open
+               phone menu and this one floats a popover, two different
+               layouts the same markup can't serve at once. {% endcomment %}
+            <div class="menu account-menu account-menu--header" data-account-menu>
+                <a href="{% url 'profile' %}" class="menu-trigger account-trigger" data-account-trigger
+                   aria-haspopup="true" aria-expanded="false"{% if request.resolver_match.url_name == "profile" %} aria-current="page"{% endif %}>
+                    <span class="account-disc" aria-hidden="true">{{ request.user.username|slice:":1"|upper }}</span>
+                    <span class="menu-label">{{ request.user.username }}</span>
+                </a>
+                <div class="menu-panel account-panel" hidden data-account-panel>
+                    <a class="menu-option account-option account-option--profile" href="{% url 'profile' %}">Your account</a>
+                    <form method="post" action="{% url 'accounts:logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="menu-option account-option account-option--signout">Sign out</button>
+                    </form>
+                </div>
+            </div>
             {% endif %}
             {% comment %} Hamburger, mobile-only (see the has-js CSS gate on
                .nav-toggle). Two glyphs stacked and opacity-swapped by
