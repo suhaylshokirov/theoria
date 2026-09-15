@@ -456,34 +456,43 @@
   text-align: center;
 }
 
-/* The resend control reads as a quiet text link, not a second call to
-   action -- the code-entry button above is the one lime element on the
-   page (see the design notes: lime marks a measurement, not a form). */
+/* Was a bare text link; now the sitewide secondary-action pill --
+   background var(--sheet-2), no border, bold, mass instead of a hairline --
+   the same family as .collection-action/.chip/.pagination a. Still not
+   lime at rest: the code-entry button above stays the one lime element on
+   the page (lime marks a measurement, not a form), so this only *fills* to
+   the lime wash on hover, same as those. */
 .auth-resend {
   margin-top: var(--space-5);
   text-align: center;
 }
 
 .auth-resend button {
-  background: none;
+  min-height: 2rem;
+  padding: var(--space-2) var(--space-4);
+  background: var(--sheet-2);
   border: none;
-  color: var(--ink-muted);
-  font-family: inherit;
-  font-weight: inherit;
-  font-stretch: inherit;
-  text-transform: none;
-  letter-spacing: normal;
-  padding: 0;
+  border-radius: var(--radius-pill);
+  color: var(--ink);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
 }
 
 .auth-resend button:hover:not(:disabled) {
-  color: var(--ink);
-  background: none;
-  text-decoration: underline;
+  background: var(--lime-wash);
+  color: var(--lime-deep);
+  text-decoration: none;
 }
 
 .auth-resend button:disabled {
+  background: var(--sheet-2);
   color: var(--ink-faint);
   cursor: default;
 }
