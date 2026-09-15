@@ -75,4 +75,4 @@ jobs:
           git config user.email "theoria-refresh-bot@users.noreply.github.com"
           git add ops/refresh-history.md
           git commit -m "nightly-refresh: run ${{ github.run_number }} [skip ci]" || exit 0
-          git push
+          git push || echo "::warning::Could not push ops/refresh-history.md; continuing because refresh already completed."
