@@ -348,10 +348,17 @@
      keep in sync. initCodeInput() only ever adds the .is-active box behind
      whichever digit sits under the caret; it was never responsible for
      making typed digits visible, and now can't be. */
+  /* One pitch wider than the six cells: letter-spacing is also added after
+     the sixth digit, so with the caret past it the text outgrows a 100%-wide
+     input and the browser scrolls it sideways to keep the caret in view --
+     every digit slides left out of its box the moment the last one lands.
+     The spare pitch leaves room for that trailing spacing; clip-path hides
+     it (and the caret parked in it) so nothing draws outside the cells. */
   position: absolute;
-  inset: 0;
-  width: 100%;
+  inset: 0 auto 0 0;
+  width: calc(100% + var(--cell) + var(--space-3));
   height: 100%;
+  clip-path: inset(0 calc(var(--cell) + var(--space-3)) 0 0);
   margin: 0;
   padding: 0;
   border: none;
@@ -366,7 +373,9 @@
      boxes, not just the cell -- .code-cells has no trailing gap after the
      last box, so the total spread still matches its rendered width. */
   letter-spacing: calc(var(--cell) + var(--space-3) - 1ch);
-  text-indent: calc((var(--cell) + var(--space-3) - 1ch) / 2);
+  /* Centres digit 1 in cell 1: (cell - glyph) / 2. The gap is not halved in
+     here -- it sits after a cell, not around it. */
+  text-indent: calc((var(--cell) - 1ch) / 2);
 }
 
 /* Red text inside the card, right where the reader is looking -- field
