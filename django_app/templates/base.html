@@ -90,7 +90,7 @@
     </script>
     <script defer src="{% static 'js/theoria.js' %}"></script>
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}" data-signed-in="{% if request.user.is_authenticated %}1{% else %}0{% endif %}">
     <a class="skip-link" href="#content">Skip to content</a>
 
     <header class="site-header">

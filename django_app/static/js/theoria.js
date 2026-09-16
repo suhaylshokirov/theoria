@@ -1097,15 +1097,22 @@
   }
 
   /* --- Collection actions (Like / Watch later / Add to top) ---------------
-     Toggling one of these pills is a same-page state flip -- reload the
-     page for it and the icon-fill bloom (theoria.css) never gets a chance
-     to play. Each form's submit is intercepted and replayed as a fetch
-     that asks the view for JSON instead of a redirect; only when that
-     exact shape comes back does the button's classes flip in place. Any
-     other outcome -- fetch missing, a network error, a non-OK status, HTML
-     back instead of JSON (the anonymous-user login redirect the same POST
-     would otherwise 302 into) -- falls back to a real form.submit(), so
-     the no-JS behaviour is still the ultimate fallback. */
+     Optimistic: the pill flips (and blooms) the instant it's pressed, and
+     the request catches up behind it. Waiting on the round-trip first --
+     Vercel function, then Neon -- made every press feel laggy, and worse
+     after either had gone idle.
+
+     Presses are sent one at a time, in order, against the toggle endpoint,
+     so however fast someone taps, the server lands on the same state as the
+     pill. Once the queue drains, the last reply is taken as the truth and
+     the pill snaps to it (without replaying the bloom) if another tab
+     changed things in the meantime.
+
+     Failure paths: HTML back instead of JSON (the anonymous-user login
+     redirect) replays as a real form.submit(), same as with JS off. A
+     network error or non-OK status reloads the page instead -- after
+     optimistic flips, the page itself is the only honest record of which
+     presses actually landed. */
   function initCollectionActions() {
     if (!window.fetch) return;
 
@@ -1113,47 +1120,108 @@
       var btn = form.querySelector(".collection-action");
       if (!btn) return;
 
-      var busy = false;
+      var queue = Promise.resolve();
+      var pending = 0;
+      var failed = false;
 
-      form.addEventListener("submit", function (event) {
-        if (busy) {
-          event.preventDefault();
-          return;
+      function show(on, animate) {
+        btn.classList.toggle("is-selected", on);
+        btn.setAttribute("aria-pressed", String(on));
+        btn.classList.remove("just-toggled-on");
+        if (on && animate) {
+          // Force a reflow between remove and re-add so the swell replays.
+          void btn.offsetWidth;
+          btn.classList.add("just-toggled-on");
         }
-        event.preventDefault();
-        busy = true;
+      }
 
-        fetch(form.getAttribute("action"), {
+      function send() {
+        if (failed) return null;
+        return fetch(form.getAttribute("action"), {
           method: "POST",
           body: new FormData(form),
           headers: { Accept: "application/json" },
           credentials: "same-origin",
-        })
-          .then(function (response) {
-            var contentType = response.headers.get("Content-Type") || "";
-            if (!response.ok || contentType.indexOf("application/json") === -1) {
-              throw new Error("collection-toggle: non-JSON response");
-            }
+        }).then(function (response) {
+          var contentType = response.headers.get("Content-Type") || "";
+          if (response.ok && contentType.indexOf("application/json") !== -1) {
             return response.json();
-          })
+          }
+          failed = true;
+          if (response.ok) {
+            form.submit();
+          } else {
+            window.location.reload();
+          }
+          return null;
+        });
+      }
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (failed) return;
+
+        show(!btn.classList.contains("is-selected"), true);
+        pending += 1;
+
+        queue = queue
+          .then(send)
           .then(function (data) {
-            var on = !!data.selected;
-            btn.classList.toggle("is-selected", on);
-            btn.setAttribute("aria-pressed", String(on));
-            // Force a reflow between remove and re-add so the swell
-            // replays even if this same pill was already mid-animation.
-            btn.classList.remove("just-toggled-on");
-            if (on) {
-              void btn.offsetWidth;
-              btn.classList.add("just-toggled-on");
+            pending -= 1;
+            if (data && pending === 0) {
+              var truth = !!data.selected;
+              if (truth !== btn.classList.contains("is-selected")) show(truth, false);
             }
-            busy = false;
           })
           .catch(function () {
-            busy = false;
-            form.submit();
+            if (failed) return;
+            failed = true;
+            window.location.reload();
           });
       });
+    });
+  }
+
+  /* --- Signed-in state freshness ------------------------------------------
+     Every page is rendered for one sign-in state (the nav's Sign in chip vs
+     the account pill), but a browser can show a page long after rendering
+     it: the back/forward cache restores a snapshot on Back, and a phone
+     resumes a backgrounded tab as it was. Sign in on one page and return
+     to one of those, and it still offers Sign in.
+
+     Each page load records the state it was rendered for; a page coming
+     back into view -- restored from that cache, re-focused, or told by
+     another tab -- reloads itself if the latest recorded state disagrees.
+     A normal page load just records, so this can't loop. */
+  function initSignedInFreshness() {
+    var KEY = "theoria-signed-in";
+    var mine = document.body.getAttribute("data-signed-in");
+    if (mine === null) return;
+
+    try {
+      localStorage.setItem(KEY, mine);
+    } catch (e) {
+      return;
+    }
+
+    function check() {
+      var latest;
+      try {
+        latest = localStorage.getItem(KEY);
+      } catch (e) {
+        return;
+      }
+      if (latest !== null && latest !== mine) window.location.reload();
+    }
+
+    window.addEventListener("pageshow", function (event) {
+      if (event.persisted) check();
+    });
+    window.addEventListener("storage", function (event) {
+      if (event.key === KEY) check();
+    });
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") check();
     });
   }
 
@@ -1179,6 +1247,7 @@
     initInlineValidation();
     initAccountMenu();
     initCollectionActions();
+    initSignedInFreshness();
   }
 
   if (document.readyState === "loading") {

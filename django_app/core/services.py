@@ -13,21 +13,23 @@ from django.db.models import Max
 from core.models import Collection, CollectionItem
 
 
-def ensure_default_collections(user):
-    names = {
-        Collection.LIKED: "Liked",
-        Collection.WATCH_LATER: "Watch later",
-        Collection.TOP: "Top",
-    }
-    for kind, name in names.items():
-        Collection.objects.get_or_create(user=user, kind=kind, defaults={"name": name})
+_DEFAULT_NAMES = {
+    Collection.LIKED: "Liked",
+    Collection.WATCH_LATER: "Watch later",
+    Collection.TOP: "Top",
+}
 
 
 def _collection(user, kind):
-    if kind not in {choice[0] for choice in Collection.KINDS}:
+    # Only the one collection being touched is fetched (or lazily created).
+    # This used to get_or_create all three on every call -- 3 extra round-trips
+    # to the auth database on each Like click, for rows the call never read.
+    if kind not in _DEFAULT_NAMES:
         raise ValueError("Unknown collection.")
-    ensure_default_collections(user)
-    return Collection.objects.get(user=user, kind=kind)
+    collection, _ = Collection.objects.get_or_create(
+        user=user, kind=kind, defaults={"name": _DEFAULT_NAMES[kind]}
+    )
+    return collection
 
 
 def _content_exists(content_type, content_id):

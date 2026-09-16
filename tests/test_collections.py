@@ -168,3 +168,43 @@ def test_remove_item_with_no_next_falls_back_to_profile():
         assert not CollectionItem.objects.filter(pk=item.pk).exists()
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_toggle_creates_only_the_collection_it_touches():
+    """A Like click used to get_or_create all three collections -- three extra
+    auth-database round-trips per press. Only the touched one is needed."""
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="collections-reader")
+    client = Client()
+    client.force_login(user)
+    try:
+        with patch("core.services._content_exists", return_value=True):
+            client.post(
+                reverse(
+                    "account:toggle_collection",
+                    kwargs={"kind": "liked", "content_type": "movie", "content_id": 550},
+                ),
+                HTTP_ACCEPT="application/json",
+            )
+        kinds = set(Collection.objects.filter(user=user).values_list("kind", flat=True))
+        assert kinds == {Collection.LIKED}
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_html_pages_are_private_and_revalidated():
+    """The nav depends on who's signed in, so no cache may reuse a page
+    rendered for a different sign-in state."""
+    response = Client().get("/this-page-does-not-exist/")
+    assert response["Content-Type"].startswith("text/html")
+    cache_control = response["Cache-Control"]
+    assert "private" in cache_control
+    assert "no-cache" in cache_control
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_views_that_set_their_own_cache_policy_keep_it():
+    response = Client().get(reverse("accounts:login"))
+    assert "no-store" in response["Cache-Control"]
