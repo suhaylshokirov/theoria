@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseBadRequest
+from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -43,9 +43,17 @@ def account(request):
 @require_POST
 def toggle_collection(request, kind, content_type, content_id):
     try:
-        toggle_collection_item(request.user, kind, content_type, content_id)
+        selected = toggle_collection_item(request.user, kind, content_type, content_id)
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
+    # The icon-fill bloom (theoria.css/theoria.js) only has something to
+    # animate if the pill doesn't reload out from under it -- so a caller
+    # that says it can read JSON gets the new state back instead of a
+    # redirect, and theoria.js falls back to a real form submit for
+    # anything else (no-JS, a network error, the anonymous-user login
+    # redirect this same request would otherwise 302 into).
+    if request.headers.get("Accept") == "application/json":
+        return JsonResponse({"selected": selected})
     return _redirect_back(request, "/")
 
 

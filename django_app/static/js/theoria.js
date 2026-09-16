@@ -1096,6 +1096,67 @@
     });
   }
 
+  /* --- Collection actions (Like / Watch later / Add to top) ---------------
+     Toggling one of these pills is a same-page state flip -- reload the
+     page for it and the icon-fill bloom (theoria.css) never gets a chance
+     to play. Each form's submit is intercepted and replayed as a fetch
+     that asks the view for JSON instead of a redirect; only when that
+     exact shape comes back does the button's classes flip in place. Any
+     other outcome -- fetch missing, a network error, a non-OK status, HTML
+     back instead of JSON (the anonymous-user login redirect the same POST
+     would otherwise 302 into) -- falls back to a real form.submit(), so
+     the no-JS behaviour is still the ultimate fallback. */
+  function initCollectionActions() {
+    if (!window.fetch) return;
+
+    document.querySelectorAll(".collection-actions form").forEach(function (form) {
+      var btn = form.querySelector(".collection-action");
+      if (!btn) return;
+
+      var busy = false;
+
+      form.addEventListener("submit", function (event) {
+        if (busy) {
+          event.preventDefault();
+          return;
+        }
+        event.preventDefault();
+        busy = true;
+
+        fetch(form.getAttribute("action"), {
+          method: "POST",
+          body: new FormData(form),
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+        })
+          .then(function (response) {
+            var contentType = response.headers.get("Content-Type") || "";
+            if (!response.ok || contentType.indexOf("application/json") === -1) {
+              throw new Error("collection-toggle: non-JSON response");
+            }
+            return response.json();
+          })
+          .then(function (data) {
+            var on = !!data.selected;
+            btn.classList.toggle("is-selected", on);
+            btn.setAttribute("aria-pressed", String(on));
+            // Force a reflow between remove and re-add so the swell
+            // replays even if this same pill was already mid-animation.
+            btn.classList.remove("just-toggled-on");
+            if (on) {
+              void btn.offsetWidth;
+              btn.classList.add("just-toggled-on");
+            }
+            busy = false;
+          })
+          .catch(function () {
+            busy = false;
+            form.submit();
+          });
+      });
+    });
+  }
+
   function init() {
     syncThemeColor();
     // Covers all three ways the theme moves — the header toggle, an OS change
@@ -1117,6 +1178,7 @@
     initAuthFormSubmitState();
     initInlineValidation();
     initAccountMenu();
+    initCollectionActions();
   }
 
   if (document.readyState === "loading") {

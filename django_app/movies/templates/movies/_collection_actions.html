@@ -2,25 +2,28 @@
     <form method="post" action="{% url 'account:toggle_collection' kind='liked' content_type=content_type content_id=content_id %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <button class="collection-action collection-action--like{% if collection_flags.liked %} is-selected{% endif %}" type="submit"{% if collection_flags.liked %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
+        <button aria-label="Like" class="collection-action collection-action--like{% if collection_flags.liked %} is-selected{% endif %}" type="submit"{% if collection_flags.liked %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
             <span class="collection-action__icon" aria-hidden="true"></span>
-            <span class="collection-action__label">Like</span>
+            <span class="collection-action__label collection-action__label--off">Like</span>
+            <span class="collection-action__label collection-action__label--on">Liked</span>
         </button>
     </form>
     <form method="post" action="{% url 'account:toggle_collection' kind='watch_later' content_type=content_type content_id=content_id %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <button class="collection-action collection-action--watch-later{% if collection_flags.watch_later %} is-selected{% endif %}" type="submit"{% if collection_flags.watch_later %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
+        <button aria-label="Watch later" class="collection-action collection-action--watch-later{% if collection_flags.watch_later %} is-selected{% endif %}" type="submit"{% if collection_flags.watch_later %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
             <span class="collection-action__icon" aria-hidden="true"></span>
-            <span class="collection-action__label">Watch later</span>
+            <span class="collection-action__label collection-action__label--off">Watch later</span>
+            <span class="collection-action__label collection-action__label--on">In Watch later</span>
         </button>
     </form>
     <form method="post" action="{% url 'account:toggle_collection' kind='top' content_type=content_type content_id=content_id %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <button class="collection-action collection-action--top{% if collection_flags.top %} is-selected{% endif %}" type="submit"{% if collection_flags.top %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
+        <button aria-label="Add to top" class="collection-action collection-action--top{% if collection_flags.top %} is-selected{% endif %}" type="submit"{% if collection_flags.top %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>
             <span class="collection-action__icon" aria-hidden="true"></span>
-            <span class="collection-action__label">Add to top</span>
+            <span class="collection-action__label collection-action__label--off">Add to top</span>
+            <span class="collection-action__label collection-action__label--on">In your Top</span>
         </button>
     </form>
 </div>
