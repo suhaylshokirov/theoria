@@ -10,6 +10,7 @@ urlpatterns = [
     path("movies/<slug:movie_slug>/", views.movie_detail, name="movie_detail"),
     path("tv/", views.series_list, name="series_list"),
     path("tv/<slug:series_slug>/", views.series_detail, name="series_detail"),
+    path("cartoons/", views.cartoon_list, name="cartoon_list"),
     path("people/", views.person_list, name="person_list"),
     path("people/<slug:person_slug>/", views.person_detail, name="person_detail"),
     # /actors/ and /directors/ survive as *indexes* — they're now filtered views

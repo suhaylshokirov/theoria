@@ -592,6 +592,133 @@ def test_series_list_genre_survives_pagination():
     assert "genre=drama" in base_query
 
 
+# ---------------------------------------------------------------------------
+# cartoon_list
+# ---------------------------------------------------------------------------
+
+
+def _cartoon_mocks(movie_mgr, series_mgr, movies=None, series=None):
+    """Wires Movie.objects/Series.objects for cartoon_list()'s shape:
+    .using().filter(Exists, Exists) [.filter(title/name__icontains=q)]
+    .annotate(imdb_rating=...) -- the annotate() call is the last queryset
+    op before the view iterates the result in Python, so its return_value is
+    set directly to the fixture list (mirroring order_by.return_value in the
+    movie_list/series_list mocks above)."""
+    movie_qs = movie_mgr.using.return_value.filter.return_value
+    movie_qs.filter.return_value = movie_qs
+    movie_qs.annotate.return_value = movies if movies is not None else []
+
+    series_qs = series_mgr.using.return_value.filter.return_value
+    series_qs.filter.return_value = series_qs
+    series_qs.annotate.return_value = series if series is not None else []
+
+    return movie_qs, series_qs
+
+
+def test_cartoon_list_returns_200_with_pagination():
+    movie = _movie(movie_id=1, title="Cartoon Movie")
+    show = _series(series_id=1, name="Cartoon Show")
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        _cartoon_mocks(movie_mgr, series_mgr, movies=[movie], series=[show])
+
+        response = client.get("/cartoons/")
+
+    assert response.status_code == 200
+    page_items = list(response.context["page_obj"])
+    assert movie in page_items
+    assert show in page_items
+    assert response.context["q"] == ""
+    assert response.context["sort"] == "newest"
+
+
+def test_cartoon_list_search_filters_movies_by_title_and_series_by_name():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        movie_qs, series_qs = _cartoon_mocks(movie_mgr, series_mgr)
+
+        response = client.get("/cartoons/", {"q": "robot"})
+
+    assert response.status_code == 200
+    movie_qs.filter.assert_called_once_with(title__icontains="robot")
+    series_qs.filter.assert_called_once_with(name__icontains="robot")
+    assert response.context["q"] == "robot"
+
+
+def test_cartoon_list_uses_exists_subqueries_not_chained_filter():
+    """Regression guard: MovieMetrics.movie and SeriesGenre.series both carry
+    primary_key=True as a fake single-column PK workaround (see their model
+    docstrings), which makes Django collapse two chained .filter(fk__x=...)
+    calls onto the same join instead of ANDing across separate rows -- silently
+    turning "animation AND family" into the always-false "genre_id = 16 AND
+    genre_id = 10751" on one row. cartoon_list() must filter with two Exists()
+    subqueries instead, which sidestep that join-reuse collapsing entirely."""
+    from django.db.models import Exists
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        _cartoon_mocks(movie_mgr, series_mgr)
+
+        client.get("/cartoons/")
+
+    movie_filter_args = movie_mgr.using.return_value.filter.call_args.args
+    assert len(movie_filter_args) == 2
+    assert all(isinstance(a, Exists) for a in movie_filter_args)
+
+    series_filter_args = series_mgr.using.return_value.filter.call_args.args
+    assert len(series_filter_args) == 2
+    assert all(isinstance(a, Exists) for a in series_filter_args)
+
+
+def test_cartoon_list_invalid_sort_falls_back_to_newest():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        _cartoon_mocks(movie_mgr, series_mgr)
+
+        response = client.get("/cartoons/", {"sort": "bogus"})
+
+    assert response.status_code == 200
+    assert response.context["sort"] == "newest"
+
+
+def test_cartoon_list_ajax_request_renders_results_fragment_only():
+    movie = _movie(movie_id=1, title="Cartoon Movie")
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        _cartoon_mocks(movie_mgr, series_mgr, movies=[movie])
+
+        response = client.get("/cartoons/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "cartoons-grid" in content
+    assert "<html" not in content
+    assert "<!DOCTYPE" not in content
+
+
+def test_cartoon_list_sort_by_title_orders_movies_and_series_together():
+    zebra_movie = _movie(movie_id=1, title="Zebra Movie")
+    aardvark_show = _series(series_id=1, name="Aardvark Show")
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        _cartoon_mocks(movie_mgr, series_mgr, movies=[zebra_movie], series=[aardvark_show])
+
+        response = client.get("/cartoons/", {"sort": "title"})
+
+    assert response.status_code == 200
+    page_items = list(response.context["page_obj"])
+    assert page_items == [aardvark_show, zebra_movie]
+
+
 @contextlib.contextmanager
 def _series_detail_mocks(series, credits=None, seasons=None, episodes=None, videos=None):
     """Mock every manager series_detail() reads (Task 87 — the SeriesCredit-

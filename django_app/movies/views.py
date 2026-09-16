@@ -3,7 +3,7 @@ from datetime import date
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, F, Max, Min, Q, Sum
+from django.db.models import Avg, Count, Exists, F, Max, Min, OuterRef, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 from django.utils.text import slugify
@@ -13,9 +13,9 @@ from core.services import collection_flags
 
 from movies.models import (
     Company, Credit, Episode, Genre, Movie, MovieCompany,
-    MovieCountry, MovieLanguage, MovieRating, MovieVideo, Person, Season,
-    Series, SeriesCompany, SeriesCountry, SeriesCredit, SeriesLanguage,
-    SeriesNetwork, SeriesRating, SeriesVideo,
+    MovieCountry, MovieLanguage, MovieMetrics, MovieRating, MovieVideo,
+    Person, Season, Series, SeriesCompany, SeriesCountry, SeriesCredit,
+    SeriesGenre, SeriesLanguage, SeriesNetwork, SeriesRating, SeriesVideo,
 )
 
 MOVIES_PER_PAGE = 24
@@ -60,6 +60,18 @@ MOVIE_SORTS = {
     "revenue": F("revenue").desc(nulls_last=True),
     "title": F("title").asc(),
 }
+
+# cartoon_list() has no field of its own to test — there's no certification
+# or audience column in the warehouse (TMDB doesn't publish one at the
+# /movie or /tv endpoints this catalog ingests). "Children's cartoons" is
+# approximated as Animation (genre_id 16) co-tagged with the one TMDB genre
+# each side uses to mark child-audience content: Family (10751) for movies,
+# Family or Kids (10751, 10762) for TV. Animation alone is too broad — it
+# also carries adult-audience anime and adult-animated sitcoms with no
+# Family/Kids co-tag.
+CARTOON_ANIMATION_GENRE_ID = 16
+CARTOON_MOVIE_AUDIENCE_GENRE_ID = 10751
+CARTOON_SERIES_AUDIENCE_GENRE_IDS = (10751, 10762)
 
 
 def _approx(n):
@@ -327,6 +339,110 @@ def _series_year_span(series):
         return f"{start}–"
     end = series.last_air_date.year
     return str(start) if start == end else f"{start}–{end}"
+
+
+CARTOON_SORTS = ("newest", "rating", "title")
+
+
+def _cartoon_newest_key(item):
+    # Nulls-last descending by date, the Python equivalent of
+    # F("...").desc(nulls_last=True) — needed here because the combined
+    # feed is a plain Python list, not a queryset.
+    if item.sort_date is None:
+        return (1, 0)
+    return (0, -item.sort_date.toordinal())
+
+
+def _cartoon_rating_key(item):
+    if item.imdb_rating is None:
+        return (1, 0)
+    return (0, -float(item.imdb_rating))
+
+
+def cartoon_list(request):
+    """Browsable cartoon catalog: animated movies and shows made for younger
+    viewers (see the CARTOON_* constants above), merged into one feed since a
+    cartoon reader browses movies and shows as one shelf, not two catalogs —
+    unlike /movies/ and /tv/, which stay genuinely separate schemas.
+
+    No genre picker: the facet this page filters on already *is* a fixed
+    genre pair, so offering a single-option "Animation" dropdown back on top
+    of it would be a choice of one.
+    """
+    q = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "newest")
+    if sort not in CARTOON_SORTS:
+        sort = "newest"
+
+    # Two Exists() subqueries, not two chained .filter(moviemetrics__...)
+    # calls: MovieMetrics.movie (like SeriesGenre.series below) carries
+    # primary_key=True as a fake single-column PK workaround (see both
+    # models' docstrings) — Django reads that as "this relation returns at
+    # most one row" and collapses chained filters against it onto the same
+    # join, silently turning "animation AND family" into the impossible
+    # "genre_id = 16 AND genre_id = 10751" on one row. Exists() sidesteps
+    # the join-reuse logic entirely.
+    movies = Movie.objects.using("warehouse").filter(
+        Exists(
+            MovieMetrics.objects.using("warehouse")
+            .filter(movie_id=OuterRef("pk"), genre_id=CARTOON_ANIMATION_GENRE_ID)
+        ),
+        Exists(
+            MovieMetrics.objects.using("warehouse")
+            .filter(movie_id=OuterRef("pk"), genre_id=CARTOON_MOVIE_AUDIENCE_GENRE_ID)
+        ),
+    )
+    if q:
+        movies = movies.filter(title__icontains=q)
+    movies = movies.annotate(
+        imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
+    )
+
+    series = Series.objects.using("warehouse").filter(
+        Exists(
+            SeriesGenre.objects.using("warehouse")
+            .filter(series_id=OuterRef("pk"), genre_id=CARTOON_ANIMATION_GENRE_ID)
+        ),
+        Exists(
+            SeriesGenre.objects.using("warehouse")
+            .filter(series_id=OuterRef("pk"), genre_id__in=CARTOON_SERIES_AUDIENCE_GENRE_IDS)
+        ),
+    )
+    if q:
+        series = series.filter(name__icontains=q)
+    series = series.annotate(
+        imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb"))
+    )
+
+    items = []
+    for movie in movies:
+        movie.kind = "movie"
+        movie.sort_date = movie.release_date
+        movie.sort_title = movie.title
+        items.append(movie)
+    for show in series:
+        show.kind = "series"
+        show.sort_date = show.first_air_date
+        show.sort_title = show.name
+        show.year_span = _series_year_span(show)
+        items.append(show)
+
+    if sort == "title":
+        items.sort(key=lambda item: item.sort_title.lower())
+    elif sort == "rating":
+        items.sort(key=_cartoon_rating_key)
+    else:
+        items.sort(key=_cartoon_newest_key)
+
+    page_obj = Paginator(items, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
+
+    context = {
+        "page_obj": page_obj, "q": q, "sort": sort,
+        "base_query": urlencode({"q": q, "sort": sort}),
+    }
+    if _is_ajax(request):
+        return render(request, "movies/_cartoon_results.html", context)
+    return render(request, "movies/cartoon_list.html", context)
 
 
 # ?sort= values accepted by person_list, mapped to an order_by expression.
