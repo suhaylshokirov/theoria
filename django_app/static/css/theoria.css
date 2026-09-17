@@ -583,95 +583,29 @@ main.container {
 
 /* --- Personal collections --------------------------------------------------- */
 
-.account-page {
-  width: min(100%, var(--measure));
-  margin-inline: auto;
-  padding-block: var(--space-8) var(--space-10);
-}
-
-.account-collections {
-  display: grid;
-  gap: var(--space-6);
-  margin-top: var(--space-8);
-}
-
-.account-collection {
-  padding: var(--space-6);
-}
-
-.collection-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: var(--hairline);
-}
-
-.collection-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5);
-  padding-block: var(--space-4);
-  border-bottom: var(--hairline);
-}
-
-.collection-item__type {
-  display: block;
-  margin-top: var(--space-1);
-  color: var(--ink-faint);
-}
-
-.collection-item__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: none;
-}
-
-.collection-item__actions form {
-  margin: 0;
-}
-
-.collection-item__actions button,
-.collection-action {
-  min-height: 2rem;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius-pill);
-  background: var(--paper);
-  color: var(--ink-muted);
-  font-family: var(--font-label);
-  font-size: var(--text-3xs);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.collection-item__actions button:hover {
-  border-color: var(--lime-mark);
-  background: var(--lime-wash);
-  color: var(--lime-deep);
-}
-
-.collection-item__actions .collection-remove {
-  border-color: transparent;
-  background: transparent;
-  color: var(--ink-faint);
-}
-
-/* Additive to the shared button rule above (kept untouched so the collections
-   list page isn't affected): a filled pill, not an outline one -- mass
-   instead of a hairline. Icons are static SVGs, masked the same way the
-   nav's account icons are, so the outline glyph tints with the button's own
-   text colour at rest and hover -- no separate colour to keep in sync. */
+/* The account page ("/me/") has its own list now — see static/css/account.css
+   — but a movie/series detail page's Like/Watch later/Top pills
+   (`.collection-action`) still use this pill shape: a filled pill, not an
+   outline one -- mass instead of a hairline. Icons are static SVGs, masked
+   the same way the nav's account icons are, so the outline glyph tints with
+   the button's own text colour at rest and hover -- no separate colour to
+   keep in sync. */
 .collection-action {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: var(--space-2);
+  min-height: 2rem;
+  padding: var(--space-2) var(--space-3);
   border: none;
+  border-radius: var(--radius-pill);
   background: var(--sheet-2);
   color: var(--ink);
+  font-family: var(--font-label);
   font-weight: 700;
+  font-size: var(--text-3xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .collection-action:hover {
@@ -801,17 +735,6 @@ main.container {
 
 .collection-actions form {
   margin: 0;
-}
-
-@media (max-width: 680px) {
-  .collection-item {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .collection-item__actions {
-    width: 100%;
-  }
 }
 
 @media (prefers-color-scheme: dark) {

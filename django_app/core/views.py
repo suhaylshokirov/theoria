@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 from django.views.decorators.http import require_POST
 
 from core.models import Collection, CollectionItem
@@ -13,6 +14,10 @@ from core.services import (
     remove_collection_item,
     toggle_collection_item,
 )
+
+# /me/ pages each collection independently, so a reader paging Liked never
+# resets Watch later or Top back to page 1.
+ACCOUNT_ITEMS_PER_PAGE = 10
 
 
 def _redirect_back(request, fallback):
@@ -32,11 +37,35 @@ def _redirect_back(request, fallback):
 
 @login_required
 def account(request):
-    cards = []
+    all_kinds = [kind for kind, _ in Collection.KINDS]
+    rows_by_kind = {kind: collection_rows(request.user, kind) for kind in all_kinds}
+
+    sections = []
+    counts = {}
     for kind, label in Collection.KINDS:
-        collection, items = collection_rows(request.user, kind)
-        cards.append({"collection": collection, "label": label, "items": items})
-    return render(request, "core/account.html", {"cards": cards})
+        collection, rows = rows_by_kind[kind]
+        page_obj = Paginator(rows, ACCOUNT_ITEMS_PER_PAGE).get_page(request.GET.get(kind))
+        counts[kind] = page_obj.paginator.count
+        # Paging Liked keeps whatever page Watch later/Top happen to be on —
+        # each section's pager only needs to know about the OTHER two.
+        other_params = {
+            other: request.GET[other]
+            for other in all_kinds
+            if other != kind and request.GET.get(other)
+        }
+        sections.append({
+            "kind": kind,
+            "label": label,
+            "collection": collection,
+            "page_obj": page_obj,
+            "base_query": urlencode(other_params),
+        })
+
+    return render(
+        request,
+        "core/account.html",
+        {"sections": sections, "counts": counts},
+    )
 
 
 @login_required

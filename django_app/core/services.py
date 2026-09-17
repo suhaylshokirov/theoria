@@ -8,7 +8,7 @@ signed-in user's `Collection`/`CollectionItem` rows.
 from __future__ import annotations
 
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Max, Q
 
 from core.models import Collection, CollectionItem
 
@@ -97,16 +97,30 @@ def collection_rows(user, kind):
     items = list(collection.items.all())
     movie_ids = [item.content_id for item in items if item.content_type == CollectionItem.MOVIE]
     series_ids = [item.content_id for item in items if item.content_type == CollectionItem.SERIES]
+    # Imported here, not at module level: movies.views imports core.services
+    # (for collection_flags), so an eager import back the other way would be
+    # circular. By the time this function runs, movies.views has already
+    # finished importing, so this just fetches it from sys.modules.
     from movies.models import Movie, Series
+    from movies.views import _series_year_span
 
+    # Same filtered annotation movies/views.py puts on every poster-card
+    # queryset (Task 68) — a card rendered from this list needs its rating
+    # badge to match what the same title shows everywhere else on the site.
     movies = {
         obj.movie_id: obj
-        for obj in Movie.objects.using("warehouse").filter(movie_id__in=movie_ids)
+        for obj in Movie.objects.using("warehouse")
+        .filter(movie_id__in=movie_ids)
+        .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
     }
-    series = {
-        obj.series_id: obj
-        for obj in Series.objects.using("warehouse").filter(series_id__in=series_ids)
-    }
+    series = {}
+    for obj in (
+        Series.objects.using("warehouse")
+        .filter(series_id__in=series_ids)
+        .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
+    ):
+        obj.year_span = _series_year_span(obj)
+        series[obj.series_id] = obj
     rows = []
     for item in items:
         item.content = (

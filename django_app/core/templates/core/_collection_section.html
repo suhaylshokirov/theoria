@@ -1,0 +1,79 @@
+{% comment %} One collection block on the account page (Liked / Watch later /
+   Top) — the same shared poster card used in every other grid on the site,
+   inside a ranked list with a remove control and, for Top only, reorder
+   arrows. Params (pass with `only`):
+     kind       : "liked" | "watch_later" | "top" — also this section's id
+                  and the pager's query-string param, so each of the three
+                  sections pages on its own key.
+     label      : the collection's display name ("Liked", "Watch later", "Top").
+     page_obj   : this section's Page, from Paginator(rows, ...).get_page(...).
+     base_query : the OTHER two sections' current page params, already
+                  urlencoded — see movies/_pager.html.
+     request, csrf_token : passed through explicitly because `only` cuts the
+                  parent context off — this partial builds its own remove/
+                  move forms (see movies/_collection_actions.html for the
+                  same pattern) and needs both for `next` and
+                  {% csrf_token %}. {% endcomment %}
+<section class="sheet-section account-section" id="{{ kind }}" aria-labelledby="account-section-{{ kind }}-title">
+    <div class="section-head">
+        <h2 id="account-section-{{ kind }}-title">{{ label }}</h2>
+        <span class="section-note">
+            {{ page_obj.paginator.count }} title{{ page_obj.paginator.count|pluralize }}{% if page_obj.paginator.num_pages > 1 %} · Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}{% endif %}
+        </span>
+    </div>
+
+    {% if page_obj.paginator.count %}
+    <ol class="poster-grid account-grid">
+        {% for item in page_obj %}
+        {% with rank=page_obj.start_index|add:forloop.counter0 %}
+        <li class="account-card">
+            <span class="account-card__type label">{% if kind == "top" %}No. {{ rank }} · {% endif %}{{ item.get_content_type_display }}</span>
+
+            <form method="post" action="{% url 'account:remove_item' kind item.id %}" class="account-card__remove-form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}#{{ kind }}">
+                <button type="submit" class="account-card__remove" aria-label="Remove {% firstof item.content.title item.content.name %} from {{ label }}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M6 6l12 12M18 6L6 18"/>
+                    </svg>
+                </button>
+            </form>
+
+            {% if item.content_type == "movie" %}
+            {% include "movies/_movie_card.html" with movie=item.content only %}
+            {% else %}
+            {% include "movies/_series_card.html" with series=item.content only %}
+            {% endif %}
+
+            {% if kind == "top" %}
+            <div class="account-card__moves">
+                <form method="post" action="{% url 'account:move_item' kind item.id 'up' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}#{{ kind }}">
+                    <button type="submit" aria-label="Move {% firstof item.content.title item.content.name %} up"{% if rank == 1 %} disabled{% endif %}>↑</button>
+                </form>
+                <form method="post" action="{% url 'account:move_item' kind item.id 'down' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}#{{ kind }}">
+                    <button type="submit" aria-label="Move {% firstof item.content.title item.content.name %} down"{% if rank == page_obj.paginator.count %} disabled{% endif %}>↓</button>
+                </form>
+            </div>
+            {% endif %}
+        </li>
+        {% endwith %}
+        {% endfor %}
+    </ol>
+    {% else %}
+    <p class="empty">
+        {% if kind == "liked" %}
+        Nothing liked yet. Press Like on any movie or show and it will be kept here. <a href="{% url 'movies:movie_list' %}">Browse movies</a>.
+        {% elif kind == "watch_later" %}
+        Nothing saved for later yet. Add a movie or show to Watch later and it will be kept here. <a href="{% url 'movies:movie_list' %}">Browse movies</a>.
+        {% else %}
+        Nothing in your Top yet. Add a movie or show to it and it will be kept here. <a href="{% url 'movies:movie_list' %}">Browse movies</a>.
+        {% endif %}
+    </p>
+    {% endif %}
+
+    {% include "movies/_pager.html" with page_obj=page_obj param=kind base_query=base_query anchor=kind only %}
+</section>

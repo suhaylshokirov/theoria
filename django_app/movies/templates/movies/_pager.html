@@ -8,6 +8,12 @@
                  know which params any given page carries, and building it in
                  Python avoids a stray trailing `&` or a bare `?q=&sort=` when
                  the other params are empty.
+   anchor      : optional — an element id (no leading '#') appended as a
+                 fragment to both the prev/next hrefs. /me/ pages three
+                 collections independently on one page, so paging one needs
+                 to land the reader back on that section, not the top of the
+                 page. Omitted (the default for every other caller), the
+                 links carry no fragment, exactly as before.
 
    This is the *server-side* pager, for result sets too large to hand a
    browser whole (/movies/ is 1,215 rows, /people/ is 122,685). The movie
@@ -17,11 +23,11 @@
 {% if page_obj.has_other_pages %}
 <nav class="pagination" aria-label="Pagination">
     {% if page_obj.has_previous %}
-    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.previous_page_number }}">← Previous</a>
+    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.previous_page_number }}{% if anchor %}#{{ anchor }}{% endif %}">← Previous</a>
     {% endif %}
     <span class="page-state">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
     {% if page_obj.has_next %}
-    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.next_page_number }}">Next →</a>
+    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.next_page_number }}{% if anchor %}#{{ anchor }}{% endif %}">Next →</a>
     {% endif %}
 </nav>
 {% endif %}

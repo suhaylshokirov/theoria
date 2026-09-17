@@ -1,0 +1,203 @@
+/* Theoria — Account page only ("/me/"). The reader's own shelf: three
+   collections (Liked / Watch later / Top) rendered with the same poster-card
+   grid every other page uses, plus the handful of controls only this page
+   needs — a type badge, a remove button, Top's reorder arrows.
+
+   Per the contract in theoria.css, this file only ADDS components; it never
+   restyles a shared one. Section-to-section rhythm is left entirely to
+   theoria.css's `.sheet-section + .sheet-section` / `.sheet-head +
+   .sheet-section` rule — the hero below nests its stats/nav/sign-out inside
+   one .sheet-head so the first collection section still gets that rule's
+   gap for free, with nothing here fighting it. */
+
+/* Hero title — the .display type role (Archivo, expanded weight, uppercase)
+   at the same size other pages reserve for a headline, not the smaller
+   .sheet-title used for a record's own name. Page-scoped so .display keeps
+   its default, unsized shape on every page that isn't this one. */
+.account-title {
+  font-size: var(--text-display);
+}
+
+/* .stats and .chips have no opinion of their own on the gap before them —
+   each page that stacks one below a sheet-head sets that spacing itself.
+   Scoped to .sheet-head rather than added to the shared rule, which stays
+   untouched for the pages that use it without a stat row. */
+.sheet-head .stats {
+  margin-top: var(--space-7);
+}
+
+.account-jumpnav {
+  margin-top: var(--space-6);
+}
+
+.account-signout-form {
+  margin-top: var(--space-7);
+}
+
+/* Outlined, not filled — the global `button` rule fills lime, which this
+   page reserves for a measured figure, not "sign out". A hairline pill in
+   .pagination a's resting shape, with the same lime-wash hover every other
+   outline control on the site already uses. */
+.account-signout {
+  min-height: 44px;
+  padding: var(--space-3) var(--space-6);
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.account-signout:hover {
+  background: var(--lime-wash);
+  border-color: var(--lime-mark);
+  color: var(--lime-deep);
+}
+
+/* --- Collection grid --------------------------------------------------- */
+
+.account-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .account-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1024px) {
+  .account-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1280px) {
+  .account-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+/* Positioning context for the badge/remove overlays below — its top-left
+   corner coincides with the shared card's own, since the card is the first
+   thing in flow inside it. */
+.account-card {
+  position: relative;
+}
+
+/* Type badge, overlaid on the poster's top-left corner. A plate rather than
+   a solid fill so it reads over any poster art; pointer-events:none keeps
+   it from stealing the click the poster's own link needs. Rank ("No. 3")
+   is real information for Top, so it stays in the visible label text, not
+   behind aria-hidden. */
+.account-card__type {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 1;
+  background: var(--paper);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-3);
+  pointer-events: none;
+}
+
+/* Remove control, overlaid top-right. Hidden until the card is reached —
+   pointer hover, keyboard focus, or (always, since there's no hover to
+   reveal it on) a touch device. */
+.account-card__remove-form {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 1;
+  margin: 0;
+}
+
+.account-card__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--dur) var(--ease),
+              background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.account-card__remove svg {
+  width: 16px;
+  height: 16px;
+}
+
+.account-card:hover .account-card__remove,
+.account-card:focus-within .account-card__remove {
+  opacity: 1;
+}
+
+.account-card__remove:hover {
+  background: var(--lime-wash);
+  color: var(--lime-deep);
+}
+
+@media (hover: none) {
+  .account-card__remove {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-card__remove {
+    transition: none;
+  }
+}
+
+/* Top's reorder row — two outline pills under the card, the same shape as
+   the remove control but always visible: reordering a ranked list isn't a
+   hover affordance, it's part of reading one. */
+.account-card__moves {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.account-card__moves form {
+  margin: 0;
+}
+
+.account-card__moves button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-label);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.account-card__moves button:hover:not(:disabled) {
+  background: var(--lime-wash);
+  color: var(--lime-deep);
+}
+
+.account-card__moves button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
