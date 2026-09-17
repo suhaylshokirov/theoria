@@ -32,8 +32,8 @@
                     </div>
                     <div class="collection-item__actions">
                         {% if card.collection.kind == "top" %}
-                        <form method="post" action="{% url 'account:move_item' card.collection.kind item.id 'up' %}">{% csrf_token %}<button type="submit" aria-label="Move {{ item.content.title|default:item.content.name }} up">↑</button></form>
-                        <form method="post" action="{% url 'account:move_item' card.collection.kind item.id 'down' %}">{% csrf_token %}<button type="submit" aria-label="Move {{ item.content.title|default:item.content.name }} down">↓</button></form>
+                        <form method="post" action="{% url 'account:move_item' card.collection.kind item.id 'up' %}">{% csrf_token %}<button type="submit" aria-label="Move {% firstof item.content.title item.content.name %} up">↑</button></form>
+                        <form method="post" action="{% url 'account:move_item' card.collection.kind item.id 'down' %}">{% csrf_token %}<button type="submit" aria-label="Move {% firstof item.content.title item.content.name %} down">↓</button></form>
                         {% endif %}
                         <form method="post" action="{% url 'account:remove_item' card.collection.kind item.id %}">{% csrf_token %}<button class="collection-remove" type="submit">Remove</button></form>
                     </div>
