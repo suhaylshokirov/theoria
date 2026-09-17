@@ -1900,12 +1900,34 @@ def test_transform_episodes_dedups_episodes_on_episode_id():
     assert len(episodes) == 1
 
 
-def test_transform_episodes_raises_when_no_season_files():
-    d = "2026-09-10"
-    files = {f"bronze/series_details/ingestion_date={d}/9.json": {"id": 9, "seasons": []}}
-    with patch.object(s3_utils, "get_s3_client", return_value=_episodes_s3_mock(files)):
+def test_transform_episodes_raises_when_no_series_detail_files():
+    with patch.object(s3_utils, "get_s3_client", return_value=_episodes_s3_mock({})):
         with pytest.raises(FileNotFoundError):
             transform_episodes(ingestion_date=dt.date(2026, 9, 10), bucket="theoria-datalake")
+
+
+def test_transform_episodes_writes_empty_episodes_when_no_season_files():
+    """Steady state: every known series unchanged, nothing newly seen — ingest_seasons
+    legitimately writes zero season files. That must not abort the nightly run."""
+    d = "2026-09-10"
+    files = {f"bronze/series_details/ingestion_date={d}/9.json": {"id": 9, "seasons": []}}
+    mock_s3 = _episodes_s3_mock(files)
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        seasons_uri, episodes_uri = transform_episodes(
+            ingestion_date=dt.date(2026, 9, 10), bucket="theoria-datalake"
+        )
+
+    assert episodes_uri.endswith(f"silver/episodes/ingestion_date={d}/episodes.parquet")
+    episodes = next(
+        pd.read_parquet(io.BytesIO(c[1]["Body"]))
+        for c in mock_s3.put_object.call_args_list if "episodes.parquet" in c[1]["Key"]
+    )
+    assert len(episodes) == 0
+    assert list(episodes.columns) == [
+        "episode_id", "series_id", "season_number", "episode_number", "name",
+        "air_date", "runtime", "overview", "still_path", "episode_type",
+        "production_code", "vote_average", "vote_count",
+    ]
 
 
 # --- transform_series_credits (Task 80) --------------------------------

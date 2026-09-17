@@ -183,9 +183,15 @@ def transform_episodes(
 
     Returns ``(seasons_uri, episodes_uri)``.
 
-    Raises FileNotFoundError if no Bronze season files exist for the date —
-    the seasons stub alone is not enough, and a run that produced no episodes
-    is a real error worth surfacing, not an empty file.
+    Raises FileNotFoundError if no Bronze series-detail files exist for the
+    date — that means the TV refresh itself never ran. Zero Bronze *season*
+    files is different and expected: ``ingest_seasons`` only re-fetches a
+    known series when its episode count moved, so a night where nothing
+    airing changed and no new series were discovered legitimately produces
+    none — that is steady state (see ``ingest_seasons``' ``max_new`` docstring),
+    not a failure. That case logs a warning and writes an empty
+    ``episodes.parquet`` instead of raising, so it doesn't abort the rest of
+    the nightly run.
     """
     if ingestion_date is None:
         ingestion_date = dt.date.today()
@@ -213,8 +219,11 @@ def transform_episodes(
     # --- episodes: from the season files ---
     season_keys = _list_keys(bucket, "seasons", ingestion_date)
     if not season_keys:
-        raise FileNotFoundError(
-            f"No Bronze season files for ingestion_date={ingestion_date}"
+        logger.warning(
+            "No Bronze season files for ingestion_date=%s — ingest_seasons "
+            "fetched nothing new/changed tonight; writing an empty episodes "
+            "Silver partition",
+            ingestion_date,
         )
     episode_rows: list[dict[str, Any]] = []
     season_file_errors = 0
@@ -225,7 +234,7 @@ def transform_episodes(
             continue
         episode_rows.extend(_extract_episode_rows(raw, _series_id_from_key(key)))
 
-    if season_file_errors == len(season_keys):
+    if season_keys and season_file_errors == len(season_keys):
         raise RuntimeError(
             f"Every Bronze season file failed to parse for ingestion_date={ingestion_date}"
         )
