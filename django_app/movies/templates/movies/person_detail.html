@@ -55,7 +55,7 @@
            no JS — see _person_filmography_results.html's docstring. {% endcomment %}
         <form method="get" action="" data-live-filter data-live-targets="#person-filmography-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="Search this filmography" aria-label="Search {{ person.name }}'s {% if show_count %}titles{% else %}movies{% endif %} by title">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search this filmography" aria-label="Search {{ person.name }}'s {% if show_count %}movies and shows{% else %}movies{% endif %} by title">
             </div>
             <fieldset class="segmented">
                 <legend class="visually-hidden">Order by</legend>

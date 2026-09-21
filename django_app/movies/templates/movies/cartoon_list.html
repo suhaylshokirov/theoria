@@ -14,7 +14,7 @@
            in cartoon_list(). {% endcomment %}
         <form method="get" action="{% url 'movies:cartoon_list' %}" data-live-filter data-live-targets="#cartoons-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="Search titles" aria-label="Search cartoons by title">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search cartoons" aria-label="Search cartoons by title">
             </div>
             <fieldset class="segmented">
                 <legend class="visually-hidden">Order by</legend>
