@@ -145,36 +145,13 @@
   margin: 0;
 }
 
-/* Same shape as Sign out, but quiet: sheet-filled with ink text, so the red
-   control stays the only one that ends something. */
-.account-rename {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 52px;
-  background: var(--sheet);
-  color: var(--ink);
-  border: 1px solid var(--rule-strong);
-  font-size: var(--text-xs);
-  text-decoration: none;
-}
-
-.account-rename svg {
-  width: 18px;
-  height: 18px;
-  flex: none;
-}
-
-.account-rename:hover {
-  border-color: var(--ink);
-  color: var(--ink);
-}
 
 /* The one red control on the page: it ends the session. Solid --danger with
    --paper text, so it flips with the theme: white on #b91c1c in light
    (6.5:1), near-black on #f87171 in dark (7.5:1). */
+/* Change username (an <a class="btn">) shares Sign out's shape and keeps the
+   global lime .btn fill. */
+.account-rename,
 .account-signout {
   display: inline-flex;
   align-items: center;
@@ -182,12 +159,16 @@
   gap: 10px;
   width: 100%;
   min-height: 52px;
-  background: var(--danger);
-  color: var(--paper);
-  border: 1px solid var(--danger);
   font-size: var(--text-xs);
 }
 
+.account-signout {
+  background: var(--danger);
+  color: var(--paper);
+  border: 1px solid var(--danger);
+}
+
+.account-rename svg,
 .account-signout svg {
   width: 18px;
   height: 18px;
