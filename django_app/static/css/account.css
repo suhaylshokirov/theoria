@@ -15,15 +15,21 @@
 
 /* --- Hero ------------------------------------------------------------------ */
 
+/* Monogram, then the reader's name beside it, bottom-aligned so the chips
+   under the name land on the disc's lower edge; Sign out follows the name
+   column rather than hugging the far right. */
 .account-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 72px;
-  align-items: start;
+  grid-template-columns: auto minmax(0, 480px) 220px;
+  justify-content: start;
+  grid-template-areas: "plate id side";
+  gap: 56px;
+  align-items: end;
   padding-top: var(--space-6);
 }
 
 .account-hero__id {
+  grid-area: id;
   /* The name sizes itself against this column's width (cqi, below). */
   container-type: inline-size;
   min-width: 0;
@@ -45,12 +51,12 @@
   letter-spacing: 0.22em;
 }
 
-/* 124px when the name fits; otherwise shrunk to what one line of this
+/* 88px when the name fits; otherwise shrunk to what one line of this
    column holds. 0.86em is Archivo's expanded uppercase advance, measured.
    overflow-wrap is the backstop for a browser without container units. */
 .account-hero__name {
   margin-top: 12px;
-  font-size: clamp(2.5rem, calc(100cqi / (var(--name-length, 8) * 0.86)), 7.75rem);
+  font-size: clamp(2.5rem, calc(100cqi / (var(--name-length, 8) * 0.86)), 5.5rem);
   line-height: 0.86;
   letter-spacing: -0.035em;
   overflow-wrap: anywhere;
@@ -103,22 +109,19 @@
 }
 
 .account-hero__side {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
+  grid-area: side;
 }
 
 /* The monogram disc: the header pill's .account-disc at full size — a
-   round sheet-filled avatar with the reader's initial in the display face.
-   Centred over the Sign out button beneath it. */
+   round sheet-filled avatar with the reader's initial in the display face. */
 .account-plate {
+  grid-area: plate;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  align-self: center;
-  width: 200px;
-  height: 200px;
+  width: 232px;
+  height: 232px;
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
   border-radius: 50%;
@@ -130,7 +133,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   font-stretch: 118%;
-  font-size: 6.875rem;
+  font-size: 7.75rem;
   line-height: 1;
   color: var(--ink);
 }
@@ -139,10 +142,9 @@
   margin: 0;
 }
 
-/* The one red control on the page: it ends the session. Outline and a faint
-   wash of --danger, never a solid fill — the global `button` rule fills
-   lime, which this page keeps for figures. --danger clears 4.5:1 on its own
-   wash in both themes (5.7:1 light, 6.2:1 dark). */
+/* The one red control on the page: it ends the session. Solid --danger with
+   --paper text, so it flips with the theme: white on #b91c1c in light
+   (6.5:1), near-black on #f87171 in dark (7.5:1). */
 .account-signout {
   display: inline-flex;
   align-items: center;
@@ -150,9 +152,9 @@
   gap: 10px;
   width: 100%;
   min-height: 52px;
-  background: color-mix(in srgb, var(--danger) 8%, transparent);
-  color: var(--danger);
-  border: 1px solid color-mix(in srgb, var(--danger) 38%, transparent);
+  background: var(--danger);
+  color: var(--paper);
+  border: 1px solid var(--danger);
   font-size: var(--text-xs);
 }
 
@@ -163,9 +165,9 @@
 }
 
 .account-signout:hover {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-  border-color: color-mix(in srgb, var(--danger) 60%, transparent);
-  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 85%, var(--ink));
+  border-color: color-mix(in srgb, var(--danger) 85%, var(--ink));
+  color: var(--paper);
 }
 
 /* --- Sections -------------------------------------------------------------- */
@@ -663,44 +665,43 @@
 
 /* --- Responsive ------------------------------------------------------------ */
 
-/* Below 1024px the hero stacks: the plate and Sign out sit in a row under
-   the name instead of beside it. */
+/* Below 1024px the monogram stays beside the name and Sign out drops to its
+   own row underneath. */
 @media (max-width: 1023px) {
   .account-hero {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 44px;
-  }
-
-  .account-hero__side {
-    flex-direction: row;
-    align-items: center;
-    gap: 18px;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "plate id"
+      "side side";
+    gap: 40px 36px;
   }
 
   .account-plate {
-    flex: none;
-    width: 125px;
-    height: 125px;
+    width: 160px;
+    height: 160px;
   }
 
   .account-plate__initial {
-    font-size: 4.25rem;
+    font-size: 5.25rem;
   }
 
   .account-signout-form {
-    flex: 1;
     max-width: 320px;
   }
 }
 
+/* Phones: too narrow for a disc beside the name, so everything stacks. */
 @media (max-width: 767px) {
-  .account-hero__side {
-    flex-direction: column;
-    align-items: stretch;
+  .account-hero {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "plate"
+      "id"
+      "side";
+    gap: 28px;
   }
 
   .account-plate {
-    align-self: flex-start;
     width: 112px;
     height: 112px;
   }

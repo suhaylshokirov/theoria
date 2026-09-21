@@ -9,6 +9,12 @@
 
 {% block content %}
 <header class="account-hero" aria-labelledby="account-page-title">
+    {% comment %} The reader's initial on a round disc. Decorative; the h1
+       names them. {% endcomment %}
+    <div class="account-plate" aria-hidden="true">
+        <span class="account-plate__initial">{{ request.user.username|slice:":1"|upper }}</span>
+    </div>
+
     <div class="account-hero__id">
         <span class="account-hero__bar" aria-hidden="true"></span>
         <span class="label account-hero__eyebrow">Account</span>
@@ -32,11 +38,6 @@
     </div>
 
     <div class="account-hero__side">
-        {% comment %} The reader's initial on a round disc. Decorative; the h1
-           names them. {% endcomment %}
-        <div class="account-plate" aria-hidden="true">
-            <span class="account-plate__initial">{{ request.user.username|slice:":1"|upper }}</span>
-        </div>
         <form method="post" action="{% url 'accounts:logout' %}" class="account-signout-form">
             {% csrf_token %}
             <button type="submit" class="account-signout">
