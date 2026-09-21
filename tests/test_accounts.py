@@ -395,3 +395,89 @@ def test_auth_pages_are_never_cached_so_back_asks_the_server_again():
     signed_in = _signed_in_client(email, "signedinnostore")
     assert "no-store" in signed_in.get("/accounts/login/")["Cache-Control"]
     User.objects.filter(email=email).delete()
+
+
+def test_change_username_requires_sign_in():
+    response = client.get("/accounts/username/")
+    assert response.status_code == 302
+    assert response.url.startswith("/accounts/login/")
+
+
+def test_change_username_renames_and_returns_to_the_account_page():
+    email = "rename-ok@example.com"
+    User.objects.filter(username__iexact="renamedhandle").delete()
+    signed_in = _signed_in_client(email, "renamebefore")
+
+    response = signed_in.post("/accounts/username/", {"username": "renamedhandle"})
+
+    assert response.status_code == 302
+    assert response.url == "/me/"
+    assert User.objects.get(email=email).username == "renamedhandle"
+    assert "no-store" in response["Cache-Control"]
+
+    User.objects.filter(email=email).delete()
+
+
+def test_change_username_refuses_a_name_someone_else_has_in_any_casing():
+    email = "rename-taken@example.com"
+    User.objects.filter(username__iexact="takenhandle").delete()
+    owner = User.objects.create_user(email="taken-owner@example.com", username="takenhandle")
+    signed_in = _signed_in_client(email, "renametaken")
+
+    response = signed_in.post("/accounts/username/", {"username": "TakenHandle"})
+
+    assert response.status_code == 200
+    assert response.context["form"].errors["username"] == ["That username is already taken."]
+    assert User.objects.get(email=email).username == "renametaken"
+
+    owner.delete()
+    User.objects.filter(email=email).delete()
+
+
+def test_change_username_allows_re_casing_your_own_name():
+    email = "rename-case@example.com"
+    signed_in = _signed_in_client(email, "recaseme")
+
+    response = signed_in.post("/accounts/username/", {"username": "ReCaseMe"})
+
+    assert response.status_code == 302
+    assert User.objects.get(email=email).username == "ReCaseMe"
+    User.objects.filter(email=email).delete()
+
+
+def test_change_username_applies_the_signup_format_and_reserved_rules():
+    email = "rename-rules@example.com"
+    signed_in = _signed_in_client(email, "renamerules")
+
+    for bad in ("ab", "a" * 31, "has space", "robert'); DROP TABLE accounts_user;--", "admin", "ME"):
+        response = signed_in.post("/accounts/username/", {"username": bad})
+        assert response.status_code == 200, bad
+        assert response.context["form"].errors["username"], bad
+
+    same = signed_in.post("/accounts/username/", {"username": "renamerules"})
+    assert same.context["form"].errors["username"] == ["That's already your username."]
+
+    assert User.objects.get(email=email).username == "renamerules"
+    User.objects.filter(email=email).delete()
+
+
+def test_change_username_is_rate_limited():
+    email = "rename-rl@example.com"
+    signed_in = _signed_in_client(email, "renamerl")
+
+    with patch("accounts.views.USERNAME_CHANGE_RATE_LIMIT", 1):
+        signed_in.post("/accounts/username/", {"username": "renamerlone"})
+        response = signed_in.post("/accounts/username/", {"username": "renamerltwo"})
+
+    assert response.status_code == 200
+    assert any("Too many username changes" in str(m) for m in response.context["messages"])
+    assert User.objects.get(email=email).username == "renamerlone"
+    User.objects.filter(email=email).delete()
+
+
+def test_account_page_links_to_change_username():
+    email = "rename-link@example.com"
+    signed_in = _signed_in_client(email, "renamelink")
+    response = signed_in.get("/me/")
+    assert b'href="/accounts/username/"' in response.content
+    User.objects.filter(email=email).delete()

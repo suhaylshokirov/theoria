@@ -19,6 +19,7 @@ from functools import wraps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
+from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render, resolve_url
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -28,7 +29,7 @@ from movies.models import Movie
 
 from . import codes, ratelimit
 from .emails import send_code_email
-from .forms import EmailOnlyForm, SignupForm, VerifyForm
+from .forms import EmailOnlyForm, SignupForm, UsernameChangeForm, VerifyForm
 from .models import PURPOSE_LOGIN, PURPOSE_SIGNUP
 
 User = get_user_model()
@@ -86,6 +87,11 @@ _ISSUE_ERROR_MESSAGES = {
 # IP or a reader who mistypes a few times won't get caught in it.
 SIGNUP_RATE_LIMIT = 20
 SIGNUP_RATE_WINDOW_SECONDS = 60 * 60
+
+# Same reasoning as the signup limit: every POST counts, so the rename form
+# can't be scripted into a username-availability oracle.
+USERNAME_CHANGE_RATE_LIMIT = 20
+USERNAME_CHANGE_RATE_WINDOW_SECONDS = 60 * 60
 
 
 def _safe_next(request) -> str:
@@ -222,6 +228,41 @@ def login_view(request):
         request,
         "accounts/login.html",
         {"form": form, "next": next_url, "sub": _login_sub_line(next_url), "gallery_posters": _gallery_posters()},
+    )
+
+
+@never_cache
+@login_required
+def change_username(request):
+    if request.method == "POST":
+        form = UsernameChangeForm(request.POST, user=request.user)
+        if ratelimit.is_rate_limited(
+            request,
+            scope="username_change",
+            limit=USERNAME_CHANGE_RATE_LIMIT,
+            window_seconds=USERNAME_CHANGE_RATE_WINDOW_SECONDS,
+        ):
+            messages.error(request, "Too many username changes — please try again later.")
+        elif form.is_valid():
+            request.user.username = form.cleaned_data["username"]
+            try:
+                with transaction.atomic():
+                    request.user.save(update_fields=["username"])
+            except IntegrityError:
+                # Taken by someone else between the form check and the save --
+                # uq_user_username_ci is the final word, as it is at signup.
+                request.user.refresh_from_db(fields=["username"])
+                form.add_error("username", "That username is already taken.")
+            else:
+                messages.success(request, "Username changed.")
+                return redirect(settings.LOGIN_REDIRECT_URL)
+    else:
+        form = UsernameChangeForm(user=request.user)
+
+    return render(
+        request,
+        "accounts/change_username.html",
+        {"form": form, "gallery_posters": _gallery_posters()},
     )
 
 

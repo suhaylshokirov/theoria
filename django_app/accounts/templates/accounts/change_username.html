@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% load static %}
+{% load tmdb_images %}
+
+{% block title %}Change username — Theoria{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/auth.css' %}">
+{% endblock %}
+
+{% block messages %}{% endblock %}
+
+{% block content %}
+<section class="auth-hero">
+    <div class="auth-panel">
+        <div class="auth-card">
+            <header class="sheet-head">
+                <h1 class="sheet-title">Change username</h1>
+                <p class="sheet-sub">You're signed in as {{ request.user.username }}.</p>
+            </header>
+
+            <form class="auth-form" method="post" novalidate>
+                {% csrf_token %}
+                {% for message in messages %}<p class="form-error" role="alert">{{ message }}</p>{% endfor %}
+
+                <div>
+                    <label class="field-label" for="id_username">New username</label>
+                    <p class="field"><input id="id_username" type="text" name="username" value="{{ form.username.value|default:'' }}" placeholder="Username" autocomplete="username" maxlength="30" required autofocus></p>
+                    {% for error in form.username.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
+                </div>
+
+                <button type="submit" class="btn-block">Save username</button>
+            </form>
+
+            <p class="auth-alt"><a href="{% url 'profile' %}">Back to your account</a></p>
+        </div>
+    </div>
+
+    <div class="auth-gallery" aria-hidden="true">
+        {% for poster in gallery_posters %}
+        <div class="auth-tile" style="--i: {{ forloop.counter0 }}">
+            <img src="{{ poster|tmdb_image:'w185' }}" alt="" loading="lazy" decoding="async">
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

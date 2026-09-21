@@ -110,6 +110,9 @@
 
 .account-hero__side {
   grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 /* The monogram disc: the header pill's .account-disc at full size — a
@@ -140,6 +143,33 @@
 
 .account-signout-form {
   margin: 0;
+}
+
+/* Same shape as Sign out, but quiet: sheet-filled with ink text, so the red
+   control stays the only one that ends something. */
+.account-rename {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  background: var(--sheet);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  font-size: var(--text-xs);
+  text-decoration: none;
+}
+
+.account-rename svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.account-rename:hover {
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 /* The one red control on the page: it ends the session. Solid --danger with

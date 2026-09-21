@@ -38,6 +38,33 @@ class SignupForm(forms.Form):
         return cleaned
 
 
+class UsernameChangeForm(forms.Form):
+    """Rename a signed-in account. The same field and validators as
+    SignupForm's username, and the same case-insensitive uniqueness check --
+    minus the reader's own row, so "ada" -> "Ada" is a legal re-casing.
+
+    Unlike signup, "taken" is reported plainly: there's no email in play to
+    hide, and the view rate-limits the endpoint the same way signup is."""
+
+    username = forms.CharField(
+        max_length=30,
+        validators=[validate_username_characters, validate_username_not_reserved],
+    )
+
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean_username(self):
+        username = self.cleaned_data["username"]
+        if username == self.user.username:
+            raise forms.ValidationError("That's already your username.")
+        taken = User.objects.filter(username__iexact=username).exclude(pk=self.user.pk).exists()
+        if taken:
+            raise forms.ValidationError("That username is already taken.")
+        return username
+
+
 class EmailOnlyForm(forms.Form):
     """Sign-in: just the address. Whether an account exists for it is
     decided by the view, not the form -- an unknown address is a valid,
