@@ -7,8 +7,6 @@ signed-in user's `Collection`/`CollectionItem` rows.
 
 from __future__ import annotations
 
-import unicodedata
-
 from django.db import transaction
 from django.db.models import Max, Q
 
@@ -96,8 +94,8 @@ def move_collection_item(user, kind, item_id, direction):
 
 def account_rows(user):
     """Every item in all three of `user`'s collections, hydrated and grouped
-    by kind: {kind: [CollectionItem, ...]}, each list in rank order
-    (position, then newest first — CollectionItem.Meta.ordering).
+    by kind: {kind: [CollectionItem, ...]}. Top is in rank order (position,
+    CollectionItem.Meta.ordering); Liked and Watch later are newest first.
 
     Three queries whatever the collection sizes: one on the application
     database for the items themselves, one per content type on the warehouse
@@ -113,55 +111,14 @@ def account_rows(user):
     by_kind = {kind: [] for kind, _ in Collection.KINDS}
     for item in rows:
         by_kind[item.collection.kind].append(item)
+    for kind in (Collection.LIKED, Collection.WATCH_LATER):
+        by_kind[kind].sort(key=lambda r: (r.added_at, r.id), reverse=True)
     return by_kind
 
 
-# ?<collection>_sort= values the account page accepts. The key functions live
-# here, not in a SQL ORDER BY: a collection's items sit on the application
-# database while the title, rating and date they sort by sit on the
-# warehouse — two servers, so no single query can order one by the other.
-# Sorting happens over the WHOLE collection before the page is sliced, so a
-# page boundary is the same one an ORDER BY ... LIMIT would have drawn.
-ACCOUNT_SORTS = (
-    ("added", "Recently added"),
-    ("title", "Title A–Z"),
-    ("rating", "Rating"),
-    ("year", "Release year"),
-)
-DEFAULT_ACCOUNT_SORT = "added"
-
-
-def _title_key(item):
-    # NFKD + casefold: "Amélie" files beside "Amelie" and case never splits a
-    # run of titles. Leading articles are kept, same as the catalogue's own
-    # A–Z sorts.
-    return unicodedata.normalize("NFKD", item.title).casefold()
-
-
-def sort_rows(rows, sort):
-    """Order `rows` (from account_rows) by one of ACCOUNT_SORTS.
-
-    Each sort is two stable passes, tie-breaker first, so equal primary keys
-    keep the tie-breaker's order. Missing ratings and release dates always
-    sort last. An unknown `sort` falls back to DEFAULT_ACCOUNT_SORT.
-    """
-    rows = list(rows)
-    if sort == "title":
-        rows.sort(key=lambda r: (_title_key(r), r.id))
-    elif sort == "rating":
-        rows.sort(key=lambda r: r.added_at, reverse=True)
-        rows.sort(key=lambda r: (r.rating is None, -(r.rating or 0)))
-    elif sort == "year":
-        rows.sort(key=_title_key)
-        rows.sort(key=lambda r: (r.release is None, -(r.release.toordinal() if r.release else 0)))
-    else:
-        rows.sort(key=lambda r: (r.added_at, r.id), reverse=True)
-    return rows
-
-
 def _hydrate(items):
-    """Attach each item's warehouse title as `.content`, plus the flat
-    `.title`, `.release` (date) and `.rating` the sorts and cards read.
+    """Attach each item's warehouse title as `.content`, plus its name as a
+    flat `.title` (a movie's `title`, a show's `name`) for the page's labels.
     Items whose title is no longer in the warehouse are dropped."""
     movie_ids = [item.content_id for item in items if item.content_type == CollectionItem.MOVIE]
     series_ids = [item.content_id for item in items if item.content_type == CollectionItem.SERIES]
@@ -196,14 +153,11 @@ def _hydrate(items):
             if item.content is None:
                 continue
             item.title = item.content.title or ""
-            item.release = item.content.release_date
         else:
             item.content = series.get(item.content_id)
             if item.content is None:
                 continue
             item.title = item.content.name or ""
-            item.release = item.content.first_air_date
-        item.rating = getattr(item.content, "imdb_rating", None)
         rows.append(item)
     return rows
 

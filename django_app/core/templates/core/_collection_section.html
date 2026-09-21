@@ -1,10 +1,10 @@
 {% comment %} One collection on the account page (Liked / Watch later / Top).
    Rendered by account.html for each section, and on its own when
-   theoria.js re-fetches one after a sort, page or remove (?_section=<slug>).
+   theoria.js re-fetches one after a page change or remove (?_section=<slug>).
    Params (pass with `only`):
      section : one dict from core.views._account_sections — slug, label,
-               sortable, sort, page_obj, count, fill, rank_slots, the
-               pager's URLs, and the sort form's hidden fields.
+               ranked, page_obj, count, fill, rank_slots and the pager's
+               URLs.
      request, csrf_token : passed through explicitly because `only` cuts the
                parent context off, and the remove/move forms need both.
 
@@ -19,33 +19,15 @@
             <h2 class="display" id="account-section-{{ slug }}-title">{{ label }}</h2>
         </div>
 
-        <div class="account-section__tools">
-            {% if section.sortable and section.count > 1 %}
-            <form method="get" action="{{ request.path }}#{{ slug }}" class="account-sort" data-account-sort>
-                {% for name, value in section.form_hidden %}
-                <input type="hidden" name="{{ name }}" value="{{ value }}">
-                {% endfor %}
-                <label class="label" for="account-sort-{{ slug }}">Sort</label>
-                <span class="field">
-                    <select id="account-sort-{{ slug }}" name="{{ slug }}_sort">
-                        {% for value, option_label in section.sort_options %}
-                        <option value="{{ value }}"{% if value == section.sort %} selected{% endif %}>{{ option_label }}</option>
-                        {% endfor %}
-                    </select>
-                </span>
-                <button type="submit" class="account-sort__submit">Sort {{ label }}</button>
-            </form>
-            {% endif %}
-            <span class="label account-section__count"><span class="mono">{{ section.count }}</span> title{{ section.count|pluralize }}</span>
-        </div>
+        <span class="label account-section__count"><span class="mono">{{ section.count }}</span> movie{{ section.count|pluralize }}</span>
     </div>
 
     {% if section.count or section.rank_slots %}
     <ol class="account-grid" data-account-grid>
         {% for item in page_obj %}
         {% with rank=page_obj.start_index|add:forloop.counter0 title=item.title %}
-        <li class="account-card{% if not section.sortable %} is-ranked{% endif %}">
-            {% if not section.sortable %}<span class="visually-hidden">Rank {{ rank }}:</span>{% endif %}
+        <li class="account-card{% if section.ranked %} is-ranked{% endif %}">
+            {% if section.ranked %}<span class="visually-hidden">Rank {{ rank }}:</span>{% endif %}
 
             {% if item.content_type == "movie" %}
             {% include "movies/_movie_card.html" with movie=item.content only %}
@@ -67,12 +49,12 @@
                         </svg>
                     </button>
                 </form>
-                {% if not section.sortable %}
+                {% if section.ranked %}
                 <span class="account-card__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>
                 {% endif %}
             </div>
 
-            {% if not section.sortable %}
+            {% if section.ranked %}
             <div class="account-card__moves">
                 <form method="post" action="{% url 'account:move_item' section.kind item.id 'up' %}">
                     {% csrf_token %}

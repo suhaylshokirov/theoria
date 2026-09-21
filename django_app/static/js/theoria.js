@@ -1183,16 +1183,16 @@
   }
 
   /* --- Account page collections (/me/) -------------------------------------
-     Progressive enhancement over plain links and forms: every pager link,
-     sort form and remove form in a [data-account-section] already works as a
-     full page load. With JS, each one re-fetches just its own section
+     Progressive enhancement over plain links and forms: every pager link and
+     remove form in a [data-account-section] already works as a full page
+     load. With JS, each one re-fetches just its own section
      (?_section=<slug>, answered by core.views.account) and swaps it in, so
      the other two collections and the scroll position stay where they are.
 
-     Each section owns only its own params (liked_sort, liked_page, ...). A
-     link's URL was built when its section was rendered and may carry stale
-     state for the OTHER sections, so the next address is always the current
-     one with just this section's two params taken from the link.
+     Each section owns only its own page param (liked_page, ...). A link's
+     URL was built when its section was rendered and may carry stale state
+     for the OTHER sections, so the next address is always the current one
+     with just this section's param taken from the link.
 
      Any failure falls back to the plain navigation or submit. */
   function initAccountSections() {
@@ -1206,11 +1206,10 @@
       var next = new URL(location.href);
       next.hash = "";
       next.searchParams.delete("_section");
-      [slug + "_sort", slug + "_page"].forEach(function (name) {
-        var value = target.searchParams.get(name);
-        if (value === null) next.searchParams.delete(name);
-        else next.searchParams.set(name, value);
-      });
+      var name = slug + "_page";
+      var value = target.searchParams.get(name);
+      if (value === null) next.searchParams.delete(name);
+      else next.searchParams.set(name, value);
       return next;
     }
 
@@ -1286,25 +1285,8 @@
       load(slug, link.href, '.account-pager__btn[aria-current="page"]');
     });
 
-    function applySort(form) {
-      var slug = slugOf(form);
-      if (!slug) return;
-      var query = new URLSearchParams(new FormData(form)).toString();
-      load(slug, location.pathname + "?" + query, "select");
-    }
-
-    document.addEventListener("change", function (event) {
-      var form = event.target.closest && event.target.closest("form[data-account-sort]");
-      if (form && event.target.tagName === "SELECT") applySort(form);
-    });
-
     document.addEventListener("submit", function (event) {
       var form = event.target;
-      if (form.matches("form[data-account-sort]")) {
-        event.preventDefault();
-        applySort(form);
-        return;
-      }
       if (!form.matches("form[data-account-remove]")) return;
 
       var slug = slugOf(form);

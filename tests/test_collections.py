@@ -427,52 +427,18 @@ def test_account_empty_collections_show_empty_state_copy():
         assert "Nothing saved for later" in content
         # An empty Top shows its five open ranks rather than a panel.
         assert content.count('class="account-slot"') == 5
-        # Nothing to sort or page through.
-        assert "account-sort" not in content
+        # Nothing to page through.
         assert "account-pager" not in content
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
 
 
-# --- /me/ redesign: sorting, paging, panels --------------------------------
+# --- /me/ redesign: paging, panels --------------------------------
 
-from datetime import date, datetime, timedelta, timezone  # noqa: E402
+from datetime import date  # noqa: E402
 from decimal import Decimal  # noqa: E402
-from types import SimpleNamespace  # noqa: E402
 
-from core.services import sort_rows  # noqa: E402
 from core.views import _page_window  # noqa: E402
-
-
-def _row(pk, title, rating=None, release=None, added_days_ago=0):
-    return SimpleNamespace(
-        id=pk,
-        title=title,
-        rating=None if rating is None else Decimal(str(rating)),
-        release=release,
-        added_at=datetime(2026, 9, 1, tzinfo=timezone.utc) - timedelta(days=added_days_ago),
-    )
-
-
-def test_sort_rows_orders_whole_list_with_tie_breakers_and_nulls_last():
-    rows = [
-        _row(1, "banana", rating=7.0, release=date(2001, 1, 1), added_days_ago=3),
-        _row(2, "Apple", rating=None, release=None, added_days_ago=1),
-        _row(3, "cherry", rating=9.0, release=date(2020, 5, 1), added_days_ago=2),
-        _row(4, "apple", rating=7.0, release=date(2020, 5, 1), added_days_ago=0),
-    ]
-    ids = lambda rs: [r.id for r in rs]  # noqa: E731
-
-    # Newest first.
-    assert ids(sort_rows(rows, "added")) == [4, 2, 3, 1]
-    # Case-insensitive; the two "apple"s tie and fall back to id ascending.
-    assert ids(sort_rows(rows, "title")) == [2, 4, 1, 3]
-    # 9.0, then the two 7.0s newest-added first, then the unrated one last.
-    assert ids(sort_rows(rows, "rating")) == [3, 4, 1, 2]
-    # Latest release first, same-date ties by title, undated last.
-    assert ids(sort_rows(rows, "year")) == [4, 3, 1, 2]
-    # Anything unknown behaves as the default.
-    assert ids(sort_rows(rows, "'; DROP TABLE core_collectionitem; --")) == ids(sort_rows(rows, "added"))
 
 
 def test_page_window_elides_long_runs():
@@ -510,95 +476,34 @@ def _get_profile(client, movies, params=None, series=(), **headers):
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
-def test_account_sort_spans_the_whole_collection_across_page_boundaries():
-    """27 items, every sort: walking pages 1..6 in order must give exactly the
-    whole collection sorted — no page may hold a title that belongs on an
-    earlier one."""
-    User.objects.filter(email=_TEST_EMAIL).delete()
-    user = User.objects.create_user(email=_TEST_EMAIL, username="collections-reader")
-    client = Client()
-    client.force_login(user)
-    try:
-        movies = _seeded_liked(user, 27)
-        by_id = {m.movie_id: m for m in movies}
-        for sort in ("added", "title", "rating", "year"):
-            walked = []
-            for page in range(1, 7):
-                response = _get_profile(client, movies, {"liked_sort": sort, "liked_page": page})
-                section = {s["slug"]: s for s in response.context["sections"]}["liked"]
-                assert section["sort"] == sort
-                walked += [item.content_id for item in section["page_obj"]]
-            assert len(walked) == 27
-
-            if sort == "title":
-                keys = [by_id[i].title.casefold() for i in walked]
-                assert keys == sorted(keys)
-            elif sort == "rating":
-                ratings = [by_id[i].imdb_rating for i in walked]
-                rated = [r for r in ratings if r is not None]
-                assert rated == sorted(rated, reverse=True)
-                assert ratings[len(rated):] == [None] * (27 - len(rated))  # nulls last
-            elif sort == "year":
-                dates = [by_id[i].release_date for i in walked]
-                dated = [d for d in dates if d is not None]
-                assert dated == sorted(dated, reverse=True)
-                assert dates[len(dated):] == [None] * (27 - len(dated))  # nulls last
-            else:
-                # Same added_at to the second is likely here, so id desc
-                # (the tie-breaker) is what decides — newest insert first.
-                assert walked == sorted(walked, key=lambda i: -CollectionItem.objects.get(
-                    collection__user=user, content_id=i).pk)
-    finally:
-        User.objects.filter(email=_TEST_EMAIL).delete()
-
-
-@override_settings(ALLOWED_HOSTS=["testserver"])
-def test_account_invalid_sort_falls_back_and_sorts_stay_independent():
+def test_account_lists_newest_first_with_no_sort_control_and_counts_movies():
+    """Liked and Watch later run newest-added first across every page, there
+    is no sort control, and each section's counter reads "N movies"."""
     User.objects.filter(email=_TEST_EMAIL).delete()
     user = User.objects.create_user(email=_TEST_EMAIL, username="collections-reader")
     client = Client()
     client.force_login(user)
     try:
         movies = _seeded_liked(user, 12)
-        _add_items(user, Collection.WATCH_LATER, CollectionItem.MOVIE, [1, 2, 3, 4, 5, 6])
-        response = _get_profile(
-            client, movies,
-            {"liked_sort": "bogus", "liked_page": "2", "later_sort": "title", "later_page": "2"},
+        _add_items(user, Collection.WATCH_LATER, CollectionItem.MOVIE, [1])
+        walked = []
+        for page in (1, 2, 3):
+            response = _get_profile(client, movies, {"liked_page": page, "later_page": "1"})
+            liked = {s["slug"]: s for s in response.context["sections"]}["liked"]
+            walked += [item.pk for item in liked["page_obj"]]
+        newest_first = list(
+            CollectionItem.objects.filter(collection__user=user, collection__kind=Collection.LIKED)
+            .order_by("-added_at", "-pk")
+            .values_list("pk", flat=True)
         )
-        sections = {s["slug"]: s for s in response.context["sections"]}
-        assert sections["liked"]["sort"] == "added"
-        assert sections["later"]["sort"] == "title"
-        assert sections["later"]["page_obj"].number == 2
-
-        # Liked's sort form carries Watch later's state but not its own page,
-        # so applying a new Liked sort lands on Liked page 1 and leaves Watch
-        # later where it was.
-        assert sections["liked"]["form_hidden"] == [("later_sort", "title"), ("later_page", 2)]
-        # Liked's pager links carry Watch later's state too.
-        assert sections["liked"]["next_url"] == "/me/?liked_page=3&later_sort=title&later_page=2#liked"
+        assert walked == newest_first
 
         content = response.content.decode()
-        assert '<form method="get" action="/me/#liked"' in content
-        assert 'name="liked_sort"' in content and 'name="later_sort"' in content
-        # Top is ranked: no sort control, whatever its size.
-        assert 'name="top_sort"' not in content
-    finally:
-        User.objects.filter(email=_TEST_EMAIL).delete()
-
-
-@override_settings(ALLOWED_HOSTS=["testserver"])
-def test_account_sort_control_hidden_below_two_items():
-    User.objects.filter(email=_TEST_EMAIL).delete()
-    user = User.objects.create_user(email=_TEST_EMAIL, username="collections-reader")
-    client = Client()
-    client.force_login(user)
-    try:
-        _add_items(user, Collection.LIKED, CollectionItem.MOVIE, [1])
-        _add_items(user, Collection.WATCH_LATER, CollectionItem.MOVIE, [1, 2])
-        movies = [Movie(movie_id=i, title=f"Movie {i}") for i in (1, 2)]
-        content = _get_profile(client, movies).content.decode()
-        assert 'name="liked_sort"' not in content
-        assert 'name="later_sort"' in content
+        assert "_sort" not in content
+        assert "<select" not in content
+        assert '<span class="mono">12</span> movies' in content
+        assert '<span class="mono">1</span> movie<' in content
+        assert "</span> title" not in content
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
 
@@ -667,10 +572,9 @@ def test_account_top_pages_by_rank_and_shows_open_rank_slots():
         _add_items(user, Collection.TOP, CollectionItem.MOVIE, ids)  # position = list order
         movies = [Movie(movie_id=i, title=f"Top {i}") for i in ids]
 
-        response = _get_profile(client, movies, {"top_sort": "title"})
+        response = _get_profile(client, movies)
         top = {s["slug"]: s for s in response.context["sections"]}["top"]
         assert [item.content_id for item in top["page_obj"]] == [30, 10, 20, 50, 40]
-        assert top["sort"] is None  # ?top_sort is ignored
         assert top["rank_slots"] == []  # not the last page
 
         response = _get_profile(client, movies, {"top_page": "2"})
@@ -720,7 +624,7 @@ def test_account_remove_answers_json_and_emptied_page_clamps_back():
     try:
         movies = _seeded_liked(user, 6)
         last = CollectionItem.objects.filter(collection__user=user).order_by("added_at", "pk").first()
-        # Default sort is newest first, so the oldest item is alone on page 2.
+        # Liked is newest first, so the oldest item is alone on page 2.
         response = client.post(
             reverse("account:remove_item", kwargs={"kind": "liked", "item_id": last.pk}),
             HTTP_ACCEPT="application/json",
