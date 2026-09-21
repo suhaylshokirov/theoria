@@ -16,10 +16,11 @@
     <div class="account-section__head">
         <div class="account-section__title">
             <span class="account-section__icon account-section__icon--{{ slug }}" aria-hidden="true"></span>
-            <h2 class="display" id="account-section-{{ slug }}-title">{{ label }}</h2>
+            <div class="account-section__name">
+                <h2 class="display" id="account-section-{{ slug }}-title">{{ label }}</h2>
+                <span class="label account-section__count"><span class="mono">{{ section.count }}</span> movie{{ section.count|pluralize }}</span>
+            </div>
         </div>
-
-        <span class="label account-section__count"><span class="mono">{{ section.count }}</span> movie{{ section.count|pluralize }}</span>
     </div>
 
     {% if section.count or section.rank_slots %}

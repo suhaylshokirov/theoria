@@ -179,11 +179,6 @@
 }
 
 .account-section__head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-5) var(--space-7);
   padding-bottom: 20px;
   border-bottom: 1px solid var(--rule-strong);
 }
@@ -192,6 +187,17 @@
   display: flex;
   align-items: center;
   gap: 18px;
+  min-width: 0;
+}
+
+/* The name and its count share one baseline, so the count reads as a
+   caption to the heading rather than a separate item floating above the
+   rule. It wraps under the name on a narrow screen instead of squeezing. */
+.account-section__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-5);
   min-width: 0;
 }
 
@@ -725,11 +731,6 @@
 
   .account-section + .account-section {
     margin-top: 64px;
-  }
-
-  /* The heading takes the whole first line; the count drops below. */
-  .account-section__title {
-    flex-basis: 100%;
   }
 }
 
