@@ -1,5 +1,5 @@
 /* Theoria — Account page only ("/me/"). The reader's own shelf: a hero with
-   their name and a monogram plate, then three collections (Liked / Watch
+   their name and a monogram disc, then three collections (Liked / Watch
    later / Top), each a paged grid of the same poster cards every other page
    uses, plus the controls only this page needs: a sort, a numbered pager,
    a remove button, Top's rank and reorder arrows, and dashed panels where a
@@ -9,7 +9,7 @@
    restyles a shared one. Every colour is a theme token, so light and dark
    both come for free. Lime keeps its one job: it marks a figure (a rank, the
    page you're on, the count bar over the name) and the Θ's crossbar on the
-   plate, which is the site's own mark.
+   disc, which is the site's own mark.
 
    Vertical rhythm is owned here, not by .sheet-section: hero → first
    section 96px, section → section 88px. */
@@ -109,20 +109,22 @@
   gap: 18px;
 }
 
-/* The monogram plate — this page's one signature. A catalog plate (sheet
-   fill, hairline, the site's 2px corner) with the reader's initial set in
-   the display face, crossed by the Θ's lime bar at the same proportion the
-   header mark draws it: the site's mark, spelled with this reader's
-   letter. */
+/* The monogram disc — this page's one signature. The header pill's
+   .account-disc at full size: a round sheet-filled avatar with the reader's
+   initial in the display face, crossed by the Θ's lime bar. Round plus
+   crossbar is the Θ itself, spelled with this reader's letter. Centred over
+   the Sign out button beneath it. */
 .account-plate {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  align-self: center;
+  width: 200px;
   height: 200px;
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
+  border-radius: 50%;
   overflow: hidden;
 }
 
@@ -725,13 +727,13 @@
 
   .account-hero__side {
     flex-direction: row;
-    align-items: flex-end;
+    align-items: center;
     gap: 18px;
   }
 
   .account-plate {
     flex: none;
-    width: 200px;
+    width: 125px;
     height: 125px;
   }
 
@@ -752,8 +754,13 @@
   }
 
   .account-plate {
-    width: 100%;
+    align-self: flex-start;
+    width: 112px;
     height: 112px;
+  }
+
+  .account-plate__initial {
+    font-size: 3.75rem;
   }
 
   /* Email and join date on their own lines; a dot left dangling at the end
