@@ -81,7 +81,7 @@
 
         {% for rank in section.rank_slots %}
         <li class="account-slot">
-            <a class="account-slot__link" href="{% url 'movies:home' %}">
+            <a class="account-slot__link" href="{% url 'movies:browse' %}">
                 <span class="account-slot__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>
                 <span class="label">Add to Top<span class="visually-hidden"> at rank {{ rank }}</span></span>
             </a>

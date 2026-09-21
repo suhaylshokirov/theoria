@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Theoria — Browse{% endblock %}
+
+{% block content %}
+{% include "movies/_sheet_header.html" with title="Browse" sub="Every movie and TV show in one place. Search by name or change the order." only %}
+
+<section class="sheet-section">
+    <div class="toolbar">
+        {% comment %} Same live-filter contract as movie_list.html/cartoon_list.html —
+           see their docstrings. Plain GET form underneath, so it still works
+           with no JS — see _browse_results.html's docstring. No genre field:
+           movies and shows don't share one genre facet, so this page keeps
+           only what both catalogs have in common — search, newest, rated,
+           A–Z. {% endcomment %}
+        <form method="get" action="{% url 'movies:browse' %}" data-live-filter data-live-targets="#browse-grid">
+            <div class="field">
+                <input type="search" name="q" value="{{ q }}" placeholder="Search movies and shows" aria-label="Search movies and shows by title">
+            </div>
+            <fieldset class="segmented">
+                <legend class="visually-hidden">Order by</legend>
+                <input type="radio" name="sort" id="sort-newest" value="newest" {% if sort == "newest" %}checked{% endif %}>
+                <label for="sort-newest">Newest</label>
+                <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
+                <label for="sort-rating">Rated</label>
+                <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
+                <label for="sort-title">A–Z</label>
+            </fieldset>
+            <button type="submit" class="apply-btn">Apply</button>
+        </form>
+    </div>
+
+    {% include "movies/_browse_grid.html" %}
+</section>
+{% endblock %}

@@ -231,6 +231,21 @@ def test_signup_rejects_a_username_longer_than_thirty_characters():
     assert not User.objects.filter(email="too-long@example.com").exists()
 
 
+def test_signup_rejects_a_reserved_username():
+    # "browse" is a route (movies:browse), not just a word -- RESERVED_USERNAMES
+    # in accounts/models.py must list it or a reader could sign up as
+    # /browse/ and shadow the nav link.
+    response = client.post(
+        "/accounts/signup/", {"username": "browse", "email": "reserved-browse@example.com"}
+    )
+
+    assert response.status_code == 200
+    assert response.context["form"].errors["username"] == [
+        "browse is a reserved name and can't be used as a username."
+    ]
+    assert not User.objects.filter(email="reserved-browse@example.com").exists()
+
+
 def test_signup_accepts_usernames_at_the_three_and_thirty_character_boundaries():
     # A valid signup redirects to the verify page rather than re-rendering
     # the form, so success here is "redirected", not "no form errors".
@@ -480,4 +495,17 @@ def test_account_page_links_to_change_username():
     signed_in = _signed_in_client(email, "renamelink")
     response = signed_in.get("/me/")
     assert b'href="/accounts/username/"' in response.content
+    User.objects.filter(email=email).delete()
+
+
+def test_account_page_empty_collections_link_to_browse():
+    # A brand-new account has nothing in any of the three collections, so
+    # /me/ renders the "Browse movies"/"Find something" CTAs (Liked, Watch
+    # later) and the "Add to Top" empty rank slots -- all of them should
+    # point at the combined Browse page now, not the old movies:home target.
+    email = "empty-collections@example.com"
+    signed_in = _signed_in_client(email, "emptycollections")
+    response = signed_in.get("/me/")
+    content = response.content.decode()
+    assert content.count('href="/browse/"') >= 3
     User.objects.filter(email=email).delete()

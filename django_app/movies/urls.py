@@ -6,6 +6,7 @@ app_name = "movies"
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("browse/", views.browse, name="browse"),
     path("movies/", views.movie_list, name="movie_list"),
     path("movies/<slug:movie_slug>/", views.movie_detail, name="movie_detail"),
     path("tv/", views.series_list, name="series_list"),

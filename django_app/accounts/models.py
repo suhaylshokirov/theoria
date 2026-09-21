@@ -24,6 +24,7 @@ from django.utils import timezone
 RESERVED_USERNAMES = frozenset({
     "me", "admin", "accounts", "account", "login", "signup", "logout", "static",
     "movies", "tv", "people", "actors", "directors", "studios", "analytics",
+    "browse", "cartoons",
 })
 
 validate_username_characters = RegexValidator(

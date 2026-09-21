@@ -719,6 +719,134 @@ def test_cartoon_list_sort_by_title_orders_movies_and_series_together():
     assert page_items == [aardvark_show, zebra_movie]
 
 
+# ---------------------------------------------------------------------------
+# browse
+# ---------------------------------------------------------------------------
+
+
+def _browse_hydration_mocks(movie_mgr, series_mgr, movies=None, series=None):
+    """Wires Movie.objects/Series.objects for browse()'s hydration step:
+    .using().filter(pk__in=...).annotate(imdb_rating=...) -- the last queryset
+    op before the view rebuilds the page in the union's order, so its
+    return_value is set directly to the fixture list (mirroring
+    _cartoon_mocks()'s annotate.return_value pattern)."""
+    movie_qs = movie_mgr.using.return_value.filter.return_value
+    movie_qs.annotate.return_value = movies if movies is not None else []
+
+    series_qs = series_mgr.using.return_value.filter.return_value
+    series_qs.annotate.return_value = series if series is not None else []
+
+    return movie_qs, series_qs
+
+
+def test_browse_returns_200_with_context_keys():
+    movie = _movie(movie_id=1, title="Browse Movie")
+    show = _series(series_id=1, name="Browse Show")
+    rows = [
+        {"kind": "movie", "item_id": 1},
+        {"kind": "series", "item_id": 1},
+    ]
+
+    with patch("movies.views._browse_rows", return_value=rows) as rows_mock, patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr, movies=[movie], series=[show])
+
+        response = client.get("/browse/")
+
+    assert response.status_code == 200
+    rows_mock.assert_called_once_with("", "newest")
+    page_items = list(response.context["page_obj"])
+    assert movie in page_items
+    assert show in page_items
+    assert response.context["q"] == ""
+    assert response.context["sort"] == "newest"
+    assert "base_query" in response.context
+
+
+def test_browse_invalid_sort_falls_back_to_newest():
+    with patch("movies.views._browse_rows", return_value=[]) as rows_mock, patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr)
+
+        response = client.get("/browse/", {"sort": "bogus"})
+
+    assert response.status_code == 200
+    assert response.context["sort"] == "newest"
+    rows_mock.assert_called_once_with("", "newest")
+
+
+def test_browse_search_passes_q_through():
+    with patch("movies.views._browse_rows", return_value=[]) as rows_mock, patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr)
+
+        response = client.get("/browse/", {"q": "robot"})
+
+    assert response.status_code == 200
+    assert response.context["q"] == "robot"
+    rows_mock.assert_called_once_with("robot", "newest")
+
+
+def test_browse_ajax_request_renders_results_fragment_only():
+    movie = _movie(movie_id=1, title="Browse Movie")
+    rows = [{"kind": "movie", "item_id": 1}]
+
+    with patch("movies.views._browse_rows", return_value=rows), patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr, movies=[movie])
+
+        response = client.get("/browse/", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "browse-grid" in content
+    assert "<html" not in content
+    assert "<!DOCTYPE" not in content
+
+
+def test_browse_items_come_back_in_the_unions_order_across_both_kinds():
+    show_a = _series(series_id=1, name="First Show")
+    movie_a = _movie(movie_id=1, title="First Movie")
+    show_b = _series(series_id=2, name="Second Show")
+
+    # The union's own row order interleaves kinds -- series, movie, series --
+    # and browse() must rebuild the page in exactly that order, not grouped
+    # by kind.
+    rows = [
+        {"kind": "series", "item_id": 1},
+        {"kind": "movie", "item_id": 1},
+        {"kind": "series", "item_id": 2},
+    ]
+
+    with patch("movies.views._browse_rows", return_value=rows), patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr, movies=[movie_a], series=[show_a, show_b])
+
+        response = client.get("/browse/")
+
+    assert response.status_code == 200
+    page_items = list(response.context["page_obj"])
+    assert page_items == [show_a, movie_a, show_b]
+
+
+def test_nav_contains_the_browse_link():
+    with patch("movies.views._browse_rows", return_value=[]), patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr)
+
+        response = client.get("/browse/")
+
+    content = response.content.decode()
+    assert 'href="/browse/"' in content
+    assert ">Browse<" in content
+
+
 @contextlib.contextmanager
 def _series_detail_mocks(series, credits=None, seasons=None, episodes=None, videos=None):
     """Mock every manager series_detail() reads (Task 87 — the SeriesCredit-

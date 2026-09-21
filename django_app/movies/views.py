@@ -3,7 +3,10 @@ from datetime import date
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Avg, Count, Exists, F, Max, Min, OuterRef, Q, Sum
+from django.db.models import (
+    Avg, CharField, Count, Exists, F, Max, Min, OuterRef, Q, Sum, Value,
+)
+from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 from django.utils.text import slugify
@@ -339,6 +342,124 @@ def _series_year_span(series):
         return f"{start}–"
     end = series.last_air_date.year
     return str(start) if start == end else f"{start}–{end}"
+
+
+# ?sort= values accepted by browse, mapped to the order_by args _browse_rows()
+# passes straight to the unioned queryset. Unlike CARTOON_SORTS below, these
+# read database column names (aliased in _browse_rows()'s .values()), not
+# model fields — a unioned queryset can only be ordered by the names in its
+# own select list. "kind", "item_id" are deterministic tiebreakers so a page
+# boundary never reshuffles between requests (two rows can share a sort_date,
+# a rating, or — rarely — a title).
+BROWSE_SORTS = {
+    "newest": (F("sort_date").desc(nulls_last=True), "kind", "item_id"),
+    "rating": (F("rating").desc(nulls_last=True), "kind", "item_id"),
+    "title": ("sort_title_lower", "kind", "item_id"),
+}
+
+
+def _browse_rows(q, sort):
+    """Every movie and show as one paginatable, database-ordered feed.
+
+    cartoon_list() below merges Movie + Series the same conceptual way, but
+    by loading every row into Python and sorting there — fine for a ~2,000
+    row animated-content slice, not for the whole catalog (~1,957 rows today,
+    growing nightly as the pipeline backfills TV). This instead builds two
+    `.values()` querysets with an identical column shape (kind, item_id,
+    sort_title(_lower), sort_date, rating) and `.union(..., all=True)`s them,
+    so Paginator's count()/slicing does the pagination in the database — a
+    request for any page only ever pulls MOVIES_PER_PAGE rows over the wire.
+
+    `sort_title_lower` exists because ORDER BY on a UNION can only reference
+    the union's own result columns, not arbitrary expressions — Lower() has
+    to be computed before the union, not applied in order_by() after it.
+
+    Split out from browse() so a test can patch it directly (see
+    tests/test_django_views.py's browse tests, following _cartoon_mocks()'s
+    pattern).
+    """
+    movies = Movie.objects.using("warehouse").all()
+    if q:
+        movies = movies.filter(title__icontains=q)
+    movies = movies.annotate(
+        kind=Value("movie", output_field=CharField()),
+        item_id=F("movie_id"),
+        sort_title=F("title"),
+        sort_title_lower=Lower("title"),
+        sort_date=F("release_date"),
+        rating=Max("movierating__rating", filter=Q(movierating__source="imdb")),
+    ).values("kind", "item_id", "sort_title", "sort_title_lower", "sort_date", "rating")
+
+    series = Series.objects.using("warehouse").all()
+    if q:
+        series = series.filter(name__icontains=q)
+    series = series.annotate(
+        kind=Value("series", output_field=CharField()),
+        item_id=F("series_id"),
+        sort_title=F("name"),
+        sort_title_lower=Lower("name"),
+        sort_date=F("first_air_date"),
+        rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")),
+    ).values("kind", "item_id", "sort_title", "sort_title_lower", "sort_date", "rating")
+
+    return movies.union(series, all=True).order_by(*BROWSE_SORTS[sort])
+
+
+def browse(request):
+    """Every movie and show in one place: search, sort, pagination — the
+    reader-facing merge of /movies/ and /tv/ (see _browse_rows()'s docstring
+    for why this can't be cartoon_list()'s Python-sort shape at this size).
+    """
+    q = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "newest")
+    if sort not in BROWSE_SORTS:
+        sort = "newest"
+
+    rows = _browse_rows(q, sort)
+    page_obj = Paginator(rows, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
+
+    # Only this page's ~24 rows are hydrated into real Movie/Series objects —
+    # the union above already did the filtering, ordering and slicing at the
+    # database, so nothing here re-reads more than one page's worth of titles.
+    movie_ids = [row["item_id"] for row in page_obj if row["kind"] == "movie"]
+    series_ids = [row["item_id"] for row in page_obj if row["kind"] == "series"]
+
+    movies_by_id = {
+        movie.movie_id: movie
+        for movie in Movie.objects.using("warehouse")
+        .filter(movie_id__in=movie_ids)
+        .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
+    }
+    for movie in movies_by_id.values():
+        movie.kind = "movie"
+
+    series_by_id = {
+        show.series_id: show
+        for show in Series.objects.using("warehouse")
+        .filter(series_id__in=series_ids)
+        .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
+    }
+    for show in series_by_id.values():
+        show.kind = "series"
+        show.year_span = _series_year_span(show)
+
+    # Rebuilt in the union's own order (page_obj's un-hydrated rows), then
+    # assigned back onto the Page so the templates iterate real, card-ready
+    # objects — _movie_card.html/_series_card.html expect a Movie/Series
+    # instance, not a plain dict.
+    page_obj.object_list = [
+        movies_by_id[row["item_id"]] if row["kind"] == "movie"
+        else series_by_id[row["item_id"]]
+        for row in page_obj
+    ]
+
+    context = {
+        "page_obj": page_obj, "q": q, "sort": sort,
+        "base_query": urlencode({"q": q, "sort": sort}),
+    }
+    if _is_ajax(request):
+        return render(request, "movies/_browse_results.html", context)
+    return render(request, "movies/browse.html", context)
 
 
 CARTOON_SORTS = ("newest", "rating", "title")

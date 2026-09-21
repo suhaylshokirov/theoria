@@ -1,0 +1,25 @@
+{% comment %} The poster grid + pager for /browse/, mirroring _cartoon_grid.html.
+   Each page_obj row is a hydrated Movie or Series carrying an extra .kind
+   attribute (set in browse()), so this dispatches to whichever existing card
+   partial matches rather than needing a card of its own. Separate partial
+   from browse.html so static/js/theoria.js's initLiveFilter() can swap just
+   this region as the filter form changes. aria-live so the swap is announced
+   to screen readers. {% endcomment %}
+<div id="browse-grid" aria-live="polite">
+    <div class="poster-grid">
+        {% for item in page_obj %}
+        {% if item.kind == "movie" %}
+        {% include "movies/_movie_card.html" with movie=item only %}
+        {% else %}
+        {% include "movies/_series_card.html" with series=item only %}
+        {% endif %}
+        {% empty %}
+        <p class="empty">
+            {% if q %}Nothing matches “{{ q }}”. Try a shorter title.
+            {% else %}Nothing loaded yet. Run the pipeline to fill the catalog.{% endif %}
+        </p>
+        {% endfor %}
+    </div>
+
+    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query=base_query only %}
+</div>

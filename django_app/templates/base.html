@@ -160,6 +160,7 @@
                "Movies" lit while you're on /movies/120/. {% endcomment %}
             {% with vn=request.resolver_match.url_name %}
             <div class="nav-links" id="nav-links">
+                <a href="{% url 'movies:browse' %}"{% if vn == "browse" %} aria-current="page"{% endif %}>Browse</a>
                 <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>Movies</a>
                 <a href="{% url 'movies:series_list' %}"{% if vn in "series_list,series_detail" %} aria-current="page"{% endif %}>TV Shows</a>
                 <a href="{% url 'movies:cartoon_list' %}"{% if vn == "cartoon_list" %} aria-current="page"{% endif %}>Cartoons</a>
