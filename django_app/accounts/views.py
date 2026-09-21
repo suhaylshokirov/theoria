@@ -254,7 +254,6 @@ def change_username(request):
                 request.user.refresh_from_db(fields=["username"])
                 form.add_error("username", "That username is already taken.")
             else:
-                messages.success(request, "Username changed.")
                 return redirect(settings.LOGIN_REDIRECT_URL)
     else:
         form = UsernameChangeForm(user=request.user)
