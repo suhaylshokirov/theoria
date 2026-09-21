@@ -8,7 +8,7 @@
     {% if slug == "liked" %}
     <h3 class="account-panel-empty__title">{% if partial %}Room for more{% else %}Nothing liked yet{% endif %}</h3>
     <p class="account-panel-empty__copy">{% if partial %}Everything you like across Movies, TV Shows and Cartoons collects here, newest first.{% else %}Press Like on any movie or show and it collects here, newest first.{% endif %}</p>
-    <a class="btn account-panel-empty__cta" href="{% url 'movies:home' %}">Browse titles</a>
+    <a class="btn account-panel-empty__cta" href="{% url 'movies:home' %}">Browse movies</a>
     {% else %}
     <h3 class="account-panel-empty__title">{% if partial %}Your queue is short{% else %}Nothing saved for later{% endif %}</h3>
     <p class="account-panel-empty__copy">Save anything you mean to get to and it waits here until you do.</p>
