@@ -1182,6 +1182,159 @@
     });
   }
 
+  /* --- Account page collections (/me/) -------------------------------------
+     Progressive enhancement over plain links and forms: every pager link,
+     sort form and remove form in a [data-account-section] already works as a
+     full page load. With JS, each one re-fetches just its own section
+     (?_section=<slug>, answered by core.views.account) and swaps it in, so
+     the other two collections and the scroll position stay where they are.
+
+     Each section owns only its own params (liked_sort, liked_page, ...). A
+     link's URL was built when its section was rendered and may carry stale
+     state for the OTHER sections, so the next address is always the current
+     one with just this section's two params taken from the link.
+
+     Any failure falls back to the plain navigation or submit. */
+  function initAccountSections() {
+    if (!document.querySelector("[data-account-section]")) return;
+    if (!window.fetch || !window.URL || !window.DOMParser) return;
+
+    var controllers = {};
+
+    function addressFor(slug, href) {
+      var target = new URL(href, location.href);
+      var next = new URL(location.href);
+      next.hash = "";
+      next.searchParams.delete("_section");
+      [slug + "_sort", slug + "_page"].forEach(function (name) {
+        var value = target.searchParams.get(name);
+        if (value === null) next.searchParams.delete(name);
+        else next.searchParams.set(name, value);
+      });
+      return next;
+    }
+
+    // focusSelector: what to put focus on inside the new section, since the
+    // element the reader just used was replaced along with everything else.
+    function load(slug, href, focusSelector) {
+      var section = document.getElementById(slug);
+      if (!section) return;
+      var address = addressFor(slug, href);
+      var request = new URL(address.href);
+      request.searchParams.set("_section", slug);
+
+      var grid = section.querySelector("[data-account-grid]");
+      if (grid) grid.setAttribute("aria-busy", "true");
+
+      if (controllers[slug]) controllers[slug].abort();
+      var controller = window.AbortController ? new AbortController() : null;
+      controllers[slug] = controller;
+
+      fetch(request.href, {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        credentials: "same-origin",
+        signal: controller ? controller.signal : undefined,
+      })
+        .then(function (response) {
+          if (!response.ok) throw new Error("section fetch failed");
+          return response.text();
+        })
+        .then(function (html) {
+          var doc = new DOMParser().parseFromString(html, "text/html");
+          var fresh = doc.getElementById(slug);
+          var current = document.getElementById(slug);
+          if (!fresh || !current) throw new Error("section missing");
+          current.replaceWith(fresh);
+
+          // Same Safari replaceState cap as initLiveFilter: a stale address
+          // bar is fine, a thrown error falling into the reload below is not.
+          try {
+            history.replaceState(null, "", address.pathname + address.search + "#" + slug);
+          } catch (e) {}
+
+          var heading = fresh.querySelector("h2");
+          if (heading && heading.getBoundingClientRect().top < 0) {
+            fresh.scrollIntoView({ block: "start" });
+          }
+
+          var focusTarget = focusSelector && fresh.querySelector(focusSelector);
+          if (!focusTarget && heading) {
+            heading.setAttribute("tabindex", "-1");
+            focusTarget = heading;
+          }
+          if (focusTarget) focusTarget.focus({ preventScroll: true });
+        })
+        .catch(function (err) {
+          if (err && err.name === "AbortError") return;
+          location.href = address.pathname + address.search + "#" + slug;
+        });
+    }
+
+    function slugOf(el) {
+      var section = el.closest("[data-account-section]");
+      return section ? section.getAttribute("data-account-section") : null;
+    }
+
+    document.addEventListener("click", function (event) {
+      var link = event.target.closest && event.target.closest("a[data-account-nav]");
+      if (!link) return;
+      // Leave new-tab and new-window clicks to the browser.
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      var slug = slugOf(link);
+      if (!slug) return;
+      event.preventDefault();
+      load(slug, link.href, '.account-pager__btn[aria-current="page"]');
+    });
+
+    function applySort(form) {
+      var slug = slugOf(form);
+      if (!slug) return;
+      var query = new URLSearchParams(new FormData(form)).toString();
+      load(slug, location.pathname + "?" + query, "select");
+    }
+
+    document.addEventListener("change", function (event) {
+      var form = event.target.closest && event.target.closest("form[data-account-sort]");
+      if (form && event.target.tagName === "SELECT") applySort(form);
+    });
+
+    document.addEventListener("submit", function (event) {
+      var form = event.target;
+      if (form.matches("form[data-account-sort]")) {
+        event.preventDefault();
+        applySort(form);
+        return;
+      }
+      if (!form.matches("form[data-account-remove]")) return;
+
+      var slug = slugOf(form);
+      if (!slug) return;
+      event.preventDefault();
+
+      // Optimistic: the card goes now; the re-fetch then pulls the next
+      // title up into its place, or — when this emptied the page — the
+      // server clamps to the page before it.
+      var card = form.closest("li");
+      if (card) card.hidden = true;
+
+      fetch(form.getAttribute("action"), {
+        method: "POST",
+        body: new FormData(form),
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      })
+        .then(function (response) {
+          var type = response.headers.get("Content-Type") || "";
+          if (!response.ok || type.indexOf("application/json") === -1) throw new Error("remove failed");
+          load(slug, location.href, null);
+        })
+        .catch(function () {
+          if (card) card.hidden = false;
+          form.submit();
+        });
+    });
+  }
+
   /* --- Signed-in state freshness ------------------------------------------
      Every page is rendered for one sign-in state (the nav's Sign in chip vs
      the account pill), but a browser can show a page long after rendering
@@ -1247,6 +1400,7 @@
     initInlineValidation();
     initAccountMenu();
     initCollectionActions();
+    initAccountSections();
     initSignedInFreshness();
   }
 

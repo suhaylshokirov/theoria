@@ -1,0 +1,17 @@
+{% comment %} The dashed "room for more" panel. Params (pass with `only`):
+     slug    : "liked" | "later" | "top"
+     partial : True when it fills out a short last page beside real cards,
+               False when the collection has nothing in it at all.
+   Every CTA goes to the home page, which is where Movies, TV Shows and
+   Cartoons all start. {% endcomment %}
+<div class="account-panel-empty{% if not partial %} is-whole{% endif %}">
+    {% if slug == "liked" %}
+    <h3 class="account-panel-empty__title">{% if partial %}Room for more{% else %}Nothing liked yet{% endif %}</h3>
+    <p class="account-panel-empty__copy">{% if partial %}Everything you like across Movies, TV Shows and Cartoons collects here, newest first.{% else %}Press Like on any movie or show and it collects here, newest first.{% endif %}</p>
+    <a class="btn account-panel-empty__cta" href="{% url 'movies:home' %}">Browse titles</a>
+    {% else %}
+    <h3 class="account-panel-empty__title">{% if partial %}Your queue is short{% else %}Nothing saved for later{% endif %}</h3>
+    <p class="account-panel-empty__copy">Save anything you mean to get to and it waits here until you do.</p>
+    <a class="btn account-panel-empty__cta is-outline" href="{% url 'movies:home' %}">Find something</a>
+    {% endif %}
+</div>

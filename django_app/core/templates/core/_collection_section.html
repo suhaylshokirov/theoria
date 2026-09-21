@@ -1,43 +1,51 @@
-{% comment %} One collection block on the account page (Liked / Watch later /
-   Top) — the same shared poster card used in every other grid on the site,
-   inside a ranked list with a remove control and, for Top only, reorder
-   arrows. Params (pass with `only`):
-     kind       : "liked" | "watch_later" | "top" — also this section's id
-                  and the pager's query-string param, so each of the three
-                  sections pages on its own key.
-     label      : the collection's display name ("Liked", "Watch later", "Top").
-     page_obj   : this section's Page, from Paginator(rows, ...).get_page(...).
-     base_query : the OTHER two sections' current page params, already
-                  urlencoded — see movies/_pager.html.
+{% comment %} One collection on the account page (Liked / Watch later / Top).
+   Rendered by account.html for each section, and on its own when
+   theoria.js re-fetches one after a sort, page or remove (?_section=<slug>).
+   Params (pass with `only`):
+     section : one dict from core.views._account_sections — slug, label,
+               sortable, sort, page_obj, count, fill, rank_slots, the
+               pager's URLs, and the sort form's hidden fields.
      request, csrf_token : passed through explicitly because `only` cuts the
-                  parent context off — this partial builds its own remove/
-                  move forms (see movies/_collection_actions.html for the
-                  same pattern) and needs both for `next` and
-                  {% csrf_token %}. {% endcomment %}
-<section class="sheet-section account-section" id="{{ kind }}" aria-labelledby="account-section-{{ kind }}-title">
-    <div class="section-head">
-        <h2 id="account-section-{{ kind }}-title">{{ label }}</h2>
-        <span class="section-note">
-            {{ page_obj.paginator.count }} title{{ page_obj.paginator.count|pluralize }}{% if page_obj.paginator.num_pages > 1 %} · Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}{% endif %}
-        </span>
+               parent context off, and the remove/move forms need both.
+
+   Cards are the shared movies/_movie_card.html and _series_card.html; this
+   partial only lays the collection's own controls (type badge, remove, Top's
+   rank and reorder arrows) over and under them. {% endcomment %}
+{% with slug=section.slug label=section.label page_obj=section.page_obj %}
+<section class="account-section" id="{{ slug }}" aria-labelledby="account-section-{{ slug }}-title" data-account-section="{{ slug }}">
+    <div class="account-section__head">
+        <div class="account-section__title">
+            <span class="account-section__icon account-section__icon--{{ slug }}" aria-hidden="true"></span>
+            <h2 class="display" id="account-section-{{ slug }}-title">{{ label }}</h2>
+        </div>
+
+        <div class="account-section__tools">
+            {% if section.sortable and section.count > 1 %}
+            <form method="get" action="{{ request.path }}#{{ slug }}" class="account-sort" data-account-sort>
+                {% for name, value in section.form_hidden %}
+                <input type="hidden" name="{{ name }}" value="{{ value }}">
+                {% endfor %}
+                <label class="label" for="account-sort-{{ slug }}">Sort</label>
+                <span class="field">
+                    <select id="account-sort-{{ slug }}" name="{{ slug }}_sort">
+                        {% for value, option_label in section.sort_options %}
+                        <option value="{{ value }}"{% if value == section.sort %} selected{% endif %}>{{ option_label }}</option>
+                        {% endfor %}
+                    </select>
+                </span>
+                <button type="submit" class="account-sort__submit">Sort {{ label }}</button>
+            </form>
+            {% endif %}
+            <span class="label account-section__count"><span class="mono">{{ section.count }}</span> title{{ section.count|pluralize }}</span>
+        </div>
     </div>
 
-    {% if page_obj.paginator.count %}
-    <ol class="poster-grid account-grid">
+    {% if section.count or section.rank_slots %}
+    <ol class="account-grid" data-account-grid>
         {% for item in page_obj %}
-        {% with rank=page_obj.start_index|add:forloop.counter0 %}
-        <li class="account-card">
-            <span class="account-card__type label">{% if kind == "top" %}No. {{ rank }} · {% endif %}{{ item.get_content_type_display }}</span>
-
-            <form method="post" action="{% url 'account:remove_item' kind item.id %}" class="account-card__remove-form">
-                {% csrf_token %}
-                <input type="hidden" name="next" value="{{ request.get_full_path }}#{{ kind }}">
-                <button type="submit" class="account-card__remove" aria-label="Remove {% firstof item.content.title item.content.name %} from {{ label }}">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-                        <path d="M6 6l12 12M18 6L6 18"/>
-                    </svg>
-                </button>
-            </form>
+        {% with rank=page_obj.start_index|add:forloop.counter0 title=item.title %}
+        <li class="account-card{% if not section.sortable %} is-ranked{% endif %}">
+            {% if not section.sortable %}<span class="visually-hidden">Rank {{ rank }}:</span>{% endif %}
 
             {% if item.content_type == "movie" %}
             {% include "movies/_movie_card.html" with movie=item.content only %}
@@ -45,35 +53,67 @@
             {% include "movies/_series_card.html" with series=item.content only %}
             {% endif %}
 
-            {% if kind == "top" %}
-            <div class="account-card__moves">
-                <form method="post" action="{% url 'account:move_item' kind item.id 'up' %}">
+            {% comment %} Overlays share one box laid exactly over the poster
+               (same width, same 2:3), so they sit on the art whatever the
+               card's text below it runs to. {% endcomment %}
+            <div class="account-card__frame">
+                <span class="account-card__type label">{{ item.get_content_type_display }}</span>
+                <form method="post" action="{% url 'account:remove_item' section.kind item.id %}" class="account-card__remove-form" data-account-remove>
                     {% csrf_token %}
-                    <input type="hidden" name="next" value="{{ request.get_full_path }}#{{ kind }}">
-                    <button type="submit" aria-label="Move {% firstof item.content.title item.content.name %} up"{% if rank == 1 %} disabled{% endif %}>↑</button>
+                    <input type="hidden" name="next" value="{{ section.self_url }}">
+                    <button type="submit" class="account-card__remove" aria-label="Remove {{ title }} from {{ label }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6L6 18"/>
+                        </svg>
+                    </button>
                 </form>
-                <form method="post" action="{% url 'account:move_item' kind item.id 'down' %}">
+                {% if not section.sortable %}
+                <span class="account-card__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>
+                {% endif %}
+            </div>
+
+            {% if not section.sortable %}
+            <div class="account-card__moves">
+                <form method="post" action="{% url 'account:move_item' section.kind item.id 'up' %}">
                     {% csrf_token %}
-                    <input type="hidden" name="next" value="{{ request.get_full_path }}#{{ kind }}">
-                    <button type="submit" aria-label="Move {% firstof item.content.title item.content.name %} down"{% if rank == page_obj.paginator.count %} disabled{% endif %}>↓</button>
+                    <input type="hidden" name="next" value="{{ section.self_url }}">
+                    <button type="submit" aria-label="Move {{ title }} up"{% if rank == 1 %} disabled{% endif %}>↑</button>
+                </form>
+                <form method="post" action="{% url 'account:move_item' section.kind item.id 'down' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ section.self_url }}">
+                    <button type="submit" aria-label="Move {{ title }} down"{% if rank == section.count %} disabled{% endif %}>↓</button>
                 </form>
             </div>
             {% endif %}
         </li>
         {% endwith %}
         {% endfor %}
+
+        {% if section.fill %}
+        <li class="account-fill" data-on-page="{{ section.fill }}">
+            {% include "core/_collection_empty.html" with slug=slug partial=True only %}
+        </li>
+        {% endif %}
+
+        {% for rank in section.rank_slots %}
+        <li class="account-slot">
+            <a class="account-slot__link" href="{% url 'movies:home' %}">
+                <span class="account-slot__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>
+                <span class="label">Add title<span class="visually-hidden"> at rank {{ rank }}</span></span>
+            </a>
+            <span class="account-slot__caption">Empty slot</span>
+        </li>
+        {% endfor %}
     </ol>
     {% else %}
-    <p class="empty">
-        {% if kind == "liked" %}
-        Nothing liked yet. Press Like on any movie or show and it will be kept here. <a href="{% url 'movies:movie_list' %}">Browse movies</a>.
-        {% elif kind == "watch_later" %}
-        Nothing saved for later yet. Add a movie or show to Watch later and it will be kept here. <a href="{% url 'movies:movie_list' %}">Browse movies</a>.
-        {% else %}
-        Nothing in your Top yet. Add a movie or show to it and it will be kept here. <a href="{% url 'movies:movie_list' %}">Browse movies</a>.
-        {% endif %}
-    </p>
+    <div class="account-empty">
+        {% include "core/_collection_empty.html" with slug=slug partial=False only %}
+    </div>
     {% endif %}
 
-    {% include "movies/_pager.html" with page_obj=page_obj param=kind base_query=base_query anchor=kind only %}
+    {% if section.count %}
+    {% include "core/_account_pager.html" with section=section only %}
+    {% endif %}
 </section>
+{% endwith %}

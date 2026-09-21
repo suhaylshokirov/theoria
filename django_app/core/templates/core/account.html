@@ -8,39 +8,53 @@
 {% endblock %}
 
 {% block content %}
-<div class="sheet-head">
-    <span class="label">Account</span>
-    <h1 class="display account-title" id="account-page-title">{{ request.user.username }}</h1>
-    <p class="sheet-sub">{{ request.user.email }} &nbsp;·&nbsp; Member since {{ request.user.date_joined|date:"j M Y" }}</p>
-
-    <div class="stats">
-        <div class="stat">
-            <span class="stat-value">{{ counts.liked }}</span>
-            <span class="stat-label">Liked</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ counts.watch_later }}</span>
-            <span class="stat-label">Watch later</span>
-        </div>
-        <div class="stat">
-            <span class="stat-value">{{ counts.top }}</span>
-            <span class="stat-label">Top</span>
-        </div>
+<header class="account-hero" aria-labelledby="account-page-title">
+    <div class="account-hero__id">
+        <span class="account-hero__bar" aria-hidden="true"></span>
+        <span class="label account-hero__eyebrow">Account</span>
+        {% comment %} --name-length lets account.css size the name to fit its
+           column: a four-letter handle gets the full 124px, a long one
+           shrinks until it sits on one line instead of breaking mid-word. {% endcomment %}
+        <h1 class="display account-hero__name" id="account-page-title" style="--name-length: {{ request.user.username|length }}">{{ request.user.username }}</h1>
+        <p class="account-hero__meta">
+            <span>{{ request.user.email }}</span>
+            <span class="account-hero__dot" aria-hidden="true"></span>
+            <span>Member since {{ request.user.date_joined|date:"j M Y" }}</span>
+        </p>
+        <nav aria-label="Your collections" class="account-jumps">
+            {% for section in sections %}
+            <a class="chip account-jump" href="#{{ section.slug }}">
+                {{ section.label }}
+                <span class="account-jump__count mono">{{ section.count }}</span>
+            </a>
+            {% endfor %}
+        </nav>
     </div>
 
-    <nav aria-label="Your collections" class="chips account-jumpnav">
-        <a class="chip" href="#liked">Liked</a>
-        <a class="chip" href="#watch_later">Watch later</a>
-        <a class="chip" href="#top">Top</a>
-    </nav>
-
-    <form method="post" action="{% url 'accounts:logout' %}" class="account-signout-form">
-        {% csrf_token %}
-        <button type="submit" class="account-signout">Sign out</button>
-    </form>
-</div>
+    <div class="account-hero__side">
+        {% comment %} The reader's initial on a catalog plate, crossed by the
+           same lime bar as the Θ in the header: the site's own mark, set
+           with this reader's letter. Decorative; the h1 names them. {% endcomment %}
+        <div class="account-plate" aria-hidden="true">
+            <span class="account-plate__initial">{{ request.user.username|slice:":1"|upper }}</span>
+        </div>
+        <form method="post" action="{% url 'accounts:logout' %}" class="account-signout-form">
+            {% csrf_token %}
+            <button type="submit" class="account-signout">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <path d="m16 17 5-5-5-5"/>
+                    <path d="M21 12H9"/>
+                </svg>
+                Sign out
+            </button>
+        </form>
+    </div>
+</header>
 
 {% for section in sections %}
-{% include "core/_collection_section.html" with kind=section.kind label=section.label page_obj=section.page_obj base_query=section.base_query request=request csrf_token=csrf_token only %}
+{% include "core/_collection_section.html" with section=section request=request csrf_token=csrf_token only %}
 {% endfor %}
 {% endblock %}
+
+{% block footer_meta %}Account · {{ request.user.username }}{% endblock %}

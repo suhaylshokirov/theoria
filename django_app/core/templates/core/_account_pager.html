@@ -1,0 +1,45 @@
+{% comment %} Numbered pager for one account-page collection. Params (pass
+   with `only`):
+     section : the dict from core.views._account_sections — reads label,
+               count, page_obj, prev_url, next_url and page_links
+               ({number, url, current}, or {number: None} for an elided run).
+
+   Links, not buttons, so paging works with JS off and every page has an
+   address; theoria.js takes over [data-account-nav] clicks to swap just this
+   section in. Shown even for a single page: the "Showing 1–3 of 3" readout
+   is still worth having, and both arrows sit disabled. The general catalogue
+   pager is movies/_pager.html; this one is the account page's own. {% endcomment %}
+{% with page_obj=section.page_obj label=section.label %}
+<nav class="account-pager" aria-label="{{ label }} pages">
+    <p class="account-pager__count mono">Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ section.count }}</p>
+    <div class="account-pager__pages">
+        {% if section.prev_url %}
+        <a class="account-pager__btn is-arrow" href="{{ section.prev_url }}" aria-label="Previous page of {{ label }}" data-account-nav>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </a>
+        {% else %}
+        <button type="button" class="account-pager__btn is-arrow" aria-label="Previous page of {{ label }}" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        {% endif %}
+
+        {% for link in section.page_links %}
+        {% if link.number %}
+        <a class="account-pager__btn mono" href="{{ link.url }}"{% if link.current %} aria-current="page"{% endif %} data-account-nav>{{ link.number }}</a>
+        {% else %}
+        <span class="account-pager__gap" aria-hidden="true">…</span>
+        {% endif %}
+        {% endfor %}
+
+        {% if section.next_url %}
+        <a class="account-pager__btn is-arrow" href="{{ section.next_url }}" aria-label="Next page of {{ label }}" data-account-nav>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </a>
+        {% else %}
+        <button type="button" class="account-pager__btn is-arrow" aria-label="Next page of {{ label }}" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+        {% endif %}
+    </div>
+</nav>
+{% endwith %}
