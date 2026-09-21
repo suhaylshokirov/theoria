@@ -32,9 +32,8 @@
     </div>
 
     <div class="account-hero__side">
-        {% comment %} The reader's initial on a round disc, crossed by the same
-           lime bar as the Θ in the header: the site's own mark, set with
-           this reader's letter. Decorative; the h1 names them. {% endcomment %}
+        {% comment %} The reader's initial on a round disc. Decorative; the h1
+           names them. {% endcomment %}
         <div class="account-plate" aria-hidden="true">
             <span class="account-plate__initial">{{ request.user.username|slice:":1"|upper }}</span>
         </div>

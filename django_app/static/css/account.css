@@ -8,8 +8,7 @@
    Per the contract in theoria.css, this file only ADDS components; it never
    restyles a shared one. Every colour is a theme token, so light and dark
    both come for free. Lime keeps its one job: it marks a figure (a rank, the
-   page you're on, the count bar over the name) and the Θ's crossbar on the
-   disc, which is the site's own mark.
+   page you're on, the count bar over the name).
 
    Vertical rhythm is owned here, not by .sheet-section: hero → first
    section 96px, section → section 88px. */
@@ -109,11 +108,9 @@
   gap: 18px;
 }
 
-/* The monogram disc — this page's one signature. The header pill's
-   .account-disc at full size: a round sheet-filled avatar with the reader's
-   initial in the display face, crossed by the Θ's lime bar. Round plus
-   crossbar is the Θ itself, spelled with this reader's letter. Centred over
-   the Sign out button beneath it. */
+/* The monogram disc: the header pill's .account-disc at full size — a
+   round sheet-filled avatar with the reader's initial in the display face.
+   Centred over the Sign out button beneath it. */
 .account-plate {
   position: relative;
   display: flex;
@@ -136,19 +133,6 @@
   font-size: 6.875rem;
   line-height: 1;
   color: var(--ink);
-}
-
-/* 18.8/26 of the ring's width and 6.6/32 of its height in the Θ mark; here
-   the letter's cap height stands in for the ring. */
-.account-plate__initial::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 1.1em;
-  height: 0.14em;
-  background: var(--lime);
-  transform: translate(-50%, -38%);
 }
 
 .account-signout-form {
