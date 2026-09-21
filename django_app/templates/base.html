@@ -132,7 +132,7 @@
                 </a>
                 <div class="menu-panel account-panel" hidden data-account-panel>
                     <a class="menu-option account-option account-option--profile" href="{% url 'profile' %}">Your account</a>
-                    <form method="post" action="{% url 'accounts:logout' %}">
+                    <form method="post" action="{% url 'accounts:logout' %}" data-signout-form>
                         {% csrf_token %}
                         <button type="submit" class="menu-option account-option account-option--signout">Sign out</button>
                     </form>
@@ -175,7 +175,7 @@
                     </a>
                     <div class="menu-panel account-panel" hidden data-account-panel>
                         <a class="menu-option account-option account-option--profile" href="{% url 'profile' %}">Your account</a>
-                        <form method="post" action="{% url 'accounts:logout' %}">
+                        <form method="post" action="{% url 'accounts:logout' %}" data-signout-form>
                             {% csrf_token %}
                             <button type="submit" class="menu-option account-option account-option--signout">Sign out</button>
                         </form>
@@ -226,6 +226,23 @@
             <span class="mono">{% block footer_meta %}Source · TMDB{% endblock %}</span>
         </div>
     </footer>
+
+    {% if request.user.is_authenticated %}
+    {% comment %} Every [data-signout-form] opens this before it submits
+       (initSignOutConfirm in theoria.js). Without JS the forms post
+       straight through, as before. "No" takes focus first so an Enter
+       press can't sign anyone out by accident. {% endcomment %}
+    <dialog class="signout-dialog" id="signout-dialog" aria-labelledby="signout-dialog-title">
+        <div class="signout-dialog__inner">
+            <span class="signout-dialog__bar" aria-hidden="true"></span>
+            <h2 class="display signout-dialog__title" id="signout-dialog-title">Are you sure?</h2>
+            <div class="signout-dialog__actions">
+                <button type="button" class="signout-dialog__no" data-signout-cancel autofocus>No, stay</button>
+                <button type="button" class="signout-dialog__yes" data-signout-confirm>Yes, sign out</button>
+            </div>
+        </div>
+    </dialog>
+    {% endif %}
 
     <div class="ai-assistant" data-ai-assistant>
         <section class="ai-assistant-panel" id="ai-assistant-panel" aria-labelledby="ai-assistant-title" hidden>

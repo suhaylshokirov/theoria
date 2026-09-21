@@ -1797,6 +1797,105 @@ input[type="email"]:focus {
   mask-image: url("../img/icons/logout.png");
 }
 
+/* Sign-out confirmation. Same rounded, lifted sheet as the account popover,
+   led by the account hero's measuring tick drawn in --danger: the one place
+   that tick marks an ending rather than a figure. Padding lives on the inner
+   wrapper so a click on the dialog element itself is always the backdrop. */
+.signout-dialog {
+  width: min(26rem, calc(100% - 2rem));
+  max-width: none;
+  padding: 0;
+  margin: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--hairline);
+  border-radius: 0.875rem;
+  box-shadow: var(--shadow-card);
+}
+
+.signout-dialog[open] {
+  animation: signout-dialog-in var(--dur) var(--ease);
+}
+
+.signout-dialog::backdrop {
+  background: rgb(11 11 11 / 0.55);
+  backdrop-filter: blur(3px);
+}
+
+@keyframes signout-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+.signout-dialog__inner {
+  padding: var(--space-7) var(--space-7) var(--space-6);
+}
+
+.signout-dialog__bar {
+  display: block;
+  width: 56px;
+  height: 5px;
+  background: var(--danger);
+}
+
+.signout-dialog__title {
+  margin-top: 18px;
+  font-size: var(--text-xl);
+  line-height: 0.95;
+}
+
+.signout-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-4);
+  margin-top: var(--space-7);
+}
+
+.signout-dialog__actions button {
+  min-height: 44px;
+  padding-inline: var(--space-6);
+}
+
+.signout-dialog__no {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--rule-strong);
+}
+
+.signout-dialog__no:hover {
+  background: var(--sheet-2);
+  border-color: var(--rule-strong);
+  color: var(--ink);
+}
+
+/* Same solid red as /me's Sign out button, and for the same reason: --paper
+   text flips with the theme, so it reads in both. */
+.signout-dialog__yes {
+  background: var(--danger);
+  color: var(--paper);
+  border-color: var(--danger);
+}
+
+.signout-dialog__yes:hover {
+  background: color-mix(in srgb, var(--danger) 85%, var(--ink));
+  border-color: color-mix(in srgb, var(--danger) 85%, var(--ink));
+  color: var(--paper);
+}
+
+@media (max-width: 480px) {
+  .signout-dialog__actions {
+    flex-direction: column-reverse;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signout-dialog[open] {
+    animation: none;
+  }
+}
+
 /* Inside the open mobile menu the account menu doesn't appear at all -- the
    .account-menu--header twin in the header row (base.html) covers a signed-
    in reader instead, the same way .nav-links a.signin-btn below cedes to

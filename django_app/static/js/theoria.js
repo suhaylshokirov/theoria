@@ -1360,6 +1360,42 @@
     });
   }
 
+  /* --- Sign-out confirmation ---------------------------------------------
+     Every [data-signout-form] asks first. Yes submits the form that asked
+     (form.submit() skips this listener, so it can't loop); No, Escape or a
+     click on the backdrop closes the dialog and focus returns to the
+     button that opened it. A browser without <dialog> just signs out. */
+  function initSignOutConfirm() {
+    var dialog = document.getElementById("signout-dialog");
+    if (!dialog || typeof dialog.showModal !== "function") return;
+
+    var pending = null;
+    var yes = dialog.querySelector("[data-signout-confirm]");
+
+    document.querySelectorAll("form[data-signout-form]").forEach(function (form) {
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        pending = form;
+        yes.disabled = false;
+        dialog.showModal();
+      });
+    });
+
+    dialog.querySelector("[data-signout-cancel]").addEventListener("click", function () {
+      dialog.close();
+    });
+
+    yes.addEventListener("click", function () {
+      if (!pending) return;
+      yes.disabled = true;
+      pending.submit();
+    });
+
+    dialog.addEventListener("click", function (event) {
+      if (event.target === dialog) dialog.close();
+    });
+  }
+
   function init() {
     syncThemeColor();
     // Covers all three ways the theme moves — the header toggle, an OS change
@@ -1381,6 +1417,7 @@
     initAuthFormSubmitState();
     initInlineValidation();
     initAccountMenu();
+    initSignOutConfirm();
     initCollectionActions();
     initAccountSections();
     initSignedInFreshness();
