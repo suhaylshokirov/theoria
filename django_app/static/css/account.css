@@ -23,7 +23,7 @@
   grid-template-columns: auto minmax(0, 480px) 220px;
   justify-content: start;
   grid-template-areas: "plate id side";
-  gap: 56px;
+  gap: var(--space-7);
   align-items: end;
   padding-top: var(--space-6);
 }
@@ -51,12 +51,13 @@
   letter-spacing: 0.22em;
 }
 
-/* 88px when the name fits; otherwise shrunk to what one line of this
-   column holds. 0.86em is Archivo's expanded uppercase advance, measured.
-   overflow-wrap is the backstop for a browser without container units. */
+/* 40px (--text-2xl, the same ceiling every .sheet-title uses) when the name
+   fits; otherwise shrunk to what one line of this column holds. 0.86em is
+   Archivo's expanded uppercase advance, measured. overflow-wrap is the
+   backstop for a browser without container units. */
 .account-hero__name {
   margin-top: 12px;
-  font-size: clamp(2.5rem, calc(100cqi / (var(--name-length, 8) * 0.86)), 5.5rem);
+  font-size: clamp(1.75rem, calc(100cqi / (var(--name-length, 8) * 0.86)), var(--text-2xl));
   line-height: 0.86;
   letter-spacing: -0.035em;
   overflow-wrap: anywhere;
@@ -123,8 +124,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 232px;
-  height: 232px;
+  width: 148px;
+  height: 148px;
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
   border-radius: 50%;
@@ -136,7 +137,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   font-stretch: 118%;
-  font-size: 7.75rem;
+  font-size: 4.75rem;
   line-height: 1;
   color: var(--ink);
 }
@@ -156,10 +157,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  min-height: 52px;
-  font-size: var(--text-xs);
+  min-height: 38px;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-2xs);
 }
 
 .account-signout {
@@ -170,8 +172,8 @@
 
 .account-rename svg,
 .account-signout svg {
-  width: 18px;
-  height: 18px;
+  width: 15px;
+  height: 15px;
   flex: none;
 }
 
@@ -184,11 +186,11 @@
 /* --- Sections -------------------------------------------------------------- */
 
 .account-hero + .account-section {
-  margin-top: 96px;
+  margin-top: var(--space-9);
 }
 
 .account-section + .account-section {
-  margin-top: 88px;
+  margin-top: var(--space-9);
 }
 
 .account-section__head {
@@ -215,7 +217,7 @@
 }
 
 .account-section__title h2 {
-  font-size: clamp(1.75rem, 4vw, 2.875rem);
+  font-size: clamp(1.5rem, 3vw, 2rem);
   line-height: 1;
 }
 
@@ -688,15 +690,18 @@
   }
 
   .account-plate {
-    width: 160px;
-    height: 160px;
+    width: 100px;
+    height: 100px;
   }
 
   .account-plate__initial {
-    font-size: 5.25rem;
+    font-size: 3.25rem;
   }
 
-  .account-signout-form {
+  /* Caps the whole side column, not just the Sign out form, so Change
+     username and Sign out stay the same width as each other instead of
+     the unwrapped rename link stretching to the full "side side" row. */
+  .account-hero__side {
     max-width: 320px;
   }
 }
@@ -713,12 +718,12 @@
   }
 
   .account-plate {
-    width: 112px;
-    height: 112px;
+    width: 72px;
+    height: 72px;
   }
 
   .account-plate__initial {
-    font-size: 3.75rem;
+    font-size: 2.25rem;
   }
 
   /* Email and join date on their own lines; a dot left dangling at the end
@@ -733,7 +738,7 @@
     display: none;
   }
 
-  .account-signout-form {
+  .account-hero__side {
     max-width: none;
   }
 
