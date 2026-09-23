@@ -17,7 +17,6 @@ CREATE TABLE IF NOT EXISTS fact_movie_metrics (
     CONSTRAINT fk_fmm_genre   FOREIGN KEY (genre_id)  REFERENCES dim_genre  (genre_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_fmm_movie_id  ON fact_movie_metrics (movie_id);
 CREATE INDEX IF NOT EXISTS idx_fmm_date_id   ON fact_movie_metrics (date_id);
 CREATE INDEX IF NOT EXISTS idx_fmm_genre_id  ON fact_movie_metrics (genre_id);
 CREATE INDEX IF NOT EXISTS idx_fmm_ingestion_date ON fact_movie_metrics (ingestion_date);
@@ -42,9 +41,9 @@ CREATE TABLE IF NOT EXISTS fact_credit (
 -- were dropped in 23_reclaim_warehouse_storage.sql: pk_fact_credit already
 -- leads with movie_id and idx_fcredit_person_dept already leads with
 -- person_id, so both were pure prefix-duplicates of an existing index.
-CREATE INDEX IF NOT EXISTS idx_fcredit_department     ON fact_credit (department);
-CREATE INDEX IF NOT EXISTS idx_fcredit_ingestion_date ON fact_credit (ingestion_date);
-CREATE INDEX IF NOT EXISTS idx_fcredit_person_dept    ON fact_credit (person_id, department);
+-- idx_fcredit_department and idx_fcredit_ingestion_date went in
+-- 25_drop_unused_indexes.sql: effectively never scanned.
+CREATE INDEX IF NOT EXISTS idx_fcredit_person_dept ON fact_credit (person_id, department);
 
 
 -- fact_collaboration (derived in Gold — see 09_collaboration.sql for the
@@ -71,7 +70,6 @@ CREATE TABLE IF NOT EXISTS fact_movie_rating (
         FOREIGN KEY (movie_id) REFERENCES dim_movie (movie_id),
     CONSTRAINT ck_fact_movie_rating_source CHECK (source IN ('imdb', 'tmdb'))
 );
-CREATE INDEX IF NOT EXISTS idx_fact_movie_rating_movie_id ON fact_movie_rating (movie_id);
 CREATE INDEX IF NOT EXISTS idx_fact_movie_rating_source_rating
     ON fact_movie_rating (source, rating DESC);
 
@@ -100,10 +98,9 @@ CREATE TABLE IF NOT EXISTS fact_series_credit (
 -- idx_fsc_series_id and idx_fsc_person_id (alone) were dropped in
 -- 23_reclaim_warehouse_storage.sql — the same prefix-duplicate reasoning as
 -- fact_credit above: pk_fact_series_credit leads with series_id, and
--- idx_fsc_person_dept already leads with person_id.
-CREATE INDEX IF NOT EXISTS idx_fsc_department     ON fact_series_credit (department);
-CREATE INDEX IF NOT EXISTS idx_fsc_ingestion_date ON fact_series_credit (ingestion_date);
-CREATE INDEX IF NOT EXISTS idx_fsc_person_dept    ON fact_series_credit (person_id, department);
+-- idx_fsc_person_dept already leads with person_id. idx_fsc_department and
+-- idx_fsc_ingestion_date went in 25_drop_unused_indexes.sql, same as above.
+CREATE INDEX IF NOT EXISTS idx_fsc_person_dept ON fact_series_credit (person_id, department);
 
 
 -- fact_series_rating (Task 81) is the TV counterpart of fact_movie_rating:
@@ -121,7 +118,6 @@ CREATE TABLE IF NOT EXISTS fact_series_rating (
         FOREIGN KEY (series_id) REFERENCES dim_series (series_id),
     CONSTRAINT ck_fact_series_rating_source CHECK (source IN ('imdb', 'tmdb'))
 );
-CREATE INDEX IF NOT EXISTS idx_fact_series_rating_series_id ON fact_series_rating (series_id);
 CREATE INDEX IF NOT EXISTS idx_fact_series_rating_source_rating
     ON fact_series_rating (source, rating DESC);
 
@@ -142,7 +138,5 @@ CREATE TABLE IF NOT EXISTS fact_episode_rating (
         FOREIGN KEY (episode_id) REFERENCES dim_episode (episode_id),
     CONSTRAINT ck_fact_episode_rating_source CHECK (source IN ('imdb', 'tmdb'))
 );
-CREATE INDEX IF NOT EXISTS idx_fact_episode_rating_episode_id
-    ON fact_episode_rating (episode_id);
 CREATE INDEX IF NOT EXISTS idx_fact_episode_rating_source_rating
     ON fact_episode_rating (source, rating DESC);

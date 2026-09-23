@@ -77,7 +77,6 @@ WAREHOUSE_TABLES = [
     "bridge_series_country",
     "bridge_series_language",
     "bridge_series_network",
-    "person_alias",
     "etl_watermarks",
 ]
 

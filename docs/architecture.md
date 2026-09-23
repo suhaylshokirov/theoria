@@ -436,8 +436,9 @@ YouTube Trailer → any Trailer → any Teaser ladder, newest first) — a rende
 The movie page renders **only that one trailer**. A "Clips" section listing every other video
 was built (Task 75) and then removed by user request on 2026-09-07 — the extra rows (clips,
 featurettes, teasers that lost the ladder) are still ingested and still stored in
-`dim_movie_video`, they simply have no UI consumer, the same way `person_alias` sits in the
-warehouse with none.
+`dim_movie_video`, they simply have no UI consumer. `person_alias` went further down that same
+road: no UI consumer ever arrived, so it was dropped from the warehouse on 2026-09-23
+(`26_drop_person_alias.sql`) — Silver still produces `silver/person_aliases/` if it's ever needed.
 
 ## 4. Idempotency & incremental loads
 

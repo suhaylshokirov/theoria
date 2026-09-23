@@ -82,9 +82,11 @@ average and is produced in / spoken in several countries and languages, unlike `
 (one collection per film, so *that* relationship fits as a plain column on `dim_movie`).
 `bridge_movie_country` carries `relation ∈ {origin, production}` in its primary key, because the
 two disagree on ~23% of films and a coarser key would let one overwrite the other.
-**Repeating-attribute** — `person_alias` (a person's `also_known_as` entries; neither `dim_`,
-`fact_` nor `bridge_` — it attaches one dimension's repeating text to it; Phase "People bios")
 **Operational** — `etl_watermarks`
+
+`person_alias` (a person's `also_known_as` entries, from Phase "People bios") was dropped
+2026-09-23 as write-only — Silver still produces the aliases file, but nothing ever read the
+warehouse copy.
 
 Two grain decisions carry most of the weight:
 

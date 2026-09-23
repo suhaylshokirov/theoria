@@ -143,14 +143,14 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> **30 tables** on the live Neon warehouse (and the local replica) as of 2026-09-12. The **18
+> **29 tables** on the live Neon warehouse (and the local replica) as of 2026-09-23. The **18
 > movie-side tables** were verified 2026-09-06 against `information_schema` and a fresh scratch DB
 > from `01`–`03` (they match table-for-table): 9 dimensions, 4 facts, 3 bridges, 1
 > repeating-attribute (`person_alias`, Task 72), 1 operational (`etl_watermarks`). **`fact_collaboration`
 > was dropped 2026-09-12** (`23_reclaim_warehouse_storage.sql`, folded out of `02`): confirmed dead
 > — no Django view and no wired-up analytics query had read it since it was built in Task 49 — and
 > Neon's free-tier 512 MB project cap was at 94% after Task 87's live backfill. The movie side is
-> now 17 tables / 3 facts; `warehouse/queries/actor_collaboration_frequency.sql` (the one query that
+> now 16 tables / 3 facts; `warehouse/queries/actor_collaboration_frequency.sql` (the one query that
 > read it) was deleted alongside it, and `etl/warehouse_loader/load_gold.py` + Gold's
 > `_build_collaboration_edges()` step (which existed only to feed this one table — the most
 > expensive computation in `build_gold_datasets.py`, a quadratic pair expansion) went with it too:
@@ -171,8 +171,15 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > `dim_series_video`** — a straight copy of `dim_movie_video` keyed on `series_id`, same
 > replace-on-load strategy (`24_series_videos.sql`, also folded into `01`). `dim_actor`,
 > `dim_director`, `fact_cast` and `fact_crew` were dropped in Task 53; `fact_casting` was replaced in
-> Task 35.
-> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`24` are migrations for an existing DB (once
+> Task 35. **`25_drop_unused_indexes.sql`** (2026-09-23) dropped 18 redundant/unused secondary
+> indexes — prefix-duplicates of an existing PK/composite index, plus four barely-scanned ones —
+> and `VACUUM FULL`'d the affected tables, taking Neon from 437 MB to 231 MB with zero query-plan
+> or behavior change. **`26_drop_person_alias.sql`** (also 2026-09-23) dropped `person_alias`
+> (Task 72): write-only — the nightly loader rewrote ~81k rows every run but no Django view/template
+> and no analytics query ever read it. Only the warehouse copy is gone; Silver still produces
+> `silver/person_aliases/`, so the loader can be restored from git history if an alias search is
+> ever built.
+> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`26` are migrations for an existing DB (once
 > `11` drops tables, "run every file in order" ≠ "build the current schema" — see README §2).
 
 **Dimensions (9):**
@@ -202,8 +209,9 @@ free-tier cap started to bind.
 - `bridge_movie_country(movie_id FK, country_code FK, relation, ingestion_date)` — PK `(movie_id, country_code, relation)`; `relation ∈ {origin, production}` is in the key because the two disagree on ~23% of films. Task 61.
 - `bridge_movie_language(movie_id FK, language_code FK, ingestion_date)` — PK `(movie_id, language_code)`. Task 61.
 
-**Repeating-attribute (1):** neither `dim_`, `fact_` nor `bridge_` — it attaches one dimension's repeating text to it (doesn't join two dimensions, carries no measure).
-- `person_alias(person_id FK, alias, ordering, ingestion_date)` — PK `(person_id, alias)`. Task 72; `also_known_as` from `GET /person/{id}`, which is a list and so can't be a `dim_person` column without breaking 1NF.
+`person_alias(person_id FK, alias, ordering, ingestion_date)` — Task 72's repeating-attribute table
+(`also_known_as` from `GET /person/{id}`) — was dropped 2026-09-23 (`26_drop_person_alias.sql`) as
+write-only; Silver still produces `silver/person_aliases/`.
 
 **Operational (1):** `etl_watermarks(loader_name PK, last_ingestion_date, updated_at)`
 

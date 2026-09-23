@@ -5116,12 +5116,6 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
             return _fact_languages_df()
         if entity == "imdb_ratings":
             return _fact_ratings_df()
-        if entity == "person_aliases":
-            return pd.DataFrame({
-                "person_id": pd.array([10, 999], dtype="Int64"),
-                "alias": ["Tomás", "Ghost"],
-                "ordering": pd.array([0, 1], dtype="Int64"),
-            })
         raise AssertionError(f"unexpected entity {entity}")
 
     import etl.warehouse_loader.load_facts as load_facts_module
@@ -5149,7 +5143,6 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
 
     assert counts == {
         "fact_movie_metrics": 1, "fact_movie_rating": 5, "fact_credit": 5,
-        "person_alias": 1,
         "bridge_movie_company": 1, "bridge_movie_country": 1, "bridge_movie_language": 1,
     }
     rejected_files = sorted(p.name for p in tmp_path.iterdir())
@@ -5160,7 +5153,6 @@ def test_load_facts_reads_both_silver_entities_and_upserts(monkeypatch, tmp_path
         "fact_credit_rejected_2026-06-26.parquet",
         "fact_movie_metrics_rejected_2026-06-26.parquet",
         "fact_movie_rating_rejected_2026-06-26.parquet",
-        "person_alias_rejected_2026-06-26.parquet",
     ]
 
 
@@ -5977,7 +5969,6 @@ def test_load_dim_company_details_left_join_keeps_unenriched_company():
 from etl.bronze.ingest_people import ingest_people
 from etl.silver.transform_people_details import transform_people_details
 from etl.warehouse_loader.load_dimensions import load_dim_person
-from etl.warehouse_loader.load_facts import _build_person_alias_rows, load_person_alias
 from scripts.run_pipeline import _extract_person_ids
 
 
@@ -6213,45 +6204,6 @@ def test_load_dim_person_without_details_upserts_only_original_columns():
         "person_id", "name", "gender", "popularity", "profile_path",
         "known_for_department",
     }
-
-
-def test_build_person_alias_rows_resolves_and_rejects():
-    df = pd.DataFrame({
-        "person_id": pd.array([10, 999], dtype="Int64"),
-        "alias": ["Tomás", "Ghost"],
-        "ordering": pd.array([0, 1], dtype="Int64"),
-    })
-    rows, rejects = _build_person_alias_rows(
-        df, valid_person_ids={10}, ingestion_date=dt.date(2026, 6, 26),
-    )
-    assert rows == [{
-        "person_id": 10, "alias": "Tomás", "ordering": 0,
-        "ingestion_date": dt.date(2026, 6, 26),
-    }]
-    assert len(rejects) == 1
-    assert rejects[0]["rejection_reason"] == "unknown person_id"
-
-
-def test_load_person_alias_upserts_and_returns_rejects():
-    df = pd.DataFrame({
-        "person_id": pd.array([10], dtype="Int64"),
-        "alias": ["Tomás"],
-        "ordering": pd.array([0], dtype="Int64"),
-    })
-    mock_session = MagicMock()
-    with patch(
-        "etl.warehouse_loader.load_facts._existing_ids", return_value={10}
-    ):
-        count, rejects = load_person_alias(mock_session, df, dt.date(2026, 6, 26))
-
-    assert count == 1
-    assert rejects == []
-    (stmt, params), _ = mock_session.execute.call_args
-    assert "INSERT INTO person_alias" in str(stmt)
-    assert params == [{
-        "person_id": 10, "alias": "Tomás", "ordering": 0,
-        "ingestion_date": dt.date(2026, 6, 26),
-    }]
 
 
 def test_extract_person_ids_leads_billed_cast_and_directors_and_filters_photoless():

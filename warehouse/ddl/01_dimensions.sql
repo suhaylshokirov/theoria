@@ -67,19 +67,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_person_slug ON dim_person (slug);
 -- imdb_id is only ever displayed (a link to IMDb), never filtered or joined
 -- on anywhere in the app or the pipeline — confirmed by grep before dropping.
 
--- also_known_as is a list, so it can't be a column on dim_person without
--- breaking 1NF. Named plainly — not fact_ (no measure), not bridge_ (attaches
--- repeating text to one dimension, doesn't join two). See 17_person_details.sql.
-CREATE TABLE IF NOT EXISTS person_alias (
-    person_id      INTEGER      NOT NULL,
-    alias          TEXT         NOT NULL,
-    ordering       INTEGER,
-    ingestion_date DATE         NOT NULL,
-    CONSTRAINT pk_person_alias PRIMARY KEY (person_id, alias),
-    CONSTRAINT fk_person_alias_person
-        FOREIGN KEY (person_id) REFERENCES dim_person (person_id)
-);
-CREATE INDEX IF NOT EXISTS idx_person_alias_person_id ON person_alias (person_id);
+-- person_alias (also_known_as, see 17_person_details.sql) was dropped in
+-- 26_drop_person_alias.sql: write-only, no reader since Task 72 shipped it.
 
 CREATE TABLE IF NOT EXISTS dim_genre (
     genre_id    INTEGER  NOT NULL,
@@ -118,7 +107,6 @@ CREATE TABLE IF NOT EXISTS bridge_movie_company (
     CONSTRAINT fk_bridge_movie_company_company
         FOREIGN KEY (company_id) REFERENCES dim_company (company_id)
 );
-CREATE INDEX IF NOT EXISTS idx_bridge_movie_company_movie_id ON bridge_movie_company (movie_id);
 CREATE INDEX IF NOT EXISTS idx_bridge_movie_company_company_id ON bridge_movie_company (company_id);
 
 -- Country and language already have a stable, short, URL-safe natural key
@@ -149,7 +137,6 @@ CREATE TABLE IF NOT EXISTS bridge_movie_country (
     CONSTRAINT fk_bridge_movie_country_country
         FOREIGN KEY (country_code) REFERENCES dim_country (country_code)
 );
-CREATE INDEX IF NOT EXISTS idx_bridge_movie_country_movie_id ON bridge_movie_country (movie_id);
 CREATE INDEX IF NOT EXISTS idx_bridge_movie_country_country_code ON bridge_movie_country (country_code);
 
 CREATE TABLE IF NOT EXISTS bridge_movie_language (
@@ -162,7 +149,6 @@ CREATE TABLE IF NOT EXISTS bridge_movie_language (
     CONSTRAINT fk_bridge_movie_language_language
         FOREIGN KEY (language_code) REFERENCES dim_language (language_code)
 );
-CREATE INDEX IF NOT EXISTS idx_bridge_movie_language_movie_id ON bridge_movie_language (movie_id);
 CREATE INDEX IF NOT EXISTS idx_bridge_movie_language_language_code ON bridge_movie_language (language_code);
 
 -- Task 74: a film's trailers and clips. Neither fact_ (no measure — `size` is a
@@ -239,7 +225,6 @@ CREATE TABLE IF NOT EXISTS bridge_series_genre (
     CONSTRAINT fk_bridge_series_genre_genre
         FOREIGN KEY (genre_id) REFERENCES dim_genre (genre_id)
 );
-CREATE INDEX IF NOT EXISTS idx_bridge_series_genre_series_id ON bridge_series_genre (series_id);
 CREATE INDEX IF NOT EXISTS idx_bridge_series_genre_genre_id ON bridge_series_genre (genre_id);
 
 CREATE TABLE IF NOT EXISTS bridge_series_company (
@@ -252,7 +237,6 @@ CREATE TABLE IF NOT EXISTS bridge_series_company (
     CONSTRAINT fk_bridge_series_company_company
         FOREIGN KEY (company_id) REFERENCES dim_company (company_id)
 );
-CREATE INDEX IF NOT EXISTS idx_bridge_series_company_series_id ON bridge_series_company (series_id);
 CREATE INDEX IF NOT EXISTS idx_bridge_series_company_company_id ON bridge_series_company (company_id);
 
 CREATE TABLE IF NOT EXISTS bridge_series_country (
@@ -266,7 +250,6 @@ CREATE TABLE IF NOT EXISTS bridge_series_country (
     CONSTRAINT fk_bridge_series_country_country
         FOREIGN KEY (country_code) REFERENCES dim_country (country_code)
 );
-CREATE INDEX IF NOT EXISTS idx_bridge_series_country_series_id ON bridge_series_country (series_id);
 CREATE INDEX IF NOT EXISTS idx_bridge_series_country_country_code ON bridge_series_country (country_code);
 
 CREATE TABLE IF NOT EXISTS bridge_series_language (
@@ -279,7 +262,6 @@ CREATE TABLE IF NOT EXISTS bridge_series_language (
     CONSTRAINT fk_bridge_series_language_language
         FOREIGN KEY (language_code) REFERENCES dim_language (language_code)
 );
-CREATE INDEX IF NOT EXISTS idx_bridge_series_language_series_id ON bridge_series_language (series_id);
 CREATE INDEX IF NOT EXISTS idx_bridge_series_language_language_code ON bridge_series_language (language_code);
 
 CREATE TABLE IF NOT EXISTS bridge_series_network (
@@ -292,7 +274,6 @@ CREATE TABLE IF NOT EXISTS bridge_series_network (
     CONSTRAINT fk_bridge_series_network_network
         FOREIGN KEY (network_id) REFERENCES dim_network (network_id)
 );
-CREATE INDEX IF NOT EXISTS idx_bridge_series_network_series_id ON bridge_series_network (series_id);
 CREATE INDEX IF NOT EXISTS idx_bridge_series_network_network_id ON bridge_series_network (network_id);
 
 -- Task 84: the episode grain. An episode is a dimension (its descriptive
@@ -317,7 +298,6 @@ CREATE TABLE IF NOT EXISTS dim_season (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_season_series_number
     ON dim_season (series_id, season_number);
-CREATE INDEX IF NOT EXISTS idx_dim_season_series_id ON dim_season (series_id);
 
 CREATE TABLE IF NOT EXISTS dim_episode (
     episode_id      INTEGER NOT NULL,
@@ -338,8 +318,6 @@ CREATE TABLE IF NOT EXISTS dim_episode (
         FOREIGN KEY (series_id) REFERENCES dim_series (series_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_episode_natural_key
-    ON dim_episode (series_id, season_number, episode_number);
-CREATE INDEX IF NOT EXISTS idx_dim_episode_series_order
     ON dim_episode (series_id, season_number, episode_number);
 CREATE INDEX IF NOT EXISTS idx_dim_episode_imdb_id ON dim_episode (imdb_id);
 
