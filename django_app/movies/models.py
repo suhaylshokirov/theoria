@@ -30,6 +30,12 @@ class Genre(models.Model):
     def __str__(self):
         return self.genre_name
 
+    @property
+    def display_name(self):
+        """The name in the reader's language. `genre_name` stays English —
+        it is what URL slugs (?genre=science-fiction) are built from."""
+        return getattr(self, "name_i18n", None) or self.genre_name
+
 
 class Movie(models.Model):
     movie_id = models.IntegerField(primary_key=True)
@@ -55,6 +61,45 @@ class Movie(models.Model):
 
     def __str__(self):
         return self.title
+
+    # Translated text (Task 94). movies.i18n.localize_movies() annotates
+    # `title_i18n` / `overview_i18n` / `tagline_i18n` (and the raw, possibly
+    # NULL `*_tr` columns) for a non-English request. The properties fall back
+    # to the English column when nothing was annotated, so a code path that
+    # forgets to localize renders English rather than a blank.
+    @property
+    def display_title(self):
+        return getattr(self, "title_i18n", None) or self.title
+
+    @property
+    def display_overview(self):
+        return getattr(self, "overview_i18n", None) or self.overview
+
+    @property
+    def display_tagline(self):
+        return getattr(self, "tagline_i18n", None) or self.tagline
+
+    @property
+    def overview_is_fallback(self):
+        """True when this request is non-English and the overview shown is
+        the English text because no translation exists."""
+        return (
+            hasattr(self, "overview_tr")
+            and bool(self.overview)
+            and not self.overview_tr
+        )
+
+    @property
+    def tagline_is_fallback(self):
+        return (
+            hasattr(self, "tagline_tr")
+            and bool(self.tagline)
+            and not self.tagline_tr
+        )
+
+    @property
+    def prose_is_fallback(self):
+        return self.overview_is_fallback or self.tagline_is_fallback
 
 
 class Date(models.Model):
@@ -105,6 +150,20 @@ class Person(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def display_biography(self):
+        return getattr(self, "biography_i18n", None) or self.biography
+
+    @property
+    def biography_is_fallback(self):
+        """True when this request is non-English and the biography shown is
+        the English text (see Movie.prose_is_fallback)."""
+        return (
+            hasattr(self, "biography_tr")
+            and bool(self.biography)
+            and not self.biography_tr
+        )
 
 
 class Credit(models.Model):
@@ -323,6 +382,83 @@ class Language(models.Model):
 
     def __str__(self):
         return self.english_name or self.name
+
+
+# --- Translations (Task 93 tables, read since Task 94) ----------------------
+# One row per (entity, lang), holding only text TMDB actually translates.
+# Same fake-single-PK workaround as the fact/bridge models above: the FK
+# column carries primary_key=True purely to satisfy Django's one-pk rule; the
+# real PK is (entity id, lang) in Postgres. Nothing here ever relies on the
+# FK alone being unique — every read filters on `lang` too.
+
+class MovieTranslation(models.Model):
+    movie = models.ForeignKey(
+        Movie, on_delete=models.DO_NOTHING, db_column="movie_id",
+        primary_key=True, related_name="translations",
+    )
+    lang = models.CharField(max_length=5)
+    title = models.TextField(null=True)
+    overview = models.TextField(null=True)
+    tagline = models.TextField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "movie_translation"
+
+    def __str__(self):
+        return f"{self.movie_id}/{self.lang}"
+
+
+class PersonTranslation(models.Model):
+    person = models.ForeignKey(
+        Person, on_delete=models.DO_NOTHING, db_column="person_id",
+        primary_key=True, related_name="translations",
+    )
+    lang = models.CharField(max_length=5)
+    biography = models.TextField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "person_translation"
+
+    def __str__(self):
+        return f"{self.person_id}/{self.lang}"
+
+
+class GenreTranslation(models.Model):
+    genre = models.ForeignKey(
+        Genre, on_delete=models.DO_NOTHING, db_column="genre_id",
+        primary_key=True, related_name="translations",
+    )
+    lang = models.CharField(max_length=5)
+    genre_name = models.TextField()
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "genre_translation"
+
+    def __str__(self):
+        return f"{self.genre_id}/{self.lang}"
+
+
+class CountryTranslation(models.Model):
+    country = models.ForeignKey(
+        Country, on_delete=models.DO_NOTHING, db_column="country_code",
+        primary_key=True, related_name="translations",
+    )
+    lang = models.CharField(max_length=5)
+    name = models.TextField()
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "country_translation"
+
+    def __str__(self):
+        return f"{self.country_id}/{self.lang}"
 
 
 class MovieCountry(models.Model):

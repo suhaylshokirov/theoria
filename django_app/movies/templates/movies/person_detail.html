@@ -15,7 +15,7 @@
    neither a bio nor an outbound link. IMDb + homepage share one row rather
    than two near-empty ones — the Task 56 "Elsewhere" pattern. A .sheet-section
    wrapper so the existing vertical-rhythm rules space it; no new CSS. {% endcomment %}
-{% if person.biography or person.imdb_id or person.homepage %}
+{% if person.display_biography or person.imdb_id or person.homepage %}
 <section class="sheet-section">
     {% comment %} A TMDB bio runs to several paragraphs and shoves the
        filmography down the page. Clamp it to a few lines with a See more /
@@ -24,10 +24,11 @@
        and the button ships `hidden` — initBioToggle() reveals it only when
        the text actually overflows the clamp, so with JS off (or a short
        bio) the full text renders with no dead control. {% endcomment %}
-    {% if person.biography %}
+    {% if person.display_biography %}
     <div class="bio" data-bio>
-        <p class="specimen-synopsis bio-body is-collapsed" id="person-bio">{{ person.biography }}</p>
+        <p class="specimen-synopsis bio-body is-collapsed" id="person-bio"{% if person.biography_is_fallback %} lang="en"{% endif %}>{{ person.display_biography }}</p>
         <button type="button" class="bio-toggle" data-bio-toggle aria-expanded="false" aria-controls="person-bio" hidden>{% translate "See more" %}</button>
+        {% if person.biography_is_fallback %}<p class="prose-note">{% translate "Shown in English — no translation yet" %}</p>{% endif %}
     </div>
     {% endif %}
     {% if person.imdb_id or person.homepage %}

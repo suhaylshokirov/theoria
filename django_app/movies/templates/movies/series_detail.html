@@ -110,7 +110,7 @@
         {% if genres %}
         <div class="chips">
             {% for genre in genres %}
-            <a class="chip" href="{% url 'movies:series_list' %}?genre={{ genre.genre_name|slugify }}">{{ genre.genre_name }}</a>
+            <a class="chip" href="{% url 'movies:series_list' %}?genre={{ genre.genre_name|slugify }}">{{ genre.display_name }}</a>
             {% endfor %}
         </div>
         {% endif %}

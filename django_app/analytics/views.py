@@ -12,6 +12,8 @@ from django.contrib.auth.decorators import login_required
 from django.db import connections
 from django.shortcuts import render
 
+from movies.i18n import country_labels, genre_labels, localize_rows
+
 QUERIES_DIR = Path(__file__).resolve().parent.parent.parent / "warehouse" / "queries"
 
 
@@ -27,9 +29,17 @@ def _run_query(filename):
 @login_required
 def dashboard(request):
     movies_by_decade = _run_query("movies_by_decade.sql")
-    revenue_by_genre = _run_query("revenue_by_genre.sql")
+    # The .sql files stay English (project rule: analytics SQL lives in .sql
+    # files, unparameterized); genre and country names are translated here,
+    # after the query, from the same lookups the movie pages use — so the
+    # tables and the Chart.js labels below can never disagree.
+    revenue_by_genre = localize_rows(
+        _run_query("revenue_by_genre.sql"), "genre_name", genre_labels()
+    )
     top_studios_by_revenue = _run_query("top_studios_by_revenue.sql")
-    films_by_production_country = _run_query("films_by_production_country.sql")
+    films_by_production_country = localize_rows(
+        _run_query("films_by_production_country.sql"), "country_name", country_labels()
+    )
     # TV panels (Task 90) — all shaped for TV, not ported from the film
     # queries: no revenue column anywhere (TV carries no money measure), and
     # episode_rating_by_season has no film-side analogue at all.

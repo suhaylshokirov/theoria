@@ -449,6 +449,19 @@ featurettes, teasers that lost the ladder) are still ingested and still stored i
 road: no UI consumer ever arrived, so it was dropped from the warehouse on 2026-09-23
 (`26_drop_person_alias.sql`) — Silver still produces `silver/person_aliases/` if it's ever needed.
 
+### 3.11 Translations: one row per (entity, language)
+
+`movie_translation(movie_id, lang, title, overview, tagline)`, `person_translation(person_id,
+lang, biography)`, `genre_translation(genre_id, lang, genre_name)` and
+`country_translation(country_code, lang, name)` (Task 93; DDL `27`/`28`). None is `dim_`, `fact_`
+or `bridge_`: each attaches repeating text to one dimension, keyed by language — no measure, and
+no second dimension to bridge to. Row-per-language rather than `title_ru` / `title_uz` columns
+means a fourth language is a new value in `lang`, not an `ALTER TABLE`. `lang` holds the bare
+ISO-639-1 code. Film and person rows are replaced by parent id on load (a film's translation set
+can shrink when TMDB withdraws one); the two vocabularies are plain upserts. **Russian is real
+data; Uzbek prose does not exist in TMDB** — Uzbek is chrome plus the genre seed and country
+names, and its overviews and biographies fall back to English (§6.1).
+
 ## 4. Idempotency & incremental loads
 
 Every ETL stage is idempotent by design:
@@ -697,6 +710,34 @@ logic twice (once in `.sql`, once as ORM query-building) for queries — like th
 director/craft partnership join — that are naturally SQL-shaped. Every dashboard query carries an
 explicit `LIMIT` (§2.1's corpus-growth lesson: an unbounded query that was harmless at 112 films
 returned 1,304 rows into a fixed-height panel once the catalog reached 1,215).
+
+### 6.1 Reading translated text (Task 94)
+
+`movies/i18n.py` is the only place that knows the translation tables exist. Two routes, split by
+what the page needs to do with the text:
+
+- **Per-entity prose** (a film's title/overview/tagline, a person's biography) is annotated onto
+  the queryset — `Coalesce(<correlated subquery for get_language()>, <English column>)` — so a
+  *search or sort* can run in SQL against the translated column. That is why it is a subquery and
+  not a template filter: a filter can only relabel a page of 24 rows, it cannot make "Начало"
+  findable or put Cyrillic titles in Cyrillic order. Search on a translated page matches the
+  translated title **or** the English one. Blank strings are excluded inside the subquery —
+  TMDB sends `""`, not `null`, for a missing field, and `Coalesce` would otherwise prefer it to
+  the English text. Movies that reach a page through a join (a person's filmography) have no
+  queryset to annotate, so `attach_movie_titles()` fetches their titles in one extra query.
+- **Vocabularies** (genres, countries) are 20–60 rows, loaded whole as `{English name: translated
+  name}` and applied wherever a name is rendered. The analytics `.sql` files therefore stay English
+  and unparameterized; the rows are mapped after the query, so the tables and the Chart.js labels
+  read the same mapping. URLs are untouched: `?genre=` slugs are built from the English name and
+  movie slugs never translate.
+
+English is the source language and short-circuits every helper, so the English site runs exactly
+the queries it did before. Models expose `display_title` / `display_overview` /
+`display_biography` / `display_name`, which fall back to the English column when nothing was
+annotated — a path that forgets to localize shows English, never a blank. Where Uzbek (or an
+untranslated Russian film) shows English prose, the paragraph carries `lang="en"` and one quiet
+line under it says so in the reader's language. Person *names* are not translated (TMDB has none),
+so person search and sort are unchanged.
 
 ## 7. URL and page design
 

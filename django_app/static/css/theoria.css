@@ -2341,6 +2341,17 @@ html.has-js .bio-body.is-collapsed {
   color: var(--ink-faint);
 }
 
+/* Where a translated page shows English prose (an Uzbek overview, a Russian
+   film TMDB never translated): one quiet line under the text, in the same
+   register as the "originally ..." note above, so it reads as a caption to
+   the paragraph rather than as a warning. */
+.prose-note {
+  margin-top: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink-faint);
+}
+
 .record-list {
   margin: var(--space-6) 0 0;
   border-top: var(--hairline);

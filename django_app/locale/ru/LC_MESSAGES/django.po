@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-24 11:16+0000\n"
+"POT-Creation-Date: 2026-09-24 12:54+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -701,18 +701,18 @@ msgid "Air date"
 msgstr "Дата выхода в эфир"
 
 #: movies/templates/movies/_episode_table.html:27
-#: movies/templates/movies/movie_detail.html:49
+#: movies/templates/movies/movie_detail.html:50
 msgid "Runtime"
 msgstr "Длительность"
 
 #: movies/templates/movies/_episode_table.html:28
-#: movies/templates/movies/movie_detail.html:40
+#: movies/templates/movies/movie_detail.html:41
 #: movies/templates/movies/series_detail.html:38
 msgid "Rating"
 msgstr "Рейтинг"
 
 #: movies/templates/movies/_episode_table.html:37
-#: movies/templates/movies/movie_detail.html:50
+#: movies/templates/movies/movie_detail.html:51
 #, python-format
 msgid "%(n)s min"
 msgstr "%(n)s мин"
@@ -883,7 +883,7 @@ msgstr "Логотип: %(name)s"
 #: movies/templates/movies/_studio_card.html:34
 #: movies/templates/movies/director_detail.html:12
 #: movies/templates/movies/person_detail.html:6
-#: movies/templates/movies/person_detail.html:81
+#: movies/templates/movies/person_detail.html:82
 #: movies/templates/movies/studio_detail.html:77
 #, python-format
 msgid "%(n)s movie"
@@ -902,15 +902,15 @@ msgstr "Студий по запросу «%(q)s» нет."
 msgid "No studios loaded yet. Run the pipeline to fill the catalog."
 msgstr "Студии ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
 
-#: movies/templates/movies/_studio_header.html:41 movies/views.py:1233
-#: movies/views.py:1582
+#: movies/templates/movies/_studio_header.html:41 movies/views.py:1255
+#: movies/views.py:1621
 msgid "Active"
 msgstr "Активная карьера"
 
 #: movies/templates/movies/_studio_header.html:45
-#: movies/templates/movies/movie_detail.html:80
+#: movies/templates/movies/movie_detail.html:81
 #: movies/templates/movies/movie_list.html:33
-#: movies/templates/movies/person_detail.html:71
+#: movies/templates/movies/person_detail.html:72
 #: movies/templates/movies/studio_detail.html:67
 #: movies/templates/movies/studio_list.html:32
 msgid "Revenue"
@@ -927,7 +927,7 @@ msgstr "Смотреть %(kind)s: %(name)s"
 
 #: movies/templates/movies/actor_detail.html:11
 #: movies/templates/movies/director_detail.html:11
-#: movies/templates/movies/person_detail.html:80
+#: movies/templates/movies/person_detail.html:81
 #: movies/templates/movies/studio_detail.html:76
 msgid "Filmography"
 msgstr "Фильмография"
@@ -965,7 +965,7 @@ msgstr "Поиск фильмов и сериалов по названию"
 #: movies/templates/movies/browse.html:24
 #: movies/templates/movies/cartoon_list.html:23
 #: movies/templates/movies/movie_list.html:27
-#: movies/templates/movies/person_detail.html:65
+#: movies/templates/movies/person_detail.html:66
 #: movies/templates/movies/person_list.html:27
 #: movies/templates/movies/series_list.html:23
 #: movies/templates/movies/studio_detail.html:61
@@ -976,7 +976,7 @@ msgstr "Сортировка"
 #: movies/templates/movies/browse.html:26
 #: movies/templates/movies/cartoon_list.html:25
 #: movies/templates/movies/movie_list.html:29
-#: movies/templates/movies/person_detail.html:67
+#: movies/templates/movies/person_detail.html:68
 #: movies/templates/movies/series_list.html:25
 #: movies/templates/movies/studio_detail.html:63
 msgid "Newest"
@@ -985,7 +985,7 @@ msgstr "Новые"
 #: movies/templates/movies/browse.html:28
 #: movies/templates/movies/cartoon_list.html:27
 #: movies/templates/movies/movie_list.html:31
-#: movies/templates/movies/person_detail.html:69
+#: movies/templates/movies/person_detail.html:70
 #: movies/templates/movies/series_list.html:27
 #: movies/templates/movies/studio_detail.html:65
 msgid "Rated"
@@ -994,7 +994,7 @@ msgstr "По рейтингу"
 #: movies/templates/movies/browse.html:30
 #: movies/templates/movies/cartoon_list.html:29
 #: movies/templates/movies/movie_list.html:35
-#: movies/templates/movies/person_detail.html:73
+#: movies/templates/movies/person_detail.html:74
 #: movies/templates/movies/person_list.html:31
 #: movies/templates/movies/series_list.html:29
 #: movies/templates/movies/studio_detail.html:69
@@ -1005,7 +1005,7 @@ msgstr "А–Я"
 #: movies/templates/movies/browse.html:32
 #: movies/templates/movies/cartoon_list.html:31
 #: movies/templates/movies/movie_list.html:62
-#: movies/templates/movies/person_detail.html:75
+#: movies/templates/movies/person_detail.html:76
 #: movies/templates/movies/person_list.html:56
 #: movies/templates/movies/series_list.html:40
 #: movies/templates/movies/studio_detail.html:71
@@ -1046,7 +1046,7 @@ msgstr "Добро<br>пожаловать<br>в мир кино."
 msgid "Built for people who love the craft of cinema — every movie, every performance, gathered in one place to explore."
 msgstr "Создано для тех, кто любит искусство кино: каждый фильм, каждая роль — всё собрано в одном месте."
 
-#: movies/templates/movies/home.html:31 movies/views.py:673
+#: movies/templates/movies/home.html:31 movies/views.py:692
 #: templates/base.html:183
 msgid "People"
 msgstr "Люди"
@@ -1085,11 +1085,16 @@ msgstr "по дате последней серии"
 msgid "originally “%(title)s”"
 msgstr "в оригинале «%(title)s»"
 
-#: movies/templates/movies/movie_detail.html:45 movies/vocab.py:139
+#: movies/templates/movies/movie_detail.html:36
+#: movies/templates/movies/person_detail.html:33
+msgid "Shown in English — no translation yet"
+msgstr "Показано на английском — перевода пока нет"
+
+#: movies/templates/movies/movie_detail.html:46 movies/vocab.py:139
 msgid "Released"
 msgstr "Дата выхода"
 
-#: movies/templates/movies/movie_detail.html:53
+#: movies/templates/movies/movie_detail.html:54
 #: movies/templates/movies/series_detail.html:63
 msgid "Language"
 msgid_plural "Languages"
@@ -1098,47 +1103,47 @@ msgstr[1] "Языки"
 msgstr[2] "Языки"
 msgstr[3] "Языки"
 
-#: movies/templates/movies/movie_detail.html:58
+#: movies/templates/movies/movie_detail.html:59
 #: movies/templates/movies/series_detail.html:68
 msgid "Countries"
 msgstr "Страны"
 
-#: movies/templates/movies/movie_detail.html:64
+#: movies/templates/movies/movie_detail.html:65
 #: movies/templates/movies/series_detail.html:74
 msgid "Country of origin"
 msgstr "Страна происхождения"
 
-#: movies/templates/movies/movie_detail.html:70
+#: movies/templates/movies/movie_detail.html:71
 #: movies/templates/movies/series_detail.html:80
 msgid "Production countries"
 msgstr "Страны производства"
 
-#: movies/templates/movies/movie_detail.html:76
+#: movies/templates/movies/movie_detail.html:77
 msgid "Budget"
 msgstr "Бюджет"
 
-#: movies/templates/movies/movie_detail.html:85
+#: movies/templates/movies/movie_detail.html:86
 msgid "Directed by"
 msgstr "Режиссёр"
 
-#: movies/templates/movies/movie_detail.html:93
+#: movies/templates/movies/movie_detail.html:94
 #: movies/templates/movies/series_detail.html:101
 #: movies/templates/movies/studio_list.html:4
 #: movies/templates/movies/studio_list.html:7 templates/base.html:184
 msgid "Studios"
 msgstr "Студии"
 
-#: movies/templates/movies/movie_detail.html:126
+#: movies/templates/movies/movie_detail.html:127
 #: movies/templates/movies/series_detail.html:129
 msgid "trailer"
 msgstr "трейлер"
 
-#: movies/templates/movies/movie_detail.html:136
+#: movies/templates/movies/movie_detail.html:137
 #: movies/templates/movies/series_detail.html:139
 msgid "Cast"
 msgstr "В ролях"
 
-#: movies/templates/movies/movie_detail.html:137
+#: movies/templates/movies/movie_detail.html:138
 #: movies/templates/movies/series_detail.html:140
 #, python-format
 msgid "%(cast)s cast · %(counter)s credit"
@@ -1148,31 +1153,31 @@ msgstr[1] "%(cast)s в ролях · %(counter)s работы"
 msgstr[2] "%(cast)s в ролях · %(counter)s работ"
 msgstr[3] "%(cast)s в ролях · %(counter)s работы"
 
-#: movies/templates/movies/movie_detail.html:151
+#: movies/templates/movies/movie_detail.html:152
 msgid "No cast recorded for this movie."
 msgstr "Для этого фильма нет записанного актёрского состава."
 
-#: movies/templates/movies/movie_detail.html:154
+#: movies/templates/movies/movie_detail.html:155
 #: movies/templates/movies/series_detail.html:154
 msgid "cast"
 msgstr "актёры"
 
-#: movies/templates/movies/movie_detail.html:168
+#: movies/templates/movies/movie_detail.html:169
 #: movies/templates/movies/series_detail.html:160 movies/vocab.py:35
 msgid "Crew"
 msgstr "Съёмочная группа"
 
-#: movies/templates/movies/movie_detail.html:169
+#: movies/templates/movies/movie_detail.html:170
 #: movies/templates/movies/series_detail.html:161
 #, python-format
 msgid "%(n)s crew"
 msgstr "%(n)s чел. в съёмочной группе"
 
-#: movies/templates/movies/movie_detail.html:194
+#: movies/templates/movies/movie_detail.html:195
 msgid "No crew recorded for this movie."
 msgstr "Для этого фильма нет записанной съёмочной группы."
 
-#: movies/templates/movies/movie_detail.html:196
+#: movies/templates/movies/movie_detail.html:197
 #: movies/templates/movies/series_detail.html:188
 msgid "crew"
 msgstr "съёмочная группа"
@@ -1200,7 +1205,7 @@ msgid "Any genre"
 msgstr "Любой жанр"
 
 #: movies/templates/movies/person_detail.html:6
-#: movies/templates/movies/person_detail.html:81
+#: movies/templates/movies/person_detail.html:82
 #, python-format
 msgid "%(n)s show"
 msgid_plural "%(n)s shows"
@@ -1219,26 +1224,26 @@ msgstr "%(name)s: %(films)s и %(shows)s в каталоге Theoria."
 msgid "%(name)s: %(films)s in the Theoria catalog."
 msgstr "%(name)s: %(films)s в каталоге Theoria."
 
-#: movies/templates/movies/person_detail.html:38
+#: movies/templates/movies/person_detail.html:39
 msgid "Elsewhere"
 msgstr "На других сайтах"
 
-#: movies/templates/movies/person_detail.html:42
+#: movies/templates/movies/person_detail.html:43
 #: movies/templates/movies/studio_detail.html:32
 msgid "Official site"
 msgstr "Официальный сайт"
 
-#: movies/templates/movies/person_detail.html:62
+#: movies/templates/movies/person_detail.html:63
 #: movies/templates/movies/studio_detail.html:58
 msgid "Search this filmography"
 msgstr "Поиск по этой фильмографии"
 
-#: movies/templates/movies/person_detail.html:62
+#: movies/templates/movies/person_detail.html:63
 #, python-format
 msgid "Search %(name)s's movies and shows by title"
 msgstr "Поиск по названию среди фильмов и сериалов: %(name)s"
 
-#: movies/templates/movies/person_detail.html:62
+#: movies/templates/movies/person_detail.html:63
 #: movies/templates/movies/studio_detail.html:58
 #, python-format
 msgid "Search %(name)s's movies by title"
@@ -1368,34 +1373,34 @@ msgstr "Поиск студий по названию"
 msgid "Most movies"
 msgstr "Больше всего фильмов"
 
-#: movies/views.py:590
+#: movies/views.py:609
 msgid "Female"
 msgstr "Женский"
 
-#: movies/views.py:591
+#: movies/views.py:610
 msgid "Male"
 msgstr "Мужской"
 
-#: movies/views.py:592
+#: movies/views.py:611
 msgid "Non-binary"
 msgstr "Небинарный"
 
-#: movies/views.py:679
+#: movies/views.py:698
 msgctxt "people list title"
 msgid "Acting"
 msgstr "Актёры"
 
-#: movies/views.py:686
+#: movies/views.py:705
 msgctxt "people list title"
 msgid "Directing"
 msgstr "Режиссёры"
 
-#: movies/views.py:1236
+#: movies/views.py:1258
 #, python-format
 msgid "%(year)s–Active"
 msgstr "%(year)s – н. в."
 
-#: movies/views.py:1582
+#: movies/views.py:1621
 msgid "Retired"
 msgstr "Карьера окончена"
 

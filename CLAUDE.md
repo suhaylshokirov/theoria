@@ -149,7 +149,9 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> **29 tables** on the live Neon warehouse (and the local replica) as of 2026-09-23. The **18
+> **33 tables** as of 2026-09-24 on the local replica: **29** as of 2026-09-23 on live Neon (and the
+> replica) plus Task 93's four `*_translation` tables (see the Translations block below) — Neon gets
+> those only once `27`/`28` are applied there. The **18
 > movie-side tables** were verified 2026-09-06 against `information_schema` and a fresh scratch DB
 > from `01`–`03` (they match table-for-table): 9 dimensions, 4 facts, 3 bridges, 1
 > repeating-attribute (`person_alias`, Task 72), 1 operational (`etl_watermarks`). **`fact_collaboration`
@@ -218,6 +220,16 @@ free-tier cap started to bind.
 `person_alias(person_id FK, alias, ordering, ingestion_date)` — Task 72's repeating-attribute table
 (`also_known_as` from `GET /person/{id}`) — was dropped 2026-09-23 (`26_drop_person_alias.sql`) as
 write-only; Silver still produces `silver/person_aliases/`.
+
+**Translations (4, Tasks 93–94):** `movie_translation(movie_id FK, lang, title, overview, tagline)`,
+`person_translation(person_id FK, lang, biography)`, `genre_translation(genre_id FK, lang, genre_name)`,
+`country_translation(country_code FK, lang, name)` — PK `(entity id, lang)`, `lang` = bare ISO code
+(`ru`, `uz`). Not `dim_`/`fact_`/`bridge_`: each attaches repeating text to one dimension, no measure,
+nothing to bridge (same posture as the dropped `person_alias`). Row-per-language so a 4th language costs
+no schema change. Replace-loaded by parent id (films, people) or upserted (genres, countries). Russian is
+real TMDB data; Uzbek prose does not exist, so Uzbek reads English for overview/tagline/biography behind
+a quiet marker. The site reads them through `django_app/movies/i18n.py` (`docs/architecture.md` §6.1);
+`dim_genre`/`dim_country` names and all URL slugs stay English.
 
 **Operational (1):** `etl_watermarks(loader_name PK, last_ingestion_date, updated_at)`
 

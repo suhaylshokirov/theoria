@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-24 11:16+0000\n"
+"POT-Creation-Date: 2026-09-24 12:54+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: uz\n"
@@ -698,18 +698,18 @@ msgid "Air date"
 msgstr "Efirga chiqqan sana"
 
 #: movies/templates/movies/_episode_table.html:27
-#: movies/templates/movies/movie_detail.html:49
+#: movies/templates/movies/movie_detail.html:50
 msgid "Runtime"
 msgstr "Davomiyligi"
 
 #: movies/templates/movies/_episode_table.html:28
-#: movies/templates/movies/movie_detail.html:40
+#: movies/templates/movies/movie_detail.html:41
 #: movies/templates/movies/series_detail.html:38
 msgid "Rating"
 msgstr "Reyting"
 
 #: movies/templates/movies/_episode_table.html:37
-#: movies/templates/movies/movie_detail.html:50
+#: movies/templates/movies/movie_detail.html:51
 #, python-format
 msgid "%(n)s min"
 msgstr "%(n)s daq"
@@ -874,7 +874,7 @@ msgstr "%(name)s logotipi"
 #: movies/templates/movies/_studio_card.html:34
 #: movies/templates/movies/director_detail.html:12
 #: movies/templates/movies/person_detail.html:6
-#: movies/templates/movies/person_detail.html:81
+#: movies/templates/movies/person_detail.html:82
 #: movies/templates/movies/studio_detail.html:77
 #, python-format
 msgid "%(n)s movie"
@@ -890,15 +890,15 @@ msgstr "“%(q)s” boʻyicha studiya topilmadi."
 msgid "No studios loaded yet. Run the pipeline to fill the catalog."
 msgstr "Studiyalar hali yuklanmagan. Katalogni toʻldirish uchun jarayonni ishga tushiring."
 
-#: movies/templates/movies/_studio_header.html:41 movies/views.py:1233
-#: movies/views.py:1582
+#: movies/templates/movies/_studio_header.html:41 movies/views.py:1255
+#: movies/views.py:1621
 msgid "Active"
 msgstr "Faol faoliyat"
 
 #: movies/templates/movies/_studio_header.html:45
-#: movies/templates/movies/movie_detail.html:80
+#: movies/templates/movies/movie_detail.html:81
 #: movies/templates/movies/movie_list.html:33
-#: movies/templates/movies/person_detail.html:71
+#: movies/templates/movies/person_detail.html:72
 #: movies/templates/movies/studio_detail.html:67
 #: movies/templates/movies/studio_list.html:32
 msgid "Revenue"
@@ -915,7 +915,7 @@ msgstr "Koʻrish (%(kind)s): %(name)s"
 
 #: movies/templates/movies/actor_detail.html:11
 #: movies/templates/movies/director_detail.html:11
-#: movies/templates/movies/person_detail.html:80
+#: movies/templates/movies/person_detail.html:81
 #: movies/templates/movies/studio_detail.html:76
 msgid "Filmography"
 msgstr "Filmografiya"
@@ -950,7 +950,7 @@ msgstr "Film va seriallarni nomi boʻyicha qidirish"
 #: movies/templates/movies/browse.html:24
 #: movies/templates/movies/cartoon_list.html:23
 #: movies/templates/movies/movie_list.html:27
-#: movies/templates/movies/person_detail.html:65
+#: movies/templates/movies/person_detail.html:66
 #: movies/templates/movies/person_list.html:27
 #: movies/templates/movies/series_list.html:23
 #: movies/templates/movies/studio_detail.html:61
@@ -961,7 +961,7 @@ msgstr "Tartiblash"
 #: movies/templates/movies/browse.html:26
 #: movies/templates/movies/cartoon_list.html:25
 #: movies/templates/movies/movie_list.html:29
-#: movies/templates/movies/person_detail.html:67
+#: movies/templates/movies/person_detail.html:68
 #: movies/templates/movies/series_list.html:25
 #: movies/templates/movies/studio_detail.html:63
 msgid "Newest"
@@ -970,7 +970,7 @@ msgstr "Yangilari"
 #: movies/templates/movies/browse.html:28
 #: movies/templates/movies/cartoon_list.html:27
 #: movies/templates/movies/movie_list.html:31
-#: movies/templates/movies/person_detail.html:69
+#: movies/templates/movies/person_detail.html:70
 #: movies/templates/movies/series_list.html:27
 #: movies/templates/movies/studio_detail.html:65
 msgid "Rated"
@@ -979,7 +979,7 @@ msgstr "Reyting boʻyicha"
 #: movies/templates/movies/browse.html:30
 #: movies/templates/movies/cartoon_list.html:29
 #: movies/templates/movies/movie_list.html:35
-#: movies/templates/movies/person_detail.html:73
+#: movies/templates/movies/person_detail.html:74
 #: movies/templates/movies/person_list.html:31
 #: movies/templates/movies/series_list.html:29
 #: movies/templates/movies/studio_detail.html:69
@@ -990,7 +990,7 @@ msgstr "A–Z"
 #: movies/templates/movies/browse.html:32
 #: movies/templates/movies/cartoon_list.html:31
 #: movies/templates/movies/movie_list.html:62
-#: movies/templates/movies/person_detail.html:75
+#: movies/templates/movies/person_detail.html:76
 #: movies/templates/movies/person_list.html:56
 #: movies/templates/movies/series_list.html:40
 #: movies/templates/movies/studio_detail.html:71
@@ -1031,7 +1031,7 @@ msgstr "Kino<br>olamiga<br>xush kelibsiz."
 msgid "Built for people who love the craft of cinema — every movie, every performance, gathered in one place to explore."
 msgstr "Kino sanʼatini sevadiganlar uchun yaratilgan — har bir film, har bir rol bir joyda jamlangan."
 
-#: movies/templates/movies/home.html:31 movies/views.py:673
+#: movies/templates/movies/home.html:31 movies/views.py:692
 #: templates/base.html:183
 msgid "People"
 msgstr "Odamlar"
@@ -1070,88 +1070,93 @@ msgstr "oxirgi efir sanasi boʻyicha"
 msgid "originally “%(title)s”"
 msgstr "asl nomi “%(title)s”"
 
-#: movies/templates/movies/movie_detail.html:45 movies/vocab.py:139
+#: movies/templates/movies/movie_detail.html:36
+#: movies/templates/movies/person_detail.html:33
+msgid "Shown in English — no translation yet"
+msgstr "Inglizcha koʻrsatilgan — tarjimasi hali yoʻq"
+
+#: movies/templates/movies/movie_detail.html:46 movies/vocab.py:139
 msgid "Released"
 msgstr "Chiqqan sana"
 
-#: movies/templates/movies/movie_detail.html:53
+#: movies/templates/movies/movie_detail.html:54
 #: movies/templates/movies/series_detail.html:63
 msgid "Language"
 msgid_plural "Languages"
 msgstr[0] "Til"
 
-#: movies/templates/movies/movie_detail.html:58
+#: movies/templates/movies/movie_detail.html:59
 #: movies/templates/movies/series_detail.html:68
 msgid "Countries"
 msgstr "Davlatlar"
 
-#: movies/templates/movies/movie_detail.html:64
+#: movies/templates/movies/movie_detail.html:65
 #: movies/templates/movies/series_detail.html:74
 msgid "Country of origin"
 msgstr "Kelib chiqqan davlat"
 
-#: movies/templates/movies/movie_detail.html:70
+#: movies/templates/movies/movie_detail.html:71
 #: movies/templates/movies/series_detail.html:80
 msgid "Production countries"
 msgstr "Ishlab chiqargan davlatlar"
 
-#: movies/templates/movies/movie_detail.html:76
+#: movies/templates/movies/movie_detail.html:77
 msgid "Budget"
 msgstr "Byudjet"
 
-#: movies/templates/movies/movie_detail.html:85
+#: movies/templates/movies/movie_detail.html:86
 msgid "Directed by"
 msgstr "Rejissyor"
 
-#: movies/templates/movies/movie_detail.html:93
+#: movies/templates/movies/movie_detail.html:94
 #: movies/templates/movies/series_detail.html:101
 #: movies/templates/movies/studio_list.html:4
 #: movies/templates/movies/studio_list.html:7 templates/base.html:184
 msgid "Studios"
 msgstr "Studiyalar"
 
-#: movies/templates/movies/movie_detail.html:126
+#: movies/templates/movies/movie_detail.html:127
 #: movies/templates/movies/series_detail.html:129
 msgid "trailer"
 msgstr "treyler"
 
-#: movies/templates/movies/movie_detail.html:136
+#: movies/templates/movies/movie_detail.html:137
 #: movies/templates/movies/series_detail.html:139
 msgid "Cast"
 msgstr "Rollarda"
 
-#: movies/templates/movies/movie_detail.html:137
+#: movies/templates/movies/movie_detail.html:138
 #: movies/templates/movies/series_detail.html:140
 #, python-format
 msgid "%(cast)s cast · %(counter)s credit"
 msgid_plural "%(cast)s cast · %(counter)s credits"
 msgstr[0] "%(cast)s ta rolda · %(counter)s ta ish"
 
-#: movies/templates/movies/movie_detail.html:151
+#: movies/templates/movies/movie_detail.html:152
 msgid "No cast recorded for this movie."
 msgstr "Bu film uchun aktyorlar tarkibi qayd etilmagan."
 
-#: movies/templates/movies/movie_detail.html:154
+#: movies/templates/movies/movie_detail.html:155
 #: movies/templates/movies/series_detail.html:154
 msgid "cast"
 msgstr "aktyorlar"
 
-#: movies/templates/movies/movie_detail.html:168
+#: movies/templates/movies/movie_detail.html:169
 #: movies/templates/movies/series_detail.html:160 movies/vocab.py:35
 msgid "Crew"
 msgstr "Suratga olish guruhi"
 
-#: movies/templates/movies/movie_detail.html:169
+#: movies/templates/movies/movie_detail.html:170
 #: movies/templates/movies/series_detail.html:161
 #, python-format
 msgid "%(n)s crew"
 msgstr "Suratga olish guruhida %(n)s kishi"
 
-#: movies/templates/movies/movie_detail.html:194
+#: movies/templates/movies/movie_detail.html:195
 msgid "No crew recorded for this movie."
 msgstr "Bu film uchun suratga olish guruhi qayd etilmagan."
 
-#: movies/templates/movies/movie_detail.html:196
+#: movies/templates/movies/movie_detail.html:197
 #: movies/templates/movies/series_detail.html:188
 msgid "crew"
 msgstr "guruh"
@@ -1179,7 +1184,7 @@ msgid "Any genre"
 msgstr "Istalgan janr"
 
 #: movies/templates/movies/person_detail.html:6
-#: movies/templates/movies/person_detail.html:81
+#: movies/templates/movies/person_detail.html:82
 #, python-format
 msgid "%(n)s show"
 msgid_plural "%(n)s shows"
@@ -1195,26 +1200,26 @@ msgstr "%(name)s: Theoria katalogida %(films)s va %(shows)s."
 msgid "%(name)s: %(films)s in the Theoria catalog."
 msgstr "%(name)s: Theoria katalogida %(films)s."
 
-#: movies/templates/movies/person_detail.html:38
+#: movies/templates/movies/person_detail.html:39
 msgid "Elsewhere"
 msgstr "Boshqa saytlarda"
 
-#: movies/templates/movies/person_detail.html:42
+#: movies/templates/movies/person_detail.html:43
 #: movies/templates/movies/studio_detail.html:32
 msgid "Official site"
 msgstr "Rasmiy sayt"
 
-#: movies/templates/movies/person_detail.html:62
+#: movies/templates/movies/person_detail.html:63
 #: movies/templates/movies/studio_detail.html:58
 msgid "Search this filmography"
 msgstr "Ushbu filmografiyadan qidirish"
 
-#: movies/templates/movies/person_detail.html:62
+#: movies/templates/movies/person_detail.html:63
 #, python-format
 msgid "Search %(name)s's movies and shows by title"
 msgstr "%(name)s: film va seriallarni nomi boʻyicha qidirish"
 
-#: movies/templates/movies/person_detail.html:62
+#: movies/templates/movies/person_detail.html:63
 #: movies/templates/movies/studio_detail.html:58
 #, python-format
 msgid "Search %(name)s's movies by title"
@@ -1335,34 +1340,34 @@ msgstr "Studiyalarni nomi boʻyicha qidirish"
 msgid "Most movies"
 msgstr "Eng koʻp filmlar"
 
-#: movies/views.py:590
+#: movies/views.py:609
 msgid "Female"
 msgstr "Ayol"
 
-#: movies/views.py:591
+#: movies/views.py:610
 msgid "Male"
 msgstr "Erkak"
 
-#: movies/views.py:592
+#: movies/views.py:611
 msgid "Non-binary"
 msgstr "Nobinar"
 
-#: movies/views.py:679
+#: movies/views.py:698
 msgctxt "people list title"
 msgid "Acting"
 msgstr "Aktyorlar"
 
-#: movies/views.py:686
+#: movies/views.py:705
 msgctxt "people list title"
 msgid "Directing"
 msgstr "Rejissyorlar"
 
-#: movies/views.py:1236
+#: movies/views.py:1258
 #, python-format
 msgid "%(year)s–Active"
 msgstr "%(year)s – hozirgacha"
 
-#: movies/views.py:1582
+#: movies/views.py:1621
 msgid "Retired"
 msgstr "Faoliyati tugagan"
 

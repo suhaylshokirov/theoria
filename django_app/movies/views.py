@@ -22,6 +22,11 @@ from movies.models import (
     Person, Season, Series, SeriesCompany, SeriesCountry, SeriesCredit,
     SeriesGenre, SeriesLanguage, SeriesNetwork, SeriesRating, SeriesVideo,
 )
+from movies.i18n import (
+    attach_movie_titles, country_labels, filter_by_title, genre_labels,
+    is_translated_request, localize_genres, localize_movies, localize_people,
+    title_order,
+)
 from movies.vocab import display_department, display_job
 
 MOVIES_PER_PAGE = 24
@@ -98,12 +103,12 @@ def _approx(n):
 def home(request):
     """Landing page: the catalog as a contact sheet, plus warehouse-wide stats."""
     top_rated = (
-        Movie.objects.using("warehouse")
+        localize_movies(Movie.objects.using("warehouse"))
         .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
         .order_by(F("imdb_rating").desc(nulls_last=True))[:12]
     )
     newest = (
-        Movie.objects.using("warehouse")
+        localize_movies(Movie.objects.using("warehouse"))
         .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
         .order_by(F("release_date").desc(nulls_last=True))[:12]
     )
@@ -216,8 +221,13 @@ def movie_list(request):
         .order_by("genre_name")
         .values_list("genre_id", "genre_name")
     )
+    # The slug is always built from the English name, so ?genre= URLs are the
+    # same in every language; only the visible label is translated (Task 94).
+    labels = genre_labels()
     genre_slugs = {slugify(name): genre_id for genre_id, name in genre_rows}
-    genre_choices = [(slugify(name), name) for _, name in genre_rows]
+    genre_choices = [(slugify(name), labels.get(name, name)) for _, name in genre_rows]
+    if labels:
+        genre_choices.sort(key=lambda choice: choice[1].lower())
 
     genre = request.GET.get("genre", "").strip()
     if genre not in genre_slugs:
@@ -226,9 +236,9 @@ def movie_list(request):
         # 404, and not an empty grid.
         genre = ""
 
-    movies = Movie.objects.using("warehouse").all()
+    movies = localize_movies(Movie.objects.using("warehouse").all())
     if q:
-        movies = movies.filter(title__icontains=q)
+        movies = filter_by_title(movies, q)
     if genre:
         # fact_movie_metrics' PK is (movie_id, date_id, genre_id) and
         # date_id is derived from the *release* date — so a film whose
@@ -244,7 +254,7 @@ def movie_list(request):
     movies = movies.annotate(
         imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
     )
-    movies = movies.order_by(MOVIE_SORTS[sort])
+    movies = movies.order_by(title_order(sort, MOVIE_SORTS[sort]))
 
     page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
@@ -297,8 +307,13 @@ def series_list(request):
         .order_by("genre_name")
         .values_list("genre_id", "genre_name")
     )
+    # The slug is always built from the English name, so ?genre= URLs are the
+    # same in every language; only the visible label is translated (Task 94).
+    labels = genre_labels()
     genre_slugs = {slugify(name): genre_id for genre_id, name in genre_rows}
-    genre_choices = [(slugify(name), name) for _, name in genre_rows]
+    genre_choices = [(slugify(name), labels.get(name, name)) for _, name in genre_rows]
+    if labels:
+        genre_choices.sort(key=lambda choice: choice[1].lower())
 
     genre = request.GET.get("genre", "").strip()
     if genre not in genre_slugs:
@@ -381,14 +396,18 @@ def _browse_rows(q, sort):
     tests/test_django_views.py's browse tests, following _cartoon_mocks()'s
     pattern).
     """
-    movies = Movie.objects.using("warehouse").all()
+    movies = localize_movies(Movie.objects.using("warehouse").all())
     if q:
-        movies = movies.filter(title__icontains=q)
+        movies = filter_by_title(movies, q)
+    # A translated title sorts under its translated spelling, so the movie
+    # side of the union reads title_i18n where the show side reads `name`
+    # (series carry no translations).
+    title_column = "title_i18n" if is_translated_request() else "title"
     movies = movies.annotate(
         kind=Value("movie", output_field=CharField()),
         item_id=F("movie_id"),
-        sort_title=F("title"),
-        sort_title_lower=Lower("title"),
+        sort_title=F(title_column),
+        sort_title_lower=Lower(title_column),
         sort_date=F("release_date"),
         rating=Max("movierating__rating", filter=Q(movierating__source="imdb")),
     ).values("kind", "item_id", "sort_title", "sort_title_lower", "sort_date", "rating")
@@ -429,7 +448,7 @@ def browse(request):
 
     movies_by_id = {
         movie.movie_id: movie
-        for movie in Movie.objects.using("warehouse")
+        for movie in localize_movies(Movie.objects.using("warehouse"))
         .filter(movie_id__in=movie_ids)
         .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
     }
@@ -506,7 +525,7 @@ def cartoon_list(request):
     # join, silently turning "animation AND family" into the impossible
     # "genre_id = 16 AND genre_id = 10751" on one row. Exists() sidesteps
     # the join-reuse logic entirely.
-    movies = Movie.objects.using("warehouse").filter(
+    movies = localize_movies(Movie.objects.using("warehouse")).filter(
         Exists(
             MovieMetrics.objects.using("warehouse")
             .filter(movie_id=OuterRef("pk"), genre_id=CARTOON_ANIMATION_GENRE_ID)
@@ -517,7 +536,7 @@ def cartoon_list(request):
         ),
     )
     if q:
-        movies = movies.filter(title__icontains=q)
+        movies = filter_by_title(movies, q)
     movies = movies.annotate(
         imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
     )
@@ -542,7 +561,7 @@ def cartoon_list(request):
     for movie in movies:
         movie.kind = "movie"
         movie.sort_date = movie.release_date
-        movie.sort_title = movie.title
+        movie.sort_title = movie.display_title
         items.append(movie)
     for show in series:
         show.kind = "series"
@@ -691,11 +710,11 @@ def director_list(request):
 def movie_detail(request, movie_slug):
     """Single movie: core facts, genres, directors, and cast."""
     movie = get_object_or_404(
-        Movie.objects.using("warehouse"), slug=movie_slug
+        localize_movies(Movie.objects.using("warehouse")), slug=movie_slug
     )
     movie_id = movie.movie_id
 
-    genres = (
+    genres = localize_genres(
         Genre.objects.using("warehouse")
         .filter(moviemetrics__movie_id=movie_id)
         .distinct()
@@ -859,10 +878,13 @@ def _country_provenance(country_rows):
     for original_title. Returns a dict with all three keys always present so
     the template doesn't have to branch on which shape it got.
     """
-    origin = sorted({r.country.name for r in country_rows if r.relation == "origin"})
-    production = sorted(
-        {r.country.name for r in country_rows if r.relation == "production"}
-    )
+    labels = country_labels()
+
+    def name(row):
+        return labels.get(row.country.name, row.country.name)
+
+    origin = sorted({name(r) for r in country_rows if r.relation == "origin"})
+    production = sorted({name(r) for r in country_rows if r.relation == "production"})
     if origin and production and origin != production:
         return {"origin": origin, "production": production, "countries": []}
     return {"origin": [], "production": [], "countries": origin or production}
@@ -911,7 +933,7 @@ def series_detail(request, series_slug):
     series = get_object_or_404(Series.objects.using("warehouse"), slug=series_slug)
     series_id = series.series_id
 
-    genres = (
+    genres = localize_genres(
         Genre.objects.using("warehouse")
         .filter(series_genres__series_id=series_id)
         .order_by("genre_name")
@@ -1184,12 +1206,12 @@ def studio_detail(request, company_slug):
     # Annotated unconditionally (not only when sort == "rating"), same as
     # movie_list() — the grid below always displays this figure, so it must
     # always be there to display, whichever way the list is sorted.
-    movies = all_movies.annotate(
+    movies = localize_movies(all_movies).annotate(
         imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
     )
     if q:
-        movies = movies.filter(title__icontains=q)
-    movies = movies.order_by(MOVIE_SORTS[sort])
+        movies = filter_by_title(movies, q)
+    movies = movies.order_by(title_order(sort, MOVIE_SORTS[sort]))
 
     page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
@@ -1374,7 +1396,11 @@ FILMOGRAPHY_SORTS = {
 def _filmography_title(title_obj):
     """A title's display name, read generically since Task 89 mixed a
     movie's `.title` and a show's `.name` into one filmography list."""
-    return getattr(title_obj, "title", None) or getattr(title_obj, "name", None) or ""
+    return (
+        getattr(title_obj, "display_title", None)
+        or getattr(title_obj, "name", None)
+        or ""
+    )
 
 
 def _filmography_sort_key(row, sort):
@@ -1486,7 +1512,9 @@ def person_detail(request, person_slug):
     """One person, every title they worked on — film or show (Task 89 folded
     fact_series_credit into the same filmography fact_credit already fed),
     and what they did there."""
-    person = get_object_or_404(Person.objects.using("warehouse"), slug=person_slug)
+    person = get_object_or_404(
+        localize_people(Person.objects.using("warehouse")), slug=person_slug
+    )
     person_id = person.person_id
 
     # One query for every film credit, joined to its film. Merging happens in
@@ -1510,6 +1538,11 @@ def person_detail(request, person_slug):
     )
 
     filmography = _merge_person_credits(credits + series_credits)
+    # Movies reach this page through fact_credit's join, so there is no movie
+    # queryset to annotate; title_i18n is attached in one extra query instead.
+    attach_movie_titles(
+        row["title_obj"] for row in filmography if row["kind"] == "movie"
+    )
 
     movie_ids = {c.movie_id for c in credits}
     series_ids = {c.series_id for c in series_credits}
@@ -1558,7 +1591,13 @@ def person_detail(request, person_slug):
 
     rows = filmography
     if q:
-        rows = [r for r in rows if q.lower() in _filmography_title(r["title_obj"]).lower()]
+        needle = q.lower()
+        rows = [
+            r for r in rows
+            if needle in _filmography_title(r["title_obj"]).lower()
+            # A film's English title stays searchable on a translated page.
+            or needle in (getattr(r["title_obj"], "title", None) or "").lower()
+        ]
     rows = _sorted_filmography(rows, sort)
 
     page_obj = Paginator(rows, MOVIES_PER_PAGE).get_page(request.GET.get("page"))

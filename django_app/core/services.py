@@ -126,6 +126,7 @@ def _hydrate(items):
     # (for collection_flags), so an eager import back the other way would be
     # circular. By the time this function runs, movies.views has already
     # finished importing, so this just fetches it from sys.modules.
+    from movies.i18n import localize_movies
     from movies.models import Movie, Series
     from movies.views import _series_year_span
 
@@ -134,7 +135,7 @@ def _hydrate(items):
     # badge to match what the same title shows everywhere else on the site.
     movies = {
         obj.movie_id: obj
-        for obj in Movie.objects.using("warehouse")
+        for obj in localize_movies(Movie.objects.using("warehouse"))
         .filter(movie_id__in=movie_ids)
         .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
     }
@@ -152,7 +153,7 @@ def _hydrate(items):
             item.content = movies.get(item.content_id)
             if item.content is None:
                 continue
-            item.title = item.content.title or ""
+            item.title = item.content.display_title or ""
         else:
             item.content = series.get(item.content_id)
             if item.content is None:
