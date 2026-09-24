@@ -49,6 +49,7 @@ import config
 from data_quality.silver_checks import run_silver_checks
 from data_quality.warehouse_checks import run_warehouse_checks
 from etl.bronze.ingest_companies import ingest_companies
+from etl.bronze.ingest_countries import ingest_countries
 from etl.bronze.ingest_genres import ingest_genres
 from etl.bronze.ingest_imdb_episodes import ingest_imdb_episodes
 from etl.bronze.ingest_imdb_ratings import ingest_imdb_ratings
@@ -59,15 +60,18 @@ from etl.bronze.refresh_series import refresh_series
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.gold.build_metrics_snapshot import build_metrics_snapshot
 from etl.silver.transform_companies import transform_companies
+from etl.silver.transform_country_translations import transform_country_translations
 from etl.silver.transform_credits_bridge import transform_credits_bridge
 from etl.silver.transform_episodes import transform_episodes
-from etl.silver.transform_genres import transform_genres
+from etl.silver.transform_genres import transform_genre_translations, transform_genres
 from etl.silver.transform_imdb_ratings import transform_imdb_ratings
 from etl.silver.transform_movie_links import transform_movie_links
+from etl.silver.transform_movie_translations import transform_movie_translations
 from etl.silver.transform_movie_videos import transform_movie_videos
 from etl.silver.transform_movies import transform_movies
 from etl.silver.transform_people import transform_people
 from etl.silver.transform_people_details import transform_people_details
+from etl.silver.transform_people_translations import transform_people_translations
 from etl.silver.transform_series import transform_series
 from etl.silver.transform_series_credits import transform_series_credits
 from etl.silver.transform_series_links import transform_series_links
@@ -94,7 +98,11 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
     t0 = time.monotonic()
     logger.info("Starting refresh run: ingestion_date=%s", ingestion_date)
 
-    ingest_genres(ingestion_date=ingestion_date, with_tv=True)
+    # Task 93: the Russian genre names and the ru/uz country names. Three extra
+    # calls per run; the film and person translations ride along on calls the
+    # refresh already makes (append_to_response), so they cost none.
+    ingest_genres(ingestion_date=ingestion_date, with_tv=True, with_translations=True)
+    ingest_countries(ingestion_date=ingestion_date)
     succeeded, failed = refresh_movies(ingestion_date=ingestion_date)
     logger.info(
         "Bronze refresh: %d film(s) refreshed, %d failed", len(succeeded), len(failed)
@@ -157,10 +165,14 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
     transform_series_videos(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date, with_tv=True)
     transform_people_details(ingestion_date=ingestion_date)
+    transform_people_translations(ingestion_date=ingestion_date)
     transform_genres(ingestion_date=ingestion_date, with_tv=True)
+    transform_genre_translations(ingestion_date=ingestion_date, with_tv=True)
+    transform_country_translations(ingestion_date=ingestion_date)
     transform_credits_bridge(ingestion_date=ingestion_date)
     transform_movie_links(ingestion_date=ingestion_date)
     transform_movie_videos(ingestion_date=ingestion_date)
+    transform_movie_translations(ingestion_date=ingestion_date)
     transform_companies(ingestion_date=ingestion_date)
     transform_imdb_ratings(ingestion_date=ingestion_date, with_tv=True)
 

@@ -30,6 +30,11 @@ logger = logging.getLogger(__name__)
 _RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 
+def _language_params(language: str | None) -> dict[str, Any] | None:
+    """`{"language": ...}` when a language is asked for, else None (TMDB's default)."""
+    return {"language": language} if language else None
+
+
 class TMDBAPIError(RuntimeError):
     """Raised when a TMDB request fails permanently (after retries)."""
 
@@ -124,9 +129,14 @@ class TMDBClient:
         time.sleep(self.backoff_factor * (2 ** attempt))
 
     # -- convenience wrappers (used by Bronze ingestion tasks) -------------
-    def get_genres(self) -> dict[str, Any]:
-        """Official movie genre list."""
-        return self.get("genre/movie/list")
+    def get_genres(self, language: str | None = None) -> dict[str, Any]:
+        """Official movie genre list.
+
+        `language` (Task 93) asks TMDB for the names in that language. Coverage
+        is uneven: ``ru`` is fully translated, but ``uz`` returns ``"name": null``
+        for every id — so callers must tolerate null names.
+        """
+        return self.get("genre/movie/list", params=_language_params(language))
 
     def get_popular_movies(self, page: int = 1) -> dict[str, Any]:
         """One page of the popular-movies catalogue."""
@@ -154,14 +164,15 @@ class TMDBClient:
             params["vote_count.gte"] = min_votes
         return self.get("discover/movie", params=params)
 
-    def get_tv_genres(self) -> dict[str, Any]:
+    def get_tv_genres(self, language: str | None = None) -> dict[str, Any]:
         """Official TV genre list (`genre/tv/list`).
 
         A list distinct from get_genres()'s `genre/movie/list`: the two share
         8 ids that carry identical names, plus each has its own extras. The
         Silver genre transform merges both into one `dim_genre` (Task 78).
+        `language` behaves as in get_genres().
         """
-        return self.get("genre/tv/list")
+        return self.get("genre/tv/list", params=_language_params(language))
 
     def discover_tv(
         self,
@@ -249,7 +260,9 @@ class TMDBClient:
         """
         return self.get(f"company/{company_id}")
 
-    def get_person_details(self, person_id: int) -> dict[str, Any]:
+    def get_person_details(
+        self, person_id: int, *, append_to_response: str | None = None
+    ) -> dict[str, Any]:
         """Full detail record for a single person.
 
         The cast/crew member objects embedded in a movie's credits payload
@@ -257,6 +270,21 @@ class TMDBClient:
         This endpoint adds `biography`, `birthday`, `deathday`,
         `place_of_birth`, `homepage`, `imdb_id` and `also_known_as` (a list of
         aliases). Same shape as get_company_details() — a thin wrapper over one
-        GET.
+        GET. `append_to_response="translations"` (Task 93) folds the per-language
+        biographies into the same payload at no extra call, as
+        get_movie_details() does.
         """
-        return self.get(f"person/{person_id}")
+        params = (
+            {"append_to_response": append_to_response} if append_to_response else None
+        )
+        return self.get(f"person/{person_id}", params=params)
+
+    def get_countries(self, language: str | None = None) -> list[dict[str, Any]]:
+        """Every country TMDB knows (`configuration/countries`), one call.
+
+        Returns a bare JSON *list* of ``{iso_3166_1, english_name, native_name}``.
+        With `language` set, ``native_name`` is the country's name in that
+        language ("Qoʻshma Shtatlar" for ``uz``) — measured live 2026-09-24, both
+        ``ru`` and ``uz`` are translated. (``english_name`` stays English.)
+        """
+        return self.get("configuration/countries", params=_language_params(language))

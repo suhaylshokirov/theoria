@@ -25,6 +25,10 @@ S3 sources:
     silver/person_details/ingestion_date=YYYY-MM-DD/person_details.parquet  (optional)
     silver/movie_videos/ingestion_date=YYYY-MM-DD/movie_videos.parquet  (optional)
     silver/series_videos/ingestion_date=YYYY-MM-DD/series_videos.parquet  (optional)
+    silver/movie_translations/ingestion_date=YYYY-MM-DD/movie_translations.parquet  (optional)
+    silver/person_translations/ingestion_date=YYYY-MM-DD/person_translations.parquet  (optional)
+    silver/genre_translations/ingestion_date=YYYY-MM-DD/genre_translations.parquet  (optional)
+    silver/country_translations/ingestion_date=YYYY-MM-DD/country_translations.parquet  (optional)
 
 Usage:
     python -m etl.warehouse_loader.load_dimensions
@@ -49,8 +53,10 @@ from sqlalchemy.orm import Session
 
 import config
 from etl.incremental import pending_partitions, set_watermark
+from etl.translations import TRANSLATION_LANGUAGES
 from etl.warehouse_loader.common import (
     _existing_ids,
+    _existing_str_ids,
     _optional_silver,
     _read_silver_parquet,
     _replace_by_parent,
@@ -394,6 +400,143 @@ def load_dim_movie_video(
         count, len(parent_ids), len(rejects),
     )
     return count, rejects
+
+
+# --- Task 93: per-language text -------------------------------------------
+
+def _load_translations(
+    session: Session,
+    df: pd.DataFrame,
+    ingestion_date: dt.date,
+    *,
+    table: str,
+    parent_col: str,
+    parent_table: str,
+    text_cols: list[str],
+    id_type: type = int,
+    replace: bool,
+    skip_unknown_parents: bool = False,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Load one *_translation table from its Silver frame.
+
+    Every row is checked before it is written: a null parent id, a `lang`
+    outside etl.translations.TRANSLATION_LANGUAGES, a parent id with no row in
+    `parent_table`, or a row with no text at all is quarantined (returned in the
+    rejects list), never dropped — the standing rule since Task 58.
+
+    `replace=True` uses _replace_by_parent(): every existing row for the parent
+    ids present in this frame is deleted, then the current set inserted, so a
+    translation TMDB withdrew disappears here too (a pure upsert would strand a
+    stale Russian overview forever, with no failing check). `replace=False` is a
+    plain upsert, right for the small fixed vocabularies (genres, countries).
+    Note the replace scope is the parent ids that have at least one row: a film
+    whose *only* translations vanished is not visited until it gains one again.
+
+    `skip_unknown_parents=True` turns a parent id absent from `parent_table` from
+    a reject into a counted, logged skip. That is the right reading for countries:
+    TMDB lists ~250 and only the ~56 that some film references are in
+    dim_country, so the other ~195 are valid data we simply do not need, not bad
+    rows — quarantining them would write a 400-row reject file every night.
+    """
+    valid_parents = (
+        _existing_ids(session, parent_table, parent_col)
+        if id_type is int
+        else _existing_str_ids(session, parent_table, parent_col)
+    )
+
+    rows: list[dict[str, Any]] = []
+    rejects: list[dict[str, Any]] = []
+    skipped = 0
+    for record in df.to_dict("records"):
+        parent = record.get(parent_col)
+        if pd.isna(parent) or (id_type is str and not str(parent).strip()):
+            rejects.append({**record, "rejection_reason": f"missing {parent_col}"})
+            continue
+        parent = id_type(parent)
+
+        lang = record.get("lang")
+        if pd.isna(lang) or lang not in TRANSLATION_LANGUAGES:
+            rejects.append({**record, "rejection_reason": f"unsupported lang {lang!r}"})
+            continue
+
+        if parent not in valid_parents:
+            if skip_unknown_parents:
+                skipped += 1
+            else:
+                rejects.append({**record, "rejection_reason": f"unknown {parent_col}"})
+            continue
+
+        values = {c: (None if pd.isna(record.get(c)) else record.get(c)) for c in text_cols}
+        if all(v is None for v in values.values()):
+            rejects.append({**record, "rejection_reason": "no translated text"})
+            continue
+
+        rows.append({parent_col: parent, "lang": lang, **values, "ingestion_date": ingestion_date})
+
+    columns = [parent_col, "lang", *text_cols, "ingestion_date"]
+    if replace:
+        parent_ids = sorted({r[parent_col] for r in rows})
+        count = _replace_by_parent(session, table, parent_col, parent_ids, columns, rows)
+    else:
+        count = _upsert(session, table, [parent_col, "lang"], columns, rows)
+
+    per_lang: dict[str, int] = {}
+    for r in rows:
+        per_lang[r["lang"]] = per_lang.get(r["lang"], 0) + 1
+    logger.info(
+        "%s: %s %d row(s) (%s), rejected %d, skipped %d not in %s",
+        table, "replaced" if replace else "upserted", count,
+        ", ".join(f"{k}={v}" for k, v in sorted(per_lang.items())) or "none",
+        len(rejects), skipped, parent_table,
+    )
+    return count, rejects
+
+
+def load_movie_translation(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Replace every movie_translation row for the films in this Silver partition."""
+    return _load_translations(
+        session, df, ingestion_date, table="movie_translation", parent_col="movie_id",
+        parent_table="dim_movie", text_cols=["title", "overview", "tagline"], replace=True,
+    )
+
+
+def load_person_translation(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Replace every person_translation row for the people in this Silver partition."""
+    return _load_translations(
+        session, df, ingestion_date, table="person_translation", parent_col="person_id",
+        parent_table="dim_person", text_cols=["biography"], replace=True,
+    )
+
+
+def load_genre_translation(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Upsert TMDB's translated genre names.
+
+    Only ever writes the languages TMDB actually names genres in (ru). The Uzbek
+    rows are seed data from 28_seed_uz_genres.sql — a different (genre_id, lang)
+    key, so this upsert can never overwrite them, and Silver never carries TMDB's
+    null Uzbek names in the first place.
+    """
+    return _load_translations(
+        session, df, ingestion_date, table="genre_translation", parent_col="genre_id",
+        parent_table="dim_genre", text_cols=["genre_name"], replace=False,
+    )
+
+
+def load_country_translation(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Upsert translated names for the countries already in dim_country."""
+    return _load_translations(
+        session, df, ingestion_date, table="country_translation", parent_col="country_code",
+        parent_table="dim_country", text_cols=["name"], id_type=str, replace=False,
+        skip_unknown_parents=True,
+    )
 
 
 # --- Task 84: dim_season, dim_episode --------------------------------------
@@ -796,7 +939,24 @@ def load_dimensions(
         bucket, "series_videos", ingestion_date, "series_videos.parquet"
     )
 
+    # Task 93: per-language text. Every source optional in the same way — a
+    # partition written before Task 93 has no translations Silver, and the
+    # 27_translations.sql migration need not be applied until one does.
+    movie_translations_df = _optional_silver(
+        bucket, "movie_translations", ingestion_date, "movie_translations.parquet"
+    )
+    person_translations_df = _optional_silver(
+        bucket, "person_translations", ingestion_date, "person_translations.parquet"
+    )
+    genre_translations_df = _optional_silver(
+        bucket, "genre_translations", ingestion_date, "genre_translations.parquet"
+    )
+    country_translations_df = _optional_silver(
+        bucket, "country_translations", ingestion_date, "country_translations.parquet"
+    )
+
     counts: dict[str, int] = {}
+    translation_rejects: dict[str, list[dict[str, Any]]] = {}
     video_rejects: list[dict[str, Any]] = []
     series_video_rejects: list[dict[str, Any]] = []
     season_rejects: list[dict[str, Any]] = []
@@ -813,6 +973,10 @@ def load_dimensions(
             )
         else:
             counts["dim_movie_video"] = 0
+        if movie_translations_df is not None and not movie_translations_df.empty:
+            counts["movie_translation"], translation_rejects["movie_translation"] = (
+                load_movie_translation(session, movie_translations_df, ingestion_date)
+            )
         # Task 79: dim_series has no FK; load it beside dim_movie_video. Only
         # when there is series Silver to load — otherwise the 19_series.sql
         # migration need not be applied and assign_slugs() below is skipped too.
@@ -846,7 +1010,15 @@ def load_dimensions(
                 session, episodes_df, ingestion_date
             )
         counts["dim_person"] = load_dim_person(session, people_df, person_details_df)
+        if person_translations_df is not None and not person_translations_df.empty:
+            counts["person_translation"], translation_rejects["person_translation"] = (
+                load_person_translation(session, person_translations_df, ingestion_date)
+            )
         counts["dim_genre"] = load_dim_genre(session, genres_df)
+        if genre_translations_df is not None and not genre_translations_df.empty:
+            counts["genre_translation"], translation_rejects["genre_translation"] = (
+                load_genre_translation(session, genre_translations_df, ingestion_date)
+            )
         # Before load_facts.load_bridge_movie_company() / load_bridge_series_company(),
         # both of which have an FK here. series_companies_df unions TV studios in.
         counts["dim_company"] = load_dim_company(
@@ -855,6 +1027,10 @@ def load_dimensions(
         # Before the movie and series country/language bridges, same reason.
         counts["dim_country"] = load_dim_country(session, countries_df, series_countries_df)
         counts["dim_language"] = load_dim_language(session, languages_df, series_languages_df)
+        if country_translations_df is not None and not country_translations_df.empty:
+            counts["country_translation"], translation_rejects["country_translation"] = (
+                load_country_translation(session, country_translations_df, ingestion_date)
+            )
         counts["dim_date"] = load_dim_date(session, calendar_start, calendar_end)
         counts["dim_movie_slugs"] = assign_slugs(session, "dim_movie", "movie_id", "title")
         counts["dim_person_slugs"] = assign_slugs(session, "dim_person", "person_id", "name")
@@ -868,6 +1044,8 @@ def load_dimensions(
     _write_rejects(series_video_rejects, "dim_series_video", ingestion_date, rejected_dir)
     _write_rejects(season_rejects, "dim_season", ingestion_date, rejected_dir)
     _write_rejects(episode_rejects, "dim_episode", ingestion_date, rejected_dir)
+    for table, rejects in translation_rejects.items():
+        _write_rejects(rejects, table, ingestion_date, rejected_dir)
 
     elapsed = time.monotonic() - t0
     logger.info(

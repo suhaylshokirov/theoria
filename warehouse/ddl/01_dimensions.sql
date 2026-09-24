@@ -354,3 +354,47 @@ CREATE TABLE IF NOT EXISTS dim_date (
     decade      SMALLINT NOT NULL,   -- e.g. 1990, 2000, 2010
     CONSTRAINT pk_dim_date PRIMARY KEY (date_id)
 );
+
+-- Task 93: per-language text for the four things TMDB translates. Folded from
+-- 27_translations.sql (read its header for the naming and load-strategy reasoning).
+CREATE TABLE IF NOT EXISTS movie_translation (
+    movie_id       INTEGER      NOT NULL,
+    lang           VARCHAR(5)   NOT NULL,
+    title          TEXT,
+    overview       TEXT,
+    tagline        TEXT,
+    ingestion_date DATE         NOT NULL,
+    CONSTRAINT pk_movie_translation PRIMARY KEY (movie_id, lang),
+    CONSTRAINT fk_movie_translation_movie
+        FOREIGN KEY (movie_id) REFERENCES dim_movie (movie_id)
+);
+
+CREATE TABLE IF NOT EXISTS person_translation (
+    person_id      INTEGER      NOT NULL,
+    lang           VARCHAR(5)   NOT NULL,
+    biography      TEXT,
+    ingestion_date DATE         NOT NULL,
+    CONSTRAINT pk_person_translation PRIMARY KEY (person_id, lang),
+    CONSTRAINT fk_person_translation_person
+        FOREIGN KEY (person_id) REFERENCES dim_person (person_id)
+);
+
+CREATE TABLE IF NOT EXISTS genre_translation (
+    genre_id       INTEGER      NOT NULL,
+    lang           VARCHAR(5)   NOT NULL,
+    genre_name     TEXT         NOT NULL,
+    ingestion_date DATE         NOT NULL,
+    CONSTRAINT pk_genre_translation PRIMARY KEY (genre_id, lang),
+    CONSTRAINT fk_genre_translation_genre
+        FOREIGN KEY (genre_id) REFERENCES dim_genre (genre_id)
+);
+
+CREATE TABLE IF NOT EXISTS country_translation (
+    country_code   VARCHAR(10)  NOT NULL,
+    lang           VARCHAR(5)   NOT NULL,
+    name           TEXT         NOT NULL,
+    ingestion_date DATE         NOT NULL,
+    CONSTRAINT pk_country_translation PRIMARY KEY (country_code, lang),
+    CONSTRAINT fk_country_translation_country
+        FOREIGN KEY (country_code) REFERENCES dim_country (country_code)
+);

@@ -2710,7 +2710,7 @@ def test_ingest_movie_details_appends_videos():
         )
 
     _, kwargs = mock_client.get_movie_details.call_args
-    assert kwargs["append_to_response"] == "videos"
+    assert kwargs["append_to_response"] == "videos,translations"
     assert mock_client.get_movie_credits.call_count == 0  # still no second call
 
 
@@ -5508,7 +5508,7 @@ def test_refresh_movies_writes_details_and_credits_per_film():
     assert mock_client.get_movie_details.call_count == 2
     assert mock_client.get_movie_credits.call_count == 0
     for _, kwargs in mock_client.get_movie_details.call_args_list:
-        assert kwargs["append_to_response"] == "credits,videos"
+        assert kwargs["append_to_response"] == "credits,videos,translations"
 
     bodies = _bodies_by_key(mock_s3)
     assert set(bodies) == {
@@ -5622,7 +5622,7 @@ def test_refresh_movies_appends_credits_and_videos_keeping_videos_inline():
         )
 
     _, kwargs = mock_client.get_movie_details.call_args
-    assert kwargs["append_to_response"] == "credits,videos"
+    assert kwargs["append_to_response"] == "credits,videos,translations"
 
     bodies = _bodies_by_key(mock_s3)
     details = bodies["bronze/movie_details/ingestion_date=2026-07-29/550.json"]

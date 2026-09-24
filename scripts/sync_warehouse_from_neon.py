@@ -53,6 +53,11 @@ WAREHOUSE_TABLES = [
     "dim_language",
     "dim_date",
     "dim_movie_video",
+    # Task 93: per-language text. Each has an FK to a table above it.
+    "movie_translation",
+    "person_translation",
+    "genre_translation",
+    "country_translation",
     # TV series dimensions (Tasks 79/84). Parents before children: dim_season /
     # dim_episode reference dim_series, so they follow it in the reload order.
     "dim_series",

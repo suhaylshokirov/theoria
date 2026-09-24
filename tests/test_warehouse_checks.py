@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 26  # 13 movie/person (2 fact_collaboration checks dropped, Task 87; person_alias check dropped with the table, 26_drop_person_alias.sql) + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81) + 3 episode grain (84) + 1 dim_series_video (90)
+    assert len(results) == 30  # 13 movie/person (2 fact_collaboration checks dropped, Task 87; person_alias check dropped with the table, 26_drop_person_alias.sql) + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81) + 3 episode grain (84) + 1 dim_series_video (90) + 4 translation tables (93)
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 26
+    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 30
 
     results = check_fk_integrity(mock_session)
 
@@ -1203,6 +1203,8 @@ def test_run_warehouse_checks_combines_all_check_groups(monkeypatch):
                          lambda session: [CheckResult("fk:a", True, "ok")])
     monkeypatch.setattr(warehouse_checks_module, "check_row_count_sanity",
                          lambda session, bucket, date: [CheckResult("rowcount:a", True, "ok")])
+    monkeypatch.setattr(warehouse_checks_module, "check_translation_sanity",
+                         lambda session, bucket, date: [CheckResult("translations:a", True, "ok")])
     monkeypatch.setattr(warehouse_checks_module, "check_gold_sanity",
                          lambda bucket, date, silver_movies_count: [CheckResult("gold:a", True, "ok")])
     monkeypatch.setattr(
@@ -1218,5 +1220,5 @@ def test_run_warehouse_checks_combines_all_check_groups(monkeypatch):
     results = run_warehouse_checks(ingestion_date=dt.date(2026, 6, 22), bucket="bucket")
 
     checks = {r.check for r in results}
-    assert checks == {"fk:a", "rowcount:a", "gold:a", "facts:a"}
+    assert checks == {"fk:a", "rowcount:a", "translations:a", "gold:a", "facts:a"}
     assert all(r.passed for r in results)

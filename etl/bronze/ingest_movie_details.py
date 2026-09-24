@@ -31,6 +31,7 @@ import time
 import config
 from etl import s3_utils
 from etl.tmdb_client import TMDBClient
+from etl.translations import trim_translations
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,11 @@ def ingest_movie_details(
 
     for movie_id in movie_ids:
         try:
-            payload = client.get_movie_details(movie_id, append_to_response="videos")
+            payload = trim_translations(
+                client.get_movie_details(
+                    movie_id, append_to_response="videos,translations"
+                )
+            )
 
             key = s3_utils.build_path(
                 "bronze", "movie_details", ingestion_date, f"{movie_id}.json"

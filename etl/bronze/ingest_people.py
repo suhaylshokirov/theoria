@@ -21,6 +21,14 @@ skips any person_id that already has a JSON file under `bronze/person_details/`
 in *any* prior ingestion_date partition, and only calls the API for the
 genuinely new ones. Bronze stays append-only.
 
+**Translations (Task 93).** The call carries `append_to_response=translations`,
+so each *new* person's per-language biographies arrive in the same payload at no
+extra call. The block is trimmed to the shipped languages before writing
+(``etl.translations``): Silver re-reads every person_details file each night, so
+the ~70 KB of unused languages per person would otherwise cost ~5 GB a night. Because of the skip above, people already enriched before Task 93
+have no `translations` block and are not re-fetched; backfilling them is a
+deliberate `--no-skip-existing` run, not something the nightly does.
+
 **New here (companies had no cap): `max_new`.** `dim_person` holds ~35,782
 people with a photo — far more than one nightly job's ~90-minute budget can
 fetch at TMDB's ~4.35 req/s. Callers pass person_ids *already in priority
@@ -47,6 +55,7 @@ import time
 import config
 from etl import s3_utils
 from etl.tmdb_client import TMDBClient
+from etl.translations import trim_translations
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +144,9 @@ def ingest_people(
 
     for person_id in to_fetch:
         try:
-            payload = client.get_person_details(person_id)
+            payload = trim_translations(
+                client.get_person_details(person_id, append_to_response="translations")
+            )
 
             key = s3_utils.build_path(
                 "bronze", "person_details", ingestion_date, f"{person_id}.json"

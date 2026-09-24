@@ -43,6 +43,7 @@ from sqlalchemy.engine import Engine
 import config
 from etl import s3_utils
 from etl.tmdb_client import TMDBClient
+from etl.translations import trim_translations
 from warehouse.db import get_engine
 
 logger = logging.getLogger(__name__)
@@ -64,18 +65,22 @@ def _movie_ids_from_warehouse(engine: Engine) -> list[int]:
 
 
 def _split_payload(movie_id: int, payload: dict) -> tuple[dict, dict]:
-    """Separate one append_to_response=credits,videos payload into (details, credits).
+    """Separate one append_to_response=credits,videos,translations payload into (details, credits).
 
     ``details`` is the movie object with only the ``credits`` key removed, so it
     is byte-comparable to what ``ingest_movie_details`` writes — the ``videos``
-    block is left inline, since it has no standalone Bronze entity and
-    ``transform_movie_videos`` reads it from ``movie_details`` directly.
+    and ``translations`` blocks are left inline, since neither has a standalone
+    Bronze entity — ``transform_movie_videos`` and ``transform_movie_translations``
+    read them from ``movie_details`` directly. The translations block is trimmed
+    to the shipped languages first (``etl.translations.trim_translations``).
     ``credits`` is rebuilt into the ``{"id", "cast", "crew"}`` shape the
     standalone ``movie/{id}/credits`` endpoint returns, which is what
     ``ingest_credits`` writes and ``transform_credits_bridge`` /
     ``transform_people`` read.
     """
-    details = {k: v for k, v in payload.items() if k != "credits"}
+    details = trim_translations(
+        {k: v for k, v in payload.items() if k != "credits"}
+    )
     raw_credits = payload.get("credits")
     if not isinstance(raw_credits, dict):
         logger.warning(
@@ -129,7 +134,7 @@ def refresh_movies(
     for movie_id in movie_ids:
         try:
             payload = client.get_movie_details(
-                movie_id, append_to_response="credits,videos"
+                movie_id, append_to_response="credits,videos,translations"
             )
             details, credits = _split_payload(movie_id, payload)
 

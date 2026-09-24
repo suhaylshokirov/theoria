@@ -1,7 +1,7 @@
 """End-to-end data quality validation for the warehouse layer.
 
-Runs two families of checks after the dimension and fact loaders have run
-for a given ingestion_date:
+Runs three families of checks after the dimension and fact loaders have run
+for a given ingestion_date (the third, translations, is described at the end):
 
     1. FK integrity — every fact row's foreign keys resolve to an existing
        dimension row. The database's FOREIGN KEY constraints (see
@@ -28,6 +28,10 @@ for a given ingestion_date:
            table, not this date's rows: an unchanged row keeps its old
            ingestion_date (see _upsert), so a no-change night tags none.
 
+    3. Translations (Task 93) — the four *_translation tables carry only
+       languages the site ships, and are non-empty whenever their Silver file
+       was. See check_translation_sanity().
+
 Produces one CheckResult per check; the overall run passes only if every
 CheckResult has passed=True.
 
@@ -52,6 +56,7 @@ from sqlalchemy.orm import Session
 
 import config
 from etl import s3_utils
+from etl.translations import TRANSLATION_LANGUAGES
 from etl.warehouse_loader.common import _read_silver_parquet
 from warehouse.db import get_session
 
@@ -111,6 +116,12 @@ _FK_CHECKS = [
     # Empty on a warehouse with no series videos loaded yet, so this passes
     # trivially until the first load.
     ("dim_series_video", "series_id", "dim_series", "series_id"),
+    # Task 93: the four translation tables. Empty until the first partition
+    # carrying translations is loaded, so they pass trivially until then.
+    ("movie_translation", "movie_id", "dim_movie", "movie_id"),
+    ("person_translation", "person_id", "dim_person", "person_id"),
+    ("genre_translation", "genre_id", "dim_genre", "genre_id"),
+    ("country_translation", "country_code", "dim_country", "country_code"),
 ]
 
 
@@ -859,6 +870,96 @@ def check_fact_load_sanity(
 
 
 # ---------------------------------------------------------------------------
+# 4. Translations (Task 93)
+# ---------------------------------------------------------------------------
+
+# (silver entity, warehouse table, parent id column)
+_TRANSLATION_ENTITIES = [
+    ("movie_translations", "movie_translation", "movie_id"),
+    ("person_translations", "person_translation", "person_id"),
+    ("genre_translations", "genre_translation", "genre_id"),
+    ("country_translations", "country_translation", "country_code"),
+]
+
+
+def _rows_per_lang(session: Session, table: str) -> dict[str, int]:
+    """Row count per `lang` value in a translation table."""
+    rows = session.execute(
+        text(f"SELECT lang, COUNT(*) FROM {table} GROUP BY lang")
+    ).all()
+    return {lang: int(n) for lang, n in rows}
+
+
+def check_translation_sanity(
+    session: Session, bucket: str, ingestion_date: dt.date,
+) -> list[CheckResult]:
+    """Row counts and the `lang` domain for the four *_translation tables.
+
+    Two checks per table whose Silver file exists for the date:
+
+      * ``translations:<table>:lang_domain`` — every `lang` in the warehouse is
+        one the site ships (etl.translations.TRANSLATION_LANGUAGES). The DDL has
+        no CHECK on `lang` on purpose (a fourth language must not need a schema
+        change), so this is where a stray ``ru-RU`` or ``en`` row is caught.
+      * ``translations:<table>:load`` — the table is non-empty whenever the Silver
+        file had rows: a loader that wrote nothing from real input is a bug. Per-
+        language counts are put in the detail so a language quietly going to zero
+        is visible in the log. Whole-table, not this date's rows, for the reason
+        given on _fact_loaded_count().
+
+    A Silver file that is absent or empty (a partition written before Task 93,
+    where Bronze could not be backfilled) is skipped for the load check — the
+    domain check still runs, since it reads only the warehouse. A missing table
+    (DDL not applied yet) makes the whole check skip with a log line rather than
+    failing the run, matching how every other optional entity behaves.
+    """
+    results: list[CheckResult] = []
+    for silver_entity, table, _parent_col in _TRANSLATION_ENTITIES:
+        try:
+            per_lang = _rows_per_lang(session, table)
+        except Exception as exc:
+            session.rollback()
+            logger.info("[translations:%s] table not readable (%s) — skipped", table, exc)
+            continue
+
+        stray = sorted(set(per_lang) - set(TRANSLATION_LANGUAGES))
+        domain_name = f"translations:{table}:lang_domain"
+        if stray:
+            results.append(CheckResult(domain_name, False,
+                f"{table} has unsupported lang value(s): {', '.join(stray)}"))
+            logger.error("[%s] FAIL — stray lang(s): %s", domain_name, stray)
+        else:
+            results.append(CheckResult(domain_name, True,
+                f"all lang values within {list(TRANSLATION_LANGUAGES)}"))
+            logger.info("[%s] OK", domain_name)
+
+        try:
+            sdf = _read_silver_parquet(
+                bucket, silver_entity, ingestion_date, f"{silver_entity}.parquet"
+            )
+        except Exception as exc:
+            logger.info(
+                "[translations:%s] no Silver %s for %s (%s) — load check skipped",
+                table, silver_entity, ingestion_date, exc,
+            )
+            continue
+
+        load_name = f"translations:{table}:load"
+        total = sum(per_lang.values())
+        breakdown = ", ".join(f"{k}={v}" for k, v in sorted(per_lang.items())) or "none"
+        if len(sdf) > 0 and total == 0:
+            results.append(CheckResult(load_name, False,
+                f"{table} has 0 row(s) despite {len(sdf)} Silver {silver_entity} row(s)"))
+            logger.error("[%s] FAIL — 0 rows loaded", load_name)
+        else:
+            results.append(CheckResult(load_name, True,
+                f"Silver={len(sdf)}, {table}={total} ({breakdown})"))
+            logger.info("[%s] OK (%s)", load_name, breakdown)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -883,6 +984,7 @@ def run_warehouse_checks(
     with get_session() as session:
         all_results.extend(check_fk_integrity(session))
         all_results.extend(check_row_count_sanity(session, bucket, ingestion_date))
+        all_results.extend(check_translation_sanity(session, bucket, ingestion_date))
 
         try:
             silver_movies_count = len(_read_silver_parquet(bucket, "movies", ingestion_date, "movies.parquet"))

@@ -18,10 +18,20 @@ silently keeping whichever row sorted last.
 Idempotent: running twice for the same date overwrites the same key with the
 same content.
 
+`transform_genre_translations()` (Task 93) is a second entry point in this
+module: it reads the `genres_<lang>.json` / `genres_tv_<lang>.json` files
+`ingest_genres(with_translations=True)` writes and produces
+`silver/genre_translations/`. It lives here, beside the genre list it
+translates, because both read the same Bronze layout and share the same
+movie/TV shared-id reasoning. `genre_name` is the *only* column that differs by
+language, so it never touches `genres.parquet` — `dim_genre.genre_name` stays the
+English name and is never overwritten by a translation.
+
 Usage:
     python -m etl.silver.transform_genres
     python -m etl.silver.transform_genres --date 2026-06-22
     python -m etl.silver.transform_genres --with-tv
+    python -m etl.silver.transform_genres --with-tv --with-translations
 """
 
 from __future__ import annotations
@@ -37,6 +47,7 @@ import pandas as pd
 
 import config
 from etl import s3_utils
+from etl.bronze.ingest_genres import TRANSLATED_GENRE_LANGUAGES
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +185,90 @@ def transform_genres(
     return uri
 
 
+def transform_genre_translations(
+    ingestion_date: dt.date | None = None,
+    bucket: str | None = None,
+    with_tv: bool = False,
+) -> str:
+    """Read the Bronze per-language genre lists -> write silver/genre_translations.
+
+    One row per (genre_id, lang, genre_name). An entry whose `name` is null or
+    blank is skipped: TMDB returns null for languages it has no genre vocabulary
+    in (Uzbek — those names are seeded by `28_seed_uz_genres.sql`), and a
+    translation table row with no translation is worse than no row, since the
+    site would show an empty chip instead of falling back to English.
+
+    With `with_tv`, the TV lists are merged in; a shared movie/TV id that TMDB
+    names differently in one language keeps the movie list's name (the list is
+    read first and `keep="first"`), logged as a warning rather than failing —
+    unlike the English lists, a translation disagreement is cosmetic.
+
+    Returns the s3:// URI of the written Parquet file.
+
+    Raises FileNotFoundError if a language's Bronze file is missing, and
+    ValueError if a language yields no named genres at all.
+    """
+    if ingestion_date is None:
+        ingestion_date = dt.date.today()
+    if bucket is None:
+        bucket = config.S3_BUCKET
+
+    t0 = time.monotonic()
+    logger.info(
+        "Starting Silver genre-translations transform for date=%s (with_tv=%s)",
+        ingestion_date, with_tv,
+    )
+
+    rows: list[dict[str, Any]] = []
+    for lang in TRANSLATED_GENRE_LANGUAGES:
+        files = [f"genres_{lang}.json"] + ([f"genres_tv_{lang}.json"] if with_tv else [])
+        lang_rows: list[dict[str, Any]] = []
+        for filename in files:
+            payload = _read_bronze_genres(bucket, ingestion_date, filename)
+            for genre in _extract_genres(payload):
+                name = genre["genre_name"]
+                name = name.strip() if isinstance(name, str) else None
+                if genre["genre_id"] is None or not name:
+                    continue
+                lang_rows.append(
+                    {"genre_id": genre["genre_id"], "lang": lang, "genre_name": name}
+                )
+        if not lang_rows:
+            raise ValueError(
+                f"Bronze genre files for lang={lang}, ingestion_date={ingestion_date} "
+                "contain no named genres."
+            )
+        rows.extend(lang_rows)
+
+    df = pd.DataFrame(rows, columns=["genre_id", "lang", "genre_name"])
+    df["genre_id"] = pd.to_numeric(df["genre_id"], errors="coerce").astype("Int64")
+    df["lang"] = df["lang"].astype("string")
+    df["genre_name"] = df["genre_name"].astype("string")
+
+    # Movie list first, so keep="first" lets it win a movie/TV name disagreement.
+    disagreements = df.groupby(["genre_id", "lang"])["genre_name"].nunique()
+    n_disagree = int((disagreements > 1).sum())
+    if n_disagree:
+        logger.warning(
+            "%d genre id(s) have different translated names in the movie and TV "
+            "lists; keeping the movie list's name", n_disagree,
+        )
+    before = len(df)
+    df = df.drop_duplicates(subset=["genre_id", "lang"], keep="first")
+    if before - len(df):
+        logger.info("Dropped %d duplicate (genre_id, lang) row(s)", before - len(df))
+
+    output_key = s3_utils.build_path(
+        "silver", "genre_translations", ingestion_date, "genre_translations.parquet"
+    )
+    uri = s3_utils.write_parquet(bucket, output_key, df)
+    logger.info(
+        "Silver genre-translations transform complete: %d row(s) in %.2fs",
+        len(df), time.monotonic() - t0,
+    )
+    return uri
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Transform Bronze genre JSON to Silver Parquet."
@@ -189,6 +284,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Also merge genres_tv.json into the output.",
     )
+    parser.add_argument(
+        "--with-translations",
+        action="store_true",
+        help="Also write silver/genre_translations from the per-language Bronze files.",
+    )
     return parser.parse_args()
 
 
@@ -197,3 +297,5 @@ if __name__ == "__main__":
     setup_logging("transform_genres")
     args = _parse_args()
     transform_genres(ingestion_date=args.date, with_tv=args.with_tv)
+    if args.with_translations:
+        transform_genre_translations(ingestion_date=args.date, with_tv=args.with_tv)
