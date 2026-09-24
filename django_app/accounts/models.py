@@ -17,6 +17,7 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 # A future `/@username/` route (sketched for the Phase F collections feature)
 # must never collide with a real path on the site, so these are refused at
@@ -29,14 +30,14 @@ RESERVED_USERNAMES = frozenset({
 
 validate_username_characters = RegexValidator(
     regex=r"^[A-Za-z0-9_]{3,30}\Z",
-    message="Usernames must be 3-30 characters: letters, numbers, and underscores only.",
+    message=_("Usernames must be 3-30 characters: letters, numbers, and underscores only."),
 )
 
 
 def validate_username_not_reserved(value: str) -> None:
     if value.lower() in RESERVED_USERNAMES:
         raise ValidationError(
-            "%(value)s is a reserved name and can't be used as a username.",
+            _("%(value)s is a reserved name and can't be used as a username."),
             params={"value": value},
         )
 

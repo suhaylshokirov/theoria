@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}Theoria — Movies{% endblock %}
+{% block title %}Theoria — {% translate "Movies" %}{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title="Movies" sub="Every title the warehouse holds. Search by name, narrow by genre, or reorder by what was measured." only %}
+{% translate "Movies" as sheet_title %}{% translate "Every title the warehouse holds. Search by name, narrow by genre, or reorder by what was measured." as sheet_sub %}
+{% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
 
 <section class="sheet-section">
     <div class="toolbar">
@@ -14,21 +16,21 @@
            JS — see _movie_results.html's docstring. {% endcomment %}
         <form method="get" action="{% url 'movies:movie_list' %}" data-live-filter data-live-targets="#movies-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="Search movies" aria-label="Search movies by title">
+                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search movies" %}" aria-label="{% translate "Search movies by title" %}">
             </div>
             {% comment %} Radio segments rather than a <select>: the sort options are few
                and fixed, so showing them is more useful than hiding them.
                Still a plain form control — submits and works without JS. {% endcomment %}
             <fieldset class="segmented">
-                <legend class="visually-hidden">Order by</legend>
+                <legend class="visually-hidden">{% translate "Order by" %}</legend>
                 <input type="radio" name="sort" id="sort-release" value="release" {% if sort == "release" %}checked{% endif %}>
-                <label for="sort-release">Newest</label>
+                <label for="sort-release">{% translate "Newest" %}</label>
                 <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
-                <label for="sort-rating">Rated</label>
+                <label for="sort-rating">{% translate "Rated" %}</label>
                 <input type="radio" name="sort" id="sort-revenue" value="revenue" {% if sort == "revenue" %}checked{% endif %}>
-                <label for="sort-revenue">Revenue</label>
+                <label for="sort-revenue">{% translate "Revenue" %}</label>
                 <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
-                <label for="sort-title">A–Z</label>
+                <label for="sort-title">{% translate "A–Z" %}</label>
             </fieldset>
             {% comment %} Genre is a facet of a film, not an entity with its own
                page — there was a /genres/ index once (removed 2026-08-14, see
@@ -41,9 +43,9 @@
                viewport. The <select> stays in the DOM (hidden) as the value
                store and the no-JS control. {% endcomment %}
             <div class="field">
-                <label for="movie-genre" class="visually-hidden">Filter by genre</label>
+                <label for="movie-genre" class="visually-hidden">{% translate "Filter by genre" %}</label>
                 <select name="genre" id="movie-genre" data-menu>
-                    <option value="">Any genre</option>
+                    <option value="">{% translate "Any genre" %}</option>
                     {% for slug, name in genre_choices %}
                     <option value="{{ slug }}" {% if genre == slug %}selected{% endif %}>{{ name }}</option>
                     {% endfor %}
@@ -53,7 +55,7 @@
                via the html.has-js CSS gate (see base.html) rather than removed, so a
                no-JS visitor, who gets no auto-submit on a radio change, still has a
                way to apply anything but the search box. {% endcomment %}
-            <button type="submit" class="apply-btn">Apply</button>
+            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
         </form>
     </div>
 

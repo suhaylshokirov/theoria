@@ -1,10 +1,10 @@
-{% load static %}<!DOCTYPE html>
-<html lang="en">
+{% load static i18n %}<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Theoria{% endblock %}</title>
-    <meta name="description" content="{% block description %}Theoria — a movie catalog measured end to end: every movie, cast member and rating read straight out of a star-schema warehouse.{% endblock %}">
+    <meta name="description" content="{% block description %}{% translate "Theoria — a movie catalog measured end to end: every movie, cast member and rating read straight out of a star-schema warehouse." %}{% endblock %}">
 
     {% comment %} Favicon: the same Θ mark, at the heavier weight that survives 16px.
        Transparent ground and currentColor-equivalent stroke picked per scheme,
@@ -88,13 +88,18 @@
          links fall back to the plain wrapping row they've always been. {% endcomment %}
       document.documentElement.classList.add("has-js");
     </script>
+    {% comment %} Every string theoria.js writes into the page, from
+       core.context_processors.js_strings. The template is the only place the
+       script gets its words: the same msgid as the markup ("Open menu", "See
+       more"), so a phrase has one translation, not one per file. {% endcomment %}
+    {{ js_strings|json_script:"js-strings" }}
     <script defer src="{% static 'js/theoria.js' %}"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}" data-signed-in="{% if request.user.is_authenticated %}1{% else %}0{% endif %}">
-    <a class="skip-link" href="#content">Skip to content</a>
+    <a class="skip-link" href="#content">{% translate "Skip to content" %}</a>
 
     <header class="site-header">
-        <nav class="nav container" aria-label="Main">
+        <nav class="nav container" aria-label="{% translate "Main" %}">
             <a class="brand" href="{% url 'movies:home' %}">
                 {% comment %} Θ — the first letter of θεωρία. Drawn as a vertical
                    ellipse rather than a circle so it reads as a letterform and
@@ -112,7 +117,7 @@
                exactly one of the two at any width. {% endcomment %}
             <a href="{% url 'accounts:login' %}" class="signin-btn signin-btn--header">
                 <span class="signin-icon" aria-hidden="true"></span>
-                Sign in
+                {% translate "Sign in" %}
             </a>
             {% else %}
             {% comment %} Phone-width twin of the nav's account menu, same
@@ -131,10 +136,10 @@
                     <span class="menu-label">{{ request.user.username }}</span>
                 </a>
                 <div class="menu-panel account-panel" hidden data-account-panel>
-                    <a class="menu-option account-option account-option--profile" href="{% url 'profile' %}">Your account</a>
+                    <a class="menu-option account-option account-option--profile" href="{% url 'profile' %}">{% translate "Your account" %}</a>
                     <form method="post" action="{% url 'accounts:logout' %}" data-signout-form>
                         {% csrf_token %}
-                        <button type="submit" class="menu-option account-option account-option--signout">Sign out</button>
+                        <button type="submit" class="menu-option account-option account-option--signout">{% translate "Sign out" %}</button>
                     </form>
                 </div>
             </div>
@@ -144,7 +149,7 @@
                aria-expanded, same device as the theme toggle below so the
                button never resizes when it opens. {% endcomment %}
             <button type="button" class="nav-toggle" id="nav-toggle"
-                    aria-expanded="false" aria-controls="nav-links" aria-label="Open menu">
+                    aria-expanded="false" aria-controls="nav-links" aria-label="{% translate "Open menu" %}">
                 <svg class="icon-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M3 6h18M3 12h18M3 18h18"/>
@@ -160,13 +165,13 @@
                "Movies" lit while you're on /movies/120/. {% endcomment %}
             {% with vn=request.resolver_match.url_name %}
             <div class="nav-links" id="nav-links">
-                <a href="{% url 'movies:browse' %}"{% if vn == "browse" %} aria-current="page"{% endif %}>Browse</a>
-                <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>Movies</a>
-                <a href="{% url 'movies:series_list' %}"{% if vn in "series_list,series_detail" %} aria-current="page"{% endif %}>TV Shows</a>
-                <a href="{% url 'movies:cartoon_list' %}"{% if vn == "cartoon_list" %} aria-current="page"{% endif %}>Cartoons</a>
-                <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>People</a>
-                <a href="{% url 'movies:studio_list' %}"{% if vn in "studio_list,studio_detail" %} aria-current="page"{% endif %}>Studios</a>
-                <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>Analytics</a>
+                <a href="{% url 'movies:browse' %}"{% if vn == "browse" %} aria-current="page"{% endif %}>{% translate "Browse" %}</a>
+                <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>{% translate "Movies" %}</a>
+                <a href="{% url 'movies:series_list' %}"{% if vn in "series_list,series_detail" %} aria-current="page"{% endif %}>{% translate "TV Shows" %}</a>
+                <a href="{% url 'movies:cartoon_list' %}"{% if vn == "cartoon_list" %} aria-current="page"{% endif %}>{% translate "Cartoons" %}</a>
+                <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>{% translate "People" %}</a>
+                <a href="{% url 'movies:studio_list' %}"{% if vn in "studio_list,studio_detail" %} aria-current="page"{% endif %}>{% translate "Studios" %}</a>
+                <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>{% translate "Analytics" %}</a>
                 {% if request.user.is_authenticated %}
                 <div class="menu account-menu" data-account-menu>
                     <a href="{% url 'profile' %}" class="menu-trigger account-trigger" data-account-trigger
@@ -175,23 +180,39 @@
                         <span class="menu-label">{{ request.user.username }}</span>
                     </a>
                     <div class="menu-panel account-panel" hidden data-account-panel>
-                        <a class="menu-option account-option account-option--profile" href="{% url 'profile' %}">Your account</a>
+                        <a class="menu-option account-option account-option--profile" href="{% url 'profile' %}">{% translate "Your account" %}</a>
                         <form method="post" action="{% url 'accounts:logout' %}" data-signout-form>
                             {% csrf_token %}
-                            <button type="submit" class="menu-option account-option account-option--signout">Sign out</button>
+                            <button type="submit" class="menu-option account-option account-option--signout">{% translate "Sign out" %}</button>
                         </form>
                     </div>
                 </div>
                 {% else %}
                 <a href="{% url 'accounts:login' %}" class="signin-btn">
                     <span class="signin-icon" aria-hidden="true"></span>
-                    Sign in
+                    {% translate "Sign in" %}
                 </a>
                 {% endif %}
+                {% comment %} Language switcher: a real POST form to Django's
+                   set_language, so it works with no JS. `next` is the current
+                   URL and set_language re-prefixes it for the chosen language,
+                   so the reader lands on this same page, not the homepage. The
+                   hidden `lang`/`hreflang` marks each option in its own language
+                   for screen readers; the visible label is the ISO code. {% endcomment %}
+                <form class="lang-switch" action="{% url 'set_language' %}" method="post"
+                      role="group" aria-label="{% translate "Language" context "language switcher" %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    {% for code, name in LANGUAGES %}
+                    <button type="submit" name="language" value="{{ code }}" class="lang-switch__opt"
+                            lang="{{ code }}" hreflang="{{ code }}" title="{{ name }}" aria-label="{{ name }}"
+                            {% if code == LANGUAGE_CODE %}aria-current="true" aria-pressed="true"{% else %}aria-pressed="false"{% endif %}>{{ code|upper }}</button>
+                    {% endfor %}
+                </form>
             </div>
             {% endwith %}
             <button type="button" class="theme-toggle" id="theme-toggle"
-                    aria-label="Switch to dark theme" title="Switch theme">
+                    aria-label="{% translate "Switch to dark theme" %}" title="{% translate "Switch theme" %}">
                 {% comment %} Moon = "go dark", sun = "go light". Only one is
                    visible at a time; both are always in the DOM so the
                    button never resizes. {% endcomment %}
@@ -223,8 +244,8 @@
 
     <footer class="site-footer">
         <div class="container footer-row">
-            <span>Theoria — a movie catalog measured end to end.</span>
-            <span class="mono">{% block footer_meta %}Source · TMDB{% endblock %}</span>
+            <span>{% translate "Theoria — a movie catalog measured end to end." %}</span>
+            <span class="mono">{% block footer_meta %}{% translate "Source · TMDB" %}{% endblock %}</span>
         </div>
     </footer>
 
@@ -236,10 +257,10 @@
     <dialog class="signout-dialog" id="signout-dialog" aria-labelledby="signout-dialog-title">
         <div class="signout-dialog__inner">
             <span class="signout-dialog__bar" aria-hidden="true"></span>
-            <h2 class="display signout-dialog__title" id="signout-dialog-title">Are you sure?</h2>
+            <h2 class="display signout-dialog__title" id="signout-dialog-title">{% translate "Are you sure?" %}</h2>
             <div class="signout-dialog__actions">
-                <button type="button" class="signout-dialog__no" data-signout-cancel autofocus>No, stay</button>
-                <button type="button" class="signout-dialog__yes" data-signout-confirm>Yes, sign out</button>
+                <button type="button" class="signout-dialog__no" data-signout-cancel autofocus>{% translate "No, stay" %}</button>
+                <button type="button" class="signout-dialog__yes" data-signout-confirm>{% translate "Yes, sign out" %}</button>
             </div>
         </div>
     </dialog>
@@ -250,9 +271,9 @@
             <header class="ai-assistant-header">
                 <div>
                     <p class="ai-assistant-kicker">THEORIA</p>
-                    <h2 class="ai-assistant-title" id="ai-assistant-title">Film guide</h2>
+                    <h2 class="ai-assistant-title" id="ai-assistant-title">{% translate "Film guide" %}</h2>
                 </div>
-                <button type="button" class="ai-assistant-close" data-ai-close aria-label="Close film guide" title="Close">
+                <button type="button" class="ai-assistant-close" data-ai-close aria-label="{% translate "Close film guide" %}" title="{% translate "Close" %}">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                         <path d="M6 6l12 12M18 6L6 18"/>
                     </svg>
@@ -261,20 +282,20 @@
 
             <div class="ai-assistant-messages" data-ai-messages role="log" aria-live="polite" aria-relevant="additions">
                 <div class="ai-message ai-message-assistant">
-                    <p>What would you like to watch?</p>
+                    <p>{% translate "What would you like to watch?" %}</p>
                 </div>
             </div>
 
             <div class="ai-assistant-actions" data-ai-actions>
-                <button type="button" data-ai-prompt="Pick for tonight">Pick for tonight</button>
-                <button type="button" data-ai-prompt="Find by mood">Find by mood</button>
-                <button type="button" data-ai-prompt="Surprise me">Surprise me</button>
+                <button type="button" data-ai-prompt="tonight">{% translate "Pick for tonight" %}</button>
+                <button type="button" data-ai-prompt="mood">{% translate "Find by mood" %}</button>
+                <button type="button" data-ai-prompt="surprise">{% translate "Surprise me" %}</button>
             </div>
 
             <form class="ai-assistant-form" data-ai-form>
-                <label class="visually-hidden" for="ai-assistant-input">Message the film guide</label>
-                <input id="ai-assistant-input" data-ai-input type="text" maxlength="300" placeholder="Describe your mood" autocomplete="off">
-                <button type="submit" class="ai-assistant-send" aria-label="Send message" title="Send" disabled>
+                <label class="visually-hidden" for="ai-assistant-input">{% translate "Message the film guide" %}</label>
+                <input id="ai-assistant-input" data-ai-input type="text" maxlength="300" placeholder="{% translate "Describe your mood" %}" autocomplete="off">
+                <button type="submit" class="ai-assistant-send" aria-label="{% translate "Send message" %}" title="{% translate "Send" %}" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M22 2 11 13"/>
                         <path d="m22 2-7 20-4-9-9-4Z"/>
@@ -283,7 +304,7 @@
             </form>
         </section>
 
-        <button type="button" class="ai-assistant-trigger" data-ai-trigger data-label="Get a film pick" aria-expanded="false" aria-controls="ai-assistant-panel" aria-label="Get a film pick" title="Get a film pick">
+        <button type="button" class="ai-assistant-trigger" data-ai-trigger data-label="{% translate "Get a film pick" %}" aria-expanded="false" aria-controls="ai-assistant-panel" aria-label="{% translate "Get a film pick" %}" title="{% translate "Get a film pick" %}">
             <svg viewBox="0 0 26 32" aria-hidden="true" focusable="false">
                 <ellipse cx="13" cy="16" rx="9.9" ry="13.3" fill="none" stroke="currentColor" stroke-width="4.4"/>
                 <rect x="3.8" y="12.8" width="18.4" height="6.4" fill="#a3e635"/>

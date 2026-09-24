@@ -1,0 +1,1945 @@
+# Theoria interface translations (ru).
+# Draft translation — needs review by a native speaker.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Theoria\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-24 11:16+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: Machine draft, needs native review\n"
+"Language-Team: ru\n"
+"Language: ru\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || (n%100>=11 && n%100<=14)? 2 : 3);\n"
+
+#: accounts/forms.py:38
+msgid "Username or email already exists."
+msgstr "Такое имя пользователя или email уже занято."
+
+#: accounts/forms.py:62
+msgid "That's already your username."
+msgstr "Это уже ваше имя пользователя."
+
+#: accounts/forms.py:65 accounts/views.py:262
+msgid "That username is already taken."
+msgstr "Это имя пользователя уже занято."
+
+#: accounts/forms.py:83
+msgid "Enter the 6-digit code."
+msgstr "Введите 6-значный код."
+
+#: accounts/models.py:33
+msgid "Usernames must be 3-30 characters: letters, numbers, and underscores only."
+msgstr "Имя пользователя должно содержать от 3 до 30 символов: только буквы, цифры и знак подчёркивания."
+
+#: accounts/models.py:40
+#, python-format
+msgid "%(value)s is a reserved name and can't be used as a username."
+msgstr "«%(value)s» — зарезервированное имя, его нельзя использовать как имя пользователя."
+
+#: accounts/templates/accounts/change_username.html:5
+msgid "Change username — Theoria"
+msgstr "Смена имени пользователя — Theoria"
+
+#: accounts/templates/accounts/change_username.html:18
+#: core/templates/core/account.html:48
+msgid "Change username"
+msgstr "Сменить имя пользователя"
+
+#: accounts/templates/accounts/change_username.html:19
+#, python-format
+msgid "You're signed in as %(username)s."
+msgstr "Вы вошли как %(username)s."
+
+#: accounts/templates/accounts/change_username.html:27
+msgid "New username"
+msgstr "Новое имя пользователя"
+
+#: accounts/templates/accounts/change_username.html:28
+#: accounts/templates/accounts/signup.html:30
+#: accounts/templates/accounts/signup.html:31
+msgid "Username"
+msgstr "Имя пользователя"
+
+#: accounts/templates/accounts/change_username.html:32
+msgid "Save username"
+msgstr "Сохранить имя"
+
+#: accounts/templates/accounts/change_username.html:35
+msgid "Back to your account"
+msgstr "Назад в аккаунт"
+
+#: accounts/templates/accounts/login.html:5
+msgid "Sign in — Theoria"
+msgstr "Вход — Theoria"
+
+#: accounts/templates/accounts/login.html:18
+#: accounts/templates/accounts/signup.html:44 templates/base.html:128
+#: templates/base.html:204
+msgid "Sign in"
+msgstr "Войти"
+
+#: accounts/templates/accounts/login.html:28
+#: accounts/templates/accounts/login.html:29
+#: accounts/templates/accounts/signup.html:36
+#: accounts/templates/accounts/signup.html:37
+msgid "Email"
+msgstr "Email"
+
+#: accounts/templates/accounts/login.html:33
+#: accounts/templates/accounts/signup.html:41
+msgid "Send code"
+msgstr "Отправить код"
+
+#: accounts/templates/accounts/login.html:36
+msgid "No account yet?"
+msgstr "Ещё нет аккаунта?"
+
+#: accounts/templates/accounts/login.html:36
+#: accounts/templates/accounts/signup.html:18
+msgid "Sign up"
+msgstr "Зарегистрироваться"
+
+#: accounts/templates/accounts/signup.html:5
+msgid "Sign up — Theoria"
+msgstr "Регистрация — Theoria"
+
+#: accounts/templates/accounts/signup.html:19
+msgid "A username and an email. That's it."
+msgstr "Имя пользователя и email. Больше ничего."
+
+#: accounts/templates/accounts/signup.html:44
+msgid "Already have an account?"
+msgstr "Уже есть аккаунт?"
+
+#: accounts/templates/accounts/verify.html:5
+msgid "Enter your code — Theoria"
+msgstr "Введите код — Theoria"
+
+#: accounts/templates/accounts/verify.html:18
+msgid "Enter your code"
+msgstr "Введите код"
+
+#: accounts/templates/accounts/verify.html:19
+#, python-format
+msgid "We sent a code to <span class=\"nowrap\">%(email)s</span>"
+msgstr "Мы отправили код на <span class=\"nowrap\">%(email)s</span>"
+
+#: accounts/templates/accounts/verify.html:37
+msgid "Code"
+msgstr "Код"
+
+#: accounts/templates/accounts/verify.html:50
+msgid "Verifying…"
+msgstr "Проверяем…"
+
+#: accounts/templates/accounts/verify.html:50
+msgid "Verify"
+msgstr "Подтвердить"
+
+#: accounts/templates/accounts/verify.html:55
+msgid "Resend code"
+msgstr "Отправить код ещё раз"
+
+#: accounts/views.py:73
+msgid "Request a new code to continue."
+msgstr "Чтобы продолжить, запросите новый код."
+
+#: accounts/views.py:74
+msgid "That code has already been used — request a new one."
+msgstr "Этот код уже использован — запросите новый."
+
+#: accounts/views.py:75
+msgid "That code has expired — request a new one."
+msgstr "Срок действия кода истёк — запросите новый."
+
+#: accounts/views.py:76
+msgid "Too many attempts — request a new code."
+msgstr "Слишком много попыток — запросите новый код."
+
+#: accounts/views.py:77
+msgid "That code isn't right."
+msgstr "Неверный код."
+
+#: accounts/views.py:81
+msgid "A code was just sent — wait a moment before requesting another."
+msgstr "Код только что отправлен — подождите немного, прежде чем запрашивать новый."
+
+#: accounts/views.py:82
+msgid "Too many codes requested for that address recently. Try again later."
+msgstr "Для этого адреса запрошено слишком много кодов. Попробуйте позже."
+
+#: accounts/views.py:149
+msgid "We couldn't send that code — please try again in a moment."
+msgstr "Не удалось отправить код — попробуйте ещё раз чуть позже."
+
+#: accounts/views.py:159
+msgid "Sign in to open a film's record."
+msgstr "Войдите, чтобы открыть страницу фильма."
+
+#: accounts/views.py:160
+msgid "Sign in to open a show's record."
+msgstr "Войдите, чтобы открыть страницу сериала."
+
+#: accounts/views.py:161
+msgid "Sign in to open a person's record."
+msgstr "Войдите, чтобы открыть страницу человека."
+
+#: accounts/views.py:162
+msgid "Sign in to see the analytics."
+msgstr "Войдите, чтобы увидеть аналитику."
+
+#: accounts/views.py:176
+msgid "We'll email you a code."
+msgstr "Мы пришлём код на почту."
+
+#: accounts/views.py:186
+msgid "Too many sign-up attempts — please try again later."
+msgstr "Слишком много попыток регистрации — попробуйте позже."
+
+#: accounts/views.py:219 accounts/views.py:343
+msgid "No account for that address."
+msgstr "Аккаунта с таким адресом нет."
+
+#: accounts/views.py:252
+msgid "Too many username changes — please try again later."
+msgstr "Слишком много смен имени пользователя — попробуйте позже."
+
+#: accounts/views.py:365
+msgid "That username or email was taken while you were verifying — please start over."
+msgstr "Пока вы подтверждали, это имя пользователя или email заняли — начните заново."
+
+#: analytics/templates/analytics/dashboard.html:4
+msgid "Theoria — Analytics"
+msgstr "Theoria — Аналитика"
+
+#: analytics/templates/analytics/dashboard.html:13 templates/base.html:185
+msgid "Analytics"
+msgstr "Аналитика"
+
+#: analytics/templates/analytics/dashboard.html:13
+msgid "Stats for nerds."
+msgstr "Цифры для дотошных."
+
+#: analytics/templates/analytics/dashboard.html:19
+msgid "Rating by decade"
+msgstr "Рейтинг по десятилетиям"
+
+#: analytics/templates/analytics/dashboard.html:20
+#: analytics/templates/analytics/dashboard.html:137
+msgid "by decade"
+msgstr "по десятилетиям"
+
+#: analytics/templates/analytics/dashboard.html:24
+msgid "Average rating by decade, line chart"
+msgstr "Средний рейтинг по десятилетиям, линейный график"
+
+#: analytics/templates/analytics/dashboard.html:29
+#: analytics/templates/analytics/dashboard.html:143
+msgid "Decade"
+msgstr "Десятилетие"
+
+#: analytics/templates/analytics/dashboard.html:29
+#: analytics/templates/analytics/dashboard.html:60
+#: analytics/templates/analytics/dashboard.html:88
+#: analytics/templates/analytics/dashboard.html:116
+#: movies/templates/movies/_person_header.html:36
+#: movies/templates/movies/_studio_header.html:33
+#: movies/templates/movies/home.html:27
+#: movies/templates/movies/movie_list.html:4
+#: movies/templates/movies/movie_list.html:7 templates/base.html:180
+msgid "Movies"
+msgstr "Фильмы"
+
+#: analytics/templates/analytics/dashboard.html:29
+#: analytics/templates/analytics/dashboard.html:88
+#: analytics/templates/analytics/dashboard.html:116
+#: analytics/templates/analytics/dashboard.html:143
+#: analytics/templates/analytics/dashboard.html:173
+#: analytics/templates/analytics/dashboard.html:200
+#: analytics/templates/analytics/dashboard.html:229
+#: core/context_processors.py:23 movies/templates/movies/_person_header.html:51
+#: movies/templates/movies/_studio_header.html:37
+#: movies/templates/movies/home.html:35
+msgid "Avg rating"
+msgstr "Средний рейтинг"
+
+#: analytics/templates/analytics/dashboard.html:29
+#: analytics/templates/analytics/dashboard.html:60
+#: analytics/templates/analytics/dashboard.html:88
+#: core/context_processors.py:24
+msgid "Total revenue"
+msgstr "Общие сборы"
+
+#: analytics/templates/analytics/dashboard.html:44
+#: analytics/templates/analytics/dashboard.html:75
+#: analytics/templates/analytics/dashboard.html:130
+msgid "No movies loaded yet. Run the pipeline to fill the warehouse."
+msgstr "Фильмы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+
+#: analytics/templates/analytics/dashboard.html:50
+msgid "Revenue by genre"
+msgstr "Сборы по жанрам"
+
+#: analytics/templates/analytics/dashboard.html:51
+msgid "by genre"
+msgstr "по жанрам"
+
+#: analytics/templates/analytics/dashboard.html:55
+msgid "Total revenue by genre, bar chart"
+msgstr "Общие сборы по жанрам, столбчатая диаграмма"
+
+#: analytics/templates/analytics/dashboard.html:60
+msgid "Genre"
+msgstr "Жанр"
+
+#: analytics/templates/analytics/dashboard.html:60
+msgid "Avg / movie"
+msgstr "В среднем на фильм"
+
+#: analytics/templates/analytics/dashboard.html:81
+msgid "Top studios by revenue"
+msgstr "Лучшие студии по сборам"
+
+#: analytics/templates/analytics/dashboard.html:82
+msgid "3+ movies"
+msgstr "от 3 фильмов"
+
+#: analytics/templates/analytics/dashboard.html:88
+msgid "Studio"
+msgstr "Студия"
+
+#: analytics/templates/analytics/dashboard.html:103
+msgid "No studios loaded yet. Run the pipeline to fill the warehouse."
+msgstr "Студии ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+
+#: analytics/templates/analytics/dashboard.html:109
+msgid "Movies by production country"
+msgstr "Фильмы по странам производства"
+
+#: analytics/templates/analytics/dashboard.html:110
+msgid "co-productions counted once each"
+msgstr "совместные постановки учитываются по одному разу"
+
+#: analytics/templates/analytics/dashboard.html:116
+msgid "Country"
+msgstr "Страна"
+
+#: analytics/templates/analytics/dashboard.html:136
+msgid "Shows by decade"
+msgstr "Сериалы по десятилетиям"
+
+#: analytics/templates/analytics/dashboard.html:143
+#: analytics/templates/analytics/dashboard.html:173
+#: analytics/templates/analytics/dashboard.html:229
+#: movies/templates/movies/_person_header.html:46
+msgid "Shows"
+msgstr "Сериалы"
+
+#: analytics/templates/analytics/dashboard.html:157
+#: analytics/templates/analytics/dashboard.html:216
+msgid "No shows loaded yet. Run the pipeline to fill the warehouse."
+msgstr "Сериалы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+
+#: analytics/templates/analytics/dashboard.html:163
+msgid "Rating by season"
+msgstr "Рейтинг по сезонам"
+
+#: analytics/templates/analytics/dashboard.html:164
+msgid "does a show decline?"
+msgstr "сдаёт ли сериал к концу?"
+
+#: analytics/templates/analytics/dashboard.html:168
+msgid "Average episode rating by season number, line chart"
+msgstr "Средний рейтинг серий по номеру сезона, линейный график"
+
+#: analytics/templates/analytics/dashboard.html:173
+#: movies/templates/movies/_season_picker.html:19
+#: movies/templates/movies/series_detail.html:203
+msgid "Season"
+msgstr "Сезон"
+
+#: analytics/templates/analytics/dashboard.html:187
+msgid "No episode ratings loaded yet. Run the pipeline to fill the warehouse."
+msgstr "Рейтинги серий ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+
+#: analytics/templates/analytics/dashboard.html:193
+msgid "Longest-running shows"
+msgstr "Самые долгие сериалы"
+
+#: analytics/templates/analytics/dashboard.html:194
+msgid "by calendar span"
+msgstr "по календарному сроку"
+
+#: analytics/templates/analytics/dashboard.html:200
+msgid "Show"
+msgstr "Сериал"
+
+#: analytics/templates/analytics/dashboard.html:200
+msgid "Years on air"
+msgstr "Лет в эфире"
+
+#: analytics/templates/analytics/dashboard.html:200
+#: movies/templates/movies/series_detail.html:55
+msgid "Seasons"
+msgstr "Сезоны"
+
+#: analytics/templates/analytics/dashboard.html:200
+#: movies/templates/movies/series_detail.html:59
+#: movies/templates/movies/series_detail.html:194
+msgid "Episodes"
+msgstr "Серии"
+
+#: analytics/templates/analytics/dashboard.html:222
+msgid "Top networks by series"
+msgstr "Лучшие каналы по числу сериалов"
+
+#: analytics/templates/analytics/dashboard.html:223
+msgid "3+ shows"
+msgstr "от 3 сериалов"
+
+#: analytics/templates/analytics/dashboard.html:229
+msgctxt "table column"
+msgid "Network"
+msgstr "Канал"
+
+#: analytics/templates/analytics/dashboard.html:243
+msgid "No networks loaded yet. Run the pipeline to fill the warehouse."
+msgstr "Каналы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+
+#: core/context_processors.py:16 templates/base.html:162
+msgid "Open menu"
+msgstr "Открыть меню"
+
+#: core/context_processors.py:17
+msgid "Close menu"
+msgstr "Закрыть меню"
+
+#: core/context_processors.py:18 templates/base.html:227
+msgid "Switch to dark theme"
+msgstr "Включить тёмную тему"
+
+#: core/context_processors.py:19
+msgid "Switch to light theme"
+msgstr "Включить светлую тему"
+
+#: core/context_processors.py:20 movies/templates/movies/person_detail.html:32
+msgid "See more"
+msgstr "Ещё"
+
+#: core/context_processors.py:21
+msgid "See less"
+msgstr "Свернуть"
+
+#: core/context_processors.py:22
+msgid "Filter"
+msgstr "Фильтр"
+
+#: core/context_processors.py:25
+msgid "Video"
+msgstr "Видео"
+
+#: core/context_processors.py:26
+msgid "Open film guide"
+msgstr "Открыть помощника по фильмам"
+
+#: core/context_processors.py:27 templates/base.html:290
+msgid "Close film guide"
+msgstr "Закрыть помощника по фильмам"
+
+#: core/context_processors.py:28
+msgid "Sending…"
+msgstr "Отправляем…"
+
+#: core/context_processors.py:29
+msgid "Enter a valid email address."
+msgstr "Введите корректный адрес электронной почты."
+
+#: core/context_processors.py:31
+msgid "Tell me a little about your mood. I can start with something funny, thoughtful, intense, or comforting."
+msgstr "Расскажите немного о своём настроении. Могу начать с чего-нибудь смешного, вдумчивого, напряжённого или утешительного."
+
+#: core/context_processors.py:35
+msgid "Choose a feeling and I will narrow it down: light, romantic, thrilling, or strange."
+msgstr "Выберите настроение, и я сужу выбор: лёгкое, романтичное, захватывающее или странное."
+
+#: core/context_processors.py:39
+msgid "A surprise pick will be ready once your personal recommendations are connected."
+msgstr "Сюрприз-подборка появится, когда будут подключены ваши персональные рекомендации."
+
+#: core/context_processors.py:43
+msgid "I am still in demo mode. Soon I will use your taste profile to make a personal recommendation."
+msgstr "Я пока работаю в демо-режиме. Скоро я буду использовать ваш профиль вкусов, чтобы давать личные рекомендации."
+
+#: core/context_processors.py:47
+#, python-brace-format
+msgid "{label} ({seconds}s)"
+msgstr "{label} ({seconds} с)"
+
+#: core/context_processors.py:50
+msgid "B"
+msgstr " млрд"
+
+#: core/context_processors.py:51
+msgid "M"
+msgstr " млн"
+
+#: core/context_processors.py:52
+msgid "K"
+msgstr " тыс."
+
+#: core/templates/core/_account_pager.html:15
+#, python-format
+msgid "%(label)s pages"
+msgstr "%(label)s: страницы"
+
+#: core/templates/core/_account_pager.html:16
+#, python-format
+msgid "Showing %(start)s–%(end)s of %(total)s"
+msgstr "Показано %(start)s–%(end)s из %(total)s"
+
+#: core/templates/core/_account_pager.html:19
+#: core/templates/core/_account_pager.html:23
+#, python-format
+msgid "Previous page of %(label)s"
+msgstr "Предыдущая страница: %(label)s"
+
+#: core/templates/core/_account_pager.html:37
+#: core/templates/core/_account_pager.html:41
+#, python-format
+msgid "Next page of %(label)s"
+msgstr "Следующая страница: %(label)s"
+
+#: core/templates/core/_collection_empty.html:10
+msgid "Room for more"
+msgstr "Место ещё есть"
+
+#: core/templates/core/_collection_empty.html:10
+msgid "Nothing liked yet"
+msgstr "Пока нет отметок «Нравится»"
+
+#: core/templates/core/_collection_empty.html:11
+msgid "Everything you like across Movies, TV Shows and Cartoons collects here, newest first."
+msgstr "Всё, что вам нравится среди фильмов, сериалов и мультфильмов, собирается здесь — сначала новое."
+
+#: core/templates/core/_collection_empty.html:11
+msgid "Press Like on any movie or show and it collects here, newest first."
+msgstr "Нажмите «Нравится» на любом фильме или сериале — и он появится здесь, сначала новое."
+
+#: core/templates/core/_collection_empty.html:12
+#: movies/templates/movies/home.html:43
+msgid "Browse movies"
+msgstr "Перейти к фильмам"
+
+#: core/templates/core/_collection_empty.html:14
+msgid "Your queue is short"
+msgstr "Ваша очередь коротка"
+
+#: core/templates/core/_collection_empty.html:14
+msgid "Nothing saved for later"
+msgstr "Ничего не отложено"
+
+#: core/templates/core/_collection_empty.html:15
+msgid "Save anything you mean to get to and it waits here until you do."
+msgstr "Сохраняйте всё, до чего собираетесь добраться, — оно дождётся вас здесь."
+
+#: core/templates/core/_collection_empty.html:16
+msgid "Find something"
+msgstr "Найти что-нибудь"
+
+#: core/templates/core/_collection_section.html:23
+#, python-format
+msgid "<span class=\"mono\">%(counter)s</span> movie"
+msgid_plural "<span class=\"mono\">%(counter)s</span> movies"
+msgstr[0] "<span class=\"mono\">%(counter)s</span> фильм"
+msgstr[1] "<span class=\"mono\">%(counter)s</span> фильма"
+msgstr[2] "<span class=\"mono\">%(counter)s</span> фильмов"
+msgstr[3] "<span class=\"mono\">%(counter)s</span> фильма"
+
+#: core/templates/core/_collection_section.html:33
+#, python-format
+msgid "Rank %(rank)s:"
+msgstr "Место %(rank)s:"
+
+#: core/templates/core/_collection_section.html:46
+msgid "Movie"
+msgstr "Фильм"
+
+#: core/templates/core/_collection_section.html:46
+msgid "TV show"
+msgstr "Сериал"
+
+#: core/templates/core/_collection_section.html:50
+#, python-format
+msgid "Remove %(title)s from %(label)s"
+msgstr "Убрать «%(title)s» из раздела «%(label)s»"
+
+#: core/templates/core/_collection_section.html:66
+#, python-format
+msgid "Move %(title)s up"
+msgstr "Поднять «%(title)s» выше"
+
+#: core/templates/core/_collection_section.html:71
+#, python-format
+msgid "Move %(title)s down"
+msgstr "Опустить «%(title)s» ниже"
+
+#: core/templates/core/_collection_section.html:89
+msgid "Add to Top"
+msgstr "Добавить в топ"
+
+#: core/templates/core/_collection_section.html:89
+#, python-format
+msgid "at rank %(rank)s"
+msgstr "на месте %(rank)s"
+
+#: core/templates/core/_collection_section.html:91
+msgid "Empty slot"
+msgstr "Свободное место"
+
+#: core/templates/core/account.html:4
+msgid "Your account — Theoria"
+msgstr "Ваш аккаунт — Theoria"
+
+#: core/templates/core/account.html:21
+msgid "Account"
+msgstr "Аккаунт"
+
+#: core/templates/core/account.html:30
+#, python-format
+msgid "Member since %(joined)s"
+msgstr "С нами с %(joined)s"
+
+#: core/templates/core/account.html:32
+msgid "Your collections"
+msgstr "Ваши коллекции"
+
+#: core/templates/core/account.html:58 templates/base.html:151
+#: templates/base.html:197
+msgid "Sign out"
+msgstr "Выйти"
+
+#: core/templates/core/account.html:69
+#, python-format
+msgid "Account · %(username)s"
+msgstr "Аккаунт · %(username)s"
+
+#: core/views.py:29 movies/templates/movies/_collection_actions.html:8
+msgid "Liked"
+msgstr "Понравившиеся"
+
+#: core/views.py:30 movies/templates/movies/_collection_actions.html:14
+#: movies/templates/movies/_collection_actions.html:16
+msgid "Watch later"
+msgstr "Смотреть позже"
+
+#: core/views.py:31
+msgid "Top"
+msgstr "Топ"
+
+#: core/views.py:150
+msgid "Unknown collection."
+msgstr "Неизвестная коллекция."
+
+#: core/views.py:179
+msgid "That collection could not be found."
+msgstr "Такая коллекция не найдена."
+
+#: core/views.py:194
+msgid "That collection item could not be moved."
+msgstr "Не удалось переместить этот элемент коллекции."
+
+#: movies/templates/movies/_browse_grid.html:20
+#, python-format
+msgid "Nothing matches “%(q)s”. Try a shorter title."
+msgstr "Ничего не найдено по запросу «%(q)s». Попробуйте более короткое название."
+
+#: movies/templates/movies/_browse_grid.html:21
+msgid "Nothing loaded yet. Run the pipeline to fill the catalog."
+msgstr "Пока ничего не загружено. Запустите конвейер, чтобы наполнить каталог."
+
+#: movies/templates/movies/_cartoon_grid.html:20
+#, python-format
+msgid "No cartoons match “%(q)s”. Try a shorter title."
+msgstr "Мультфильмов по запросу «%(q)s» нет. Попробуйте более короткое название."
+
+#: movies/templates/movies/_cartoon_grid.html:21
+msgid "No cartoons loaded yet. Run the pipeline to fill the catalog."
+msgstr "Мультфильмы ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
+
+#: movies/templates/movies/_collection_actions.html:1
+msgid "Personal collections"
+msgstr "Личные коллекции"
+
+#: movies/templates/movies/_collection_actions.html:5
+#: movies/templates/movies/_collection_actions.html:7
+msgid "Like"
+msgstr "Нравится"
+
+#: movies/templates/movies/_collection_actions.html:17
+msgid "In Watch later"
+msgstr "В списке «Смотреть позже»"
+
+#: movies/templates/movies/_collection_actions.html:23
+#: movies/templates/movies/_collection_actions.html:25
+msgid "Add to top"
+msgstr "Добавить в топ"
+
+#: movies/templates/movies/_collection_actions.html:26
+msgid "In your Top"
+msgstr "В вашем топе"
+
+#: movies/templates/movies/_episode_table.html:25
+msgid "Title"
+msgstr "Название"
+
+#: movies/templates/movies/_episode_table.html:26
+msgid "Air date"
+msgstr "Дата выхода в эфир"
+
+#: movies/templates/movies/_episode_table.html:27
+#: movies/templates/movies/movie_detail.html:49
+msgid "Runtime"
+msgstr "Длительность"
+
+#: movies/templates/movies/_episode_table.html:28
+#: movies/templates/movies/movie_detail.html:40
+#: movies/templates/movies/series_detail.html:38
+msgid "Rating"
+msgstr "Рейтинг"
+
+#: movies/templates/movies/_episode_table.html:37
+#: movies/templates/movies/movie_detail.html:50
+#, python-format
+msgid "%(n)s min"
+msgstr "%(n)s мин"
+
+#: movies/templates/movies/_episode_table.html:44
+msgid "episodes"
+msgstr "серии"
+
+#: movies/templates/movies/_episode_table.html:47
+msgid "Episodes for this season haven't been catalogued yet."
+msgstr "Серии этого сезона ещё не внесены в каталог."
+
+#: movies/templates/movies/_movie_card.html:12
+#: movies/templates/movies/_series_card.html:15
+#: movies/templates/movies/movie_detail.html:21
+#: movies/templates/movies/series_detail.html:19
+#, python-format
+msgid "%(title)s poster"
+msgstr "Постер: %(title)s"
+
+#: movies/templates/movies/_movie_grid.html:14
+#: movies/templates/movies/_studio_movies_grid.html:16
+#, python-format
+msgid "No movies match “%(q)s”. Try a shorter title."
+msgstr "Фильмов по запросу «%(q)s» нет. Попробуйте более короткое название."
+
+#: movies/templates/movies/_movie_grid.html:15
+msgid "No movies match this filter. Try loosening it."
+msgstr "Нет фильмов, подходящих под этот фильтр. Попробуйте смягчить условия."
+
+#: movies/templates/movies/_movie_grid.html:16
+#: movies/templates/movies/home.html:75 movies/templates/movies/home.html:89
+msgid "No movies loaded yet. Run the pipeline to fill the catalog."
+msgstr "Фильмы ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
+
+#: movies/templates/movies/_pager.html:26
+msgid "Pagination"
+msgstr "Постраничная навигация"
+
+#: movies/templates/movies/_pager.html:28
+#: movies/templates/movies/_pager_client.html:15
+msgid "← Previous"
+msgstr "← Назад"
+
+#: movies/templates/movies/_pager.html:32
+#: movies/templates/movies/_pager_client.html:17
+msgid "Next →"
+msgstr "Далее →"
+
+#: movies/templates/movies/_pager_client.html:14
+#, python-format
+msgid "%(label)s pagination"
+msgstr "Навигация: %(label)s"
+
+#: movies/templates/movies/_person_card.html:29
+#, python-format
+msgid "Pop %(pop)s"
+msgstr "Поп. %(pop)s"
+
+#: movies/templates/movies/_person_filmography_grid.html:26
+#, python-format
+msgid "No titles match “%(q)s”. Try a shorter title."
+msgstr "Ничего не найдено по запросу «%(q)s». Попробуйте более короткое название."
+
+#: movies/templates/movies/_person_filmography_grid.html:27
+msgid "No credits recorded for this person yet."
+msgstr "Для этого человека пока нет записанных работ."
+
+#: movies/templates/movies/_person_grid.html:14
+#, python-format
+msgid "No names match “%(q)s”."
+msgstr "Имён по запросу «%(q)s» нет."
+
+#: movies/templates/movies/_person_grid.html:15
+msgid "No one matches this filter."
+msgstr "Никто не подходит под этот фильтр."
+
+#: movies/templates/movies/_person_grid.html:16
+msgid "Nothing loaded yet. Run the pipeline to fill the index."
+msgstr "Пока ничего не загружено. Запустите конвейер, чтобы наполнить индекс."
+
+#: movies/templates/movies/_person_header.html:58
+#: movies/templates/movies/series_detail.html:51
+msgid "Status"
+msgstr "Статус"
+
+#: movies/templates/movies/_person_header.html:73
+msgid "Credits"
+msgstr "Работы"
+
+#: movies/templates/movies/_person_header.html:88
+msgid "Born"
+msgstr "Дата рождения"
+
+#: movies/templates/movies/_person_header.html:94
+msgid "Died"
+msgstr "Дата смерти"
+
+#: movies/templates/movies/_person_header.html:100
+msgid "Born in"
+msgstr "Место рождения"
+
+#: movies/templates/movies/_person_toolbar_meta.html:12
+msgid "Filter people by credit"
+msgstr "Фильтр людей по виду работы"
+
+#: movies/templates/movies/_person_toolbar_meta.html:13
+msgid "All"
+msgstr "Все"
+
+#: movies/templates/movies/_person_toolbar_meta.html:14 movies/vocab.py:24
+msgid "Acting"
+msgstr "Актёрская игра"
+
+#: movies/templates/movies/_person_toolbar_meta.html:15 movies/vocab.py:25
+msgid "Directing"
+msgstr "Режиссура"
+
+#: movies/templates/movies/_rating_badge.html:26
+#: movies/templates/movies/_rating_badge.html:32
+#, python-format
+msgid "IMDb rating %(value)s out of 10"
+msgstr "Рейтинг IMDb: %(value)s из 10"
+
+#: movies/templates/movies/_rating_badge.html:29
+#, python-format
+msgid "%(formatted)s vote"
+msgid_plural "%(formatted)s votes"
+msgstr[0] "%(formatted)s голос"
+msgstr[1] "%(formatted)s голоса"
+msgstr[2] "%(formatted)s голосов"
+msgstr[3] "%(formatted)s голоса"
+
+#: movies/templates/movies/_season_picker.html:21
+msgid "Choose a season"
+msgstr "Выберите сезон"
+
+#: movies/templates/movies/_series_card.html:25
+#: movies/templates/movies/series_detail.html:195
+#, python-format
+msgid "%(n)s season"
+msgid_plural "%(n)s seasons"
+msgstr[0] "%(n)s сезон"
+msgstr[1] "%(n)s сезона"
+msgstr[2] "%(n)s сезонов"
+msgstr[3] "%(n)s сезона"
+
+#: movies/templates/movies/_series_grid.html:13
+#, python-format
+msgid "No shows match “%(q)s”. Try a shorter title."
+msgstr "Сериалов по запросу «%(q)s» нет. Попробуйте более короткое название."
+
+#: movies/templates/movies/_series_grid.html:14
+msgid "No shows match this filter. Try loosening it."
+msgstr "Нет сериалов, подходящих под этот фильтр. Попробуйте смягчить условия."
+
+#: movies/templates/movies/_series_grid.html:15
+#: movies/templates/movies/home.html:111
+msgid "No shows loaded yet. Run the pipeline to fill the catalog."
+msgstr "Сериалы ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
+
+#: movies/templates/movies/_studio_card.html:23
+#: movies/templates/movies/_studio_header.html:19
+#, python-format
+msgid "%(name)s logo"
+msgstr "Логотип: %(name)s"
+
+#: movies/templates/movies/_studio_card.html:34
+#: movies/templates/movies/director_detail.html:12
+#: movies/templates/movies/person_detail.html:6
+#: movies/templates/movies/person_detail.html:81
+#: movies/templates/movies/studio_detail.html:77
+#, python-format
+msgid "%(n)s movie"
+msgid_plural "%(n)s movies"
+msgstr[0] "%(n)s фильм"
+msgstr[1] "%(n)s фильма"
+msgstr[2] "%(n)s фильмов"
+msgstr[3] "%(n)s фильма"
+
+#: movies/templates/movies/_studio_grid.html:16
+#, python-format
+msgid "No studios match “%(q)s”."
+msgstr "Студий по запросу «%(q)s» нет."
+
+#: movies/templates/movies/_studio_grid.html:17
+msgid "No studios loaded yet. Run the pipeline to fill the catalog."
+msgstr "Студии ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
+
+#: movies/templates/movies/_studio_header.html:41 movies/views.py:1233
+#: movies/views.py:1582
+msgid "Active"
+msgstr "Активная карьера"
+
+#: movies/templates/movies/_studio_header.html:45
+#: movies/templates/movies/movie_detail.html:80
+#: movies/templates/movies/movie_list.html:33
+#: movies/templates/movies/person_detail.html:71
+#: movies/templates/movies/studio_detail.html:67
+#: movies/templates/movies/studio_list.html:32
+msgid "Revenue"
+msgstr "Сборы"
+
+#: movies/templates/movies/_video_embed.html:19
+msgid "video"
+msgstr "видео"
+
+#: movies/templates/movies/_video_embed.html:25
+#, python-format
+msgid "Play %(kind)s: %(name)s"
+msgstr "Смотреть %(kind)s: %(name)s"
+
+#: movies/templates/movies/actor_detail.html:11
+#: movies/templates/movies/director_detail.html:11
+#: movies/templates/movies/person_detail.html:80
+#: movies/templates/movies/studio_detail.html:76
+msgid "Filmography"
+msgstr "Фильмография"
+
+#: movies/templates/movies/actor_detail.html:12
+#, python-format
+msgid "%(n)s credit"
+msgid_plural "%(n)s credits"
+msgstr[0] "%(n)s работа"
+msgstr[1] "%(n)s работы"
+msgstr[2] "%(n)s работ"
+msgstr[3] "%(n)s работы"
+
+#: movies/templates/movies/actor_detail.html:18
+msgid "No credits recorded for this actor yet."
+msgstr "Для этого актёра пока нет записанных работ."
+
+#: movies/templates/movies/browse.html:4 movies/templates/movies/browse.html:7
+#: templates/base.html:179
+msgid "Browse"
+msgstr "Обзор"
+
+#: movies/templates/movies/browse.html:7
+msgid "Every movie and TV show in one place. Search by name or change the order."
+msgstr "Все фильмы и сериалы в одном месте. Ищите по названию или меняйте порядок."
+
+#: movies/templates/movies/browse.html:21
+msgid "Search movies and shows"
+msgstr "Поиск фильмов и сериалов"
+
+#: movies/templates/movies/browse.html:21
+msgid "Search movies and shows by title"
+msgstr "Поиск фильмов и сериалов по названию"
+
+#: movies/templates/movies/browse.html:24
+#: movies/templates/movies/cartoon_list.html:23
+#: movies/templates/movies/movie_list.html:27
+#: movies/templates/movies/person_detail.html:65
+#: movies/templates/movies/person_list.html:27
+#: movies/templates/movies/series_list.html:23
+#: movies/templates/movies/studio_detail.html:61
+#: movies/templates/movies/studio_list.html:28
+msgid "Order by"
+msgstr "Сортировка"
+
+#: movies/templates/movies/browse.html:26
+#: movies/templates/movies/cartoon_list.html:25
+#: movies/templates/movies/movie_list.html:29
+#: movies/templates/movies/person_detail.html:67
+#: movies/templates/movies/series_list.html:25
+#: movies/templates/movies/studio_detail.html:63
+msgid "Newest"
+msgstr "Новые"
+
+#: movies/templates/movies/browse.html:28
+#: movies/templates/movies/cartoon_list.html:27
+#: movies/templates/movies/movie_list.html:31
+#: movies/templates/movies/person_detail.html:69
+#: movies/templates/movies/series_list.html:27
+#: movies/templates/movies/studio_detail.html:65
+msgid "Rated"
+msgstr "По рейтингу"
+
+#: movies/templates/movies/browse.html:30
+#: movies/templates/movies/cartoon_list.html:29
+#: movies/templates/movies/movie_list.html:35
+#: movies/templates/movies/person_detail.html:73
+#: movies/templates/movies/person_list.html:31
+#: movies/templates/movies/series_list.html:29
+#: movies/templates/movies/studio_detail.html:69
+#: movies/templates/movies/studio_list.html:34
+msgid "A–Z"
+msgstr "А–Я"
+
+#: movies/templates/movies/browse.html:32
+#: movies/templates/movies/cartoon_list.html:31
+#: movies/templates/movies/movie_list.html:62
+#: movies/templates/movies/person_detail.html:75
+#: movies/templates/movies/person_list.html:56
+#: movies/templates/movies/series_list.html:40
+#: movies/templates/movies/studio_detail.html:71
+#: movies/templates/movies/studio_list.html:41
+msgid "Apply"
+msgstr "Применить"
+
+#: movies/templates/movies/cartoon_list.html:4
+#: movies/templates/movies/cartoon_list.html:7 templates/base.html:182
+msgid "Cartoons"
+msgstr "Мультфильмы"
+
+#: movies/templates/movies/cartoon_list.html:7
+msgid "Animated movies and shows made for younger viewers. Search by name or reorder by what was measured."
+msgstr "Анимационные фильмы и сериалы для юных зрителей. Ищите по названию или меняйте порядок по измеряемым показателям."
+
+#: movies/templates/movies/cartoon_list.html:20
+msgid "Search cartoons"
+msgstr "Поиск мультфильмов"
+
+#: movies/templates/movies/cartoon_list.html:20
+msgid "Search cartoons by title"
+msgstr "Поиск мультфильмов по названию"
+
+#: movies/templates/movies/director_detail.html:18
+msgid "No movies recorded for this director yet."
+msgstr "Для этого режиссёра пока нет записанных фильмов."
+
+#: movies/templates/movies/home.html:5
+msgid "Theoria — Welcome to the world of movies"
+msgstr "Theoria — добро пожаловать в мир кино"
+
+#: movies/templates/movies/home.html:20
+msgid "Welcome<br>to the world<br>of movies."
+msgstr "Добро<br>пожаловать<br>в мир кино."
+
+#: movies/templates/movies/home.html:22
+msgid "Built for people who love the craft of cinema — every movie, every performance, gathered in one place to explore."
+msgstr "Создано для тех, кто любит искусство кино: каждый фильм, каждая роль — всё собрано в одном месте."
+
+#: movies/templates/movies/home.html:31 movies/views.py:673
+#: templates/base.html:183
+msgid "People"
+msgstr "Люди"
+
+#: movies/templates/movies/home.html:44
+msgid "See the analytics →"
+msgstr "Открыть аналитику →"
+
+#: movies/templates/movies/home.html:68
+msgid "Highest rated"
+msgstr "Самые высокие оценки"
+
+#: movies/templates/movies/home.html:69
+msgid "top 12"
+msgstr "топ-12"
+
+#: movies/templates/movies/home.html:82
+msgid "See what's new"
+msgstr "Что нового"
+
+#: movies/templates/movies/home.html:83
+msgid "by release date"
+msgstr "по дате выхода"
+
+#: movies/templates/movies/home.html:104
+msgid "Recently aired"
+msgstr "Недавно в эфире"
+
+#: movies/templates/movies/home.html:105
+msgid "by last air date"
+msgstr "по дате последней серии"
+
+#: movies/templates/movies/movie_detail.html:32
+#: movies/templates/movies/series_detail.html:30
+#, python-format
+msgid "originally “%(title)s”"
+msgstr "в оригинале «%(title)s»"
+
+#: movies/templates/movies/movie_detail.html:45 movies/vocab.py:139
+msgid "Released"
+msgstr "Дата выхода"
+
+#: movies/templates/movies/movie_detail.html:53
+#: movies/templates/movies/series_detail.html:63
+msgid "Language"
+msgid_plural "Languages"
+msgstr[0] "Язык"
+msgstr[1] "Языки"
+msgstr[2] "Языки"
+msgstr[3] "Языки"
+
+#: movies/templates/movies/movie_detail.html:58
+#: movies/templates/movies/series_detail.html:68
+msgid "Countries"
+msgstr "Страны"
+
+#: movies/templates/movies/movie_detail.html:64
+#: movies/templates/movies/series_detail.html:74
+msgid "Country of origin"
+msgstr "Страна происхождения"
+
+#: movies/templates/movies/movie_detail.html:70
+#: movies/templates/movies/series_detail.html:80
+msgid "Production countries"
+msgstr "Страны производства"
+
+#: movies/templates/movies/movie_detail.html:76
+msgid "Budget"
+msgstr "Бюджет"
+
+#: movies/templates/movies/movie_detail.html:85
+msgid "Directed by"
+msgstr "Режиссёр"
+
+#: movies/templates/movies/movie_detail.html:93
+#: movies/templates/movies/series_detail.html:101
+#: movies/templates/movies/studio_list.html:4
+#: movies/templates/movies/studio_list.html:7 templates/base.html:184
+msgid "Studios"
+msgstr "Студии"
+
+#: movies/templates/movies/movie_detail.html:126
+#: movies/templates/movies/series_detail.html:129
+msgid "trailer"
+msgstr "трейлер"
+
+#: movies/templates/movies/movie_detail.html:136
+#: movies/templates/movies/series_detail.html:139
+msgid "Cast"
+msgstr "В ролях"
+
+#: movies/templates/movies/movie_detail.html:137
+#: movies/templates/movies/series_detail.html:140
+#, python-format
+msgid "%(cast)s cast · %(counter)s credit"
+msgid_plural "%(cast)s cast · %(counter)s credits"
+msgstr[0] "%(cast)s в ролях · %(counter)s работа"
+msgstr[1] "%(cast)s в ролях · %(counter)s работы"
+msgstr[2] "%(cast)s в ролях · %(counter)s работ"
+msgstr[3] "%(cast)s в ролях · %(counter)s работы"
+
+#: movies/templates/movies/movie_detail.html:151
+msgid "No cast recorded for this movie."
+msgstr "Для этого фильма нет записанного актёрского состава."
+
+#: movies/templates/movies/movie_detail.html:154
+#: movies/templates/movies/series_detail.html:154
+msgid "cast"
+msgstr "актёры"
+
+#: movies/templates/movies/movie_detail.html:168
+#: movies/templates/movies/series_detail.html:160 movies/vocab.py:35
+msgid "Crew"
+msgstr "Съёмочная группа"
+
+#: movies/templates/movies/movie_detail.html:169
+#: movies/templates/movies/series_detail.html:161
+#, python-format
+msgid "%(n)s crew"
+msgstr "%(n)s чел. в съёмочной группе"
+
+#: movies/templates/movies/movie_detail.html:194
+msgid "No crew recorded for this movie."
+msgstr "Для этого фильма нет записанной съёмочной группы."
+
+#: movies/templates/movies/movie_detail.html:196
+#: movies/templates/movies/series_detail.html:188
+msgid "crew"
+msgstr "съёмочная группа"
+
+#: movies/templates/movies/movie_list.html:7
+msgid "Every title the warehouse holds. Search by name, narrow by genre, or reorder by what was measured."
+msgstr "Все фильмы, что есть в хранилище. Ищите по названию, выбирайте жанр или меняйте порядок по измеряемым показателям."
+
+#: movies/templates/movies/movie_list.html:20
+msgid "Search movies"
+msgstr "Поиск фильмов"
+
+#: movies/templates/movies/movie_list.html:20
+msgid "Search movies by title"
+msgstr "Поиск фильмов по названию"
+
+#: movies/templates/movies/movie_list.html:49
+#: movies/templates/movies/series_list.html:32
+msgid "Filter by genre"
+msgstr "Фильтр по жанру"
+
+#: movies/templates/movies/movie_list.html:51
+#: movies/templates/movies/series_list.html:34
+msgid "Any genre"
+msgstr "Любой жанр"
+
+#: movies/templates/movies/person_detail.html:6
+#: movies/templates/movies/person_detail.html:81
+#, python-format
+msgid "%(n)s show"
+msgid_plural "%(n)s shows"
+msgstr[0] "%(n)s сериал"
+msgstr[1] "%(n)s сериала"
+msgstr[2] "%(n)s сериалов"
+msgstr[3] "%(n)s сериала"
+
+#: movies/templates/movies/person_detail.html:6
+#, python-format
+msgid "%(name)s: %(films)s and %(shows)s in the Theoria catalog."
+msgstr "%(name)s: %(films)s и %(shows)s в каталоге Theoria."
+
+#: movies/templates/movies/person_detail.html:6
+#, python-format
+msgid "%(name)s: %(films)s in the Theoria catalog."
+msgstr "%(name)s: %(films)s в каталоге Theoria."
+
+#: movies/templates/movies/person_detail.html:38
+msgid "Elsewhere"
+msgstr "На других сайтах"
+
+#: movies/templates/movies/person_detail.html:42
+#: movies/templates/movies/studio_detail.html:32
+msgid "Official site"
+msgstr "Официальный сайт"
+
+#: movies/templates/movies/person_detail.html:62
+#: movies/templates/movies/studio_detail.html:58
+msgid "Search this filmography"
+msgstr "Поиск по этой фильмографии"
+
+#: movies/templates/movies/person_detail.html:62
+#, python-format
+msgid "Search %(name)s's movies and shows by title"
+msgstr "Поиск по названию среди фильмов и сериалов: %(name)s"
+
+#: movies/templates/movies/person_detail.html:62
+#: movies/templates/movies/studio_detail.html:58
+#, python-format
+msgid "Search %(name)s's movies by title"
+msgstr "Поиск по названию среди фильмов: %(name)s"
+
+#: movies/templates/movies/person_list.html:7
+msgid "Search by name, filter by gender or craft, and reorder by what was measured."
+msgstr "Ищите по имени, фильтруйте по полу или профессии и меняйте порядок по измеряемым показателям."
+
+#: movies/templates/movies/person_list.html:20
+msgid "Search names"
+msgstr "Поиск по именам"
+
+#: movies/templates/movies/person_list.html:20
+#, python-format
+msgid "Search %(title)s by name"
+msgstr "Поиск по имени: %(title)s"
+
+#: movies/templates/movies/person_list.html:29
+msgid "Most popular"
+msgstr "Самые популярные"
+
+#: movies/templates/movies/person_list.html:34
+msgid "Filter by gender"
+msgstr "Фильтр по полу"
+
+#: movies/templates/movies/person_list.html:36
+msgid "Any gender"
+msgstr "Любой пол"
+
+#: movies/templates/movies/person_list.html:43
+msgid "Filter by craft"
+msgstr "Фильтр по профессии"
+
+#: movies/templates/movies/person_list.html:45
+msgid "Any craft"
+msgstr "Любая профессия"
+
+#: movies/templates/movies/series_detail.html:43
+msgid "First aired"
+msgstr "Первый эфир"
+
+#: movies/templates/movies/series_detail.html:47
+msgid "Last aired"
+msgstr "Последний эфир"
+
+#: movies/templates/movies/series_detail.html:87
+msgid "Created by"
+msgstr "Создатели"
+
+#: movies/templates/movies/series_detail.html:95
+msgid "Network"
+msgid_plural "Networks"
+msgstr[0] "Канал"
+msgstr[1] "Каналы"
+msgstr[2] "Каналы"
+msgstr[3] "Каналы"
+
+#: movies/templates/movies/series_detail.html:151
+msgid "No cast recorded for this show."
+msgstr "Для этого сериала нет записанного актёрского состава."
+
+#: movies/templates/movies/series_detail.html:186
+msgid "No crew recorded for this show."
+msgstr "Для этого сериала нет записанной съёмочной группы."
+
+#: movies/templates/movies/series_detail.html:195
+#, python-format
+msgid "%(n)s episode"
+msgid_plural "%(n)s episodes"
+msgstr[0] "%(n)s серия"
+msgstr[1] "%(n)s серии"
+msgstr[2] "%(n)s серий"
+msgstr[3] "%(n)s серии"
+
+#: movies/templates/movies/series_detail.html:210
+msgid "No seasons recorded for this show."
+msgstr "Для этого сериала нет записанных сезонов."
+
+#: movies/templates/movies/series_list.html:4
+#: movies/templates/movies/series_list.html:7 templates/base.html:181
+msgid "TV Shows"
+msgstr "Сериалы"
+
+#: movies/templates/movies/series_list.html:7
+msgid "Every show the warehouse holds. Search by name, narrow by genre, or reorder by what was measured."
+msgstr "Все сериалы, что есть в хранилище. Ищите по названию, выбирайте жанр или меняйте порядок по измеряемым показателям."
+
+#: movies/templates/movies/series_list.html:18
+msgid "Search shows"
+msgstr "Поиск сериалов"
+
+#: movies/templates/movies/series_list.html:18
+msgid "Search TV shows by name"
+msgstr "Поиск сериалов по названию"
+
+#: movies/templates/movies/studio_detail.html:5
+#, python-format
+msgid "%(name)s: %(n)s movie in the Theoria catalog."
+msgid_plural "%(name)s: %(n)s movies in the Theoria catalog."
+msgstr[0] "%(name)s: %(n)s фильм в каталоге Theoria."
+msgstr[1] "%(name)s: %(n)s фильма в каталоге Theoria."
+msgstr[2] "%(name)s: %(n)s фильмов в каталоге Theoria."
+msgstr[3] "%(name)s: %(n)s фильма в каталоге Theoria."
+
+#: movies/templates/movies/studio_detail.html:26
+msgid "Headquarters"
+msgstr "Штаб-квартира"
+
+#: movies/templates/movies/studio_detail.html:38
+msgid "Parent company"
+msgstr "Материнская компания"
+
+#: movies/templates/movies/studio_list.html:7
+msgid "Every production company credited on a movie in the catalog. Search by name, or reorder by output or revenue."
+msgstr "Все продюсерские компании, указанные в титрах фильмов каталога. Ищите по названию или меняйте порядок по количеству фильмов или сборам."
+
+#: movies/templates/movies/studio_list.html:20
+msgid "Search studios"
+msgstr "Поиск студий"
+
+#: movies/templates/movies/studio_list.html:20
+msgid "Search studios by name"
+msgstr "Поиск студий по названию"
+
+#: movies/templates/movies/studio_list.html:30
+msgid "Most movies"
+msgstr "Больше всего фильмов"
+
+#: movies/views.py:590
+msgid "Female"
+msgstr "Женский"
+
+#: movies/views.py:591
+msgid "Male"
+msgstr "Мужской"
+
+#: movies/views.py:592
+msgid "Non-binary"
+msgstr "Небинарный"
+
+#: movies/views.py:679
+msgctxt "people list title"
+msgid "Acting"
+msgstr "Актёры"
+
+#: movies/views.py:686
+msgctxt "people list title"
+msgid "Directing"
+msgstr "Режиссёры"
+
+#: movies/views.py:1236
+#, python-format
+msgid "%(year)s–Active"
+msgstr "%(year)s – н. в."
+
+#: movies/views.py:1582
+msgid "Retired"
+msgstr "Карьера окончена"
+
+#: movies/vocab.py:26
+msgid "Writing"
+msgstr "Сценарий"
+
+#: movies/vocab.py:27
+msgid "Production"
+msgstr "Продюсирование"
+
+#: movies/vocab.py:28
+msgid "Camera"
+msgstr "Операторская работа"
+
+#: movies/vocab.py:29
+msgid "Editing"
+msgstr "Монтаж"
+
+#: movies/vocab.py:30
+msgid "Sound"
+msgstr "Звук"
+
+#: movies/vocab.py:31
+msgid "Art"
+msgstr "Художественный отдел"
+
+#: movies/vocab.py:32
+msgid "Costume & Make-Up"
+msgstr "Костюмы и грим"
+
+#: movies/vocab.py:33
+msgid "Visual Effects"
+msgstr "Визуальные эффекты"
+
+#: movies/vocab.py:34
+msgid "Lighting"
+msgstr "Освещение"
+
+#: movies/vocab.py:36
+msgid "Creation"
+msgstr "Создание"
+
+#: movies/vocab.py:37
+msgid "Actors"
+msgstr "Актёры"
+
+#: movies/vocab.py:42
+msgid "Actor"
+msgstr "Актёр"
+
+#: movies/vocab.py:43
+msgid "Director"
+msgstr "Режиссёр"
+
+#: movies/vocab.py:44
+msgid "Creator"
+msgstr "Создатель"
+
+#: movies/vocab.py:45
+msgid "Producer"
+msgstr "Продюсер"
+
+#: movies/vocab.py:46
+msgid "Executive Producer"
+msgstr "Исполнительный продюсер"
+
+#: movies/vocab.py:47
+msgid "Co-Executive Producer"
+msgstr "Соисполнительный продюсер"
+
+#: movies/vocab.py:48
+msgid "Co-Producer"
+msgstr "Сопродюсер"
+
+#: movies/vocab.py:49
+msgid "Associate Producer"
+msgstr "Ассоциированный продюсер"
+
+#: movies/vocab.py:50
+msgid "Supervising Producer"
+msgstr "Главный продюсер"
+
+#: movies/vocab.py:51
+msgid "Consulting Producer"
+msgstr "Продюсер-консультант"
+
+#: movies/vocab.py:52
+msgid "Visual Effects Producer"
+msgstr "Продюсер визуальных эффектов"
+
+#: movies/vocab.py:53
+msgid "Screenplay"
+msgstr "Сценарий"
+
+#: movies/vocab.py:54
+msgid "Writer"
+msgstr "Сценарист"
+
+#: movies/vocab.py:55
+msgid "Story"
+msgstr "Автор истории"
+
+#: movies/vocab.py:56
+msgid "Teleplay"
+msgstr "Телесценарий"
+
+#: movies/vocab.py:57
+msgid "Story Editor"
+msgstr "Редактор сценария"
+
+#: movies/vocab.py:58
+msgid "Executive Story Editor"
+msgstr "Главный редактор сценария"
+
+#: movies/vocab.py:59
+msgid "Editor"
+msgstr "Монтажёр"
+
+#: movies/vocab.py:60
+msgid "Assistant Editor"
+msgstr "Ассистент монтажёра"
+
+#: movies/vocab.py:61
+msgid "First Assistant Editor"
+msgstr "Первый ассистент монтажёра"
+
+#: movies/vocab.py:62
+msgid "Sound Editor"
+msgstr "Звукомонтажёр"
+
+#: movies/vocab.py:63
+msgid "Supervising Sound Editor"
+msgstr "Главный звукомонтажёр"
+
+#: movies/vocab.py:64
+msgid "Sound Effects Editor"
+msgstr "Монтажёр звуковых эффектов"
+
+#: movies/vocab.py:65
+msgid "Dialogue Editor"
+msgstr "Монтажёр диалогов"
+
+#: movies/vocab.py:66
+msgid "Music Editor"
+msgstr "Музыкальный редактор"
+
+#: movies/vocab.py:67
+msgid "Visual Effects Editor"
+msgstr "Монтажёр визуальных эффектов"
+
+#: movies/vocab.py:68
+msgid "Original Music Composer"
+msgstr "Композитор"
+
+#: movies/vocab.py:69
+msgid "Songs"
+msgstr "Песни"
+
+#: movies/vocab.py:70
+msgid "Musician"
+msgstr "Музыкант"
+
+#: movies/vocab.py:71
+msgid "Theme Song Performance"
+msgstr "Исполнение главной песни"
+
+#: movies/vocab.py:72
+msgid "Director of Photography"
+msgstr "Оператор-постановщик"
+
+#: movies/vocab.py:73
+msgid "Camera Operator"
+msgstr "Оператор"
+
+#: movies/vocab.py:74
+msgid "First Assistant Camera"
+msgstr "Первый ассистент оператора"
+
+#: movies/vocab.py:75
+msgid "Still Photographer"
+msgstr "Фотограф на съёмочной площадке"
+
+#: movies/vocab.py:76
+msgid "First Assistant Director"
+msgstr "Первый ассистент режиссёра"
+
+#: movies/vocab.py:77
+msgid "Second Assistant Director"
+msgstr "Второй ассистент режиссёра"
+
+#: movies/vocab.py:78
+msgid "Casting"
+msgstr "Кастинг"
+
+#: movies/vocab.py:79
+msgid "Production Design"
+msgstr "Художник-постановщик"
+
+#: movies/vocab.py:80
+msgid "Art Direction"
+msgstr "Художественное руководство"
+
+#: movies/vocab.py:81
+msgid "Assistant Art Director"
+msgstr "Ассистент художника-постановщика"
+
+#: movies/vocab.py:82
+msgid "Set Decoration"
+msgstr "Декоратор"
+
+#: movies/vocab.py:83
+msgid "Set Dresser"
+msgstr "Оформитель декораций"
+
+#: movies/vocab.py:84
+msgid "Set Designer"
+msgstr "Художник по декорациям"
+
+#: movies/vocab.py:85
+msgid "Storyboard Artist"
+msgstr "Художник раскадровки"
+
+#: movies/vocab.py:86
+msgid "Background Designer"
+msgstr "Художник по фонам"
+
+#: movies/vocab.py:87
+msgid "Painter"
+msgstr "Художник-живописец"
+
+#: movies/vocab.py:88
+msgid "Costume Design"
+msgstr "Художник по костюмам"
+
+#: movies/vocab.py:89
+msgid "Costume Supervisor"
+msgstr "Руководитель костюмерного цеха"
+
+#: movies/vocab.py:90
+msgid "Costumer"
+msgstr "Костюмер"
+
+#: movies/vocab.py:91
+msgid "Set Costumer"
+msgstr "Костюмер на площадке"
+
+#: movies/vocab.py:92
+msgid "Makeup Artist"
+msgstr "Гримёр"
+
+#: movies/vocab.py:93
+msgid "Hairstylist"
+msgstr "Парикмахер-стилист"
+
+#: movies/vocab.py:94
+msgid "Sound Designer"
+msgstr "Саунд-дизайнер"
+
+#: movies/vocab.py:95
+msgid "Sound Re-Recording Mixer"
+msgstr "Звукорежиссёр перезаписи"
+
+#: movies/vocab.py:96
+msgid "Foley Artist"
+msgstr "Артист по шумам"
+
+#: movies/vocab.py:97
+msgid "Boom Operator"
+msgstr "Оператор микрофона-«удочки»"
+
+#: movies/vocab.py:98
+msgid "ADR Mixer"
+msgstr "Звукорежиссёр дубляжа"
+
+#: movies/vocab.py:99
+msgid "Visual Effects Supervisor"
+msgstr "Супервайзер визуальных эффектов"
+
+#: movies/vocab.py:100
+msgid "Visual Effects Coordinator"
+msgstr "Координатор визуальных эффектов"
+
+#: movies/vocab.py:101
+msgid "Digital Compositor"
+msgstr "Цифровой композитор"
+
+#: movies/vocab.py:102
+msgid "Compositor"
+msgstr "Специалист по композитингу"
+
+#: movies/vocab.py:103
+msgid "Compositing Artist"
+msgstr "Художник по композитингу"
+
+#: movies/vocab.py:104
+msgid "CG Supervisor"
+msgstr "Супервайзер компьютерной графики"
+
+#: movies/vocab.py:105
+msgid "VFX Artist"
+msgstr "Художник по визуальным эффектам"
+
+#: movies/vocab.py:106
+msgid "Special Effects"
+msgstr "Спецэффекты"
+
+#: movies/vocab.py:107
+msgid "Special Effects Technician"
+msgstr "Техник по спецэффектам"
+
+#: movies/vocab.py:108
+msgid "Animation"
+msgstr "Анимация"
+
+#: movies/vocab.py:109
+msgid "Animation Director"
+msgstr "Режиссёр анимации"
+
+#: movies/vocab.py:110
+msgid "Key Animation"
+msgstr "Ведущий аниматор"
+
+#: movies/vocab.py:111
+msgid "Opening/Ending Animation"
+msgstr "Анимация заставок"
+
+#: movies/vocab.py:112
+msgid "Modeling"
+msgstr "Моделирование"
+
+#: movies/vocab.py:113
+msgid "Stunts"
+msgstr "Трюки"
+
+#: movies/vocab.py:114
+msgid "Stunt Double"
+msgstr "Дублёр-каскадёр"
+
+#: movies/vocab.py:115
+msgid "Stunt Coordinator"
+msgstr "Координатор трюков"
+
+#: movies/vocab.py:116
+msgid "Stunt Driver"
+msgstr "Каскадёр-водитель"
+
+#: movies/vocab.py:117
+msgid "Utility Stunts"
+msgstr "Вспомогательные трюки"
+
+#: movies/vocab.py:118
+msgid "Electrician"
+msgstr "Электрик"
+
+#: movies/vocab.py:119
+msgid "Lighting Technician"
+msgstr "Осветитель"
+
+#: movies/vocab.py:120
+msgid "Gaffer"
+msgstr "Главный осветитель"
+
+#: movies/vocab.py:121
+msgid "Grip"
+msgstr "Грип"
+
+#: movies/vocab.py:122
+msgid "Key Grip"
+msgstr "Главный грип"
+
+#: movies/vocab.py:123
+msgid "Driver"
+msgstr "Водитель"
+
+#: movies/vocab.py:124
+msgid "Script Supervisor"
+msgstr "Скрипт-супервайзер"
+
+#: movies/vocab.py:125
+msgid "Unit Production Manager"
+msgstr "Директор группы"
+
+#: movies/vocab.py:126
+msgid "Production Manager"
+msgstr "Руководитель производства"
+
+#: movies/vocab.py:127
+msgid "Production Supervisor"
+msgstr "Супервайзер производства"
+
+#: movies/vocab.py:128
+msgid "Production Coordinator"
+msgstr "Координатор производства"
+
+#: movies/vocab.py:129
+msgid "Production Assistant"
+msgstr "Ассистент по производству"
+
+#: movies/vocab.py:130
+msgid "Location Manager"
+msgstr "Менеджер по локациям"
+
+#: movies/vocab.py:131
+msgid "Property Master"
+msgstr "Реквизитор"
+
+#: movies/vocab.py:132
+msgid "Thanks"
+msgstr "Благодарности"
+
+#: movies/vocab.py:140
+msgid "Rumored"
+msgstr "По слухам"
+
+#: movies/vocab.py:141
+msgid "Planned"
+msgstr "Запланирован"
+
+#: movies/vocab.py:142
+msgid "In Production"
+msgstr "В производстве"
+
+#: movies/vocab.py:143
+msgid "Post Production"
+msgstr "Постпродакшн"
+
+#: movies/vocab.py:144
+msgid "Canceled"
+msgstr "Отменён"
+
+#: movies/vocab.py:145
+msgid "Returning Series"
+msgstr "Сериал продолжается"
+
+#: movies/vocab.py:146
+msgid "Ended"
+msgstr "Завершён"
+
+#: movies/vocab.py:147
+msgid "Pilot"
+msgstr "Пилот"
+
+#: templates/404.html:10
+msgid "Page not found — Theoria"
+msgstr "Страница не найдена — Theoria"
+
+#: templates/404.html:15
+msgid "This page doesn’t exist."
+msgstr "Такой страницы нет."
+
+#: templates/404.html:17
+msgid "The link may be broken, or the page may have been moved or removed."
+msgstr "Возможно, ссылка неверна, а страницу переместили или удалили."
+
+#: templates/404.html:19
+msgid "Back to homepage"
+msgstr "На главную"
+
+#: templates/base.html:7
+msgid "Theoria — a movie catalog measured end to end: every movie, cast member and rating read straight out of a star-schema warehouse."
+msgstr "Theoria — каталог фильмов, измеренный от начала до конца: каждый фильм, актёр и рейтинг прочитаны прямо из хранилища данных со схемой «звезда»."
+
+#: templates/base.html:105
+msgid "Skip to content"
+msgstr "Перейти к содержимому"
+
+#: templates/base.html:108
+msgid "Main"
+msgstr "Главное меню"
+
+#: templates/base.html:148 templates/base.html:194
+msgid "Your account"
+msgstr "Ваш аккаунт"
+
+#: templates/base.html:215
+msgctxt "language switcher"
+msgid "Language"
+msgstr "Язык"
+
+#: templates/base.html:227
+msgid "Switch theme"
+msgstr "Сменить тему"
+
+#: templates/base.html:260
+msgid "Theoria — a movie catalog measured end to end."
+msgstr "Theoria — каталог фильмов, измеренный от начала до конца."
+
+#: templates/base.html:261
+msgid "Source · TMDB"
+msgstr "Источник · TMDB"
+
+#: templates/base.html:274
+msgid "Are you sure?"
+msgstr "Вы уверены?"
+
+#: templates/base.html:276
+msgid "No, stay"
+msgstr "Нет, остаться"
+
+#: templates/base.html:277
+msgid "Yes, sign out"
+msgstr "Да, выйти"
+
+#: templates/base.html:288
+msgid "Film guide"
+msgstr "Помощник по фильмам"
+
+#: templates/base.html:290
+msgid "Close"
+msgstr "Закрыть"
+
+#: templates/base.html:299
+msgid "What would you like to watch?"
+msgstr "Что хотите посмотреть?"
+
+#: templates/base.html:304
+msgid "Pick for tonight"
+msgstr "Выбор на вечер"
+
+#: templates/base.html:305
+msgid "Find by mood"
+msgstr "Подбор по настроению"
+
+#: templates/base.html:306
+msgid "Surprise me"
+msgstr "Удивите меня"
+
+#: templates/base.html:310
+msgid "Message the film guide"
+msgstr "Сообщение помощнику"
+
+#: templates/base.html:311
+msgid "Describe your mood"
+msgstr "Опишите настроение"
+
+#: templates/base.html:312
+msgid "Send message"
+msgstr "Отправить сообщение"
+
+#: templates/base.html:312
+msgid "Send"
+msgstr "Отправить"
+
+#: templates/base.html:321
+msgid "Get a film pick"
+msgstr "Подобрать фильм"

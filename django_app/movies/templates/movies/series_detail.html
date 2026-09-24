@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load tmdb_images %}
+{% load i18n l10n tmdb_images i18n_vocab %}
 
 {% block title %}Theoria — {{ series.name }}{% endblock %}
 
@@ -14,7 +14,7 @@
 <article class="specimen">
     <div class="specimen-plate">
         {% if series.poster_path %}
-        <img class="poster" src="{{ series.poster_path|tmdb_image:'w342' }}" alt="{{ series.name }} poster" decoding="async">
+        <img class="poster" src="{{ series.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=series.name %}{{ title }} poster{% endblocktranslate %}" decoding="async">
         {% else %}
         <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}
@@ -25,7 +25,7 @@
     <div class="specimen-record">
         <h1 class="sheet-title">{{ series.name }}</h1>
         {% if series.original_name and series.original_name != series.name %}
-        <p class="specimen-original-title mono">originally &ldquo;{{ series.original_name }}&rdquo;</p>
+        <p class="specimen-original-title mono">{% blocktranslate trimmed with title=series.original_name %}originally “{{ title }}”{% endblocktranslate %}</p>
         {% endif %}
         {% if series.tagline %}<p class="specimen-tagline">{{ series.tagline }}</p>{% endif %}
         {% if series.overview %}<p class="specimen-synopsis">{{ series.overview }}</p>{% endif %}
@@ -33,56 +33,56 @@
         <dl class="record-list">
             {% if series_rating.rating %}
             <div class="record-row record-row--rating">
-                <dt class="label">Rating</dt>
+                <dt class="label">{% translate "Rating" %}</dt>
                 <dd>{% include "movies/_rating_badge.html" with rating=series_rating.rating vote_count=series_rating.vote_count imdb_id=series.imdb_id only %}</dd>
             </div>
             {% endif %}
             <div class="record-row">
-                <dt class="label">First aired</dt>
+                <dt class="label">{% translate "First aired" %}</dt>
                 <dd class="mono">{% if series.first_air_date %}{{ series.first_air_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
             </div>
             <div class="record-row">
-                <dt class="label">Last aired</dt>
+                <dt class="label">{% translate "Last aired" %}</dt>
                 <dd class="mono">{% if series.last_air_date %}{{ series.last_air_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
             </div>
             <div class="record-row">
-                <dt class="label">Status</dt>
-                <dd>{{ series.status|default:"—" }}</dd>
+                <dt class="label">{% translate "Status" %}</dt>
+                <dd>{{ series.status|display_status|default:"—" }}</dd>
             </div>
             <div class="record-row">
-                <dt class="label">Seasons</dt>
+                <dt class="label">{% translate "Seasons" %}</dt>
                 <dd class="mono">{{ series.number_of_seasons|default:"—" }}</dd>
             </div>
             <div class="record-row">
-                <dt class="label">Episodes</dt>
+                <dt class="label">{% translate "Episodes" %}</dt>
                 <dd class="mono">{{ series.number_of_episodes|default:"—" }}</dd>
             </div>
             <div class="record-row">
-                <dt class="label">{% if languages|length > 1 %}Languages{% else %}Language{% endif %}</dt>
+                <dt class="label">{% blocktranslate trimmed count n=languages|length|default:1 %}Language{% plural %}Languages{% endblocktranslate %}</dt>
                 <dd>{% if languages %}{{ languages|join:", " }}{% else %}—{% endif %}</dd>
             </div>
             {% if countries.countries %}
             <div class="record-row">
-                <dt class="label">Countries</dt>
+                <dt class="label">{% translate "Countries" %}</dt>
                 <dd>{{ countries.countries|join:", " }}</dd>
             </div>
             {% elif countries.origin or countries.production %}
             {% if countries.origin %}
             <div class="record-row">
-                <dt class="label">Country of origin</dt>
+                <dt class="label">{% translate "Country of origin" %}</dt>
                 <dd>{{ countries.origin|join:", " }}</dd>
             </div>
             {% endif %}
             {% if countries.production %}
             <div class="record-row">
-                <dt class="label">Production countries</dt>
+                <dt class="label">{% translate "Production countries" %}</dt>
                 <dd>{{ countries.production|join:", " }}</dd>
             </div>
             {% endif %}
             {% endif %}
             {% if creators %}
             <div class="record-row">
-                <dt class="label">Created by</dt>
+                <dt class="label">{% translate "Created by" %}</dt>
                 <dd>
                     {% for creator in creators %}<a href="{% url 'movies:person_detail' creator.slug %}">{{ creator.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
                 </dd>
@@ -90,13 +90,13 @@
             {% endif %}
             {% if networks %}
             <div class="record-row">
-                <dt class="label">{% if networks|length > 1 %}Networks{% else %}Network{% endif %}</dt>
+                <dt class="label">{% blocktranslate trimmed count n=networks|length %}Network{% plural %}Networks{% endblocktranslate %}</dt>
                 <dd>{% for network in networks %}{{ network.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
             </div>
             {% endif %}
             {% if studios %}
             <div class="record-row">
-                <dt class="label">Studios</dt>
+                <dt class="label">{% translate "Studios" %}</dt>
                 <dd>
                     {% for studio in studios %}<a href="{% url 'movies:studio_detail' studio.slug %}">{{ studio.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
                 </dd>
@@ -122,7 +122,7 @@
    there is one, the backdrop stays only otherwise. {% endcomment %}
 {% if trailer %}
 <figure class="video-strip">
-    {% include "movies/_video_embed.html" with video=trailer kind="trailer" only %}
+    {% translate "trailer" as trailer_word %}{% include "movies/_video_embed.html" with video=trailer kind=trailer_word only %}
 </figure>
 {% elif series.backdrop_path %}
 <figure class="backdrop-strip">
@@ -132,8 +132,8 @@
 
 <section class="sheet-section" id="cast">
     <div class="section-head">
-        <h2>Cast</h2>
-        <span class="section-note">{{ cast_count }} cast · {{ credit_count }} credit{{ credit_count|pluralize }}</span>
+        <h2>{% translate "Cast" %}</h2>
+        <span class="section-note">{% blocktranslate trimmed with cast=cast_count count counter=credit_count %}{{ cast }} cast · {{ counter }} credit{% plural %}{{ cast }} cast · {{ counter }} credits{% endblocktranslate %}</span>
     </div>
     {% comment %} Same client-side pager as movie_detail.html's cast section —
        measured mean ~690 credits/show against film's ~200, well within what
@@ -143,17 +143,17 @@
             {% for credit in cast %}
             {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
             {% empty %}
-            <p class="empty">No cast recorded for this show.</p>
+            <p class="empty">{% translate "No cast recorded for this show." %}</p>
             {% endfor %}
         </div>
-        {% include "movies/_pager_client.html" with label="cast" only %}
+        {% translate "cast" as cast_label %}{% include "movies/_pager_client.html" with label=cast_label only %}
     </div>
 </section>
 
 <section class="sheet-section" id="crew">
     <div class="section-head">
-        <h2>Crew</h2>
-        <span class="section-note">{{ crew_person_count }} crew</span>
+        <h2>{% translate "Crew" %}</h2>
+        <span class="section-note">{% blocktranslate trimmed with n=crew_person_count %}{{ n }} crew{% endblocktranslate %}</span>
     </div>
     <div data-paged data-page-size="10" data-page-items=".credit-row">
         {% for department in crew %}
@@ -178,29 +178,30 @@
             </ul>
         </div>
         {% empty %}
-        <p class="empty">No crew recorded for this show.</p>
+        <p class="empty">{% translate "No crew recorded for this show." %}</p>
         {% endfor %}
-        {% include "movies/_pager_client.html" with label="crew" only %}
+        {% translate "crew" as crew_label %}{% include "movies/_pager_client.html" with label=crew_label only %}
     </div>
 </section>
 
 <section class="sheet-section" id="episodes">
     <div class="section-head">
-        <h2>Episodes</h2>
-        <span class="section-note">{{ series.number_of_seasons|default:"—" }} season{{ series.number_of_seasons|pluralize }} · {{ series.number_of_episodes|default:"—" }} episode{{ series.number_of_episodes|pluralize }}</span>
+        <h2>{% translate "Episodes" %}</h2>
+        <span class="section-note">{% if series.number_of_seasons %}{% blocktranslate trimmed count n=series.number_of_seasons %}{{ n }} season{% plural %}{{ n }} seasons{% endblocktranslate %}{% else %}—{% endif %} · {% if series.number_of_episodes %}{% blocktranslate trimmed count n=series.number_of_episodes %}{{ n }} episode{% plural %}{{ n }} episodes{% endblocktranslate %}{% else %}—{% endif %}</span>
     </div>
     {% comment %} All seasons render every time — the picker (JS-only, see
        _season_picker.html) is what narrows this to one at a time; a no-JS
        reader scrolls the stacked seasons instead, each under its own
        heading. {% endcomment %}
     {% include "movies/_season_picker.html" with seasons=seasons only %}
+    {% translate "Season" as season_word %}
     {% for block in seasons %}
     <div class="season-panel{% if forloop.first %} is-active{% endif %}" data-season-panel="{{ block.season.season_number }}">
-        <h3 class="credit-department">{{ block.season.name|default:"Season" }}</h3>
+        <h3 class="credit-department">{{ block.season.name|default:season_word }}</h3>
         {% include "movies/_episode_table.html" with block=block only %}
     </div>
     {% empty %}
-    <p class="empty">No seasons recorded for this show.</p>
+    <p class="empty">{% translate "No seasons recorded for this show." %}</p>
     {% endfor %}
 </section>
 {% endblock %}

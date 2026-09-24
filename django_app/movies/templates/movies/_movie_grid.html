@@ -3,15 +3,16 @@
    half of the pair static/js/theoria.js's initLiveFilter() swaps as the
    filter form changes. aria-live so the swap is announced to screen
    readers. {% endcomment %}
+{% load i18n %}
 <div id="movies-grid" aria-live="polite">
     <div class="poster-grid">
         {% for movie in page_obj %}
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
         <p class="empty">
-            {% if q %}No movies match “{{ q }}”. Try a shorter title.
-            {% elif genre %}No movies match this filter. Try loosening it.
-            {% else %}No movies loaded yet. Run the pipeline to fill the catalog.{% endif %}
+            {% if q %}{% blocktranslate trimmed with q=q %}No movies match “{{ q }}”. Try a shorter title.{% endblocktranslate %}
+            {% elif genre %}{% translate "No movies match this filter. Try loosening it." %}
+            {% else %}{% translate "No movies loaded yet. Run the pipeline to fill the catalog." %}{% endif %}
         </p>
         {% endfor %}
     </div>

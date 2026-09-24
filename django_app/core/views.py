@@ -5,6 +5,7 @@ from django.core.paginator import Paginator
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
+from django.utils.translation import gettext, gettext_lazy as _
 from django.views.decorators.http import require_POST
 
 from core.models import Collection, CollectionItem
@@ -25,9 +26,9 @@ ACCOUNT_ITEMS_PER_PAGE = 5
 # "watch_later", which stays untouched in the data. Top is the ranked one:
 # it shows each title's rank and its open rank slots.
 ACCOUNT_SECTIONS = (
-    (Collection.LIKED, "liked", "Liked", False),
-    (Collection.WATCH_LATER, "later", "Watch later", False),
-    (Collection.TOP, "top", "Top", True),
+    (Collection.LIKED, "liked", _("Liked"), False),
+    (Collection.WATCH_LATER, "later", _("Watch later"), False),
+    (Collection.TOP, "top", _("Top"), True),
 )
 
 # Every param the page reads, in the order it writes them back into a URL.
@@ -146,7 +147,7 @@ def account(request):
         for section in sections:
             if section["slug"] == wanted:
                 return render(request, "core/_collection_section.html", {"section": section})
-        return HttpResponseBadRequest("Unknown collection.")
+        return HttpResponseBadRequest(gettext("Unknown collection."))
 
     return render(request, "core/account.html", {"sections": sections})
 
@@ -175,7 +176,7 @@ def remove_item(request, kind, item_id):
     try:
         removed = remove_collection_item(request.user, kind, item_id)
     except ValueError:
-        return HttpResponseBadRequest("That collection could not be found.")
+        return HttpResponseBadRequest(gettext("That collection could not be found."))
     # theoria.js removes the card at once and re-fetches the section itself,
     # so it only needs to hear that the delete happened — not a redirect to a
     # whole page it would throw away.
@@ -190,5 +191,5 @@ def move_item(request, kind, item_id, direction):
     try:
         move_collection_item(request.user, kind, item_id, direction)
     except (ValueError, CollectionItem.DoesNotExist):
-        return HttpResponseBadRequest("That collection item could not be moved.")
+        return HttpResponseBadRequest(gettext("That collection item could not be moved."))
     return _redirect_back(request, "profile")

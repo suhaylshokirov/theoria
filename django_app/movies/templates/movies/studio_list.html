@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}Theoria — Studios{% endblock %}
+{% block title %}Theoria — {% translate "Studios" %}{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title="Studios" sub="Every production company credited on a movie in the catalog. Search by name, or reorder by output or revenue." only %}
+{% translate "Studios" as sheet_title %}{% translate "Every production company credited on a movie in the catalog. Search by name, or reorder by output or revenue." as sheet_sub %}
+{% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
 
 <section class="sheet-section">
     <div class="toolbar">
@@ -14,26 +16,26 @@
            JS — see _studio_results.html's docstring. {% endcomment %}
         <form method="get" action="" data-live-filter data-live-targets="#studios-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="Search studios" aria-label="Search studios by name">
+                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search studios" %}" aria-label="{% translate "Search studios by name" %}">
             </div>
             {% comment %} Radio segments rather than a <select>: few, fixed options, so
                showing them is more useful than hiding them (matches movie_list's
                and person_list's sort control). Still a plain form control —
                works without JS. {% endcomment %}
             <fieldset class="segmented">
-                <legend class="visually-hidden">Order by</legend>
+                <legend class="visually-hidden">{% translate "Order by" %}</legend>
                 <input type="radio" name="sort" id="sort-film_count" value="film_count" {% if sort == "film_count" %}checked{% endif %}>
-                <label for="sort-film_count">Most movies</label>
+                <label for="sort-film_count">{% translate "Most movies" %}</label>
                 <input type="radio" name="sort" id="sort-revenue" value="revenue" {% if sort == "revenue" %}checked{% endif %}>
-                <label for="sort-revenue">Revenue</label>
+                <label for="sort-revenue">{% translate "Revenue" %}</label>
                 <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
-                <label for="sort-name">A–Z</label>
+                <label for="sort-name">{% translate "A–Z" %}</label>
             </fieldset>
             {% comment %} Redundant once JS is live-filtering on every change — hidden
                via the html.has-js CSS gate (see base.html) rather than removed, so a
                no-JS visitor, who gets no auto-submit on a radio change, still has a
                way to apply anything but the search box. {% endcomment %}
-            <button type="submit" class="apply-btn">Apply</button>
+            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
         </form>
     </div>
 

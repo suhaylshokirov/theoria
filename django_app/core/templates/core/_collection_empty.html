@@ -4,14 +4,14 @@
                False when the collection has nothing in it at all.
    Every CTA goes to the combined Browse page, which lists every movie and
    show in one place. {% endcomment %}
-<div class="account-panel-empty{% if not partial %} is-whole{% endif %}">
+{% load i18n %}<div class="account-panel-empty{% if not partial %} is-whole{% endif %}">
     {% if slug == "liked" %}
-    <h3 class="account-panel-empty__title">{% if partial %}Room for more{% else %}Nothing liked yet{% endif %}</h3>
-    <p class="account-panel-empty__copy">{% if partial %}Everything you like across Movies, TV Shows and Cartoons collects here, newest first.{% else %}Press Like on any movie or show and it collects here, newest first.{% endif %}</p>
-    <a class="btn account-panel-empty__cta" href="{% url 'movies:browse' %}">Browse movies</a>
+    <h3 class="account-panel-empty__title">{% if partial %}{% translate "Room for more" %}{% else %}{% translate "Nothing liked yet" %}{% endif %}</h3>
+    <p class="account-panel-empty__copy">{% if partial %}{% translate "Everything you like across Movies, TV Shows and Cartoons collects here, newest first." %}{% else %}{% translate "Press Like on any movie or show and it collects here, newest first." %}{% endif %}</p>
+    <a class="btn account-panel-empty__cta" href="{% url 'movies:browse' %}">{% translate "Browse movies" %}</a>
     {% else %}
-    <h3 class="account-panel-empty__title">{% if partial %}Your queue is short{% else %}Nothing saved for later{% endif %}</h3>
-    <p class="account-panel-empty__copy">Save anything you mean to get to and it waits here until you do.</p>
-    <a class="btn account-panel-empty__cta is-outline" href="{% url 'movies:browse' %}">Find something</a>
+    <h3 class="account-panel-empty__title">{% if partial %}{% translate "Your queue is short" %}{% else %}{% translate "Nothing saved for later" %}{% endif %}</h3>
+    <p class="account-panel-empty__copy">{% translate "Save anything you mean to get to and it waits here until you do." %}</p>
+    <a class="btn account-panel-empty__cta is-outline" href="{% url 'movies:browse' %}">{% translate "Find something" %}</a>
     {% endif %}
 </div>

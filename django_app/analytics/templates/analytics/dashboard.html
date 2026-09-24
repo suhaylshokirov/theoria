@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static i18n %}
 
-{% block title %}Theoria — Analytics{% endblock %}
+{% block title %}{% translate "Theoria — Analytics" %}{% endblock %}
 
 {% block body_class %}page-analytics{% endblock %}
 
@@ -10,22 +10,23 @@
 {% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title="Analytics" sub="Stats for nerds." only %}
+{% translate "Analytics" as analytics_title %}{% translate "Stats for nerds." as analytics_sub %}
+{% include "movies/_sheet_header.html" with title=analytics_title sub=analytics_sub only %}
 
 <div class="panel-grid">
     <section class="panel is-wide" aria-labelledby="decade-h">
         <div class="section-head">
-            <h2 id="decade-h">Rating by decade</h2>
-            <span class="section-note">by decade</span>
+            <h2 id="decade-h">{% translate "Rating by decade" %}</h2>
+            <span class="section-note">{% translate "by decade" %}</span>
         </div>
         {% if movies_by_decade %}
         <div class="chart-stage">
-            <canvas id="decade-chart" role="img" aria-label="Average rating by decade, line chart"></canvas>
+            <canvas id="decade-chart" role="img" aria-label="{% translate "Average rating by decade, line chart" %}"></canvas>
         </div>
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th scope="col">Decade</th><th scope="col" class="num">Movies</th><th scope="col" class="num">Avg rating</th><th scope="col" class="num">Total revenue</th></tr>
+                    <tr><th scope="col">{% translate "Decade" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th><th scope="col" class="num">{% translate "Total revenue" %}</th></tr>
                 </thead>
                 <tbody>
                     {% for row in movies_by_decade %}
@@ -40,23 +41,23 @@
             </table>
         </div>
         {% else %}
-        <p class="empty">No movies loaded yet. Run the pipeline to fill the warehouse.</p>
+        <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
         {% endif %}
     </section>
 
     <section class="panel is-wide" aria-labelledby="revenue-h">
         <div class="section-head">
-            <h2 id="revenue-h">Revenue by genre</h2>
-            <span class="section-note">by genre</span>
+            <h2 id="revenue-h">{% translate "Revenue by genre" %}</h2>
+            <span class="section-note">{% translate "by genre" %}</span>
         </div>
         {% if revenue_by_genre %}
         <div class="chart-stage">
-            <canvas id="revenue-chart" role="img" aria-label="Total revenue by genre, bar chart"></canvas>
+            <canvas id="revenue-chart" role="img" aria-label="{% translate "Total revenue by genre, bar chart" %}"></canvas>
         </div>
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th scope="col">Genre</th><th scope="col" class="num">Movies</th><th scope="col" class="num">Total revenue</th><th scope="col" class="num">Avg / movie</th></tr>
+                    <tr><th scope="col">{% translate "Genre" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Total revenue" %}</th><th scope="col" class="num">{% translate "Avg / movie" %}</th></tr>
                 </thead>
                 <tbody>
                     {% for row in revenue_by_genre %}
@@ -71,20 +72,20 @@
             </table>
         </div>
         {% else %}
-        <p class="empty">No movies loaded yet. Run the pipeline to fill the warehouse.</p>
+        <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
         {% endif %}
     </section>
 
     <section class="panel is-wide" aria-labelledby="studio-revenue-h">
         <div class="section-head">
-            <h2 id="studio-revenue-h">Top studios by revenue</h2>
-            <span class="section-note">3+ movies</span>
+            <h2 id="studio-revenue-h">{% translate "Top studios by revenue" %}</h2>
+            <span class="section-note">{% translate "3+ movies" %}</span>
         </div>
         {% if top_studios_by_revenue %}
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th scope="col">Studio</th><th scope="col" class="num">Movies</th><th scope="col" class="num">Total revenue</th><th scope="col" class="num">Avg rating</th></tr>
+                    <tr><th scope="col">{% translate "Studio" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Total revenue" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
                 </thead>
                 <tbody>
                     {% for row in top_studios_by_revenue %}
@@ -99,20 +100,20 @@
             </table>
         </div>
         {% else %}
-        <p class="empty">No studios loaded yet. Run the pipeline to fill the warehouse.</p>
+        <p class="empty">{% translate "No studios loaded yet. Run the pipeline to fill the warehouse." %}</p>
         {% endif %}
     </section>
 
     <section class="panel is-wide" aria-labelledby="country-h">
         <div class="section-head">
-            <h2 id="country-h">Movies by production country</h2>
-            <span class="section-note">co-productions counted once each</span>
+            <h2 id="country-h">{% translate "Movies by production country" %}</h2>
+            <span class="section-note">{% translate "co-productions counted once each" %}</span>
         </div>
         {% if films_by_production_country %}
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th scope="col">Country</th><th scope="col" class="num">Movies</th><th scope="col" class="num">Avg rating</th></tr>
+                    <tr><th scope="col">{% translate "Country" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
                 </thead>
                 <tbody>
                     {% for row in films_by_production_country %}
@@ -126,20 +127,20 @@
             </table>
         </div>
         {% else %}
-        <p class="empty">No movies loaded yet. Run the pipeline to fill the warehouse.</p>
+        <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
         {% endif %}
     </section>
 
     <section class="panel is-wide" aria-labelledby="series-decade-h">
         <div class="section-head">
-            <h2 id="series-decade-h">Shows by decade</h2>
-            <span class="section-note">by decade</span>
+            <h2 id="series-decade-h">{% translate "Shows by decade" %}</h2>
+            <span class="section-note">{% translate "by decade" %}</span>
         </div>
         {% if series_by_decade %}
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th scope="col">Decade</th><th scope="col" class="num">Shows</th><th scope="col" class="num">Avg rating</th></tr>
+                    <tr><th scope="col">{% translate "Decade" %}</th><th scope="col" class="num">{% translate "Shows" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
                 </thead>
                 <tbody>
                     {% for row in series_by_decade %}
@@ -153,23 +154,23 @@
             </table>
         </div>
         {% else %}
-        <p class="empty">No shows loaded yet. Run the pipeline to fill the warehouse.</p>
+        <p class="empty">{% translate "No shows loaded yet. Run the pipeline to fill the warehouse." %}</p>
         {% endif %}
     </section>
 
     <section class="panel is-wide" aria-labelledby="season-rating-h">
         <div class="section-head">
-            <h2 id="season-rating-h">Rating by season</h2>
-            <span class="section-note">does a show decline?</span>
+            <h2 id="season-rating-h">{% translate "Rating by season" %}</h2>
+            <span class="section-note">{% translate "does a show decline?" %}</span>
         </div>
         {% if episode_rating_by_season %}
         <div class="chart-stage">
-            <canvas id="season-chart" role="img" aria-label="Average episode rating by season number, line chart"></canvas>
+            <canvas id="season-chart" role="img" aria-label="{% translate "Average episode rating by season number, line chart" %}"></canvas>
         </div>
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th scope="col">Season</th><th scope="col" class="num">Shows</th><th scope="col" class="num">Avg rating</th></tr>
+                    <tr><th scope="col">{% translate "Season" %}</th><th scope="col" class="num">{% translate "Shows" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
                 </thead>
                 <tbody>
                     {% for row in episode_rating_by_season %}
@@ -183,20 +184,20 @@
             </table>
         </div>
         {% else %}
-        <p class="empty">No episode ratings loaded yet. Run the pipeline to fill the warehouse.</p>
+        <p class="empty">{% translate "No episode ratings loaded yet. Run the pipeline to fill the warehouse." %}</p>
         {% endif %}
     </section>
 
     <section class="panel is-wide" aria-labelledby="longest-running-h">
         <div class="section-head">
-            <h2 id="longest-running-h">Longest-running shows</h2>
-            <span class="section-note">by calendar span</span>
+            <h2 id="longest-running-h">{% translate "Longest-running shows" %}</h2>
+            <span class="section-note">{% translate "by calendar span" %}</span>
         </div>
         {% if longest_running_series %}
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th scope="col">Show</th><th scope="col" class="num">Years on air</th><th scope="col" class="num">Seasons</th><th scope="col" class="num">Episodes</th><th scope="col" class="num">Avg rating</th></tr>
+                    <tr><th scope="col">{% translate "Show" %}</th><th scope="col" class="num">{% translate "Years on air" %}</th><th scope="col" class="num">{% translate "Seasons" %}</th><th scope="col" class="num">{% translate "Episodes" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
                 </thead>
                 <tbody>
                     {% for row in longest_running_series %}
@@ -212,20 +213,20 @@
             </table>
         </div>
         {% else %}
-        <p class="empty">No shows loaded yet. Run the pipeline to fill the warehouse.</p>
+        <p class="empty">{% translate "No shows loaded yet. Run the pipeline to fill the warehouse." %}</p>
         {% endif %}
     </section>
 
     <section class="panel is-wide" aria-labelledby="networks-h">
         <div class="section-head">
-            <h2 id="networks-h">Top networks by series</h2>
-            <span class="section-note">3+ shows</span>
+            <h2 id="networks-h">{% translate "Top networks by series" %}</h2>
+            <span class="section-note">{% translate "3+ shows" %}</span>
         </div>
         {% if top_networks_by_series %}
         <div class="table-wrap">
             <table>
                 <thead>
-                    <tr><th scope="col">Network</th><th scope="col" class="num">Shows</th><th scope="col" class="num">Avg rating</th></tr>
+                    <tr><th scope="col">{% translate "Network" context "table column" %}</th><th scope="col" class="num">{% translate "Shows" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
                 </thead>
                 <tbody>
                     {% for row in top_networks_by_series %}
@@ -239,7 +240,7 @@
             </table>
         </div>
         {% else %}
-        <p class="empty">No networks loaded yet. Run the pipeline to fill the warehouse.</p>
+        <p class="empty">{% translate "No networks loaded yet. Run the pipeline to fill the warehouse." %}</p>
         {% endif %}
     </section>
 

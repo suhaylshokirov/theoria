@@ -11,6 +11,7 @@ from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import urlencode
 from django.utils.text import slugify
+from django.utils.translation import gettext, gettext_lazy, pgettext
 
 from core.models import CollectionItem
 from core.services import collection_flags
@@ -21,6 +22,7 @@ from movies.models import (
     Person, Season, Series, SeriesCompany, SeriesCountry, SeriesCredit,
     SeriesGenre, SeriesLanguage, SeriesNetwork, SeriesRating, SeriesVideo,
 )
+from movies.vocab import display_department, display_job
 
 MOVIES_PER_PAGE = 24
 PEOPLE_PER_PAGE = 30
@@ -581,7 +583,14 @@ PINNED_PERSON_ID = 56731
 # TMDB's gender codes. 0 ("not specified") is deliberately not a filter option
 # below — it isn't a fact about the person, it's TMDB having no answer, and
 # offering it as a choice would imply otherwise.
-GENDER_LABELS = {"1": "Female", "2": "Male", "3": "Non-binary"}
+# Lazy: this is evaluated at import, before any request has a language. The
+# keys are the TMDB codes the ?gender= filter compares against; only the values
+# are translated.
+GENDER_LABELS = {
+    "1": gettext_lazy("Female"),
+    "2": gettext_lazy("Male"),
+    "3": gettext_lazy("Non-binary"),
+}
 
 # Filter options for "known for" — the person's own TMDB craft, independent of
 # which credits they hold in *this* catalog (that's what the Acting/Directing
@@ -661,15 +670,21 @@ def _person_queryset(department=None):
 
 
 def person_list(request):
-    return _person_list(request, _person_queryset(), "People", "all")
+    return _person_list(request, _person_queryset(), gettext("People"), "all")
 
 
 def actor_list(request):
-    return _person_list(request, _person_queryset("Acting"), "Acting", "acting")
+    return _person_list(
+        request, _person_queryset("Acting"),
+        pgettext("people list title", "Acting"), "acting",
+    )
 
 
 def director_list(request):
-    return _person_list(request, _person_queryset("Directing"), "Directing", "directing")
+    return _person_list(
+        request, _person_queryset("Directing"),
+        pgettext("people list title", "Directing"), "directing",
+    )
 
 
 @login_required
@@ -724,7 +739,10 @@ def movie_detail(request, movie_slug):
         by_department.setdefault(m["department"], []).append(m)
     crew = [
         {
-            "name": name,
+            # `key` is the raw database value (what was sorted on above);
+            # `name` is only what the heading displays.
+            "key": name,
+            "name": display_department(name),
             "people": sorted(rows, key=lambda m: m["person"].name),
             "count": len(rows),
         }
@@ -932,7 +950,10 @@ def series_detail(request, series_slug):
         by_department.setdefault(m["department"], []).append(m)
     crew = [
         {
-            "name": name,
+            # `key` is the raw database value (what was sorted on above);
+            # `name` is only what the heading displays.
+            "key": name,
+            "name": display_department(name),
             "people": sorted(rows, key=lambda m: m["person"].name),
             "count": len(rows),
         }
@@ -1208,12 +1229,21 @@ def _career_period(start, end):
         return "—"
     current_year = date.today().year
     if end.year >= current_year:
-        return "Active" if start.year == end.year else f"{start.year}–Active"
+        if start.year == end.year:
+            return gettext("Active")
+        # The whole phrase is one msgid so a translation can reorder or
+        # re-punctuate it; only the year is interpolated.
+        return gettext("%(year)s–Active") % {"year": start.year}
     return str(start.year) if start.year == end.year else f"{start.year}–{end.year}"
 
 
 # Acting first, then the crafts in roughly the order a viewer thinks about
 # them; anything TMDB reports outside this list is appended alphabetically.
+#
+# Raw English on purpose: these are database values that _department_rank()
+# sorts on, that ?known_for= filters against, and that `department ==
+# "Acting"` compares with. They are never translated here -- templates
+# render them through the display_department filter (movies/vocab.py).
 DEPARTMENT_ORDER = [
     "Acting", "Directing", "Writing", "Production", "Camera", "Editing",
     "Sound", "Art", "Costume & Make-Up", "Visual Effects", "Lighting", "Crew",
@@ -1264,7 +1294,8 @@ def _merge_crew(credits):
             "person": rows_sorted[0].person,
             "department": rows_sorted[0].department,
             "jobs": jobs,
-            "job_display": " / ".join(jobs),
+            # Raw `jobs` stays for logic; the joined string is display only.
+            "job_display": " / ".join(display_job(j) for j in jobs),
         })
     return merged
 
@@ -1415,7 +1446,7 @@ def _merge_person_credits(credits):
         labels = []
         if acting_rows:
             labels.append(_merge_character_names(c.character_name for c in acting_rows))
-        labels += [c.job for c in other_rows]
+        labels += [display_job(c.job) for c in other_rows]
         title_obj = rows_sorted[0].movie if kind == "movie" else rows_sorted[0].series
         merged.append({
             "kind": kind,
@@ -1548,7 +1579,7 @@ def person_detail(request, person_slug):
         # a death date, "Active" otherwise. The catalogue is too thin for
         # "years since last credit" to mean anything, and this reads the same
         # for an actor, a director or a crew member.
-        "activity": "Retired" if person.deathday else "Active",
+        "activity": gettext("Retired") if person.deathday else gettext("Active"),
     }
     # Same live-filter contract as movie_list()/studio_detail(): the record
     # header is never part of the swap, so only the grid+pager fragment comes

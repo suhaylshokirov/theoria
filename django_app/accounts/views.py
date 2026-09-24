@@ -23,6 +23,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.shortcuts import redirect, render, resolve_url
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.translation import gettext, gettext_lazy as _
 from django.views.decorators.cache import never_cache
 
 from movies.models import Movie
@@ -69,16 +70,16 @@ SESSION_NEXT = "accounts_next"
 SESSION_BOUNCE_TO = "accounts_bounce_to"
 
 _VERIFY_ERROR_MESSAGES = {
-    codes.VerifyResult.NOT_FOUND: "Request a new code to continue.",
-    codes.VerifyResult.ALREADY_CONSUMED: "That code has already been used — request a new one.",
-    codes.VerifyResult.EXPIRED: "That code has expired — request a new one.",
-    codes.VerifyResult.TOO_MANY_ATTEMPTS: "Too many attempts — request a new code.",
-    codes.VerifyResult.WRONG_CODE: "That code isn't right.",
+    codes.VerifyResult.NOT_FOUND: _("Request a new code to continue."),
+    codes.VerifyResult.ALREADY_CONSUMED: _("That code has already been used — request a new one."),
+    codes.VerifyResult.EXPIRED: _("That code has expired — request a new one."),
+    codes.VerifyResult.TOO_MANY_ATTEMPTS: _("Too many attempts — request a new code."),
+    codes.VerifyResult.WRONG_CODE: _("That code isn't right."),
 }
 
 _ISSUE_ERROR_MESSAGES = {
-    codes.IssueResult.COOLDOWN: "A code was just sent — wait a moment before requesting another.",
-    codes.IssueResult.HOURLY_CAP: "Too many codes requested for that address recently. Try again later.",
+    codes.IssueResult.COOLDOWN: _("A code was just sent — wait a moment before requesting another."),
+    codes.IssueResult.HOURLY_CAP: _("Too many codes requested for that address recently. Try again later."),
 }
 
 # Every POST to /accounts/signup/ counts against this, valid or not -- the
@@ -145,7 +146,7 @@ def _send_code_or_flash_error(request, email: str, code: str, purpose: str) -> b
         send_code_email(email, code, purpose=purpose)
     except Exception:
         logger.exception("Failed to send %s code email to %s", purpose, _mask_email(email))
-        messages.error(request, "We couldn't send that code — please try again in a moment.")
+        messages.error(request, gettext("We couldn't send that code — please try again in a moment."))
         return False
     return True
 
@@ -155,18 +156,24 @@ def _send_code_or_flash_error(request, email: str, code: str, purpose: str) -> b
 # or table names. Falls back to a generic line for a `next` that matches
 # none of these (or none at all, i.e. a reader who came here on their own).
 _GATE_SUB_LINES = (
-    ("/movies/", "Sign in to open a film's record."),
-    ("/tv/", "Sign in to open a show's record."),
-    ("/people/", "Sign in to open a person's record."),
-    ("/analytics/", "Sign in to see the analytics."),
+    ("/movies/", _("Sign in to open a film's record.")),
+    ("/tv/", _("Sign in to open a show's record.")),
+    ("/people/", _("Sign in to open a person's record.")),
+    ("/analytics/", _("Sign in to see the analytics.")),
 )
 
 
 def _login_sub_line(next_url: str) -> str:
+    # `next` arrives language-prefixed on the ru/uz sites (/ru/movies/...);
+    # the gate table below is written against the bare path.
+    for code, _name in settings.LANGUAGES:
+        if next_url.startswith(f"/{code}/"):
+            next_url = next_url[len(code) + 1:]
+            break
     for prefix, sub in _GATE_SUB_LINES:
         if next_url.startswith(prefix):
             return sub
-    return "We'll email you a code."
+    return gettext("We'll email you a code.")
 
 
 @signed_out_only
@@ -176,7 +183,7 @@ def signup(request):
         if ratelimit.is_rate_limited(
             request, scope="signup", limit=SIGNUP_RATE_LIMIT, window_seconds=SIGNUP_RATE_WINDOW_SECONDS
         ):
-            messages.error(request, "Too many sign-up attempts — please try again later.")
+            messages.error(request, gettext("Too many sign-up attempts — please try again later."))
         elif form.is_valid():
             email = form.cleaned_data["email"]
             username = form.cleaned_data["username"]
@@ -209,7 +216,7 @@ def login_view(request):
                 # film catalogue, and a generic "we've sent a code if an
                 # account exists" message would strand every reader who
                 # mistypes their address.
-                messages.error(request, "No account for that address.")
+                messages.error(request, gettext("No account for that address."))
             else:
                 result, code = codes.issue(email, PURPOSE_LOGIN)
                 if result is codes.IssueResult.ISSUED:
@@ -242,7 +249,7 @@ def change_username(request):
             limit=USERNAME_CHANGE_RATE_LIMIT,
             window_seconds=USERNAME_CHANGE_RATE_WINDOW_SECONDS,
         ):
-            messages.error(request, "Too many username changes — please try again later.")
+            messages.error(request, gettext("Too many username changes — please try again later."))
         elif form.is_valid():
             request.user.username = form.cleaned_data["username"]
             try:
@@ -252,7 +259,7 @@ def change_username(request):
                 # Taken by someone else between the form check and the save --
                 # uq_user_username_ci is the final word, as it is at signup.
                 request.user.refresh_from_db(fields=["username"])
-                form.add_error("username", "That username is already taken.")
+                form.add_error("username", gettext("That username is already taken."))
             else:
                 return redirect(settings.LOGIN_REDIRECT_URL)
     else:
@@ -333,7 +340,7 @@ def _complete_verification(request, email: str, purpose: str, code_row):
         try:
             return User.objects.get(email=email)
         except User.DoesNotExist:
-            messages.error(request, "No account for that address.")
+            messages.error(request, gettext("No account for that address."))
             request.session.pop(SESSION_EMAIL, None)
             request.session.pop(SESSION_PURPOSE, None)
             request.session[SESSION_BOUNCE_TO] = "accounts:login"
@@ -355,7 +362,7 @@ def _complete_verification(request, email: str, purpose: str, code_row):
     except IntegrityError:
         messages.error(
             request,
-            "That username or email was taken while you were verifying — please start over.",
+            gettext("That username or email was taken while you were verifying — please start over."),
         )
         request.session.pop(SESSION_EMAIL, None)
         request.session.pop(SESSION_PURPOSE, None)

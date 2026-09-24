@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %} The poster grid + pager for /browse/, mirroring _cartoon_grid.html.
    Each page_obj row is a hydrated Movie or Series carrying an extra .kind
    attribute (set in browse()), so this dispatches to whichever existing card
@@ -15,8 +16,8 @@
         {% endif %}
         {% empty %}
         <p class="empty">
-            {% if q %}Nothing matches “{{ q }}”. Try a shorter title.
-            {% else %}Nothing loaded yet. Run the pipeline to fill the catalog.{% endif %}
+            {% if q %}{% blocktranslate trimmed with q=q %}Nothing matches “{{ q }}”. Try a shorter title.{% endblocktranslate %}
+            {% else %}{% translate "Nothing loaded yet. Run the pipeline to fill the catalog." %}{% endif %}
         </p>
         {% endfor %}
     </div>

@@ -53,11 +53,37 @@
     }
   }
 
+  // Words come from base.html's #js-strings block (see
+  // core.context_processors.js_strings); the English key is the fallback.
+  var STRINGS = readJSON("js-strings") || {};
+  function t(key) {
+    return Object.prototype.hasOwnProperty.call(STRINGS, key) ? STRINGS[key] : key;
+  }
+
+  // Uzbek formats as Russian, same as theoria.js's numberLocale(): browser
+  // Intl data for "uz" is unreliable, and Django's Uzbek separators are
+  // Russian's.
+  var LANG = (function () {
+    var lang = document.documentElement.lang || "en";
+    return lang === "uz" ? "ru" : lang;
+  })();
+
+  function fixed(n, digits) {
+    return n.toLocaleString(LANG, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+  }
+
+  // Magnitude suffixes are translated ("B" is "млрд" in Russian) and the
+  // digits follow the language's own decimal mark. The "$" that callers
+  // prepend is not localized: TMDB reports money in USD, so it is a unit of
+  // the data, not a formatting preference.
   function compact(value) {
-    if (Math.abs(value) >= 1e9) return (value / 1e9).toFixed(1) + "B";
-    if (Math.abs(value) >= 1e6) return (value / 1e6).toFixed(1) + "M";
-    if (Math.abs(value) >= 1e3) return (value / 1e3).toFixed(0) + "K";
-    return String(value);
+    if (Math.abs(value) >= 1e9) return fixed(value / 1e9, 1) + t("compact B");
+    if (Math.abs(value) >= 1e6) return fixed(value / 1e6, 1) + t("compact M");
+    if (Math.abs(value) >= 1e3) return fixed(value / 1e3, 0) + t("compact K");
+    return value.toLocaleString(LANG);
   }
 
   function baseOptions(formatValue) {
@@ -131,7 +157,7 @@
           labels: decadeLabels,
           datasets: [
             {
-              label: "Avg rating",
+              label: t("Avg rating"),
               data: decadeRatings,
               borderColor: MARK,
               borderWidth: 2,
@@ -163,7 +189,7 @@
           labels: seasonLabels,
           datasets: [
             {
-              label: "Avg rating",
+              label: t("Avg rating"),
               data: seasonRatings,
               borderColor: MARK,
               borderWidth: 2,
@@ -195,7 +221,7 @@
           labels: genreLabels,
           datasets: [
             {
-              label: "Total revenue",
+              label: t("Total revenue"),
               data: genreRevenue,
               backgroundColor: MARK,
               borderRadius: { topLeft: 4, topRight: 4 },

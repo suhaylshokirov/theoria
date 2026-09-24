@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static i18n %}
 {% load tmdb_images %}
 
-{% block title %}Enter your code — Theoria{% endblock %}
+{% block title %}{% translate "Enter your code — Theoria" %}{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'css/auth.css' %}">
@@ -15,8 +15,8 @@
     <div class="auth-panel">
         <div class="auth-card" data-verify-form>
             <header class="sheet-head">
-                <h1 class="sheet-title">Enter your code</h1>
-                <p class="sheet-sub">We sent a code to <span class="nowrap">{{ masked_email }}</span></p>
+                <h1 class="sheet-title">{% translate "Enter your code" %}</h1>
+                <p class="sheet-sub">{% blocktranslate trimmed with email=masked_email %}We sent a code to <span class="nowrap">{{ email }}</span>{% endblocktranslate %}</p>
             </header>
 
             <form class="auth-form" method="post" novalidate>
@@ -33,7 +33,7 @@
                            label this field doesn't have. {% endcomment %}
                         <input id="id_code" class="code-input" type="text" name="code" inputmode="numeric"
                                autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6"
-                               aria-label="Code" required autofocus>
+                               aria-label="{% translate "Code" %}" required autofocus>
                         <span class="code-cells" aria-hidden="true">
                             <span class="code-cell"></span>
                             <span class="code-cell"></span>
@@ -46,12 +46,12 @@
                     {% for error in form.code.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
                 </div>
 
-                <button type="submit" class="btn-block" data-busy-label="Verifying…">Verify</button>
+                <button type="submit" class="btn-block" data-busy-label="{% translate "Verifying…" %}">{% translate "Verify" %}</button>
             </form>
 
             <form class="auth-resend" method="post">
                 {% csrf_token %}
-                <button type="submit" name="resend" value="1" data-resend-button>Resend code</button>
+                <button type="submit" name="resend" value="1" data-resend-button>{% translate "Resend code" %}</button>
             </form>
         </div>
     </div>

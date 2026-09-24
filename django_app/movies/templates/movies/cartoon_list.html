@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}Theoria — Cartoons{% endblock %}
+{% block title %}Theoria — {% translate "Cartoons" %}{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title="Cartoons" sub="Animated movies and shows made for younger viewers. Search by name or reorder by what was measured." only %}
+{% translate "Cartoons" as sheet_title %}{% translate "Animated movies and shows made for younger viewers. Search by name or reorder by what was measured." as sheet_sub %}
+{% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
 
 <section class="sheet-section">
     <div class="toolbar">
@@ -14,18 +16,18 @@
            in cartoon_list(). {% endcomment %}
         <form method="get" action="{% url 'movies:cartoon_list' %}" data-live-filter data-live-targets="#cartoons-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="Search cartoons" aria-label="Search cartoons by title">
+                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search cartoons" %}" aria-label="{% translate "Search cartoons by title" %}">
             </div>
             <fieldset class="segmented">
-                <legend class="visually-hidden">Order by</legend>
+                <legend class="visually-hidden">{% translate "Order by" %}</legend>
                 <input type="radio" name="sort" id="sort-newest" value="newest" {% if sort == "newest" %}checked{% endif %}>
-                <label for="sort-newest">Newest</label>
+                <label for="sort-newest">{% translate "Newest" %}</label>
                 <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
-                <label for="sort-rating">Rated</label>
+                <label for="sort-rating">{% translate "Rated" %}</label>
                 <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
-                <label for="sort-title">A–Z</label>
+                <label for="sort-title">{% translate "A–Z" %}</label>
             </fieldset>
-            <button type="submit" class="apply-btn">Apply</button>
+            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
         </form>
     </div>
 

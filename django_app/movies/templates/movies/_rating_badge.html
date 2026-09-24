@@ -18,17 +18,18 @@
                   out to imdb.com (".ext-link" draws the outward marker) and
                   is what makes vote_count worth showing at all
 {% endcomment %}
+{% load i18n %}
 {% if rating %}
 {% if imdb_id %}
 <a class="rating-badge ext-link" href="https://www.imdb.com/title/{{ imdb_id }}/"
    target="_blank" rel="noopener noreferrer"
-   aria-label="IMDb rating {{ rating|floatformat:1 }} out of 10">
+   aria-label="{% blocktranslate trimmed with value=rating|floatformat:1 %}IMDb rating {{ value }} out of 10{% endblocktranslate %}">
     <span class="rating-badge-mark" aria-hidden="true">IMDb</span>
     <span class="rating-badge-figure" aria-hidden="true">{{ rating|floatformat:1 }} / 10</span>
-    {% if vote_count %}<span class="rating-badge-votes" aria-hidden="true">({{ vote_count|floatformat:"0g" }} votes)</span>{% endif %}
+    {% if vote_count %}<span class="rating-badge-votes" aria-hidden="true">({% blocktranslate trimmed with formatted=vote_count|floatformat:"0g" count counter=vote_count %}{{ formatted }} vote{% plural %}{{ formatted }} votes{% endblocktranslate %})</span>{% endif %}
 </a>
 {% else %}
-<span class="rating-badge" aria-label="IMDb rating {{ rating|floatformat:1 }} out of 10">
+<span class="rating-badge" aria-label="{% blocktranslate trimmed with value=rating|floatformat:1 %}IMDb rating {{ value }} out of 10{% endblocktranslate %}">
     <span class="rating-badge-mark" aria-hidden="true">IMDb</span>
     <span class="rating-badge-figure" aria-hidden="true">{{ rating|floatformat:1 }} / 10</span>
 </span>

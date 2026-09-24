@@ -9,16 +9,17 @@
    section in. Shown even for a single page: the "Showing 1–3 of 3" readout
    is still worth having, and both arrows sit disabled. The general catalogue
    pager is movies/_pager.html; this one is the account page's own. {% endcomment %}
+{% load i18n %}
 {% with page_obj=section.page_obj label=section.label %}
-<nav class="account-pager" aria-label="{{ label }} pages">
-    <p class="account-pager__count mono">Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ section.count }}</p>
+<nav class="account-pager" aria-label="{% blocktranslate with label=label %}{{ label }} pages{% endblocktranslate %}">
+    <p class="account-pager__count mono">{% blocktranslate trimmed with start=page_obj.start_index end=page_obj.end_index total=section.count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktranslate %}</p>
     <div class="account-pager__pages">
         {% if section.prev_url %}
-        <a class="account-pager__btn is-arrow" href="{{ section.prev_url }}" aria-label="Previous page of {{ label }}" data-account-nav>
+        <a class="account-pager__btn is-arrow" href="{{ section.prev_url }}" aria-label="{% blocktranslate with label=label %}Previous page of {{ label }}{% endblocktranslate %}" data-account-nav>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         </a>
         {% else %}
-        <button type="button" class="account-pager__btn is-arrow" aria-label="Previous page of {{ label }}" disabled>
+        <button type="button" class="account-pager__btn is-arrow" aria-label="{% blocktranslate with label=label %}Previous page of {{ label }}{% endblocktranslate %}" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
         </button>
         {% endif %}
@@ -32,11 +33,11 @@
         {% endfor %}
 
         {% if section.next_url %}
-        <a class="account-pager__btn is-arrow" href="{{ section.next_url }}" aria-label="Next page of {{ label }}" data-account-nav>
+        <a class="account-pager__btn is-arrow" href="{{ section.next_url }}" aria-label="{% blocktranslate with label=label %}Next page of {{ label }}{% endblocktranslate %}" data-account-nav>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </a>
         {% else %}
-        <button type="button" class="account-pager__btn is-arrow" aria-label="Next page of {{ label }}" disabled>
+        <button type="button" class="account-pager__btn is-arrow" aria-label="{% blocktranslate with label=label %}Next page of {{ label }}{% endblocktranslate %}" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </button>
         {% endif %}

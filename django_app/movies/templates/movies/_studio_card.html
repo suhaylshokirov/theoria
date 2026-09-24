@@ -14,11 +14,12 @@
    generic icon: safer to draw correctly than a hand-built building/camera
    glyph, and still reads immediately as "this studio has no logo on file"
    rather than a broken image. {% endcomment %}
+{% load i18n l10n %}
 {% load tmdb_images %}
 <div class="poster-card">
     <a href="{% url 'movies:studio_detail' company.slug %}">
         {% if company.logo_path %}
-        <img class="logo" src="{{ company.logo_path|tmdb_image:'w185' }}" alt="{{ company.name }} logo" loading="lazy" decoding="async">
+        <img class="logo" src="{{ company.logo_path|tmdb_image:'w185' }}" alt="{% blocktranslate trimmed with name=company.name %}{{ name }} logo{% endblocktranslate %}" loading="lazy" decoding="async">
         {% else %}
         <div class="placeholder placeholder-studio" aria-hidden="true">
             <span class="studio-initial">{{ company.name|first|upper }}</span>
@@ -29,7 +30,7 @@
             {% if sort == "revenue" and company.total_revenue %}
             <span class="card-sub">${{ company.total_revenue|floatformat:"0g" }}</span>
             {% else %}
-            <span class="card-sub">{{ company.film_count }} movie{{ company.film_count|pluralize }}</span>
+            <span class="card-sub">{% blocktranslate trimmed count n=company.film_count|default:0 %}{{ n }} movie{% plural %}{{ n }} movies{% endblocktranslate %}</span>
             {% endif %}
         </div>
     </a>

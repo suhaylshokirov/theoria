@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static i18n %}
 {% load tmdb_images %}
 
-{% block title %}Change username — Theoria{% endblock %}
+{% block title %}{% translate "Change username — Theoria" %}{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'css/auth.css' %}">
@@ -15,8 +15,8 @@
     <div class="auth-panel">
         <div class="auth-card">
             <header class="sheet-head">
-                <h1 class="sheet-title">Change username</h1>
-                <p class="sheet-sub">You're signed in as {{ request.user.username }}.</p>
+                <h1 class="sheet-title">{% translate "Change username" %}</h1>
+                <p class="sheet-sub">{% blocktranslate trimmed with username=request.user.username %}You're signed in as {{ username }}.{% endblocktranslate %}</p>
             </header>
 
             <form class="auth-form" method="post" novalidate>
@@ -24,15 +24,15 @@
                 {% for message in messages %}<p class="form-error" role="alert">{{ message }}</p>{% endfor %}
 
                 <div>
-                    <label class="field-label" for="id_username">New username</label>
-                    <p class="field"><input id="id_username" type="text" name="username" value="{{ form.username.value|default:'' }}" placeholder="Username" autocomplete="username" maxlength="30" required autofocus></p>
+                    <label class="field-label" for="id_username">{% translate "New username" %}</label>
+                    <p class="field"><input id="id_username" type="text" name="username" value="{{ form.username.value|default:'' }}" placeholder="{% translate "Username" %}" autocomplete="username" maxlength="30" required autofocus></p>
                     {% for error in form.username.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
                 </div>
 
-                <button type="submit" class="btn-block">Save username</button>
+                <button type="submit" class="btn-block">{% translate "Save username" %}</button>
             </form>
 
-            <p class="auth-alt"><a href="{% url 'profile' %}">Back to your account</a></p>
+            <p class="auth-alt"><a href="{% url 'profile' %}">{% translate "Back to your account" %}</a></p>
         </div>
     </div>
 

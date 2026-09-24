@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load tmdb_images %}
+{% load i18n l10n tmdb_images %}
 
 {% block title %}Theoria — {{ movie.title }}{% endblock %}
 
@@ -16,7 +16,7 @@
 <article class="specimen">
     <div class="specimen-plate">
         {% if movie.poster_path %}
-        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{{ movie.title }} poster" decoding="async">
+        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=movie.title %}{{ title }} poster{% endblocktranslate %}" decoding="async">
         {% else %}
         <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}
@@ -27,7 +27,7 @@
     <div class="specimen-record">
         <h1 class="sheet-title">{{ movie.title }}</h1>
         {% if movie.original_title and movie.original_title != movie.title %}
-        <p class="specimen-original-title mono">originally &ldquo;{{ movie.original_title }}&rdquo;</p>
+        <p class="specimen-original-title mono">{% blocktranslate trimmed with title=movie.original_title %}originally “{{ title }}”{% endblocktranslate %}</p>
         {% endif %}
         {% if movie.tagline %}<p class="specimen-tagline">{{ movie.tagline }}</p>{% endif %}
         {% if movie.overview %}<p class="specimen-synopsis">{{ movie.overview }}</p>{% endif %}
@@ -35,52 +35,52 @@
         <dl class="record-list">
             {% if movie_rating.rating %}
             <div class="record-row record-row--rating">
-                <dt class="label">Rating</dt>
+                <dt class="label">{% translate "Rating" %}</dt>
                 <dd>{% include "movies/_rating_badge.html" with rating=movie_rating.rating vote_count=movie_rating.vote_count imdb_id=movie.imdb_id only %}</dd>
             </div>
             {% endif %}
             <div class="record-row">
-                <dt class="label">Released</dt>
+                <dt class="label">{% translate "Released" %}</dt>
                 <dd class="mono">{% if movie.release_date %}{{ movie.release_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
             </div>
             <div class="record-row">
-                <dt class="label">Runtime</dt>
-                <dd class="mono">{% if movie.runtime %}{{ movie.runtime }} min{% else %}—{% endif %}</dd>
+                <dt class="label">{% translate "Runtime" %}</dt>
+                <dd class="mono">{% if movie.runtime %}{% blocktranslate trimmed with n=movie.runtime %}{{ n }} min{% endblocktranslate %}{% else %}—{% endif %}</dd>
             </div>
             <div class="record-row">
-                <dt class="label">{% if languages|length > 1 %}Languages{% else %}Language{% endif %}</dt>
+                <dt class="label">{% blocktranslate trimmed count n=languages|length|default:1 %}Language{% plural %}Languages{% endblocktranslate %}</dt>
                 <dd>{% if languages %}{{ languages|join:", " }}{% else %}—{% endif %}</dd>
             </div>
             {% if countries.countries %}
             <div class="record-row">
-                <dt class="label">Countries</dt>
+                <dt class="label">{% translate "Countries" %}</dt>
                 <dd>{{ countries.countries|join:", " }}</dd>
             </div>
             {% elif countries.origin or countries.production %}
             {% if countries.origin %}
             <div class="record-row">
-                <dt class="label">Country of origin</dt>
+                <dt class="label">{% translate "Country of origin" %}</dt>
                 <dd>{{ countries.origin|join:", " }}</dd>
             </div>
             {% endif %}
             {% if countries.production %}
             <div class="record-row">
-                <dt class="label">Production countries</dt>
+                <dt class="label">{% translate "Production countries" %}</dt>
                 <dd>{{ countries.production|join:", " }}</dd>
             </div>
             {% endif %}
             {% endif %}
             <div class="record-row">
-                <dt class="label">Budget</dt>
+                <dt class="label">{% translate "Budget" %}</dt>
                 <dd class="mono">{% if movie.budget %}${{ movie.budget|floatformat:"0g" }}{% else %}—{% endif %}</dd>
             </div>
             <div class="record-row">
-                <dt class="label">Revenue</dt>
+                <dt class="label">{% translate "Revenue" %}</dt>
                 <dd class="mono">{% if movie.revenue %}${{ movie.revenue|floatformat:"0g" }}{% else %}—{% endif %}</dd>
             </div>
             {% if directors %}
             <div class="record-row">
-                <dt class="label">Directed by</dt>
+                <dt class="label">{% translate "Directed by" %}</dt>
                 <dd>
                     {% for director in directors %}<a href="{% url 'movies:person_detail' director.slug %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
                 </dd>
@@ -88,7 +88,7 @@
             {% endif %}
             {% if studios %}
             <div class="record-row">
-                <dt class="label">Studios</dt>
+                <dt class="label">{% translate "Studios" %}</dt>
                 <dd>
                     {% for studio in studios %}<a href="{% url 'movies:studio_detail' studio.slug %}">{{ studio.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
                 </dd>
@@ -119,7 +119,7 @@
    the backdrop stays only otherwise (Task 75). {% endcomment %}
 {% if trailer %}
 <figure class="video-strip">
-    {% include "movies/_video_embed.html" with video=trailer kind="trailer" only %}
+    {% translate "trailer" as trailer_word %}{% include "movies/_video_embed.html" with video=trailer kind=trailer_word only %}
 </figure>
 {% elif movie.backdrop_path %}
 <figure class="backdrop-strip">
@@ -129,8 +129,8 @@
 
 <section class="sheet-section" id="cast">
     <div class="section-head">
-        <h2>Cast</h2>
-        <span class="section-note">{{ cast_count }} cast · {{ credit_count }} credit{{ credit_count|pluralize }}</span>
+        <h2>{% translate "Cast" %}</h2>
+        <span class="section-note">{% blocktranslate trimmed with cast=cast_count count counter=credit_count %}{{ cast }} cast · {{ counter }} credit{% plural %}{{ cast }} cast · {{ counter }} credits{% endblocktranslate %}</span>
     </div>
     {% comment %} Every actor is rendered here and paged in the browser,
        eighteen at a time — see [data-paged] in static/js/theoria.js. Headshots
@@ -143,10 +143,10 @@
             {% for credit in cast %}
             {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
             {% empty %}
-            <p class="empty">No cast recorded for this movie.</p>
+            <p class="empty">{% translate "No cast recorded for this movie." %}</p>
             {% endfor %}
         </div>
-        {% include "movies/_pager_client.html" with label="cast" only %}
+        {% translate "cast" as cast_label %}{% include "movies/_pager_client.html" with label=cast_label only %}
     </div>
 </section>
 
@@ -159,8 +159,8 @@
    itself when the current page holds none of its people. {% endcomment %}
 <section class="sheet-section" id="crew">
     <div class="section-head">
-        <h2>Crew</h2>
-        <span class="section-note">{{ crew_person_count }} crew</span>
+        <h2>{% translate "Crew" %}</h2>
+        <span class="section-note">{% blocktranslate trimmed with n=crew_person_count %}{{ n }} crew{% endblocktranslate %}</span>
     </div>
     <div data-paged data-page-size="10" data-page-items=".credit-row">
         {% for department in crew %}
@@ -185,9 +185,9 @@
             </ul>
         </div>
         {% empty %}
-        <p class="empty">No crew recorded for this movie.</p>
+        <p class="empty">{% translate "No crew recorded for this movie." %}</p>
         {% endfor %}
-        {% include "movies/_pager_client.html" with label="crew" only %}
+        {% translate "crew" as crew_label %}{% include "movies/_pager_client.html" with label=crew_label only %}
     </div>
 </section>
 {% endblock %}

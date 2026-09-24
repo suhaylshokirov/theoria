@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %} Client-side pager. Params — always pass with `only`:
    label : what's being paged, for the accessible name ("cast", "crew").
 
@@ -9,8 +10,8 @@
 
    The counterpart to _pager.html, which is the server-side pager for result
    sets too large to send whole. {% endcomment %}
-<nav class="pagination is-client" aria-label="{{ label }} pagination" data-page-nav hidden>
-    <button type="button" class="page-btn" data-page-prev>← Previous</button>
+<nav class="pagination is-client" aria-label="{% blocktranslate trimmed with label=label %}{{ label }} pagination{% endblocktranslate %}" data-page-nav hidden>
+    <button type="button" class="page-btn" data-page-prev>{% translate "← Previous" %}</button>
     <span class="page-state" data-page-state aria-live="polite" aria-atomic="true"></span>
-    <button type="button" class="page-btn" data-page-next>Next →</button>
+    <button type="button" class="page-btn" data-page-next>{% translate "Next →" %}</button>
 </nav>

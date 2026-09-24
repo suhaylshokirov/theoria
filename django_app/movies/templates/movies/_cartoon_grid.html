@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %} The poster grid + pager for /cartoons/, mirroring _movie_grid.html
    and _series_grid.html. Each page_obj row is a Movie or a Series carrying an
    extra .kind attribute (set in cartoon_list()), so this dispatches to
@@ -15,8 +16,8 @@
         {% endif %}
         {% empty %}
         <p class="empty">
-            {% if q %}No cartoons match “{{ q }}”. Try a shorter title.
-            {% else %}No cartoons loaded yet. Run the pipeline to fill the catalog.{% endif %}
+            {% if q %}{% blocktranslate trimmed with q=q %}No cartoons match “{{ q }}”. Try a shorter title.{% endblocktranslate %}
+            {% else %}{% translate "No cartoons loaded yet. Run the pipeline to fill the catalog." %}{% endif %}
         </p>
         {% endfor %}
     </div>

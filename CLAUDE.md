@@ -32,6 +32,12 @@ loader **before** deploying the code that reads it, since Django never migrates 
 `vercel.json`'s `ignoreCommand` stops the nightly `ops/refresh-history.md` commit from redeploying
 the site every night — Vercel does not honour `[skip ci]`. See `docs/architecture.md` §4.4.
 
+**Translations:** the interface ships in en/ru/uz (`django_app/locale/`, Task 92). Edit the `.po`, then
+`python manage.py makemessages -l ru -l uz --no-obsolete` and `compilemessages` from `django_app/`; **commit the
+`.mo` files** (Vercel's build may lack `msgfmt`, and a missing `.mo` silently serves English). Translate what
+readers see, never what code compares (`DEPARTMENT_ORDER`, `job == "Director"` stay raw English). Machine-read
+numbers in templates need `|unlocalize`. `USE_THOUSAND_SEPARATOR` stays off.
+
 **Warehouse topology:** the nightly GitHub Actions job writes **Neon** (`eu-central-1`, source of
 truth). Django runs locally and reads a **local Postgres replica** — reading Neon directly costs
 ~90 ms/query (seconds/page). `manage.py serve` calls `sync_if_stale()` first: one date query

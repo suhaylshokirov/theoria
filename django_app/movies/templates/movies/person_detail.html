@@ -1,8 +1,9 @@
 {% extends "base.html" %}
+{% load i18n %}
 {% load tmdb_images %}
 
 {% block title %}Theoria — {{ person.name }}{% endblock %}
-{% block description %}{{ person.name }}: {{ film_count }} movie{{ film_count|pluralize }}{% if show_count %} and {{ show_count }} show{{ show_count|pluralize }}{% endif %} in the Theoria catalog.{% endblock %}
+{% block description %}{% blocktranslate trimmed count n=film_count asvar films_phrase %}{{ n }} movie{% plural %}{{ n }} movies{% endblocktranslate %}{% if show_count %}{% blocktranslate trimmed count n=show_count asvar shows_phrase %}{{ n }} show{% plural %}{{ n }} shows{% endblocktranslate %}{% blocktranslate trimmed with name=person.name films=films_phrase shows=shows_phrase %}{{ name }}: {{ films }} and {{ shows }} in the Theoria catalog.{% endblocktranslate %}{% else %}{% blocktranslate trimmed with name=person.name films=films_phrase %}{{ name }}: {{ films }} in the Theoria catalog.{% endblocktranslate %}{% endif %}{% endblock %}
 
 {% block content %}
 {% include "movies/_person_header.html" with person=person film_count=film_count show_count=show_count title_count=title_count avg_rating=avg_rating activity=activity credit_count=credit_count only %}
@@ -26,17 +27,17 @@
     {% if person.biography %}
     <div class="bio" data-bio>
         <p class="specimen-synopsis bio-body is-collapsed" id="person-bio">{{ person.biography }}</p>
-        <button type="button" class="bio-toggle" data-bio-toggle aria-expanded="false" aria-controls="person-bio" hidden>See more</button>
+        <button type="button" class="bio-toggle" data-bio-toggle aria-expanded="false" aria-controls="person-bio" hidden>{% translate "See more" %}</button>
     </div>
     {% endif %}
     {% if person.imdb_id or person.homepage %}
     <dl class="record-list">
         <div class="record-row">
-            <dt class="label">Elsewhere</dt>
+            <dt class="label">{% translate "Elsewhere" %}</dt>
             <dd>
                 {% if person.imdb_id %}<a class="ext-link" href="https://www.imdb.com/name/{{ person.imdb_id }}/" target="_blank" rel="noopener noreferrer">IMDb</a>{% endif %}
                 {% if person.imdb_id and person.homepage %} &middot; {% endif %}
-                {% if person.homepage %}<a class="ext-link" href="{{ person.homepage }}" target="_blank" rel="noopener noreferrer">Official site</a>{% endif %}
+                {% if person.homepage %}<a class="ext-link" href="{{ person.homepage }}" target="_blank" rel="noopener noreferrer">{% translate "Official site" %}</a>{% endif %}
             </dd>
         </div>
     </dl>
@@ -55,26 +56,27 @@
            no JS — see _person_filmography_results.html's docstring. {% endcomment %}
         <form method="get" action="" data-live-filter data-live-targets="#person-filmography-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="Search this filmography" aria-label="Search {{ person.name }}'s {% if show_count %}movies and shows{% else %}movies{% endif %} by title">
+                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search this filmography" %}" aria-label="{% if show_count %}{% blocktranslate trimmed with name=person.name %}Search {{ name }}'s movies and shows by title{% endblocktranslate %}{% else %}{% blocktranslate trimmed with name=person.name %}Search {{ name }}'s movies by title{% endblocktranslate %}{% endif %}">
             </div>
             <fieldset class="segmented">
-                <legend class="visually-hidden">Order by</legend>
+                <legend class="visually-hidden">{% translate "Order by" %}</legend>
                 <input type="radio" name="sort" id="sort-release" value="release" {% if sort == "release" %}checked{% endif %}>
-                <label for="sort-release">Newest</label>
+                <label for="sort-release">{% translate "Newest" %}</label>
                 <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
-                <label for="sort-rating">Rated</label>
+                <label for="sort-rating">{% translate "Rated" %}</label>
                 <input type="radio" name="sort" id="sort-revenue" value="revenue" {% if sort == "revenue" %}checked{% endif %}>
-                <label for="sort-revenue">Revenue</label>
+                <label for="sort-revenue">{% translate "Revenue" %}</label>
                 <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
-                <label for="sort-title">A–Z</label>
+                <label for="sort-title">{% translate "A–Z" %}</label>
             </fieldset>
-            <button type="submit" class="apply-btn">Apply</button>
+            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
         </form>
     </div>
 
     <div class="section-head">
-        <h2>Filmography</h2>
-        <span class="section-note">{{ film_count }} movie{{ film_count|pluralize }}{% if show_count %} · {{ show_count }} show{{ show_count|pluralize }}{% endif %}</span>
+        <h2>{% translate "Filmography" %}</h2>
+        {% blocktranslate trimmed count n=film_count asvar films_phrase %}{{ n }} movie{% plural %}{{ n }} movies{% endblocktranslate %}{% if show_count %}{% blocktranslate trimmed count n=show_count asvar shows_phrase %}{{ n }} show{% plural %}{{ n }} shows{% endblocktranslate %}{% endif %}
+        <span class="section-note">{{ films_phrase }}{% if show_count %} · {{ shows_phrase }}{% endif %}</span>
     </div>
 
     {% include "movies/_person_filmography_grid.html" %}

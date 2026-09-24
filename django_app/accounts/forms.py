@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.utils.translation import gettext_lazy as _
 
 from .models import validate_username_characters, validate_username_not_reserved
 
@@ -34,7 +35,7 @@ class SignupForm(forms.Form):
                 or User.objects.filter(email=email).exists()
             )
             if taken:
-                raise forms.ValidationError("Username or email already exists.")
+                raise forms.ValidationError(_("Username or email already exists."))
         return cleaned
 
 
@@ -58,10 +59,10 @@ class UsernameChangeForm(forms.Form):
     def clean_username(self):
         username = self.cleaned_data["username"]
         if username == self.user.username:
-            raise forms.ValidationError("That's already your username.")
+            raise forms.ValidationError(_("That's already your username."))
         taken = User.objects.filter(username__iexact=username).exclude(pk=self.user.pk).exists()
         if taken:
-            raise forms.ValidationError("That username is already taken.")
+            raise forms.ValidationError(_("That username is already taken."))
         return username
 
 
@@ -79,5 +80,5 @@ class EmailOnlyForm(forms.Form):
 class VerifyForm(forms.Form):
     code = forms.RegexField(
         regex=r"^\d{6}$",
-        error_messages={"invalid": "Enter the 6-digit code."},
+        error_messages={"invalid": _("Enter the 6-digit code.")},
     )

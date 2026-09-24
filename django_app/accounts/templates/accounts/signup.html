@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static i18n %}
 {% load tmdb_images %}
 
-{% block title %}Sign up — Theoria{% endblock %}
+{% block title %}{% translate "Sign up — Theoria" %}{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'css/auth.css' %}">
@@ -15,8 +15,8 @@
     <div class="auth-panel">
         <div class="auth-card">
             <header class="sheet-head">
-                <h1 class="sheet-title">Sign up</h1>
-                <p class="sheet-sub">A username and an email. That's it.</p>
+                <h1 class="sheet-title">{% translate "Sign up" %}</h1>
+                <p class="sheet-sub">{% translate "A username and an email. That's it." %}</p>
             </header>
 
             <form class="auth-form" method="post" novalidate>
@@ -27,21 +27,21 @@
                 {% for message in messages %}<p class="form-error" role="alert">{{ message }}</p>{% endfor %}
 
                 <div>
-                    <label class="field-label" for="id_username">Username</label>
-                    <p class="field"><input id="id_username" type="text" name="username" value="{{ form.username.value|default:'' }}" placeholder="Username" autocomplete="username" maxlength="30" required></p>
+                    <label class="field-label" for="id_username">{% translate "Username" %}</label>
+                    <p class="field"><input id="id_username" type="text" name="username" value="{{ form.username.value|default:'' }}" placeholder="{% translate "Username" %}" autocomplete="username" maxlength="30" required></p>
                     {% for error in form.username.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
                 </div>
 
                 <div>
-                    <label class="field-label" for="id_email">Email</label>
-                    <p class="field"><input id="id_email" type="email" name="email" value="{{ form.email.value|default:'' }}" placeholder="Email" autocomplete="email" required></p>
+                    <label class="field-label" for="id_email">{% translate "Email" %}</label>
+                    <p class="field"><input id="id_email" type="email" name="email" value="{{ form.email.value|default:'' }}" placeholder="{% translate "Email" %}" autocomplete="email" required></p>
                     {% for error in form.email.errors %}<p class="form-error">{{ error }}</p>{% endfor %}
                 </div>
 
-                <button type="submit" class="btn-block">Send code</button>
+                <button type="submit" class="btn-block">{% translate "Send code" %}</button>
             </form>
 
-            <p class="auth-alt">Already have an account? <a href="{% url 'accounts:login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% endif %}">Sign in</a></p>
+            <p class="auth-alt">{% translate "Already have an account?" %} <a href="{% url 'accounts:login' %}{% if request.GET.next %}?next={{ request.GET.next|urlencode }}{% endif %}">{% translate "Sign in" %}</a></p>
         </div>
     </div>
 

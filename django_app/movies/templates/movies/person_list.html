@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% load i18n %}
 
 {% block title %}Theoria — {{ list_title }}{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title=list_title sub="Search by name, filter by gender or craft, and reorder by what was measured." only %}
+{% translate "Search by name, filter by gender or craft, and reorder by what was measured." as sheet_sub %}
+{% include "movies/_sheet_header.html" with title=list_title sub=sheet_sub only %}
 
 <section class="sheet-section">
     <div class="toolbar">
@@ -14,33 +16,33 @@
            no JS — see _person_results.html's docstring. {% endcomment %}
         <form method="get" action="" data-live-filter data-live-targets="#people-toolbar-meta, #people-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="Search names" aria-label="Search {{ list_title|lower }} by name">
+                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search names" %}" aria-label="{% blocktranslate trimmed with title=list_title|lower %}Search {{ title }} by name{% endblocktranslate %}">
             </div>
             {% comment %} Radio segments rather than a <select>: few, fixed options, so
                showing them is more useful than hiding them (matches movie_list's
                sort control). Still a plain form control — works without JS. {% endcomment %}
             <fieldset class="segmented">
-                <legend class="visually-hidden">Order by</legend>
+                <legend class="visually-hidden">{% translate "Order by" %}</legend>
                 <input type="radio" name="sort" id="sort-popularity" value="popularity" {% if sort == "popularity" %}checked{% endif %}>
-                <label for="sort-popularity">Most popular</label>
+                <label for="sort-popularity">{% translate "Most popular" %}</label>
                 <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
-                <label for="sort-name">A–Z</label>
+                <label for="sort-name">{% translate "A–Z" %}</label>
             </fieldset>
             <fieldset class="segmented">
-                <legend class="visually-hidden">Filter by gender</legend>
+                <legend class="visually-hidden">{% translate "Filter by gender" %}</legend>
                 <input type="radio" name="gender" id="gender-all" value="" {% if not gender %}checked{% endif %}>
-                <label for="gender-all">Any gender</label>
+                <label for="gender-all">{% translate "Any gender" %}</label>
                 {% for value, label in gender_choices.items %}
                 <input type="radio" name="gender" id="gender-{{ value }}" value="{{ value }}" {% if gender == value %}checked{% endif %}>
                 <label for="gender-{{ value }}">{{ label }}</label>
                 {% endfor %}
             </fieldset>
             <div class="field">
-                <label for="known-for" class="visually-hidden">Filter by craft</label>
+                <label for="known-for" class="visually-hidden">{% translate "Filter by craft" %}</label>
                 <select name="known_for" id="known-for">
-                    <option value="">Any craft</option>
+                    <option value="">{% translate "Any craft" %}</option>
                     {% for choice in known_for_choices %}
-                    <option value="{{ choice }}" {% if known_for == choice %}selected{% endif %}>{{ choice }}</option>
+                    <option value="{{ choice }}" {% if known_for == choice %}selected{% endif %}>{% translate choice %}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -48,7 +50,7 @@
                via the html.has-js CSS gate (see base.html) rather than removed, so a
                no-JS visitor, who gets no auto-submit on a radio/select change, still
                has a way to apply anything but the search box. {% endcomment %}
-            <button type="submit" class="apply-btn">Apply</button>
+            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
         </form>
         {% comment %} Actors and directors are no longer separate tables — they're the
            people holding an Acting or Directing credit. So this is a scope

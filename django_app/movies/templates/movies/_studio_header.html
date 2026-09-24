@@ -10,11 +10,12 @@
    contained wordmark on the fixed --logo-plate (a light backing that never
    swaps with the theme, so a dark wordmark stays legible in dark mode), with
    an initial-letter monogram when TMDB has no logo — ~46% do not. {% endcomment %}
+{% load i18n l10n %}
 {% load tmdb_images %}
 <header class="studio-head">
     <div class="studio-plate">
         {% if company.logo_path %}
-        <img class="logo" src="{{ company.logo_path|tmdb_image:'w300' }}" alt="{{ company.name }} logo" decoding="async">
+        <img class="logo" src="{{ company.logo_path|tmdb_image:'w300' }}" alt="{% blocktranslate trimmed with name=company.name %}{{ name }} logo{% endblocktranslate %}" decoding="async">
         {% else %}
         <div class="placeholder placeholder-studio" aria-hidden="true">
             <span class="studio-initial">{{ company.name|first|upper }}</span>
@@ -27,20 +28,20 @@
 
         <div class="stats">
             <div class="stat">
-                <span class="stat-value" data-count="{{ film_count }}">{{ film_count }}</span>
-                <span class="stat-label">Movies</span>
+                <span class="stat-value" data-count="{{ film_count|unlocalize }}">{{ film_count }}</span>
+                <span class="stat-label">{% translate "Movies" %}</span>
             </div>
             <div class="stat">
                 <span class="stat-value">{% if avg_rating %}★ {{ avg_rating|floatformat:2 }}{% else %}—{% endif %}</span>
-                <span class="stat-label">Avg rating</span>
+                <span class="stat-label">{% translate "Avg rating" %}</span>
             </div>
             <div class="stat">
                 <span class="stat-value">{{ period }}</span>
-                <span class="stat-label">Active</span>
+                <span class="stat-label">{% translate "Active" %}</span>
             </div>
             <div class="stat">
                 <span class="stat-value">{% if total_revenue %}${{ total_revenue|floatformat:"0g" }}{% else %}—{% endif %}</span>
-                <span class="stat-label">Revenue</span>
+                <span class="stat-label">{% translate "Revenue" %}</span>
             </div>
         </div>
     </div>

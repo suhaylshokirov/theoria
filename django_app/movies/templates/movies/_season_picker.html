@@ -15,11 +15,13 @@
      seasons : the same list of {season, episodes} dicts series_detail()
                builds for _episode_table.html — only `season` is read here.
 {% endcomment %}
+{% load i18n %}
+{% translate "Season" as season_word %}
 <fieldset class="season-picker" data-season-picker>
-    <legend class="visually-hidden">Choose a season</legend>
+    <legend class="visually-hidden">{% translate "Choose a season" %}</legend>
     {% for block in seasons %}
     <input type="radio" name="season" id="season-{{ block.season.season_id }}"
            value="{{ block.season.season_number }}" {% if forloop.first %}checked{% endif %}>
-    <label for="season-{{ block.season.season_id }}">{{ block.season.name|default:"Season" }}</label>
+    <label for="season-{{ block.season.season_id }}">{{ block.season.name|default:season_word }}</label>
     {% endfor %}
 </fieldset>

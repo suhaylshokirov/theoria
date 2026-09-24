@@ -11,6 +11,7 @@
    Cards are the shared movies/_movie_card.html and _series_card.html; this
    partial only lays the collection's own controls (type badge, remove, Top's
    rank and reorder arrows) over and under them. {% endcomment %}
+{% load i18n %}
 {% with slug=section.slug label=section.label page_obj=section.page_obj %}
 <section class="account-section" id="{{ slug }}" aria-labelledby="account-section-{{ slug }}-title" data-account-section="{{ slug }}">
     <div class="account-section__head">
@@ -18,7 +19,7 @@
             <span class="account-section__icon account-section__icon--{{ slug }}" aria-hidden="true"></span>
             <div class="account-section__name">
                 <h2 class="display" id="account-section-{{ slug }}-title">{{ label }}</h2>
-                <span class="label account-section__count"><span class="mono">{{ section.count }}</span> movie{{ section.count|pluralize }}</span>
+                <span class="label account-section__count">{% blocktranslate trimmed count counter=section.count %}<span class="mono">{{ counter }}</span> movie{% plural %}<span class="mono">{{ counter }}</span> movies{% endblocktranslate %}</span>
             </div>
         </div>
     </div>
@@ -28,7 +29,7 @@
         {% for item in page_obj %}
         {% with rank=page_obj.start_index|add:forloop.counter0 title=item.title %}
         <li class="account-card{% if section.ranked %} is-ranked{% endif %}">
-            {% if section.ranked %}<span class="visually-hidden">Rank {{ rank }}:</span>{% endif %}
+            {% if section.ranked %}<span class="visually-hidden">{% blocktranslate trimmed with rank=rank %}Rank {{ rank }}:{% endblocktranslate %}</span>{% endif %}
 
             {% if item.content_type == "movie" %}
             {% include "movies/_movie_card.html" with movie=item.content only %}
@@ -40,11 +41,11 @@
                (same width, same 2:3), so they sit on the art whatever the
                card's text below it runs to. {% endcomment %}
             <div class="account-card__frame">
-                <span class="account-card__type label">{{ item.get_content_type_display }}</span>
+                <span class="account-card__type label">{% if item.content_type == "movie" %}{% translate "Movie" %}{% else %}{% translate "TV show" %}{% endif %}</span>
                 <form method="post" action="{% url 'account:remove_item' section.kind item.id %}" class="account-card__remove-form" data-account-remove>
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ section.self_url }}">
-                    <button type="submit" class="account-card__remove" aria-label="Remove {{ title }} from {{ label }}">
+                    <button type="submit" class="account-card__remove" aria-label="{% blocktranslate trimmed with title=title label=label %}Remove {{ title }} from {{ label }}{% endblocktranslate %}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
                             <path d="M6 6l12 12M18 6L6 18"/>
                         </svg>
@@ -60,12 +61,12 @@
                 <form method="post" action="{% url 'account:move_item' section.kind item.id 'up' %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ section.self_url }}">
-                    <button type="submit" aria-label="Move {{ title }} up"{% if rank == 1 %} disabled{% endif %}>↑</button>
+                    <button type="submit" aria-label="{% blocktranslate trimmed with title=title %}Move {{ title }} up{% endblocktranslate %}"{% if rank == 1 %} disabled{% endif %}>↑</button>
                 </form>
                 <form method="post" action="{% url 'account:move_item' section.kind item.id 'down' %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ section.self_url }}">
-                    <button type="submit" aria-label="Move {{ title }} down"{% if rank == section.count %} disabled{% endif %}>↓</button>
+                    <button type="submit" aria-label="{% blocktranslate trimmed with title=title %}Move {{ title }} down{% endblocktranslate %}"{% if rank == section.count %} disabled{% endif %}>↓</button>
                 </form>
             </div>
             {% endif %}
@@ -83,9 +84,9 @@
         <li class="account-slot">
             <a class="account-slot__link" href="{% url 'movies:browse' %}">
                 <span class="account-slot__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>
-                <span class="label">Add to Top<span class="visually-hidden"> at rank {{ rank }}</span></span>
+                <span class="label">{% translate "Add to Top" %}<span class="visually-hidden"> {% blocktranslate trimmed with rank=rank %}at rank {{ rank }}{% endblocktranslate %}</span></span>
             </a>
-            <span class="account-slot__caption">Empty slot</span>
+            <span class="account-slot__caption">{% translate "Empty slot" %}</span>
         </li>
         {% endfor %}
     </ol>

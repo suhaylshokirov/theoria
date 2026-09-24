@@ -104,6 +104,10 @@ AUTH_USER_MODEL = 'accounts.User'
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    # Between Session and Common, and the order is load-bearing: it reads the
+    # session/cookie language set by the switcher, and must run before
+    # CommonMiddleware so its language-prefix 404 fallback sees the URLconf.
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -125,7 +129,7 @@ SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 # ordinary account.
 LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = 'profile'
-LOGOUT_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = 'movies:home'
 
 ROOT_URLCONF = 'theoria_site.urls'
 
@@ -138,6 +142,8 @@ TEMPLATES = [
             'context_processors': [
                 'django.template.context_processors.debug',
                 'django.template.context_processors.request',
+                'django.template.context_processors.i18n',
+                'core.context_processors.js_strings',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
@@ -303,11 +309,26 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'en'
+
+# English is the unprefixed default (its URLs are unchanged); ru/uz live under
+# /ru/ and /uz/. Endonyms, because a reader hunting for their language must be
+# able to recognise it without reading the current one.
+LANGUAGES = [
+    ('en', 'English'),
+    ('ru', 'Русский'),
+    ('uz', 'Oʻzbekcha'),
+]
+
+# Compiled .mo files are committed: Vercel's build image is not guaranteed to
+# have msgfmt, and a missing .mo fails silently (the site just serves English).
+LOCALE_PATHS = [BASE_DIR / 'locale']
 
 TIME_ZONE = 'UTC'
 
 USE_I18N = True
+
+USE_THOUSAND_SEPARATOR = True
 
 USE_TZ = True
 

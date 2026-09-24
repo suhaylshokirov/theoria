@@ -1,3 +1,4 @@
+{% load i18n l10n %}
 {% comment %} Shared pagination control. Params — always pass with `only`:
    page_obj    : a Django Page/Paginator page object.
    param       : query-string key to write the page number under, e.g. "page".
@@ -21,13 +22,13 @@
    are small enough to ship in full — see [data-paged] in
    static/js/theoria.js. {% endcomment %}
 {% if page_obj.has_other_pages %}
-<nav class="pagination" aria-label="Pagination">
+<nav class="pagination" aria-label="{% translate "Pagination" %}">
     {% if page_obj.has_previous %}
-    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.previous_page_number }}{% if anchor %}#{{ anchor }}{% endif %}">← Previous</a>
+    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.previous_page_number|unlocalize }}{% if anchor %}#{{ anchor }}{% endif %}">{% translate "← Previous" %}</a>
     {% endif %}
     <span class="page-state">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
     {% if page_obj.has_next %}
-    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.next_page_number }}{% if anchor %}#{{ anchor }}{% endif %}">Next →</a>
+    <a href="?{% if base_query %}{{ base_query }}&amp;{% endif %}{{ param }}={{ page_obj.next_page_number|unlocalize }}{% if anchor %}#{{ anchor }}{% endif %}">{% translate "Next →" %}</a>
     {% endif %}
 </nav>
 {% endif %}

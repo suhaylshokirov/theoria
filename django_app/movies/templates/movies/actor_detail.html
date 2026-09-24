@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load i18n %}
 
 {% block title %}Theoria — {{ actor.name }}{% endblock %}
 
@@ -7,14 +8,14 @@
 
 <section class="sheet-section">
     <div class="section-head">
-        <h2>Filmography</h2>
-        <span class="section-note">{{ film_count }} credit{{ film_count|pluralize }}</span>
+        <h2>{% translate "Filmography" %}</h2>
+        <span class="section-note">{% blocktranslate trimmed count n=film_count %}{{ n }} credit{% plural %}{{ n }} credits{% endblocktranslate %}</span>
     </div>
     <div class="poster-grid">
         {% for movie in filmography %}
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
-        <p class="empty">No credits recorded for this actor yet.</p>
+        <p class="empty">{% translate "No credits recorded for this actor yet." %}</p>
         {% endfor %}
     </div>
 </section>

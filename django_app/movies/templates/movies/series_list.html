@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}Theoria — TV Shows{% endblock %}
+{% block title %}Theoria — {% translate "TV Shows" %}{% endblock %}
 
 {% block content %}
-{% include "movies/_sheet_header.html" with title="TV Shows" sub="Every show the warehouse holds. Search by name, narrow by genre, or reorder by what was measured." only %}
+{% translate "TV Shows" as sheet_title %}{% translate "Every show the warehouse holds. Search by name, narrow by genre, or reorder by what was measured." as sheet_sub %}
+{% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
 
 <section class="sheet-section">
     <div class="toolbar">
@@ -12,28 +14,28 @@
            JS — see _series_results.html's docstring. {% endcomment %}
         <form method="get" action="{% url 'movies:series_list' %}" data-live-filter data-live-targets="#series-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="Search shows" aria-label="Search TV shows by name">
+                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search shows" %}" aria-label="{% translate "Search TV shows by name" %}">
             </div>
             {% comment %} No Revenue segment — TV has no money measures. {% endcomment %}
             <fieldset class="segmented">
-                <legend class="visually-hidden">Order by</legend>
+                <legend class="visually-hidden">{% translate "Order by" %}</legend>
                 <input type="radio" name="sort" id="sort-first-air" value="first_air" {% if sort == "first_air" %}checked{% endif %}>
-                <label for="sort-first-air">Newest</label>
+                <label for="sort-first-air">{% translate "Newest" %}</label>
                 <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
-                <label for="sort-rating">Rated</label>
+                <label for="sort-rating">{% translate "Rated" %}</label>
                 <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
-                <label for="sort-name">A–Z</label>
+                <label for="sort-name">{% translate "A–Z" %}</label>
             </fieldset>
             <div class="field">
-                <label for="series-genre" class="visually-hidden">Filter by genre</label>
+                <label for="series-genre" class="visually-hidden">{% translate "Filter by genre" %}</label>
                 <select name="genre" id="series-genre" data-menu>
-                    <option value="">Any genre</option>
+                    <option value="">{% translate "Any genre" %}</option>
                     {% for slug, name in genre_choices %}
                     <option value="{{ slug }}" {% if genre == slug %}selected{% endif %}>{{ name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit" class="apply-btn">Apply</button>
+            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
         </form>
     </div>
 

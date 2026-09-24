@@ -1,3 +1,4 @@
+{% load i18n %}
 {% comment %} The filmography poster grid + pager on person_detail.html, below
    .toolbar and the section-head. The half static/js/theoria.js's
    initLiveFilter() swaps as the toolbar changes — mirrors
@@ -21,8 +22,8 @@
         {% endif %}
         {% empty %}
         <p class="empty">
-            {% if q %}No titles match “{{ q }}”. Try a shorter title.
-            {% else %}No credits recorded for this person yet.{% endif %}
+            {% if q %}{% blocktranslate trimmed with q=q %}No titles match “{{ q }}”. Try a shorter title.{% endblocktranslate %}
+            {% else %}{% translate "No credits recorded for this person yet." %}{% endif %}
         </p>
         {% endfor %}
     </div>

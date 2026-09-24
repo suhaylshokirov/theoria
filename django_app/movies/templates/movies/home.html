@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static i18n l10n %}
 {% load tmdb_images %}
 
-{% block title %}Theoria — Welcome to the world of movies{% endblock %}
+{% block title %}{% translate "Theoria — Welcome to the world of movies" %}{% endblock %}
 
 {% block body_class %}page-home{% endblock %}
 
@@ -16,32 +16,31 @@
    one outlines it in lime. {% endcomment %}
 <section class="sheet-hero">
     <div class="hero-card">
-        <h1 class="hero-title">Welcome<br>to the world<br>of movies.</h1>
+        <h1 class="hero-title">{% translate "Welcome<br>to the world<br>of movies." %}</h1>
         <p class="hero-lead">
-            Built for people who love the craft of cinema — every movie,
-            every performance, gathered in one place to explore.
+            {% translate "Built for people who love the craft of cinema — every movie, every performance, gathered in one place to explore." %}
         </p>
 
         <dl class="hero-counts">
             <div class="count">
-                <dt class="stat-label">Movies</dt>
-                <dd class="stat-value" data-count="{{ movie_count }}" data-suffix="+">{{ movie_count }}+</dd>
+                <dt class="stat-label">{% translate "Movies" %}</dt>
+                <dd class="stat-value" data-count="{{ movie_count|unlocalize }}" data-suffix="+">{{ movie_count }}+</dd>
             </div>
             <div class="count">
-                <dt class="stat-label">People</dt>
-                <dd class="stat-value" data-count="{{ person_count }}" data-suffix="+">{{ person_count }}+</dd>
+                <dt class="stat-label">{% translate "People" %}</dt>
+                <dd class="stat-value" data-count="{{ person_count|unlocalize }}" data-suffix="+">{{ person_count }}+</dd>
             </div>
             <div class="count">
-                <dt class="stat-label">Avg rating</dt>
+                <dt class="stat-label">{% translate "Avg rating" %}</dt>
                 <dd class="stat-value">
-                    {% if avg_rating %}<span data-count="{{ avg_rating|floatformat:1 }}" data-decimals="1">{{ avg_rating|floatformat:1 }}</span>{% else %}—{% endif %}
+                    {% if avg_rating %}<span data-count="{{ avg_rating|floatformat:"1u" }}" data-decimals="1">{{ avg_rating|floatformat:1 }}</span>{% else %}—{% endif %}
                 </dd>
             </div>
         </dl>
 
         <div class="hero-actions">
-            <a class="btn" href="{% url 'movies:movie_list' %}">Browse movies</a>
-            <a class="hero-link" href="{% url 'analytics:dashboard' %}">See the analytics →</a>
+            <a class="btn" href="{% url 'movies:movie_list' %}">{% translate "Browse movies" %}</a>
+            <a class="hero-link" href="{% url 'analytics:dashboard' %}">{% translate "See the analytics →" %}</a>
         </div>
     </div>
 
@@ -64,28 +63,28 @@
 
 <section class="sheet-section">
     <div class="section-head">
-        <h2>Highest rated</h2>
-        <span class="section-note">top 12</span>
+        <h2>{% translate "Highest rated" %}</h2>
+        <span class="section-note">{% translate "top 12" %}</span>
     </div>
     <div class="poster-grid">
         {% for movie in top_rated %}
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
-        <p class="empty">No movies loaded yet. Run the pipeline to fill the catalog.</p>
+        <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the catalog." %}</p>
         {% endfor %}
     </div>
 </section>
 
 <section class="sheet-section">
     <div class="section-head">
-        <h2>See what's new</h2>
-        <span class="section-note">by release date</span>
+        <h2>{% translate "See what's new" %}</h2>
+        <span class="section-note">{% translate "by release date" %}</span>
     </div>
     <div class="poster-grid">
         {% for movie in newest %}
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
-        <p class="empty">No movies loaded yet. Run the pipeline to fill the catalog.</p>
+        <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the catalog." %}</p>
         {% endfor %}
     </div>
 </section>
@@ -99,14 +98,14 @@
    that's the right "new" for a show. {% endcomment %}
 <section class="sheet-section">
     <div class="section-head">
-        <h2>Recently aired</h2>
-        <span class="section-note">by last air date</span>
+        <h2>{% translate "Recently aired" %}</h2>
+        <span class="section-note">{% translate "by last air date" %}</span>
     </div>
     <div class="poster-grid">
         {% for series in recently_aired %}
         {% include "movies/_series_card.html" with series=series only %}
         {% empty %}
-        <p class="empty">No shows loaded yet. Run the pipeline to fill the catalog.</p>
+        <p class="empty">{% translate "No shows loaded yet. Run the pipeline to fill the catalog." %}</p>
         {% endfor %}
     </div>
 </section>

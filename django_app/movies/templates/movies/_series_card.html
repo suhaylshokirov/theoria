@@ -7,11 +7,11 @@
                 person page's filmography grid uses it for the job/role held
                 on the show (Task 89), same as _movie_card.html's param of
                 the same name. {% endcomment %}
-{% load tmdb_images %}
+{% load i18n tmdb_images %}
 <div class="poster-card is-film">
     <a href="{% url 'movies:series_detail' series.slug %}">
         {% if series.poster_path %}
-        <img class="poster" src="{{ series.poster_path|tmdb_image:'w342' }}" alt="{{ series.name }} poster" loading="lazy" decoding="async">
+        <img class="poster" src="{{ series.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=series.name %}{{ title }} poster{% endblocktranslate %}" loading="lazy" decoding="async">
         {% else %}
         <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}
@@ -21,7 +21,7 @@
             <span class="card-role">{{ card_sub }}</span>
             {% else %}
             <span class="card-sub">
-                {{ series.year_span|default:"—" }}{% if series.number_of_seasons %} · {{ series.number_of_seasons }} season{{ series.number_of_seasons|pluralize }}{% endif %}
+                {{ series.year_span|default:"—" }}{% if series.number_of_seasons %} · {% blocktranslate trimmed count n=series.number_of_seasons %}{{ n }} season{% plural %}{{ n }} seasons{% endblocktranslate %}{% endif %}
             </span>
             {% endif %}
             {% include "movies/_rating_badge.html" with rating=series.imdb_rating only %}

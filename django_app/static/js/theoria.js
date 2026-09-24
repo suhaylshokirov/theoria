@@ -19,8 +19,48 @@
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  /* --- Language ------------------------------------------------------------
+     base.html sets <html lang> to the active language and renders every
+     string this script displays into the #js-strings JSON block, so the
+     script never owns a phrase -- see core.context_processors.js_strings. */
+
+  var STRINGS = (function () {
+    var el = document.getElementById("js-strings");
+    try {
+      return el ? JSON.parse(el.textContent) : {};
+    } catch (e) {
+      return {};
+    }
+  })();
+
+  // The English key doubles as the fallback, so a missing block degrades to
+  // the old English behaviour rather than to "undefined".
+  function t(key, vars) {
+    var out = Object.prototype.hasOwnProperty.call(STRINGS, key) ? STRINGS[key] : key;
+    if (vars) {
+      Object.keys(vars).forEach(function (k) {
+        out = out.split("{" + k + "}").join(vars[k]);
+      });
+    }
+    return out;
+  }
+
+  // Uzbek numbers format as Russian ones: Django's own Uzbek format uses a
+  // non-breaking space for thousands and a comma for decimals, and browser
+  // Intl data for "uz" is unreliable (some builds claim support and still
+  // print 1,234.5). Using "ru" keeps the count-up in agreement with the
+  // number the server already printed.
+  function numberLocale() {
+    var lang = document.documentElement.lang || "en";
+    return lang === "uz" ? "ru" : lang;
+  }
+
+  // English writes 1,234.5; Russian and Uzbek write 1 234,5, so the decimal
+  // mark has to be read back the way the server printed it.
   function parseCell(el) {
-    var n = parseFloat(el.textContent.replace(/[,$\s★]/g, ""));
+    var raw = el.textContent.replace(/[$\s★]/g, "");
+    raw = numberLocale() === "en" ? raw.replace(/,/g, "") : raw.replace(",", ".");
+    var n = parseFloat(raw);
     return isNaN(n) ? null : n;
   }
 
@@ -41,7 +81,7 @@
       cells.forEach(function (td) {
         var v = parseCell(td);
         if (v === null) return;
-        if (Number.isInteger(v)) td.textContent = v.toLocaleString("en-US");
+        if (Number.isInteger(v)) td.textContent = v.toLocaleString(numberLocale());
 
         // A track wrapper reserves the strip the number sits in, so the
         // fill's percentage is relative to the bar's own space rather than
@@ -76,7 +116,7 @@
       .forEach(function (td) {
         var v = parseCell(td);
         if (v !== null && Number.isInteger(v) && Math.abs(v) > 999) {
-          td.textContent = v.toLocaleString("en-US");
+          td.textContent = v.toLocaleString(numberLocale());
         }
       });
   }
@@ -84,8 +124,13 @@
   /* --- Count-up ------------------------------------------------------------- */
 
   function format(value, decimals) {
-    if (decimals > 0) return value.toFixed(decimals);
-    return Math.round(value).toLocaleString("en-US");
+    if (decimals > 0) {
+      return value.toLocaleString(numberLocale(), {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      });
+    }
+    return Math.round(value).toLocaleString(numberLocale());
   }
 
   function runCounter(el) {
@@ -167,7 +212,7 @@
 
     function syncLabel() {
       var next = currentTheme() === "dark" ? "light" : "dark";
-      btn.setAttribute("aria-label", "Switch to " + next + " theme");
+      btn.setAttribute("aria-label", t(next === "dark" ? "Switch to dark theme" : "Switch to light theme"));
     }
 
     syncLabel();
@@ -220,7 +265,7 @@
 
     function setOpen(open) {
       btn.setAttribute("aria-expanded", open ? "true" : "false");
-      btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+      btn.setAttribute("aria-label", t(open ? "Close menu" : "Open menu"));
       panel.classList.toggle("is-open", open);
     }
 
@@ -441,7 +486,7 @@
     btn.addEventListener("click", function () {
       var collapsed = body.classList.toggle("is-collapsed");
       btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
-      btn.textContent = collapsed ? "See more" : "See less";
+      btn.textContent = t(collapsed ? "See more" : "See less");
     });
 
     // scrollHeight is the full text height, clientHeight the clamped box; a
@@ -530,7 +575,7 @@
         "https://www.youtube-nocookie.com/embed/" +
         encodeURIComponent(key) +
         "?autoplay=1";
-      iframe.title = play.getAttribute("data-video-name") || "Video";
+      iframe.title = play.getAttribute("data-video-name") || t("Video");
       // The site sends Referrer-Policy: same-origin (Django's SecurityMiddleware
       // default), which strips the Referer on this cross-origin load and makes
       // YouTube reject the embed with "player configuration error" (153). Send
@@ -602,7 +647,7 @@
     var labelText =
       select.getAttribute("aria-label") ||
       (select.labels && select.labels[0] && select.labels[0].textContent) ||
-      "Filter";
+      t("Filter");
 
     var wrap = document.createElement("div");
     wrap.className = "menu";
@@ -759,16 +804,18 @@
     var send = form.querySelector("button[type='submit']");
     var actions = root.querySelectorAll("[data-ai-prompt]");
 
+    // The buttons carry a stable key (data-ai-prompt="tonight"), not their
+    // English label: the label is translated, the key is what picks the reply.
     var replies = {
-      "Pick for tonight": "Tell me a little about your mood. I can start with something funny, thoughtful, intense, or comforting.",
-      "Find by mood": "Choose a feeling and I will narrow it down: light, romantic, thrilling, or strange.",
-      "Surprise me": "A surprise pick will be ready once your personal recommendations are connected."
+      tonight: t("Pick for tonight"),
+      mood: t("Find by mood"),
+      surprise: t("Surprise me")
     };
 
     function setOpen(open) {
       panel.hidden = !open;
       trigger.setAttribute("aria-expanded", open ? "true" : "false");
-      trigger.setAttribute("aria-label", open ? "Close film guide" : "Open film guide");
+      trigger.setAttribute("aria-label", t(open ? "Close film guide" : "Open film guide"));
       if (open) {
         window.setTimeout(function () { input.focus(); }, 0);
       } else {
@@ -786,12 +833,12 @@
       messages.scrollTop = messages.scrollHeight;
     }
 
-    function respond(prompt) {
-      addMessage(prompt, "user");
+    function respond(prompt, shown) {
+      addMessage(shown || prompt, "user");
       input.value = "";
       send.disabled = true;
       window.setTimeout(function () {
-        addMessage(replies[prompt] || "I am still in demo mode. Soon I will use your taste profile to make a personal recommendation.", "assistant");
+        addMessage(replies[prompt] || t("assistant fallback"), "assistant");
       }, 260);
     }
 
@@ -805,7 +852,7 @@
 
     actions.forEach(function (action) {
       action.addEventListener("click", function () {
-        respond(action.getAttribute("data-ai-prompt"));
+        respond(action.getAttribute("data-ai-prompt"), action.textContent.trim());
       });
     });
 
@@ -826,7 +873,7 @@
     window.addEventListener("pageshow", function () {
       panel.hidden = true;
       trigger.setAttribute("aria-expanded", "false");
-      trigger.setAttribute("aria-label", "Open film guide");
+      trigger.setAttribute("aria-label", t("Open film guide"));
     });
   }
 
@@ -906,7 +953,7 @@
           resendBtn.disabled = false;
           resendBtn.textContent = label;
         } else {
-          resendBtn.textContent = label + " (" + seconds + "s)";
+          resendBtn.textContent = t("Resend wait", { label: label, seconds: seconds });
         }
       }, 1000);
     }
@@ -940,7 +987,7 @@
         }
         submitting = true;
         if (!btn) return;
-        var busyLabel = btn.getAttribute("data-busy-label") || "Sending…";
+        var busyLabel = btn.getAttribute("data-busy-label") || t("Sending…");
         btn.disabled = true;
         btn.innerHTML =
           '<span class="btn-spinner" aria-hidden="true"></span><span>' + busyLabel + "</span>";
@@ -984,7 +1031,7 @@
           clearErrors();
           var p = document.createElement("p");
           p.className = "form-error is-live";
-          p.textContent = "Enter a valid email address.";
+          p.textContent = t("Enter a valid email address.");
           wrap.appendChild(p);
         }
       });
