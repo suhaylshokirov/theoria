@@ -4,7 +4,8 @@ from datetime import date
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import (
-    Avg, CharField, Count, Exists, F, Max, Min, OuterRef, Q, Sum, Value,
+    Avg, Case, CharField, Count, Exists, F, IntegerField, Max, Min, OuterRef, Q, Sum,
+    Value, When,
 )
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
@@ -572,6 +573,11 @@ PERSON_SORTS = {
     "name": F("name").asc(),
 }
 
+# The one profile that always leads every people index (Jessica Alba, TMDB
+# person 56731), whatever the sort. Filters and search still apply — she can't
+# lead a list she doesn't match — but nothing reorders her below anyone else.
+PINNED_PERSON_ID = 56731
+
 # TMDB's gender codes. 0 ("not specified") is deliberately not a filter option
 # below — it isn't a fact about the person, it's TMDB having no answer, and
 # offering it as a choice would imply otherwise.
@@ -608,7 +614,12 @@ def _person_list(request, people, list_title, scope):
         people = people.filter(gender=int(gender))
     if known_for:
         people = people.filter(known_for_department=known_for)
-    people = people.order_by(PERSON_SORTS[sort])
+    pinned_first = Case(
+        When(person_id=PINNED_PERSON_ID, then=Value(0)),
+        default=Value(1),
+        output_field=IntegerField(),
+    )
+    people = people.order_by(pinned_first, PERSON_SORTS[sort])
 
     page_obj = Paginator(people, PEOPLE_PER_PAGE).get_page(request.GET.get("page"))
 

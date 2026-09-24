@@ -1290,6 +1290,24 @@ def test_person_list_sorts_by_name_when_requested():
     qs.order_by.assert_called_once()
 
 
+def test_person_list_pins_jessica_alba_ahead_of_every_sort():
+    """PINNED_PERSON_ID leads the ordering whichever sort is chosen — the
+    Case() is order_by's first argument, the requested sort only its second."""
+    from movies.views import PERSON_SORTS, PINNED_PERSON_ID
+
+    assert PINNED_PERSON_ID == 56731
+    for sort in PERSON_SORTS:
+        with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
+            qs = person_mgr.using.return_value
+            qs.order_by.return_value = [_person()]
+
+            client.get("/people/", {"sort": sort})
+
+        pinned, requested = qs.order_by.call_args.args
+        assert requested == PERSON_SORTS[sort]
+        assert pinned.cases[0].condition.children == [("person_id", 56731)]
+
+
 def test_person_list_ajax_request_renders_results_fragment_only():
     """initLiveFilter()'s fetch() sets this header and wants just the results,
     not the full page — see _is_ajax() in views.py."""
