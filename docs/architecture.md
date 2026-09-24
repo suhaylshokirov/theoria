@@ -158,6 +158,15 @@ multiple rows per `(movie_id, ingestion_date)` (one per genre, one per credit). 
 instead comes from the composite primary key plus `ON CONFLICT DO UPDATE` upserts in the loaders —
 idempotent by construction, not by an extra constraint.
 
+The loaders' `_upsert()` only rewrites a conflicting row when a *data* column differs;
+`ingestion_date` is excluded from that comparison (it changes every night by construction, so
+including it rewrote every credit row nightly and roughly doubled the tables on Neon). So on a
+warehouse row it means "the date this row's data last changed", and factless bridges become
+`ON CONFLICT DO NOTHING`. The data-quality load checks therefore test that a table is non-empty
+when Silver was, not that it holds rows tagged with the run date. The replica's staleness probe
+(`max(ingestion_date)` on `fact_movie_rating`, §4.3) still advances nightly because IMDb vote
+counts change daily.
+
 ### 3.1 Resolved: `fact_cast`/`fact_crew` replace the earlier `fact_casting` cross-join
 
 TMDB's credits endpoint returns cast and crew as two separate flat lists per movie — it never

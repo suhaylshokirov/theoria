@@ -21,11 +21,12 @@ for a given ingestion_date:
            just loaded.
          - Every Gold dataset must exist and be non-empty for the date
            whenever the Silver movies partition was non-empty.
-         - Every fact table must have at least one row tagged with this
-           ingestion_date whenever the Silver data that feeds it was
-           non-empty — a loader that silently produced zero rows from real
-           input is a bug, not "clean data" (genuine zero-row loads only
-           happen when Silver itself is empty).
+         - Every fact table must be non-empty whenever the Silver data that
+           feeds it was non-empty — a loader that silently produced zero rows
+           from real input is a bug, not "clean data" (genuine zero-row loads
+           only happen when Silver itself is empty). Checked against the whole
+           table, not this date's rows: an unchanged row keeps its old
+           ingestion_date (see _upsert), so a no-change night tags none.
 
 Produces one CheckResult per check; the overall run passes only if every
 CheckResult has passed=True.
@@ -219,11 +220,15 @@ def _table_row_count(session: Session, table: str) -> int:
     return session.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
 
 
-def _fact_ingestion_date_count(session: Session, table: str, ingestion_date: dt.date) -> int:
-    return session.execute(
-        text(f"SELECT COUNT(*) FROM {table} WHERE ingestion_date = :date"),
-        {"date": ingestion_date},
-    ).scalar()
+def _fact_loaded_count(session: Session, table: str) -> int:
+    """Rows in `table`, regardless of which run wrote them.
+
+    Not ``WHERE ingestion_date = <run date>``: _upsert() leaves an unchanged
+    row alone, so a night where nothing changed legitimately tags zero rows
+    with that night's date. The guard is "non-empty Silver never yields an
+    empty table"; the silver_to_warehouse checks cover the cumulative count.
+    """
+    return session.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
 
 
 # ---------------------------------------------------------------------------
@@ -451,15 +456,15 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             logger.info("[%s] OK", s2w_name)
 
         load_name = "rowcount:movie_videos:load"
-        loaded = _fact_ingestion_date_count(session, "dim_movie_video", ingestion_date)
+        loaded = _fact_loaded_count(session, "dim_movie_video")
         if len(videos_df) > 0 and loaded == 0:
             results.append(CheckResult(load_name, False,
-                f"dim_movie_video has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"dim_movie_video has 0 row(s) despite "
                 f"{len(videos_df)} Silver movie_videos row(s)"))
             logger.error("[%s] FAIL — 0 rows loaded", load_name)
         else:
             results.append(CheckResult(load_name, True,
-                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+                f"{loaded} row(s) present"))
             logger.info("[%s] OK (%d rows)", load_name, loaded)
 
     # dim_series_video (Task 90): the show counterpart of dim_movie_video above.
@@ -504,15 +509,15 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             logger.info("[%s] OK", s2w_name)
 
         load_name = "rowcount:series_videos:load"
-        loaded = _fact_ingestion_date_count(session, "dim_series_video", ingestion_date)
+        loaded = _fact_loaded_count(session, "dim_series_video")
         if len(sv_df) > 0 and loaded == 0:
             results.append(CheckResult(load_name, False,
-                f"dim_series_video has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"dim_series_video has 0 row(s) despite "
                 f"{len(sv_df)} Silver series_videos row(s)"))
             logger.error("[%s] FAIL — 0 rows loaded", load_name)
         else:
             results.append(CheckResult(load_name, True,
-                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+                f"{loaded} row(s) present"))
             logger.info("[%s] OK (%d rows)", load_name, loaded)
 
     # dim_series / dim_network (Task 79): checked here beside the other
@@ -593,15 +598,15 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             logger.info("[%s] OK", s2w_name)
 
         load_name = "rowcount:series_credits:load"
-        loaded = _fact_ingestion_date_count(session, "fact_series_credit", ingestion_date)
+        loaded = _fact_loaded_count(session, "fact_series_credit")
         if len(sc_df) > 0 and loaded == 0:
             results.append(CheckResult(load_name, False,
-                f"fact_series_credit has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"fact_series_credit has 0 row(s) despite "
                 f"{len(sc_df)} Silver series_credits row(s)"))
             logger.error("[%s] FAIL — 0 rows loaded", load_name)
         else:
             results.append(CheckResult(load_name, True,
-                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+                f"{loaded} row(s) present"))
             logger.info("[%s] OK (%d rows)", load_name, loaded)
 
     # fact_series_rating (Task 81): same defensive shape. The Silver anchor is
@@ -639,15 +644,15 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             logger.info("[%s] OK", s2w_name)
 
         load_name = "rowcount:series_ratings:load"
-        loaded = _fact_ingestion_date_count(session, "fact_series_rating", ingestion_date)
+        loaded = _fact_loaded_count(session, "fact_series_rating")
         if len(srs_df) > 0 and loaded == 0:
             results.append(CheckResult(load_name, False,
-                f"fact_series_rating has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"fact_series_rating has 0 row(s) despite "
                 f"{len(srs_df)} Silver series row(s)"))
             logger.error("[%s] FAIL — 0 rows loaded", load_name)
         else:
             results.append(CheckResult(load_name, True,
-                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+                f"{loaded} row(s) present"))
             logger.info("[%s] OK (%d rows)", load_name, loaded)
 
     # dim_episode (Task 84): same defensive shape as dim_series / series_credits
@@ -687,15 +692,15 @@ def check_row_count_sanity(session: Session, bucket: str, ingestion_date: dt.dat
             logger.info("[%s] OK", s2w_name)
 
         load_name = "rowcount:episodes:load"
-        loaded = _fact_ingestion_date_count(session, "dim_episode", ingestion_date)
+        loaded = _fact_loaded_count(session, "dim_episode")
         if len(ep_df) > 0 and loaded == 0:
             results.append(CheckResult(load_name, False,
-                f"dim_episode has 0 row(s) for ingestion_date={ingestion_date} despite "
+                f"dim_episode has 0 row(s) despite "
                 f"{len(ep_df)} Silver episodes row(s)"))
             logger.error("[%s] FAIL — 0 rows loaded", load_name)
         else:
             results.append(CheckResult(load_name, True,
-                f"{loaded} row(s) loaded for ingestion_date={ingestion_date}"))
+                f"{loaded} row(s) present"))
             logger.info("[%s] OK (%d rows)", load_name, loaded)
 
         # Natural-grain guard: dim_episode's PK is TMDB's surrogate episode_id,
@@ -780,74 +785,74 @@ def check_fact_load_sanity(
     """A loader that silently wrote zero rows from non-empty Silver input is a bug."""
     results: list[CheckResult] = []
 
-    fmm_count = _fact_ingestion_date_count(session, "fact_movie_metrics", ingestion_date)
+    fmm_count = _fact_loaded_count(session, "fact_movie_metrics")
     if silver_movies_count > 0 and fmm_count == 0:
         results.append(CheckResult("facts:fact_movie_metrics", False,
-            f"fact_movie_metrics has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"fact_movie_metrics has 0 row(s) despite "
             f"{silver_movies_count} Silver movie row(s)"))
         logger.error("[facts:fact_movie_metrics] FAIL — 0 rows loaded")
     else:
         results.append(CheckResult("facts:fact_movie_metrics", True,
-            f"{fmm_count} row(s) loaded for ingestion_date={ingestion_date}"))
+            f"{fmm_count} row(s) present"))
         logger.info("[facts:fact_movie_metrics] OK (%d rows)", fmm_count)
 
-    fcredit_count = _fact_ingestion_date_count(session, "fact_credit", ingestion_date)
+    fcredit_count = _fact_loaded_count(session, "fact_credit")
     if silver_credit_count > 0 and fcredit_count == 0:
         results.append(CheckResult("facts:fact_credit", False,
-            f"fact_credit has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"fact_credit has 0 row(s) despite "
             f"{silver_credit_count} Silver credits_bridge row(s)"))
         logger.error("[facts:fact_credit] FAIL — 0 rows loaded")
     else:
         results.append(CheckResult("facts:fact_credit", True,
-            f"{fcredit_count} row(s) loaded for ingestion_date={ingestion_date}"))
+            f"{fcredit_count} row(s) present"))
         logger.info("[facts:fact_credit] OK (%d rows)", fcredit_count)
 
-    bmc_count = _fact_ingestion_date_count(session, "bridge_movie_company", ingestion_date)
+    bmc_count = _fact_loaded_count(session, "bridge_movie_company")
     if silver_company_count > 0 and bmc_count == 0:
         results.append(CheckResult("facts:bridge_movie_company", False,
-            f"bridge_movie_company has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"bridge_movie_company has 0 row(s) despite "
             f"{silver_company_count} Silver movie_companies row(s)"))
         logger.error("[facts:bridge_movie_company] FAIL — 0 rows loaded")
     else:
         results.append(CheckResult("facts:bridge_movie_company", True,
-            f"{bmc_count} row(s) loaded for ingestion_date={ingestion_date}"))
+            f"{bmc_count} row(s) present"))
         logger.info("[facts:bridge_movie_company] OK (%d rows)", bmc_count)
 
-    bmco_count = _fact_ingestion_date_count(session, "bridge_movie_country", ingestion_date)
+    bmco_count = _fact_loaded_count(session, "bridge_movie_country")
     if silver_country_count > 0 and bmco_count == 0:
         results.append(CheckResult("facts:bridge_movie_country", False,
-            f"bridge_movie_country has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"bridge_movie_country has 0 row(s) despite "
             f"{silver_country_count} Silver movie_countries row(s)"))
         logger.error("[facts:bridge_movie_country] FAIL — 0 rows loaded")
     else:
         results.append(CheckResult("facts:bridge_movie_country", True,
-            f"{bmco_count} row(s) loaded for ingestion_date={ingestion_date}"))
+            f"{bmco_count} row(s) present"))
         logger.info("[facts:bridge_movie_country] OK (%d rows)", bmco_count)
 
-    bmla_count = _fact_ingestion_date_count(session, "bridge_movie_language", ingestion_date)
+    bmla_count = _fact_loaded_count(session, "bridge_movie_language")
     if silver_language_count > 0 and bmla_count == 0:
         results.append(CheckResult("facts:bridge_movie_language", False,
-            f"bridge_movie_language has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"bridge_movie_language has 0 row(s) despite "
             f"{silver_language_count} Silver movie_languages row(s)"))
         logger.error("[facts:bridge_movie_language] FAIL — 0 rows loaded")
     else:
         results.append(CheckResult("facts:bridge_movie_language", True,
-            f"{bmla_count} row(s) loaded for ingestion_date={ingestion_date}"))
+            f"{bmla_count} row(s) present"))
         logger.info("[facts:bridge_movie_language] OK (%d rows)", bmla_count)
 
     # fact_movie_rating gets rows from two Silver sources: a non-empty
     # movies partition alone guarantees source='tmdb' rows, so either input
     # being non-empty should produce at least one row for this date.
-    fmr_count = _fact_ingestion_date_count(session, "fact_movie_rating", ingestion_date)
+    fmr_count = _fact_loaded_count(session, "fact_movie_rating")
     if (silver_movies_count > 0 or silver_rating_count > 0) and fmr_count == 0:
         results.append(CheckResult("facts:fact_movie_rating", False,
-            f"fact_movie_rating has 0 row(s) for ingestion_date={ingestion_date} despite "
+            f"fact_movie_rating has 0 row(s) despite "
             f"{silver_movies_count} Silver movie row(s) / {silver_rating_count} Silver "
             f"imdb_ratings row(s)"))
         logger.error("[facts:fact_movie_rating] FAIL — 0 rows loaded")
     else:
         results.append(CheckResult("facts:fact_movie_rating", True,
-            f"{fmr_count} row(s) loaded for ingestion_date={ingestion_date}"))
+            f"{fmr_count} row(s) present"))
         logger.info("[facts:fact_movie_rating] OK (%d rows)", fmr_count)
 
     return results

@@ -64,24 +64,36 @@ def _upsert(session: Session, table: str, pk_cols: list[str], columns: list[str]
     fine on a local socket, but ~2 minutes per 1,000 rows against a database in
     another region, and ``dim_person`` / ``fact_credit`` are 120k+ rows each.
 
-    A conflicting row is only updated when at least one update column actually
+    A conflicting row is only updated when at least one *data* column actually
     differs (``WHERE (target...) IS DISTINCT FROM (excluded...)``) — otherwise
     every re-run rewrites the whole table even when nothing changed, which is
     exactly what left Neon's dim_person heap at ~4x its live size (dead tuples
     can't be reclaimed until the transaction commits).
+
+    ``ingestion_date`` is deliberately left out of that comparison. It differs
+    on every nightly run by construction, so including it made every row
+    "changed" and rewrote fact_credit / fact_series_credit in full each night.
+    It is still written whenever a row *does* change, so on a warehouse row it
+    means "the date this row's data last changed", not "the last run that saw
+    it". A table with no data columns beyond the key (the factless bridges)
+    therefore becomes DO NOTHING on conflict.
     """
     if not records:
         return 0
     update_cols = [c for c in columns if c not in pk_cols]
+    compare_cols = [c for c in update_cols if c != "ingestion_date"]
     tbl = Table(table, MetaData(), *(Column(c) for c in columns))
     stmt = pg_insert(tbl)
-    set_ = {c: stmt.excluded[c] for c in update_cols}
-    on_conflict_kwargs: dict[str, Any] = {"index_elements": pk_cols, "set_": set_}
-    if update_cols:
-        target = tuple_(*(tbl.c[c] for c in update_cols))
-        excluded = tuple_(*(stmt.excluded[c] for c in update_cols))
-        on_conflict_kwargs["where"] = target.is_distinct_from(excluded)
-    stmt = stmt.on_conflict_do_update(**on_conflict_kwargs)
+    if compare_cols:
+        target = tuple_(*(tbl.c[c] for c in compare_cols))
+        excluded = tuple_(*(stmt.excluded[c] for c in compare_cols))
+        stmt = stmt.on_conflict_do_update(
+            index_elements=pk_cols,
+            set_={c: stmt.excluded[c] for c in update_cols},
+            where=target.is_distinct_from(excluded),
+        )
+    else:
+        stmt = stmt.on_conflict_do_nothing(index_elements=pk_cols)
     session.execute(stmt, records)
     return len(records)
 

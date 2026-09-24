@@ -3682,6 +3682,34 @@ def test_upsert_builds_on_conflict_sql_and_executes():
     assert params == records
 
 
+def _compiled_upsert_sql(pk_cols, columns):
+    from sqlalchemy.dialects import postgresql
+    mock_session = MagicMock()
+    _upsert(mock_session, "some_table", pk_cols, columns, [{c: 1 for c in columns}])
+    (stmt, _), _ = mock_session.execute.call_args
+    return str(stmt.compile(dialect=postgresql.dialect())).lower()
+
+
+def test_upsert_ignores_ingestion_date_when_deciding_a_row_changed():
+    """ingestion_date differs every night, so comparing it rewrote every row nightly.
+
+    It must still be written on a real change (in SET) but stay out of the
+    IS DISTINCT FROM guard.
+    """
+    sql = _compiled_upsert_sql(["a"], ["a", "b", "ingestion_date"])
+    assert "ingestion_date = excluded.ingestion_date" in sql
+    where = sql.split(" where ", 1)[1]
+    assert "some_table.b" in where and "excluded.b" in where
+    assert "ingestion_date" not in where
+
+
+def test_upsert_does_nothing_on_conflict_when_only_ingestion_date_could_change():
+    """A factless bridge (key + ingestion_date) has nothing to update but the date."""
+    sql = _compiled_upsert_sql(["a", "b"], ["a", "b", "ingestion_date"])
+    assert "on conflict (a, b) do nothing" in sql
+    assert "do update" not in sql
+
+
 def test_upsert_skips_execute_when_no_records():
     """_upsert() must not call session.execute() for an empty record list."""
     mock_session = MagicMock()
