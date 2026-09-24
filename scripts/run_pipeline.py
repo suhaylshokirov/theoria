@@ -167,16 +167,24 @@ def _extract_person_ids(
 def _warehouse_episode_counts() -> dict[int, int]:
     """{series_id: number_of_episodes} from dim_series, for ingest_seasons' change signal.
 
-    Degrades to {} if dim_series does not exist yet (a partition replayed
-    before 19_series.sql is applied) — so every series reads as newly seen.
+    Only series that already have episode rows in dim_episode. A series that is
+    in dim_series but has none is still owed its first fetch: listing it here
+    made ingest_seasons read it as "known, count unchanged" and skip it every
+    night, so the episode backfill wedged at whatever the discovery run reached
+    (307 of 736 shows) and the `max_new` cap never got to fill the tail.
+
+    Degrades to {} if dim_series / dim_episode do not exist yet (a partition
+    replayed before 19_series.sql is applied) — so every series reads as newly
+    seen.
     """
     try:
         from sqlalchemy import text
         from warehouse.db import get_session
         with get_session() as session:
             rows = session.execute(
-                text("SELECT series_id, number_of_episodes FROM dim_series "
-                     "WHERE number_of_episodes IS NOT NULL")
+                text("SELECT s.series_id, s.number_of_episodes FROM dim_series s "
+                     "WHERE s.number_of_episodes IS NOT NULL "
+                     "AND EXISTS (SELECT 1 FROM dim_episode e WHERE e.series_id = s.series_id)")
             ).all()
         return {int(sid): int(n) for sid, n in rows}
     except Exception as exc:

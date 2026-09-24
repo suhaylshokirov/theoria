@@ -906,6 +906,25 @@ def test_ingest_seasons_caps_newly_seen_series_at_max_new():
     assert succeeded == [1, 2]  # series 3 deferred to a later run
 
 
+def test_warehouse_episode_counts_only_lists_series_that_have_episodes():
+    """A show in dim_series with no dim_episode rows is still owed its first fetch.
+
+    Listing every dim_series row as "known" made ingest_seasons skip it as
+    "count unchanged" every night — the episode backfill stalled at 307/736.
+    """
+    from scripts.run_pipeline import _warehouse_episode_counts
+
+    session = MagicMock()
+    session.execute.return_value.all.return_value = [(1, 10), (2, 24)]
+    with patch("warehouse.db.get_session") as get_session:
+        get_session.return_value.__enter__.return_value = session
+        counts = _warehouse_episode_counts()
+
+    assert counts == {1: 10, 2: 24}
+    sql = str(session.execute.call_args[0][0]).lower()
+    assert "exists" in sql and "dim_episode" in sql
+
+
 def test_ingest_seasons_marks_series_failed_when_a_season_call_raises():
     mock_client = MagicMock()
 
