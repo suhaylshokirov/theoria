@@ -13,6 +13,7 @@ on which app owns `AUTH_USER_MODEL`.
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -67,3 +68,47 @@ class CollectionItem(models.Model):
             models.Index(fields=["content_type", "content_id"]),
         ]
         ordering = ["position", "-added_at"]
+
+
+class TitleFeedback(models.Model):
+    """A user's private watch and preference signals for one catalogue title.
+
+    Collections express positive saved lists. These flags cover independent
+    facts that a list cannot represent cleanly: a person may have watched and
+    disliked the same title, for example.
+    """
+
+    MOVIE = "movie"
+    SERIES = "series"
+    CONTENT_TYPES = ((MOVIE, "Movie"), (SERIES, "TV show"))
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="title_feedback"
+    )
+    content_type = models.CharField(max_length=10, choices=CONTENT_TYPES)
+    content_id = models.PositiveIntegerField()
+    watched = models.BooleanField(default=False)
+    disliked = models.BooleanField(default=False)
+    not_interested = models.BooleanField(default=False)
+    personal_rating = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "content_type", "content_id"],
+                name="one_title_feedback_per_user",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["user", "content_type", "content_id"]),
+            models.Index(fields=["user", "watched"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.content_type} {self.content_id}"

@@ -10,7 +10,9 @@ from __future__ import annotations
 from django.db import transaction
 from django.db.models import Max, Q
 
-from core.models import Collection, CollectionItem
+from core.models import Collection, CollectionItem, TitleFeedback
+
+_UNSET = object()
 
 
 _DEFAULT_NAMES = {
@@ -174,3 +176,118 @@ def collection_flags(user, content_type, content_id):
         ).values_list("collection__kind", flat=True)
     )
     return {kind: kind in selected for kind, _ in Collection.KINDS}
+
+
+def record_title_feedback(
+    user,
+    content_type,
+    content_id,
+    *,
+    watched=None,
+    disliked=None,
+    not_interested=None,
+    personal_rating=_UNSET,
+):
+    """Save an explicit watch/preference signal for a signed-in user."""
+    if content_type not in {TitleFeedback.MOVIE, TitleFeedback.SERIES}:
+        raise ValueError("Unknown content type.")
+    if not _content_exists(content_type, content_id):
+        raise ValueError("That title is not in the catalogue.")
+    if personal_rating is not _UNSET and personal_rating is not None:
+        if not isinstance(personal_rating, int) or not 1 <= personal_rating <= 5:
+            raise ValueError("Personal rating must be a whole number from 1 to 5.")
+
+    feedback, _ = TitleFeedback.objects.get_or_create(
+        user=user,
+        content_type=content_type,
+        content_id=content_id,
+    )
+    changed = []
+    for field, value in {
+        "watched": watched,
+        "disliked": disliked,
+        "not_interested": not_interested,
+    }.items():
+        if value is not None:
+            setattr(feedback, field, bool(value))
+            changed.append(field)
+    if personal_rating is not _UNSET:
+        feedback.personal_rating = personal_rating
+        changed.append("personal_rating")
+    if changed:
+        feedback.save(update_fields=[*changed, "updated_at"])
+    return feedback
+
+
+def _catalogue_title_lookup(items):
+    """Return the catalogue facts needed to describe saved list items.
+
+    Personal lists live in the main Django database, while title details live
+    in the read-only warehouse. Keeping this lookup in one helper makes that
+    boundary explicit and lets the recommendation code stay database-agnostic.
+    """
+    movie_ids = {item.content_id for item in items if item.content_type == CollectionItem.MOVIE}
+    series_ids = {item.content_id for item in items if item.content_type == CollectionItem.SERIES}
+    from movies.models import Movie, Series
+
+    titles = {}
+    for movie in Movie.objects.using("warehouse").filter(movie_id__in=movie_ids):
+        titles[(CollectionItem.MOVIE, movie.movie_id)] = {
+            "content_id": movie.movie_id,
+            "content_type": CollectionItem.MOVIE,
+            "title": movie.title,
+            "runtime": movie.runtime,
+            "year": movie.release_date.year if movie.release_date else None,
+        }
+    for series in Series.objects.using("warehouse").filter(series_id__in=series_ids):
+        titles[(CollectionItem.SERIES, series.series_id)] = {
+            "content_id": series.series_id,
+            "content_type": CollectionItem.SERIES,
+            "title": series.name,
+            "runtime": None,
+            "year": series.first_air_date.year if series.first_air_date else None,
+        }
+    return titles
+
+
+def build_taste_summary(user):
+    """Read a signed-in user's saved lists into a recommendation-ready summary.
+
+    This is deliberately the first small AI building block: it only reports
+    facts Theoria already owns. It does not call an AI provider, infer hidden
+    preferences, or create any user data. Future steps can add watched and
+    disliked feedback to this same summary.
+    """
+    summary = {
+        **{kind: [] for kind, _ in Collection.KINDS},
+        "watched": [],
+        "disliked": [],
+        "not_interested": [],
+    }
+    if not user.is_authenticated:
+        return summary
+
+    items = list(
+        CollectionItem.objects.filter(collection__user=user)
+        .select_related("collection")
+        .order_by("collection__kind", "position", "-added_at")
+    )
+    feedback_rows = list(TitleFeedback.objects.filter(user=user).order_by("-updated_at"))
+    titles = _catalogue_title_lookup([*items, *feedback_rows])
+    for item in items:
+        title = titles.get((item.content_type, item.content_id))
+        if title is None:
+            continue
+        summary[item.collection.kind].append({**title, "position": item.position})
+    for feedback in feedback_rows:
+        title = titles.get((feedback.content_type, feedback.content_id))
+        if title is None:
+            continue
+        feedback_title = {**title, "personal_rating": feedback.personal_rating}
+        if feedback.watched:
+            summary["watched"].append(feedback_title)
+        if feedback.disliked:
+            summary["disliked"].append(feedback_title)
+        if feedback.not_interested:
+            summary["not_interested"].append(feedback_title)
+    return summary

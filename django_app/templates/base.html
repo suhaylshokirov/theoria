@@ -266,7 +266,9 @@
     </dialog>
     {% endif %}
 
-    <div class="ai-assistant" data-ai-assistant>
+    <div class="ai-assistant" data-ai-assistant data-ai-chat-endpoint="{% url 'assistant:chat' %}"
+         data-ai-feedback-endpoint="{% url 'assistant:feedback' %}"
+         data-ai-authenticated="{{ request.user.is_authenticated|yesno:'true,false' }}">
         <section class="ai-assistant-panel" id="ai-assistant-panel" aria-labelledby="ai-assistant-title" hidden>
             <header class="ai-assistant-header">
                 <div>
@@ -293,6 +295,7 @@
             </div>
 
             <form class="ai-assistant-form" data-ai-form>
+                {% csrf_token %}
                 <label class="visually-hidden" for="ai-assistant-input">{% translate "Message the film guide" %}</label>
                 <input id="ai-assistant-input" data-ai-input type="text" maxlength="300" placeholder="{% translate "Describe your mood" %}" autocomplete="off">
                 <button type="submit" class="ai-assistant-send" aria-label="{% translate "Send message" %}" title="{% translate "Send" %}" disabled>

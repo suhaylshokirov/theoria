@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'movies',
     'analytics',
     'accounts',
+    'assistant',
 ]
 
 # The one custom user model, set before any migration or account row exists
