@@ -125,7 +125,9 @@
 
   function format(value, decimals) {
     if (decimals > 0) {
-      return value.toLocaleString(numberLocale(), {
+      // Fractional values are ratings, which keep a dot in every language
+      // (the server prints them with floatformat "u").
+      return value.toLocaleString("en", {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
       });

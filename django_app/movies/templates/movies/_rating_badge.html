@@ -23,15 +23,15 @@
 {% if imdb_id %}
 <a class="rating-badge ext-link" href="https://www.imdb.com/title/{{ imdb_id }}/"
    target="_blank" rel="noopener noreferrer"
-   aria-label="{% blocktranslate trimmed with value=rating|floatformat:1 %}IMDb rating {{ value }} out of 10{% endblocktranslate %}">
+   aria-label="{% blocktranslate trimmed with value=rating|floatformat:"1u" %}IMDb rating {{ value }} out of 10{% endblocktranslate %}">
     <span class="rating-badge-mark" aria-hidden="true">IMDb</span>
-    <span class="rating-badge-figure" aria-hidden="true">{{ rating|floatformat:1 }} / 10</span>
+    <span class="rating-badge-figure" aria-hidden="true">{{ rating|floatformat:"1u" }} / 10</span>
     {% if vote_count %}<span class="rating-badge-votes" aria-hidden="true">({% blocktranslate trimmed with formatted=vote_count|floatformat:"0g" count counter=vote_count %}{{ formatted }} vote{% plural %}{{ formatted }} votes{% endblocktranslate %})</span>{% endif %}
 </a>
 {% else %}
-<span class="rating-badge" aria-label="{% blocktranslate trimmed with value=rating|floatformat:1 %}IMDb rating {{ value }} out of 10{% endblocktranslate %}">
+<span class="rating-badge" aria-label="{% blocktranslate trimmed with value=rating|floatformat:"1u" %}IMDb rating {{ value }} out of 10{% endblocktranslate %}">
     <span class="rating-badge-mark" aria-hidden="true">IMDb</span>
-    <span class="rating-badge-figure" aria-hidden="true">{{ rating|floatformat:1 }} / 10</span>
+    <span class="rating-badge-figure" aria-hidden="true">{{ rating|floatformat:"1u" }} / 10</span>
 </span>
 {% endif %}
 {% endif %}

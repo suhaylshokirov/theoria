@@ -33,7 +33,7 @@
                     <tr>
                         <th scope="row" class="mono">{{ row.decade }}</th>
                         <td class="num" data-meter>{{ row.movie_count }}</td>
-                        <td class="num">{{ row.avg_rating|floatformat:2|default:"—" }}</td>
+                        <td class="num">{{ row.avg_rating|floatformat:"2u"|default:"—" }}</td>
                         <td class="num">{{ row.total_revenue|default:"—" }}</td>
                     </tr>
                     {% endfor %}
@@ -93,7 +93,7 @@
                         <th scope="row"><a href="{% url 'movies:studio_detail' row.studio_slug %}">{{ row.studio_name }}</a></th>
                         <td class="num">{{ row.movie_count }}</td>
                         <td class="num" data-meter>{{ row.total_revenue|default:"—" }}</td>
-                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -120,7 +120,7 @@
                     <tr>
                         <th scope="row">{{ row.country_name }}</th>
                         <td class="num" data-meter>{{ row.film_count }}</td>
-                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -147,7 +147,7 @@
                     <tr>
                         <th scope="row" class="mono">{{ row.decade }}</th>
                         <td class="num" data-meter>{{ row.series_count }}</td>
-                        <td class="num">{{ row.avg_rating|floatformat:2|default:"—" }}</td>
+                        <td class="num">{{ row.avg_rating|floatformat:"2u"|default:"—" }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -177,7 +177,7 @@
                     <tr>
                         <th scope="row" class="mono">{{ row.season_number }}</th>
                         <td class="num" data-meter>{{ row.show_count }}</td>
-                        <td class="num">{{ row.avg_rating|floatformat:2|default:"—" }}</td>
+                        <td class="num">{{ row.avg_rating|floatformat:"2u"|default:"—" }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -206,7 +206,7 @@
                         <td class="num" data-meter>{{ row.years_on_air|default:"—" }}</td>
                         <td class="num">{{ row.number_of_seasons|default:"—" }}</td>
                         <td class="num">{{ row.number_of_episodes|default:"—" }}</td>
-                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -233,7 +233,7 @@
                     <tr>
                         <th scope="row">{{ row.network_name }}</th>
                         <td class="num" data-meter>{{ row.series_count }}</td>
-                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:2 }}{% else %}—{% endif %}</td>
+                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
