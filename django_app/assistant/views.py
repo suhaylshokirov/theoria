@@ -1,9 +1,4 @@
-"""JSON endpoints for the in-page AI Movie Companion.
-
-The first version deliberately uses Theoria's own rule-based selector. Grok
-will later be added behind this same chat endpoint, after the website flow is
-fully tested without an external AI service.
-"""
+"""JSON endpoints for the in-page AI Movie Companion."""
 
 from __future__ import annotations
 
@@ -13,8 +8,9 @@ from django.http import JsonResponse
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
+from assistant.gemini import generate_companion_reply
 from core.recommendations import select_movie_candidates
-from core.services import record_title_feedback
+from core.services import build_taste_summary, record_title_feedback
 
 MAX_MESSAGE_LENGTH = 300
 FEEDBACK_ACTIONS = {
@@ -72,9 +68,11 @@ def chat(request):
             }
         )
 
+    taste_summary = build_taste_summary(request.user)
+    reply = generate_companion_reply(message, taste_summary, candidates)
     return JsonResponse(
         {
-            "reply": "Here are a few picks from Theoria that fit your request.",
+            "reply": reply or "Here are a few picks from Theoria that fit your request.",
             "recommendations": [_recommendation_response(candidate) for candidate in candidates],
         }
     )

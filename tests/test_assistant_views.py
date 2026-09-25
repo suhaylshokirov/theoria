@@ -55,7 +55,14 @@ def test_chat_returns_rule_based_recommendations_for_signed_in_user():
     client = Client()
     client.force_login(user)
     try:
-        with patch("assistant.views.select_movie_candidates", return_value=[_candidate()]):
+        with (
+            patch("assistant.views.select_movie_candidates", return_value=[_candidate()]),
+            patch("assistant.views.build_taste_summary", return_value={}),
+            patch(
+                "assistant.views.generate_companion_reply",
+                return_value="Arrival is a thoughtful, personal pick for tonight.",
+            ),
+        ):
             response = client.post(
                 reverse("assistant:chat"),
                 data=json.dumps({"message": "Something funny"}),
@@ -74,6 +81,7 @@ def test_chat_returns_rule_based_recommendations_for_signed_in_user():
                 "reason": "It matches your requested genre.",
             }
         ]
+        assert payload["reply"] == "Arrival is a thoughtful, personal pick for tonight."
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
 
