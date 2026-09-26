@@ -164,6 +164,7 @@ DJANGO_DEBUG = _optional("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 # This stays empty until the AI companion is enabled. It is intentionally read
 # by server-side Python only, never by browser JavaScript.
 GEMINI_API_KEY = _optional("GEMINI_API_KEY", "")
+GEMINI_MODEL = _optional("GEMINI_MODEL", "gemini-3.5-flash-lite")
 
 # --- Email delivery --------------------------------------------------------
 # settings.py picks the backend itself, based on whether EMAIL_HOST is set --
