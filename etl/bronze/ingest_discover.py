@@ -13,6 +13,7 @@ pagination ceiling, which no single query can page past.
 
 S3 layout:
     bronze/discover/ingestion_date=YYYY-MM-DD/year=YYYY/page_NNNN.json
+    bronze/discover/ingestion_date=YYYY-MM-DD/recent/page_NNNN.json
 
 Returns the deduplicated list of discovered movie_ids, in the same shape as
 `ingest_movies()`, so the downstream detail/credits ingestion is unchanged.
@@ -116,6 +117,89 @@ def ingest_discover(
         "Discover ingestion complete: %d page(s) written, %d failed, "
         "%d unique movie_ids collected in %.2fs",
         pages_written, pages_failed, len(movie_ids), elapsed,
+    )
+    return movie_ids
+
+
+def ingest_discover_recent(
+    ingestion_date: dt.date | None = None,
+    client: TMDBClient | None = None,
+    days: int = config.DISCOVER_RECENT_DAYS,
+    pages: int = config.DISCOVER_RECENT_PAGES,
+    min_votes: int = config.DISCOVER_RECENT_MIN_VOTES,
+) -> list[int]:
+    """Fetch the most-voted films released in the last `days` days.
+
+    Companion to `ingest_discover()`. That function keeps the top N films of
+    each year *by vote count*, so a new release can only enter once it out-votes
+    the year's existing entries — which takes months, and by then it is no
+    longer new. This pass asks a different question ("what came out recently
+    and has real votes?") over a rolling window, with a lower vote floor, so a
+    film shows up within weeks of release. Anything it finds that the per-year
+    pass already has is deduplicated downstream.
+
+    Same fail-and-continue contract as `ingest_discover()`: each page is
+    flushed to S3 before the next is fetched.
+
+    Idempotent for a given ingestion_date; the window is anchored on that date,
+    so replaying an old partition asks the same question it did then.
+    """
+    if ingestion_date is None:
+        ingestion_date = dt.date.today()
+    if client is None:
+        client = TMDBClient()
+
+    window_start = ingestion_date - dt.timedelta(days=days)
+    t0 = time.monotonic()
+    logger.info(
+        "Starting recent-releases discovery: %s to %s, up to %d page(s), "
+        "min_votes=%d",
+        window_start, ingestion_date, pages, min_votes,
+    )
+
+    movie_ids: list[int] = []
+    seen: set[int] = set()
+    pages_written = 0
+    pages_failed = 0
+
+    for page in range(1, pages + 1):
+        try:
+            payload = client.discover_movies(
+                page=page,
+                min_votes=min_votes,
+                release_date_gte=window_start,
+                release_date_lte=ingestion_date,
+            )
+            results = payload.get("results", [])
+
+            key = s3_utils.build_path(
+                "bronze", "discover", ingestion_date, f"recent/page_{page:04d}.json"
+            )
+            s3_utils.write_json(config.S3_BUCKET, key, payload)
+            pages_written += 1
+
+            for movie in results:
+                movie_id = movie.get("id")
+                if movie_id is not None and movie_id not in seen:
+                    seen.add(movie_id)
+                    movie_ids.append(movie_id)
+
+            logger.info(
+                "recent page %d: %d result(s) (running total: %d)",
+                page, len(results), len(movie_ids),
+            )
+
+            if not results or page >= payload.get("total_pages", page):
+                break
+
+        except Exception as exc:
+            pages_failed += 1
+            logger.error("recent page %d failed, skipping: %s", page, exc)
+
+    logger.info(
+        "Recent-releases discovery complete: %d page(s) written, %d failed, "
+        "%d movie_id(s) collected in %.2fs",
+        pages_written, pages_failed, len(movie_ids), time.monotonic() - t0,
     )
     return movie_ids
 

@@ -124,6 +124,15 @@ DISCOVER_END_YEAR = int(_optional("DISCOVER_END_YEAR", "2026"))
 DISCOVER_PAGES_PER_YEAR = int(_optional("DISCOVER_PAGES_PER_YEAR", "1"))
 DISCOVER_MIN_VOTES = int(_optional("DISCOVER_MIN_VOTES", "300"))
 
+# Recent-releases pass (etl/bronze/ingest_discover.py::ingest_discover_recent).
+# The per-year top-N above ranks by vote count, so the current year fills with
+# months-old films and anything released in the last few weeks — still collecting
+# votes — never ranks. This pass looks at a rolling window instead, with a lower
+# floor, and adds whatever it finds on top of the per-year corpus.
+DISCOVER_RECENT_DAYS = int(_optional("DISCOVER_RECENT_DAYS", "120"))
+DISCOVER_RECENT_PAGES = int(_optional("DISCOVER_RECENT_PAGES", "3"))
+DISCOVER_RECENT_MIN_VOTES = int(_optional("DISCOVER_RECENT_MIN_VOTES", "100"))
+
 # Corpus design for the `discover/tv` source (etl/bronze/ingest_discover_tv.py),
 # the TV counterpart of the DISCOVER_* block above. The defaults deliberately
 # match the movie values so turning TV on (Task 85) needs no new .env entry:

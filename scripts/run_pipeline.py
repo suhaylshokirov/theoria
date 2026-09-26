@@ -29,7 +29,7 @@ from data_quality.warehouse_checks import run_warehouse_checks
 from etl import s3_utils
 from etl.bronze.ingest_companies import ingest_companies
 from etl.bronze.ingest_credits import ingest_credits
-from etl.bronze.ingest_discover import ingest_discover
+from etl.bronze.ingest_discover import ingest_discover, ingest_discover_recent
 from etl.bronze.ingest_discover_tv import ingest_discover_tv
 from etl.bronze.ingest_genres import ingest_genres
 from etl.bronze.ingest_imdb_episodes import ingest_imdb_episodes
@@ -208,7 +208,8 @@ def run_pipeline(
 
     `source` selects which Bronze catalogue defines the corpus: "popular"
     (whatever TMDB is featuring today) or "discover" (the most-voted films of
-    each year in a configured range). Everything downstream is identical —
+    each year in a configured range, plus the recent-releases window that
+    the per-year ranking can't reach). Everything downstream is identical —
     both return a plain list of movie_ids.
 
     The TV series path runs unconditionally (Task 85 removed the `--with-tv`
@@ -240,6 +241,10 @@ def run_pipeline(
     ingest_genres(ingestion_date=ingestion_date, with_tv=True)
     if source == "discover":
         movie_ids = ingest_discover(ingestion_date=ingestion_date)
+        # The per-year top-N ranks by votes, so it cannot see films released in
+        # the last few weeks; this rolling-window pass adds them.
+        recent_ids = ingest_discover_recent(ingestion_date=ingestion_date)
+        movie_ids = list(dict.fromkeys(movie_ids + recent_ids))
     else:
         movie_ids = ingest_movies(ingestion_date=ingestion_date, max_pages=max_pages)
     logger.info("Bronze %s: %d movie_id(s) discovered", source, len(movie_ids))

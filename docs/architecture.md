@@ -74,6 +74,17 @@ The four `DISCOVER_*` values in `config.py` therefore define the dataset, not th
 lowering `DISCOVER_MIN_VOTES` doesn't make the pipeline slower, it makes the warehouse describe a
 different population.
 
+**The per-year ranking has a blind spot: new releases.** It keeps the top `DISCOVER_PAGES_PER_YEAR`
+pages *by vote count*, and a film needs months to out-vote the year's earlier entries. In
+September 2026 the 20th-ranked film of 2026 had 1,946 votes, while nine August–September releases
+with 500–1,500 votes sat below the cut — so the warehouse had no film after 2026-07-29 even though
+the pipeline ran green every night. `ingest_discover_recent()` closes that: a second query over a
+rolling window (`DISCOVER_RECENT_DAYS`, default 120) with a lower floor (`DISCOVER_RECENT_MIN_VOTES`,
+default 100), merged with the per-year ids in `run_pipeline --source discover`. The two answer
+different questions — "which films define each year" vs. "what came out lately" — so neither
+replaces the other. Once a film is in the warehouse the nightly refresh keeps it current; discovery
+itself only runs weekly, so a release can take up to a week to appear.
+
 ### 2.2 Why S3, and why three layers instead of loading straight into Postgres
 
 - **Bronze is the immutable source of truth.** Raw API responses are never edited in place. If a

@@ -347,7 +347,7 @@ def test_ingest_movies_partial_failure_does_not_lose_written_pages():
 
 # --- ingest_discover ----------------------------------------------------------
 
-from etl.bronze.ingest_discover import ingest_discover
+from etl.bronze.ingest_discover import ingest_discover, ingest_discover_recent
 
 
 def _discover_page(page: int, ids: list[int], total_pages: int = 1) -> dict:
@@ -461,6 +461,71 @@ def test_ingest_discover_stops_early_when_year_has_no_more_pages():
         )
 
     assert mock_client.discover_movies.call_count == 1
+
+
+def test_discover_movies_sends_release_date_window():
+    """A date window must become primary_release_date.gte/lte, ISO-formatted."""
+    client = _client()
+    with patch.object(
+        client.session, "get", return_value=_fake_response(200, {"results": []})
+    ) as mock_get:
+        client.discover_movies(
+            release_date_gte=dt.date(2026, 5, 29), release_date_lte=dt.date(2026, 9, 26)
+        )
+
+    params = mock_get.call_args[1]["params"]
+    assert params["primary_release_date.gte"] == "2026-05-29"
+    assert params["primary_release_date.lte"] == "2026-09-26"
+    assert "primary_release_year" not in params
+
+
+def test_ingest_discover_recent_queries_rolling_window_and_writes_bronze():
+    """The window is anchored on the ingestion date and lands under recent/."""
+    mock_client = MagicMock()
+    mock_client.discover_movies.side_effect = [
+        _discover_page(1, [10, 20], total_pages=2),
+        _discover_page(2, [20, 30], total_pages=2),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ids = ingest_discover_recent(
+            ingestion_date=dt.date(2026, 9, 26),
+            client=mock_client,
+            days=120,
+            pages=3,
+            min_votes=100,
+        )
+
+    assert ids == [10, 20, 30]  # deduplicated across pages, order kept
+    first = mock_client.discover_movies.call_args_list[0][1]
+    assert first["release_date_gte"] == dt.date(2026, 5, 29)
+    assert first["release_date_lte"] == dt.date(2026, 9, 26)
+    assert first["min_votes"] == 100
+    keys = [call[1]["Key"] for call in mock_s3.put_object.call_args_list]
+    assert "bronze/discover/ingestion_date=2026-09-26/recent/page_0001.json" in keys
+    assert "bronze/discover/ingestion_date=2026-09-26/recent/page_0002.json" in keys
+    assert mock_client.discover_movies.call_count == 2  # stopped at total_pages
+
+
+def test_ingest_discover_recent_continues_after_a_failed_page():
+    """One failing page must not lose the pages around it."""
+    mock_client = MagicMock()
+    mock_client.discover_movies.side_effect = [
+        _discover_page(1, [10], total_pages=3),
+        RuntimeError("boom"),
+        _discover_page(3, [30], total_pages=3),
+    ]
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        ids = ingest_discover_recent(
+            ingestion_date=dt.date(2026, 9, 26), client=mock_client, pages=3
+        )
+
+    assert ids == [10, 30]
 
 
 # --- ingest_movie_details -----------------------------------------------------

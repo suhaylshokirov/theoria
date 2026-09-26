@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import time
 from typing import Any
@@ -148,6 +149,8 @@ class TMDBClient:
         release_year: int | None = None,
         min_votes: int | None = None,
         sort_by: str = "vote_count.desc",
+        release_date_gte: dt.date | None = None,
+        release_date_lte: dt.date | None = None,
     ) -> dict[str, Any]:
         """One page of `discover/movie`, filtered to a defined population.
 
@@ -156,10 +159,19 @@ class TMDBClient:
         minimum vote count (to keep obscure entries out), and a sort order.
         Paging one year at a time also sidesteps TMDB's pagination ceiling,
         which no single query can page past.
+
+        `release_date_gte`/`release_date_lte` bound the primary release date
+        instead of a whole year — the recent-releases pass uses them to look at
+        a rolling window that a per-year top-N never reaches (see
+        `ingest_discover_recent`).
         """
         params: dict[str, Any] = {"page": page, "sort_by": sort_by}
         if release_year is not None:
             params["primary_release_year"] = release_year
+        if release_date_gte is not None:
+            params["primary_release_date.gte"] = release_date_gte.isoformat()
+        if release_date_lte is not None:
+            params["primary_release_date.lte"] = release_date_lte.isoformat()
         if min_votes is not None:
             params["vote_count.gte"] = min_votes
         return self.get("discover/movie", params=params)
