@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -57,3 +58,19 @@ def test_gemini_reply_sends_compact_taste_and_candidate_context():
 def test_gemini_reply_falls_back_when_the_provider_is_unavailable():
     with patch("assistant.gemini.config.GEMINI_API_KEY", ""):
         assert generate_companion_reply("Anything good?", {}, [_candidate()]) is None
+
+
+def test_gemini_reply_accepts_decimal_ratings_from_the_warehouse():
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(output_text="Arrival fits.")
+    provider = SimpleNamespace(Client=Mock(return_value=client))
+    candidate = {**_candidate(), "imdb_rating": Decimal("7.9")}
+
+    with (
+        patch("assistant.gemini.config.GEMINI_API_KEY", "test-key"),
+        patch("assistant.gemini.genai", provider),
+    ):
+        reply = generate_companion_reply("Something smart", {}, [candidate])
+
+    assert reply == "Arrival fits."
+    assert '"imdb_rating": 7.9' in client.interactions.create.call_args.kwargs["input"]

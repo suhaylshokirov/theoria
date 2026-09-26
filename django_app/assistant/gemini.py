@@ -61,7 +61,7 @@ option has status 'on_list', say it is already on their Watch later list. Give
 one short paragraph (no headings, no markdown list), maximum 100 words.
 
 Theoria context:
-""" + json.dumps(context, ensure_ascii=True)
+""" + json.dumps(context, ensure_ascii=True, default=float)  # ratings arrive as Decimal
 
 
 def generate_companion_reply(message, taste_summary, candidates):
