@@ -160,6 +160,11 @@ IMDB_EPISODES_URL = _optional("IMDB_EPISODES_URL", "https://datasets.imdbws.com/
 DJANGO_SECRET_KEY = _require("DJANGO_SECRET_KEY", role="web")
 DJANGO_DEBUG = _optional("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 
+# --- Google Gemini ----------------------------------------------------------
+# This stays empty until the AI companion is enabled. It is intentionally read
+# by server-side Python only, never by browser JavaScript.
+GEMINI_API_KEY = _optional("GEMINI_API_KEY", "")
+
 # --- Email delivery --------------------------------------------------------
 # settings.py picks the backend itself, based on whether EMAIL_HOST is set --
 # there is no EMAIL_BACKEND variable here. Leave EMAIL_HOST blank locally and

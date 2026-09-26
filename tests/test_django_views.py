@@ -914,10 +914,11 @@ def test_series_detail_returns_200_with_expected_context():
     # The collection-actions include must receive csrf_token despite `only`,
     # or every Like/Watch later/Top click on this page 403s. base.html's own
     # sign-out forms (desktop account popover + mobile header menu) always
-    # render two tokens, and the language switcher a third, so a plain "in"
-    # check can't tell them apart -- count instead: 3 (sign-out x2 + language
-    # switcher) + 3 (Like/Watch later/Top) with the include fixed, 3 without.
-    assert response.content.count(b"csrfmiddlewaretoken") == 6
+    # render two tokens, the language switcher a third and the film-guide chat
+    # form a fourth, so a plain "in" check can't tell them apart -- count
+    # instead: 4 (sign-out x2 + language switcher + film guide) + 3 (Like/Watch
+    # later/Top) with the include fixed, 4 without.
+    assert response.content.count(b"csrfmiddlewaretoken") == 7
 
 
 def test_series_detail_404_when_missing():
@@ -1385,10 +1386,11 @@ def test_movie_detail_returns_200_with_expected_context():
     # The collection-actions include must receive csrf_token despite `only`,
     # or every Like/Watch later/Top click on this page 403s. base.html's own
     # sign-out forms (desktop account popover + mobile header menu) always
-    # render two tokens, and the language switcher a third, so a plain "in"
-    # check can't tell them apart -- count instead: 3 (sign-out x2 + language
-    # switcher) + 3 (Like/Watch later/Top) with the include fixed, 3 without.
-    assert response.content.count(b"csrfmiddlewaretoken") == 6
+    # render two tokens, the language switcher a third and the film-guide chat
+    # form a fourth, so a plain "in" check can't tell them apart -- count
+    # instead: 4 (sign-out x2 + language switcher + film guide) + 3 (Like/Watch
+    # later/Top) with the include fixed, 4 without.
+    assert response.content.count(b"csrfmiddlewaretoken") == 7
 
 
 def test_movie_detail_renders_studios_as_links():

@@ -805,13 +805,15 @@
     var input = root.querySelector("[data-ai-input]");
     var send = form.querySelector("button[type='submit']");
     var actions = root.querySelectorAll("[data-ai-prompt]");
-
-    // The buttons carry a stable key (data-ai-prompt="tonight"), not their
-    // English label: the label is translated, the key is what picks the reply.
-    var replies = {
-      tonight: t("Pick for tonight"),
-      mood: t("Find by mood"),
-      surprise: t("Surprise me")
+    var chatEndpoint = root.getAttribute("data-ai-chat-endpoint");
+    var feedbackEndpoint = root.getAttribute("data-ai-feedback-endpoint");
+    var authenticated = root.getAttribute("data-ai-authenticated") === "true";
+    var csrf = form.querySelector("[name='csrfmiddlewaretoken']");
+    var pending = false;
+    var promptRequests = {
+      tonight: "Pick a movie for tonight",
+      mood: "Find a movie for my mood",
+      surprise: "Surprise me with a movie"
     };
 
     function setOpen(open) {
@@ -825,23 +827,126 @@
       }
     }
 
-    function addMessage(text, role) {
+    function addMessage(text, role, extraClass) {
       var message = document.createElement("div");
       message.className = "ai-message ai-message-" + role;
+      if (extraClass) message.classList.add(extraClass);
       var paragraph = document.createElement("p");
       paragraph.textContent = text;
       message.appendChild(paragraph);
       messages.appendChild(message);
       messages.scrollTop = messages.scrollHeight;
+      return message;
     }
 
-    function respond(prompt, shown) {
+    function setPending(nextPending) {
+      pending = nextPending;
+      input.disabled = nextPending;
+      actions.forEach(function (action) { action.disabled = nextPending; });
+      send.disabled = nextPending || !input.value.trim();
+      messages.setAttribute("aria-busy", nextPending ? "true" : "false");
+    }
+
+    function requestJson(endpoint, payload) {
+      return fetch(endpoint, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          "X-CSRFToken": csrf ? csrf.value : ""
+        },
+        body: JSON.stringify(payload)
+      }).then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (data) {
+          return { ok: response.ok, data: data };
+        });
+      });
+    }
+
+    function addRecommendations(recommendations) {
+      recommendations.forEach(function (recommendation) {
+        var card = document.createElement("article");
+        card.className = "ai-recommendation";
+        var title = document.createElement(recommendation.url ? "a" : "span");
+        title.className = "ai-recommendation-title";
+        title.textContent = recommendation.title;
+        if (recommendation.url) title.href = recommendation.url;
+        card.appendChild(title);
+
+        var status = document.createElement("p");
+        status.className = "ai-recommendation-status";
+        status.textContent = recommendation.status === "on_list" ? "On your Watch later list" : "New pick";
+        card.appendChild(status);
+
+        var reason = document.createElement("p");
+        reason.className = "ai-recommendation-reason";
+        reason.textContent = recommendation.reason;
+        card.appendChild(reason);
+
+        var feedback = document.createElement("div");
+        feedback.className = "ai-recommendation-feedback";
+        [
+          { action: "watched", label: "Already watched" },
+          { action: "not_interested", label: "Not for me" }
+        ].forEach(function (item) {
+          var button = document.createElement("button");
+          button.type = "button";
+          button.textContent = item.label;
+          button.addEventListener("click", function () {
+            feedback.querySelectorAll("button").forEach(function (control) { control.disabled = true; });
+            requestJson(feedbackEndpoint, {
+              action: item.action,
+              content_id: recommendation.content_id,
+              content_type: recommendation.content_type
+            }).then(function (result) {
+              if (result.ok) {
+                feedback.textContent = result.data.message;
+              } else {
+                feedback.textContent = result.data.error || "That feedback could not be saved.";
+              }
+            }).catch(function () {
+              feedback.textContent = "That feedback could not be saved.";
+            });
+          });
+          feedback.appendChild(button);
+        });
+        card.appendChild(feedback);
+        messages.appendChild(card);
+      });
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function signInMessage() {
+      addMessage("Sign in first and I can use your lists to make a personal recommendation.", "assistant");
+    }
+
+    async function respond(prompt, shown) {
+      if (pending) return;
+      if (!authenticated) {
+        signInMessage();
+        return;
+      }
       addMessage(shown || prompt, "user");
       input.value = "";
-      send.disabled = true;
-      window.setTimeout(function () {
-        addMessage(replies[prompt] || t("assistant fallback"), "assistant");
-      }, 260);
+      setPending(true);
+      var thinking = addMessage("Finding a few good picks...", "assistant", "ai-message-thinking");
+
+      try {
+        var result = await requestJson(chatEndpoint, { message: prompt });
+        thinking.remove();
+        if (!result.ok) {
+          addMessage(result.data.error || "The guide could not answer just now. Please try again.", "assistant");
+          return;
+        }
+        addMessage(result.data.reply, "assistant");
+        addRecommendations(result.data.recommendations || []);
+      } catch (error) {
+        thinking.remove();
+        addMessage("The guide could not answer just now. Please try again.", "assistant");
+      } finally {
+        setPending(false);
+    }
     }
 
     trigger.addEventListener("click", function () {
@@ -854,7 +959,8 @@
 
     actions.forEach(function (action) {
       action.addEventListener("click", function () {
-        respond(action.getAttribute("data-ai-prompt"), action.textContent.trim());
+        var promptKey = action.getAttribute("data-ai-prompt");
+        respond(promptRequests[promptKey] || promptKey, action.textContent.trim());
       });
     });
 

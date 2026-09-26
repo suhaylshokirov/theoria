@@ -36,6 +36,7 @@ urlpatterns += i18n_patterns(
     # An unprefixed endpoint would resolve a reader's /ru/... `next` as
     # English, fail to translate it, and leave them on the Russian page.
     path('i18n/', include('django.conf.urls.i18n')),
+    path('assistant/', include('assistant.urls')),
     path('account/', include(account_urls)),
     path('analytics/', include('analytics.urls')),
     path('accounts/', include('accounts.urls')),
