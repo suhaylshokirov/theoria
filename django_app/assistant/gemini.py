@@ -54,14 +54,22 @@ def _prompt(message, taste_summary, candidates):
             for candidate in candidates
         ],
     }
-    return """You are Theoria's warm, concise movie companion. Explain why the
+    if candidates:
+        instructions = """You are Theoria's warm, concise movie companion. Explain why the
 movie options below fit this person's request and stored taste. Recommend only
 movies in movie_options. Never claim to know anything outside this data. If an
 option has status 'on_list', say it is already on their Watch later list. Give
-one short paragraph (no headings, no markdown list), maximum 100 words.
+one short paragraph (no headings, no markdown list), maximum 100 words."""
+    else:
+        instructions = """You are Theoria's warm, concise movie companion. The person is
+asking about their own taste, not for new picks. Using only the taste data
+below, describe the pattern you see in what they like, dislike, and watch.
+Do not suggest or invent any specific movies. Give one short paragraph (no
+headings, no markdown list), maximum 100 words."""
 
-Theoria context:
-""" + json.dumps(context, ensure_ascii=True, default=float)  # ratings arrive as Decimal
+    return instructions + "\n\nTheoria context:\n" + json.dumps(
+        context, ensure_ascii=True, default=float
+    )  # ratings arrive as Decimal
 
 
 def generate_companion_reply(message, taste_summary, candidates):

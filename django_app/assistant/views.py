@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from assistant.gemini import generate_companion_reply
-from core.recommendations import select_movie_candidates
+from core.recommendations import is_taste_assessment, select_movie_candidates
 from core.services import build_taste_summary, record_title_feedback
 
 MAX_MESSAGE_LENGTH = 300
@@ -58,6 +58,16 @@ def chat(request):
         return JsonResponse({"error": "Tell the guide what you feel like watching."}, status=400)
     if len(message) > MAX_MESSAGE_LENGTH:
         return JsonResponse({"error": "Keep your message under 300 characters."}, status=400)
+
+    if is_taste_assessment(message):
+        taste_summary = build_taste_summary(request.user)
+        reply = generate_companion_reply(message, taste_summary, [])
+        return JsonResponse(
+            {
+                "reply": reply or "Like or watch a few more movies and ask me again — I need more to go on.",
+                "recommendations": [],
+            }
+        )
 
     candidates = select_movie_candidates(request.user, message)
     if not candidates:

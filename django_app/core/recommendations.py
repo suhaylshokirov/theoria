@@ -17,6 +17,19 @@ from core.services import build_taste_summary
 MAX_RESULTS = 3
 CATALOGUE_POOL_SIZE = 30
 
+ASSESSMENT_PHRASES = (
+    "my taste",
+    "assess",
+    "opinion",
+    "what do you think",
+    "how would you describe",
+    "review my",
+    "analyze my",
+    "analyse my",
+    "describe my",
+    "understand my",
+)
+
 GENRE_WORDS = {
     "action": "Action",
     "animated": "Animation",
@@ -36,6 +49,12 @@ GENRE_WORDS = {
     "science fiction": "Science Fiction",
     "thriller": "Thriller",
 }
+
+
+def is_taste_assessment(request_text):
+    """True when the person is asking about their taste, not for new picks."""
+    message = request_text.lower()
+    return any(phrase in message for phrase in ASSESSMENT_PHRASES)
 
 
 def read_request_constraints(request_text):

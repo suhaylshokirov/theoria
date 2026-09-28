@@ -87,6 +87,39 @@ def test_chat_returns_rule_based_recommendations_for_signed_in_user():
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
+def test_chat_skips_recommendations_for_a_taste_assessment_request():
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="assistant-reader")
+    client = Client()
+    client.force_login(user)
+    try:
+        with (
+            patch("assistant.views.select_movie_candidates") as select_candidates,
+            patch("assistant.views.build_taste_summary", return_value={}),
+            patch(
+                "assistant.views.generate_companion_reply",
+                return_value="You lean toward thoughtful sci-fi and steer clear of horror.",
+            ) as generate_reply,
+        ):
+            response = client.post(
+                reverse("assistant:chat"),
+                data=json.dumps({"message": "What do you think of my taste in movies?"}),
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["recommendations"] == []
+        assert payload["reply"] == "You lean toward thoughtful sci-fi and steer clear of horror."
+        select_candidates.assert_not_called()
+        generate_reply.assert_called_once_with(
+            "What do you think of my taste in movies?", {}, []
+        )
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
 def test_feedback_records_the_selected_action():
     User.objects.filter(email=_TEST_EMAIL).delete()
     user = User.objects.create_user(email=_TEST_EMAIL, username="assistant-reader")

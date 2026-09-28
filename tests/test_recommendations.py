@@ -18,10 +18,20 @@ django.setup()
 
 from core.models import Collection  # noqa: E402
 from core.recommendations import (  # noqa: E402
+    is_taste_assessment,
     rank_movie_candidates,
     read_request_constraints,
     select_movie_candidates,
 )
+
+
+def test_is_taste_assessment_detects_opinion_requests():
+    assert is_taste_assessment("What do you think of my taste in movies?")
+    assert is_taste_assessment("Can you assess my taste?")
+
+
+def test_is_taste_assessment_ignores_recommendation_requests():
+    assert not is_taste_assessment("Something funny under 100 minutes")
 
 
 def _title(content_id, content_type="movie"):
