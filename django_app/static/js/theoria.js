@@ -930,7 +930,7 @@
       addMessage(shown || prompt, "user");
       input.value = "";
       setPending(true);
-      var thinking = addMessage("Finding a few good picks...", "assistant", "ai-message-thinking");
+      var thinking = addMessage("Thinking…", "assistant", "ai-message-thinking");
 
       try {
         var result = await requestJson(chatEndpoint, { message: prompt });
