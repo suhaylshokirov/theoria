@@ -823,6 +823,7 @@
     var promptRequests = {
       tonight: "Pick a movie for tonight",
       mood: "Find a movie for my mood",
+      genre: "Help me browse movies by genre",
       surprise: "Surprise me with a movie"
     };
 

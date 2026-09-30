@@ -1906,8 +1906,8 @@ msgid "Yes, sign out"
 msgstr "Да, выйти"
 
 #: templates/base.html:288
-msgid "Film guide"
-msgstr "Помощник по фильмам"
+msgid "Theoria assistant"
+msgstr "Ассистент Theoria"
 
 #: templates/base.html:291
 msgid "Expand film guide"
@@ -1930,28 +1930,36 @@ msgid "Close"
 msgstr "Закрыть"
 
 #: templates/base.html:299
-msgid "What would you like to watch?"
-msgstr "Что хотите посмотреть?"
+msgid "👋 Hi there! Want to find a movie to watch? I’m here to help."
+msgstr "👋 Здравствуйте! Хотите найти фильм для просмотра? Я помогу."
+
+#: templates/base.html:302
+msgid "Ask me or select an option below."
+msgstr "Спросите меня или выберите вариант ниже."
 
 #: templates/base.html:304
-msgid "Pick for tonight"
-msgstr "Выбор на вечер"
+msgid "🍿 Pick for tonight"
+msgstr "🍿 Выбор на вечер"
 
 #: templates/base.html:305
-msgid "Find by mood"
-msgstr "Подбор по настроению"
+msgid "😊 Find by mood"
+msgstr "😊 Подбор по настроению"
+
+#: templates/base.html:307
+msgid "🎬 Browse by genre"
+msgstr "🎬 Выбрать по жанру"
 
 #: templates/base.html:306
-msgid "Surprise me"
-msgstr "Удивите меня"
+msgid "🎲 Surprise me"
+msgstr "🎲 Удивите меня"
 
 #: templates/base.html:310
 msgid "Message the film guide"
 msgstr "Сообщение помощнику"
 
 #: templates/base.html:311
-msgid "Describe your mood"
-msgstr "Опишите настроение"
+msgid "Ask me anything about movies..."
+msgstr "Спросите меня о фильмах..."
 
 #: templates/base.html:312
 msgid "Send message"
