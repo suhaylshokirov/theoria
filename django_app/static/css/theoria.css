@@ -3052,12 +3052,19 @@ html.has-js .bio-body.is-collapsed {
   border: 1px solid var(--rule-strong);
   border-radius: 4px;
   box-shadow: 0 18px 48px rgba(11, 11, 11, 0.22);
-  transition: width var(--dur) var(--ease), height var(--dur) var(--ease);
+  transition: width var(--dur) var(--ease), height var(--dur) var(--ease),
+              opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 
 .ai-assistant-panel.is-expanded {
   width: min(640px, calc(100vw - 2 * var(--space-6)));
   height: min(720px, calc(100vh - 112px));
+}
+
+.ai-assistant-panel.is-closing {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
 }
 
 .ai-assistant-header {
