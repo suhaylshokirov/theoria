@@ -1909,6 +1909,14 @@ msgstr "Да, выйти"
 msgid "Film guide"
 msgstr "Помощник по фильмам"
 
+#: templates/base.html:324
+msgid "Hi — not sure what to watch?"
+msgstr "Не знаете, что посмотреть?"
+
+#: templates/base.html:325
+msgid "Tell me a mood, genre, or how much time you have."
+msgstr "Назовите настроение, жанр или сколько у вас времени."
+
 #: templates/base.html:290
 msgid "Close"
 msgstr "Закрыть"

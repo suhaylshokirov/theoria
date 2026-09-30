@@ -2893,6 +2893,150 @@ html.has-js .bio-body.is-collapsed {
   transform: translateY(-50%);
 }
 
+.ai-assistant-welcome {
+  position: absolute;
+  right: 0;
+  bottom: 68px;
+  width: min(310px, calc(100vw - 2 * var(--space-6)));
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  box-shadow: 0 18px 48px rgba(11, 11, 11, 0.22);
+  animation: ai-assistant-welcome-in 420ms var(--ease) both;
+}
+
+.ai-assistant-welcome[hidden] {
+  display: none;
+}
+
+.ai-assistant-welcome::after {
+  position: absolute;
+  right: 23px;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  background: var(--paper);
+  border-right: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-strong);
+  content: "";
+  transform: rotate(45deg);
+}
+
+.ai-assistant-welcome-open {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-5) var(--space-6) var(--space-5) var(--space-5);
+  color: inherit;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  font-weight: 400;
+  font-stretch: normal;
+  letter-spacing: normal;
+  text-align: left;
+  text-transform: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: default;
+  transition: none;
+}
+
+.ai-assistant-welcome-open:hover,
+.ai-assistant-welcome-open:active {
+  color: var(--ink);
+  background: transparent;
+  border-color: transparent;
+  text-decoration: none;
+}
+
+.ai-assistant-welcome-open:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+
+.ai-assistant-welcome-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: var(--ink);
+  background: var(--lime);
+  border-radius: 50%;
+}
+
+.ai-assistant-welcome-mark svg {
+  width: 18px;
+  height: 22px;
+}
+
+.ai-assistant-welcome-copy {
+  display: grid;
+  gap: var(--space-2);
+  padding-right: var(--space-3);
+}
+
+.ai-assistant-welcome-copy strong {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.ai-assistant-welcome-copy span {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.ai-assistant-welcome-close {
+  position: absolute;
+  z-index: 2;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.ai-assistant-welcome-close:hover,
+.ai-assistant-welcome-close:focus-visible {
+  color: var(--ink);
+  background: var(--lime-wash);
+  outline: none;
+}
+
+.ai-assistant-welcome-close:focus-visible {
+  box-shadow: 0 0 0 2px var(--lime-mark);
+}
+
+.ai-assistant-welcome-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+@keyframes ai-assistant-welcome-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .ai-assistant-panel {
   position: absolute;
   right: 0;
@@ -3354,6 +3498,13 @@ a.ai-recommendation-title:focus-visible {
     bottom: 80px;
     width: calc(100vw - 2 * var(--space-4));
     height: min(560px, calc(100dvh - 104px));
+  }
+
+  .ai-assistant-welcome {
+    position: fixed;
+    right: var(--space-4);
+    bottom: 80px;
+    width: min(310px, calc(100vw - 2 * var(--space-4)));
   }
 }
 

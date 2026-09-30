@@ -1876,6 +1876,14 @@ msgstr "Ha, chiqaman"
 msgid "Film guide"
 msgstr "Film yordamchisi"
 
+#: templates/base.html:324
+msgid "Hi — not sure what to watch?"
+msgstr "Nima tomosha qilishni bilmayapsizmi?"
+
+#: templates/base.html:325
+msgid "Tell me a mood, genre, or how much time you have."
+msgstr "Kayfiyatingizni, janrni yoki qancha vaqtingiz borligini ayting."
+
 #: templates/base.html:290
 msgid "Close"
 msgstr "Yopish"

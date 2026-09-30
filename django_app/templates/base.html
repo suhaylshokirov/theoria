@@ -307,6 +307,26 @@
             </form>
         </section>
 
+        <aside class="ai-assistant-welcome" data-ai-welcome aria-labelledby="ai-assistant-welcome-title" hidden>
+            <button type="button" class="ai-assistant-welcome-close" data-ai-welcome-close aria-label="{% translate "Close film guide" %}" title="{% translate "Close" %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6L6 18"/>
+                </svg>
+            </button>
+            <button type="button" class="ai-assistant-welcome-open" data-ai-welcome-open>
+                <span class="ai-assistant-welcome-mark" aria-hidden="true">
+                    <svg viewBox="0 0 26 32" focusable="false">
+                        <ellipse cx="13" cy="16" rx="9.9" ry="13.3" fill="none" stroke="currentColor" stroke-width="4.4"/>
+                        <rect x="3.8" y="12.8" width="18.4" height="6.4" fill="#a3e635"/>
+                    </svg>
+                </span>
+                <span class="ai-assistant-welcome-copy">
+                    <strong id="ai-assistant-welcome-title">{% translate "Hi — not sure what to watch?" %}</strong>
+                    <span>{% translate "Tell me a mood, genre, or how much time you have." %}</span>
+                </span>
+            </button>
+        </aside>
+
         <button type="button" class="ai-assistant-trigger" data-ai-trigger data-label="{% translate "Get a film pick" %}" aria-expanded="false" aria-controls="ai-assistant-panel" aria-label="{% translate "Get a film pick" %}" title="{% translate "Get a film pick" %}">
             <svg viewBox="0 0 26 32" aria-hidden="true" focusable="false">
                 <ellipse cx="13" cy="16" rx="9.9" ry="13.3" fill="none" stroke="currentColor" stroke-width="4.4"/>

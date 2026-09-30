@@ -800,6 +800,9 @@
     var trigger = root.querySelector("[data-ai-trigger]");
     var panel = root.querySelector("#ai-assistant-panel");
     var close = root.querySelector("[data-ai-close]");
+    var welcome = root.querySelector("[data-ai-welcome]");
+    var welcomeOpen = root.querySelector("[data-ai-welcome-open]");
+    var welcomeClose = root.querySelector("[data-ai-welcome-close]");
     var messages = root.querySelector("[data-ai-messages]");
     var form = root.querySelector("[data-ai-form]");
     var input = root.querySelector("[data-ai-input]");
@@ -811,7 +814,9 @@
     var csrf = form.querySelector("[name='csrfmiddlewaretoken']");
     var pending = false;
     var sessionStorageKey = "theoria-assistant-session";
+    var welcomeStorageKey = "theoria-assistant-welcome-dismissed";
     var sessionId = null;
+    var welcomeDismissed = false;
     var promptRequests = {
       tonight: "Pick a movie for tonight",
       mood: "Find a movie for my mood",
@@ -820,6 +825,7 @@
 
     try {
       sessionId = window.sessionStorage.getItem(sessionStorageKey);
+      welcomeDismissed = window.sessionStorage.getItem(welcomeStorageKey) === "true";
     } catch (error) {
       // Private browsing can deny storage; the server will begin a new chat
       // session for each request and the assistant remains usable.
@@ -832,6 +838,16 @@
         window.sessionStorage.setItem(sessionStorageKey, sessionId);
       } catch (error) {
         // The response still works when the browser declines storage.
+      }
+    }
+
+    function dismissWelcome() {
+      if (!welcome) return;
+      welcome.hidden = true;
+      try {
+        window.sessionStorage.setItem(welcomeStorageKey, "true");
+      } catch (error) {
+        // The greeting simply returns after a reload when storage is unavailable.
       }
     }
 
@@ -973,12 +989,24 @@
     }
 
     trigger.addEventListener("click", function () {
+      dismissWelcome();
       setOpen(panel.hidden);
     });
 
     close.addEventListener("click", function () {
       setOpen(false);
     });
+
+    if (welcomeOpen) {
+      welcomeOpen.addEventListener("click", function () {
+        dismissWelcome();
+        setOpen(true);
+      });
+    }
+
+    if (welcomeClose) {
+      welcomeClose.addEventListener("click", dismissWelcome);
+    }
 
     actions.forEach(function (action) {
       action.addEventListener("click", function () {
@@ -1006,6 +1034,12 @@
       trigger.setAttribute("aria-expanded", "false");
       trigger.setAttribute("aria-label", t("Open film guide"));
     });
+
+    if (welcome && !welcomeDismissed) {
+      window.setTimeout(function () {
+        if (panel.hidden) welcome.hidden = false;
+      }, 700);
+    }
   }
 
   /* --- Verify-code auto-advance --------------------------------------------
