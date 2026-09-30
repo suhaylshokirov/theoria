@@ -4,18 +4,22 @@ from __future__ import annotations
 
 import json
 
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.urls import reverse
-from django.views.decorators.http import require_POST
+from django.utils.translation import gettext as _
+from django.views.decorators.http import require_GET, require_POST
 
 from assistant.conversations import (
+    create_session,
     get_session,
     recent_recommendations,
+    recent_sessions,
     recent_turns,
     record_recommendations,
     record_turn,
 )
 from assistant.gemini import generate_companion_reply, plan_companion_message
+from assistant.models import ChatSession
 from core.recommendations import select_movie_candidates
 from core.services import build_taste_summary, record_title_feedback
 
@@ -52,6 +56,53 @@ def _recommendation_response(candidate):
         "status": candidate["status"],
         "reason": candidate["reason"],
     }
+
+
+def _conversation_summary(session):
+    return {
+        "id": str(session.pk),
+        "title": session.title or _("New chat"),
+        "updated_at": session.updated_at.isoformat(),
+    }
+
+
+def _owned_session_or_404(user, session_id):
+    try:
+        return user.assistant_sessions.get(pk=session_id)
+    except (ChatSession.DoesNotExist, ValueError):
+        raise Http404("Chat not found")
+
+
+@require_GET
+def conversations(request):
+    if not request.user.is_authenticated:
+        return _sign_in_required()
+    return JsonResponse(
+        {"conversations": [_conversation_summary(session) for session in recent_sessions(request.user)]}
+    )
+
+
+@require_POST
+def new_conversation(request):
+    if not request.user.is_authenticated:
+        return _sign_in_required()
+    return JsonResponse({"conversation": _conversation_summary(create_session(request.user))}, status=201)
+
+
+@require_GET
+def conversation_detail(request, session_id):
+    if not request.user.is_authenticated:
+        return _sign_in_required()
+    try:
+        session = _owned_session_or_404(request.user, session_id)
+    except Http404:
+        return JsonResponse({"error": "Chat not found."}, status=404)
+    return JsonResponse(
+        {
+            "conversation": _conversation_summary(session),
+            "turns": list(session.turns.order_by("created_at").values("role", "message")),
+        }
+    )
 
 
 @require_POST

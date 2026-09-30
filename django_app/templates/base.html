@@ -268,6 +268,8 @@
 
     <div class="ai-assistant" data-ai-assistant data-ai-chat-endpoint="{% url 'assistant:chat' %}"
          data-ai-feedback-endpoint="{% url 'assistant:feedback' %}"
+         data-ai-conversations-endpoint="{% url 'assistant:conversations' %}"
+         data-ai-new-conversation-endpoint="{% url 'assistant:new_conversation' %}"
          data-ai-authenticated="{{ request.user.is_authenticated|yesno:'true,false' }}">
         <section class="ai-assistant-panel" id="ai-assistant-panel" aria-labelledby="ai-assistant-title" hidden>
             <header class="ai-assistant-header">
@@ -276,6 +278,16 @@
                     <h2 class="ai-assistant-title" id="ai-assistant-title">{% translate "Theoria assistant" %}</h2>
                 </div>
                 <div class="ai-assistant-controls">
+                    <button type="button" class="ai-assistant-new" data-ai-new aria-label="{% translate "New chat" %}" title="{% translate "New chat" %}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M12 5v14M5 12h14"/>
+                        </svg>
+                    </button>
+                    <button type="button" class="ai-assistant-history-toggle" data-ai-history-toggle aria-expanded="false" aria-controls="ai-assistant-history" aria-label="{% translate "Recent chats" %}" title="{% translate "Recent chats" %}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M4 6h16M4 12h16M4 18h10"/>
+                        </svg>
+                    </button>
                     <button type="button" class="ai-assistant-resize" data-ai-resize data-expand-label="{% translate "Expand film guide" %}" data-shrink-label="{% translate "Shrink film guide" %}" aria-pressed="false" aria-label="{% translate "Expand film guide" %}" title="{% translate "Expand film guide" %}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path class="ai-assistant-expand-icon" d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/>
@@ -289,6 +301,18 @@
                     </button>
                 </div>
             </header>
+
+            <aside class="ai-assistant-history" id="ai-assistant-history" data-ai-history hidden aria-labelledby="ai-assistant-history-title">
+                <div class="ai-assistant-history-header">
+                    <h3 id="ai-assistant-history-title">{% translate "Recent chats" %}</h3>
+                    <button type="button" class="ai-assistant-history-close" data-ai-history-close aria-label="{% translate "Close recent chats" %}" title="{% translate "Close" %}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                            <path d="M6 6l12 12M18 6L6 18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="ai-assistant-history-list" data-ai-history-list></div>
+            </aside>
 
             <div class="ai-assistant-messages" data-ai-messages role="log" aria-live="polite" aria-relevant="additions">
                 <div class="ai-message ai-message-assistant">

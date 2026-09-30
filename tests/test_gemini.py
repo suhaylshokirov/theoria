@@ -76,6 +76,26 @@ def test_gemini_reply_accepts_decimal_ratings_from_the_warehouse():
     assert '"imdb_rating": 7.9' in client.interactions.create.call_args.kwargs["input"]
 
 
+def test_gemini_reply_for_an_existing_chat_forbids_another_greeting():
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(output_text="Arrival fits.")
+    provider = SimpleNamespace(Client=Mock(return_value=client))
+
+    with (
+        patch("assistant.gemini.config.GEMINI_API_KEY", "test-key"),
+        patch("assistant.gemini.genai", provider),
+    ):
+        generate_companion_reply(
+            "Something fun",
+            {},
+            [_candidate()],
+            recent_turns=[{"role": "user", "message": "Hi"}],
+        )
+
+    prompt = client.interactions.create.call_args.kwargs["input"]
+    assert "do not greet, reintroduce" in prompt
+
+
 def test_gemini_conversation_plan_uses_history_and_returns_validated_intent():
     client = Mock()
     client.interactions.create.return_value = SimpleNamespace(

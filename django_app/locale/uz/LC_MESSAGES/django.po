@@ -1939,3 +1939,35 @@ msgstr "Yuborish"
 #: templates/base.html:321
 msgid "Get a film pick"
 msgstr "Film tanlash"
+
+#: templates/base.html:280
+msgid "New chat"
+msgstr "Yangi chat"
+
+#: templates/base.html:285
+msgid "Recent chats"
+msgstr "So‘nggi chatlar"
+
+#: templates/base.html:300
+msgid "Close recent chats"
+msgstr "So‘nggi chatlarni yopish"
+
+#: assistant/views.py:64
+msgid "Your last three chats will appear here."
+msgstr "Oxirgi uchta chattingiz shu yerda ko‘rinadi."
+
+#: core/context_processors.py:24
+msgid "Loading chats…"
+msgstr "Chatlar yuklanmoqda…"
+
+#: core/context_processors.py:25
+msgid "Your chats could not be loaded just now."
+msgstr "Chatlaringizni hozir yuklab bo‘lmadi. Qayta urinib ko‘ring."
+
+#: core/context_processors.py:26
+msgid "That chat could not be opened just now. Please try again."
+msgstr "Bu chatni hozir ochib bo‘lmadi. Qayta urinib ko‘ring."
+
+#: core/context_processors.py:29
+msgid "A new chat could not be started just now. Please try again."
+msgstr "Yangi chatni hozir boshlab bo‘lmadi. Qayta urinib ko‘ring."

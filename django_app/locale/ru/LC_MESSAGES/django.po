@@ -1972,3 +1972,35 @@ msgstr "Отправить"
 #: templates/base.html:321
 msgid "Get a film pick"
 msgstr "Подобрать фильм"
+
+#: templates/base.html:280
+msgid "New chat"
+msgstr "Новый чат"
+
+#: templates/base.html:285
+msgid "Recent chats"
+msgstr "Недавние чаты"
+
+#: templates/base.html:300
+msgid "Close recent chats"
+msgstr "Закрыть недавние чаты"
+
+#: assistant/views.py:64
+msgid "Your last three chats will appear here."
+msgstr "Здесь появятся ваши последние три чата."
+
+#: core/context_processors.py:24
+msgid "Loading chats…"
+msgstr "Загрузка чатов…"
+
+#: core/context_processors.py:25
+msgid "Your chats could not be loaded just now."
+msgstr "Не удалось загрузить чаты. Попробуйте ещё раз."
+
+#: core/context_processors.py:26
+msgid "That chat could not be opened just now. Please try again."
+msgstr "Не удалось открыть этот чат. Попробуйте ещё раз."
+
+#: core/context_processors.py:29
+msgid "A new chat could not be started just now. Please try again."
+msgstr "Не удалось начать новый чат. Попробуйте ещё раз."
