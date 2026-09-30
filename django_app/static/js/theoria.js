@@ -818,6 +818,8 @@
     var welcomeStorageKey = "theoria-assistant-welcome-dismissed";
     var sessionId = null;
     var welcomeDismissed = false;
+    var closeTimer = null;
+    var closeDuration = reduce ? 0 : 220;
     var promptRequests = {
       tonight: "Pick a movie for tonight",
       mood: "Find a movie for my mood",
@@ -853,12 +855,25 @@
     }
 
     function setOpen(open) {
-      panel.hidden = !open;
+      if (closeTimer) {
+        window.clearTimeout(closeTimer);
+        closeTimer = null;
+      }
+
       trigger.setAttribute("aria-expanded", open ? "true" : "false");
       trigger.setAttribute("aria-label", t(open ? "Close film guide" : "Open film guide"));
       if (open) {
+        panel.hidden = false;
+        panel.classList.remove("is-closing");
         window.setTimeout(function () { input.focus(); }, 0);
       } else {
+        if (panel.hidden) return;
+        panel.classList.add("is-closing");
+        closeTimer = window.setTimeout(function () {
+          panel.hidden = true;
+          panel.classList.remove("is-closing");
+          closeTimer = null;
+        }, closeDuration);
         trigger.focus();
       }
     }
@@ -1000,7 +1015,7 @@
 
     trigger.addEventListener("click", function () {
       dismissWelcome();
-      setOpen(panel.hidden);
+      setOpen(panel.hidden || panel.classList.contains("is-closing"));
     });
 
     close.addEventListener("click", function () {
@@ -1046,7 +1061,10 @@
     });
 
     window.addEventListener("pageshow", function () {
+      if (closeTimer) window.clearTimeout(closeTimer);
+      closeTimer = null;
       panel.hidden = true;
+      panel.classList.remove("is-closing");
       setExpanded(false);
       trigger.setAttribute("aria-expanded", "false");
       trigger.setAttribute("aria-label", t("Open film guide"));
