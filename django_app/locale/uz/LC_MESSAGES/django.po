@@ -1873,8 +1873,8 @@ msgid "Yes, sign out"
 msgstr "Ha, chiqaman"
 
 #: templates/base.html:288
-msgid "Film guide"
-msgstr "Film yordamchisi"
+msgid "Theoria assistant"
+msgstr "Theoria yordamchisi"
 
 #: templates/base.html:291
 msgid "Expand film guide"
@@ -1897,8 +1897,12 @@ msgid "Close"
 msgstr "Yopish"
 
 #: templates/base.html:299
-msgid "What would you like to watch?"
-msgstr "Nima koʻrmoqchisiz?"
+msgid "Hi there! I’m your personal film guide."
+msgstr "Salom! Men sizning shaxsiy film yordamchingizman."
+
+#: templates/base.html:302
+msgid "I’m here to help you discover something great to watch. Ask me anything, or choose an option below to get started."
+msgstr "Men sizga tomosha qilish uchun ajoyib film topishga yordam beraman. Istalgan savolni bering yoki boshlash uchun quyidagi variantlardan birini tanlang."
 
 #: templates/base.html:304
 msgid "Pick for tonight"
@@ -1907,6 +1911,10 @@ msgstr "Bugun kechqurun uchun tanlov"
 #: templates/base.html:305
 msgid "Find by mood"
 msgstr "Kayfiyat boʻyicha topish"
+
+#: templates/base.html:307
+msgid "Browse by genre"
+msgstr "Janr bo‘yicha tanlash"
 
 #: templates/base.html:306
 msgid "Surprise me"
@@ -1917,8 +1925,8 @@ msgid "Message the film guide"
 msgstr "Yordamchiga xabar"
 
 #: templates/base.html:311
-msgid "Describe your mood"
-msgstr "Kayfiyatingizni tasvirlang"
+msgid "Ask me anything about movies..."
+msgstr "Filmlar haqida istalgan savolni bering..."
 
 #: templates/base.html:312
 msgid "Send message"

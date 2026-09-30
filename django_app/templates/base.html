@@ -273,7 +273,7 @@
             <header class="ai-assistant-header">
                 <div>
                     <p class="ai-assistant-kicker">THEORIA</p>
-                    <h2 class="ai-assistant-title" id="ai-assistant-title">{% translate "Film guide" %}</h2>
+                    <h2 class="ai-assistant-title" id="ai-assistant-title">{% translate "Theoria assistant" %}</h2>
                 </div>
                 <div class="ai-assistant-controls">
                     <button type="button" class="ai-assistant-resize" data-ai-resize data-expand-label="{% translate "Expand film guide" %}" data-shrink-label="{% translate "Shrink film guide" %}" aria-pressed="false" aria-label="{% translate "Expand film guide" %}" title="{% translate "Expand film guide" %}">
@@ -292,20 +292,24 @@
 
             <div class="ai-assistant-messages" data-ai-messages role="log" aria-live="polite" aria-relevant="additions">
                 <div class="ai-message ai-message-assistant">
-                    <p>{% translate "What would you like to watch?" %}</p>
+                    <p>{% translate "Hi there! I’m your personal film guide." %}</p>
+                </div>
+                <div class="ai-message ai-message-assistant">
+                    <p>{% translate "I’m here to help you discover something great to watch. Ask me anything, or choose an option below to get started." %}</p>
                 </div>
             </div>
 
             <div class="ai-assistant-actions" data-ai-actions>
                 <button type="button" data-ai-prompt="tonight">{% translate "Pick for tonight" %}</button>
                 <button type="button" data-ai-prompt="mood">{% translate "Find by mood" %}</button>
+                <button type="button" data-ai-prompt="genre">{% translate "Browse by genre" %}</button>
                 <button type="button" data-ai-prompt="surprise">{% translate "Surprise me" %}</button>
             </div>
 
             <form class="ai-assistant-form" data-ai-form>
                 {% csrf_token %}
                 <label class="visually-hidden" for="ai-assistant-input">{% translate "Message the film guide" %}</label>
-                <input id="ai-assistant-input" data-ai-input type="text" maxlength="300" placeholder="{% translate "Describe your mood" %}" autocomplete="off">
+                <input id="ai-assistant-input" data-ai-input type="text" maxlength="300" placeholder="{% translate "Ask me anything about movies..." %}" autocomplete="off">
                 <button type="submit" class="ai-assistant-send" aria-label="{% translate "Send message" %}" title="{% translate "Send" %}" disabled>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M22 2 11 13"/>
