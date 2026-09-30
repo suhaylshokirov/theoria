@@ -124,13 +124,14 @@ def _reason_for(candidate, constraints, saved_for_later):
     return "It is a highly rated option from the Theoria catalogue."
 
 
-def rank_movie_candidates(taste_summary, candidates, constraints):
+def rank_movie_candidates(taste_summary, candidates, constraints, *, exclude_movie_ids=()):
     """Exclude known or rejected movies and put Watch later films first."""
     excluded_movie_ids = _known_movie_ids(taste_summary, Collection.LIKED)
     excluded_movie_ids.update(_known_movie_ids(taste_summary, Collection.TOP))
     excluded_movie_ids.update(_known_movie_ids(taste_summary, "watched"))
     excluded_movie_ids.update(_known_movie_ids(taste_summary, "disliked"))
     excluded_movie_ids.update(_known_movie_ids(taste_summary, "not_interested"))
+    excluded_movie_ids.update(exclude_movie_ids)
     saved_for_later = _known_movie_ids(taste_summary, Collection.WATCH_LATER)
 
     ranked = []
@@ -148,9 +149,11 @@ def rank_movie_candidates(taste_summary, candidates, constraints):
     return ranked[:MAX_RESULTS]
 
 
-def select_movie_candidates(user, request_text):
-    """Return up to three explainable movie choices for one user request."""
+def select_movie_candidates(user, request_text, *, exclude_movie_ids=()):
+    """Return up to three explainable movie choices, excluding prior chat picks."""
     constraints = read_request_constraints(request_text)
     taste_summary = build_taste_summary(user)
     candidates = _catalogue_movie_candidates(constraints)
-    return rank_movie_candidates(taste_summary, candidates, constraints)
+    return rank_movie_candidates(
+        taste_summary, candidates, constraints, exclude_movie_ids=exclude_movie_ids
+    )
