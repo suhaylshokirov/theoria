@@ -8,8 +8,15 @@ from django.http import JsonResponse
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from assistant.gemini import generate_companion_reply
-from core.recommendations import is_taste_assessment, select_movie_candidates
+from assistant.conversations import (
+    get_session,
+    recent_recommendations,
+    recent_turns,
+    record_recommendations,
+    record_turn,
+)
+from assistant.gemini import generate_companion_reply, plan_companion_message
+from core.recommendations import select_movie_candidates
 from core.services import build_taste_summary, record_title_feedback
 
 MAX_MESSAGE_LENGTH = 300
@@ -59,31 +66,46 @@ def chat(request):
     if len(message) > MAX_MESSAGE_LENGTH:
         return JsonResponse({"error": "Keep your message under 300 characters."}, status=400)
 
-    if is_taste_assessment(message):
+    session = get_session(request.user, payload.get("session_id"))
+    conversation = recent_turns(session)
+    shown_titles = recent_recommendations(session)
+    record_turn(session, "user", message)
+    plan = plan_companion_message(message, conversation, shown_titles)
+
+    if plan.needs_recommendations:
+        shown_movie_ids = {
+            item["content_id"] for item in shown_titles if item["content_type"] == "movie"
+        }
+        candidates = select_movie_candidates(
+            request.user, message, exclude_movie_ids=shown_movie_ids
+        )
+        if candidates:
+            taste_summary = build_taste_summary(request.user)
+            reply = generate_companion_reply(
+                message, taste_summary, candidates, recent_turns=conversation
+            )
+            reply = reply or "Here are a few picks from Theoria that fit your request."
+            record_recommendations(session, candidates)
+        else:
+            reply = "I could not find a new match with those limits. Try a wider genre or a little more time."
+    elif plan.intent == "taste_assessment":
         taste_summary = build_taste_summary(request.user)
-        reply = generate_companion_reply(message, taste_summary, [])
-        return JsonResponse(
-            {
-                "reply": reply or "Like or watch a few more movies and ask me again — I need more to go on.",
-                "recommendations": [],
-            }
+        reply = generate_companion_reply(
+            message, taste_summary, [], recent_turns=conversation
         )
+        reply = reply or "Like or watch a few more movies and ask me again — I need more to go on."
+        candidates = []
+    else:
+        reply = plan.reply or "Tell me a little more about what you would like to watch."
+        candidates = []
 
-    candidates = select_movie_candidates(request.user, message)
-    if not candidates:
-        return JsonResponse(
-            {
-                "reply": "I could not find a good match with those limits. Try a wider genre or a little more time.",
-                "recommendations": [],
-            }
-        )
-
-    taste_summary = build_taste_summary(request.user)
-    reply = generate_companion_reply(message, taste_summary, candidates)
+    record_turn(session, "assistant", reply, intent=plan.intent)
     return JsonResponse(
         {
             "reply": reply or "Here are a few picks from Theoria that fit your request.",
             "recommendations": [_recommendation_response(candidate) for candidate in candidates],
+            "session_id": str(session.pk),
+            "intent": plan.intent,
         }
     )
 

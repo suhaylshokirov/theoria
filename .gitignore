@@ -27,10 +27,12 @@ logs/*.log.*
 # Django
 db.sqlite3
 django_app/**/migrations/0*.py
-# Accounts and core own durable application tables, so their migrations must
-# travel with the code. The warehouse mirror apps remain migration-free.
+# Accounts, core, and assistant own durable application tables, so their
+# migrations must travel with the code. The warehouse mirror apps remain
+# migration-free.
 !django_app/core/migrations/0*.py
 !django_app/accounts/migrations/0*.py
+!django_app/assistant/migrations/0*.py
 staticfiles/
 
 # graphify stuff

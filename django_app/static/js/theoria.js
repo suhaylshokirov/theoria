@@ -810,11 +810,30 @@
     var authenticated = root.getAttribute("data-ai-authenticated") === "true";
     var csrf = form.querySelector("[name='csrfmiddlewaretoken']");
     var pending = false;
+    var sessionStorageKey = "theoria-assistant-session";
+    var sessionId = null;
     var promptRequests = {
       tonight: "Pick a movie for tonight",
       mood: "Find a movie for my mood",
       surprise: "Surprise me with a movie"
     };
+
+    try {
+      sessionId = window.sessionStorage.getItem(sessionStorageKey);
+    } catch (error) {
+      // Private browsing can deny storage; the server will begin a new chat
+      // session for each request and the assistant remains usable.
+    }
+
+    function saveSessionId(nextSessionId) {
+      if (!nextSessionId) return;
+      sessionId = nextSessionId;
+      try {
+        window.sessionStorage.setItem(sessionStorageKey, sessionId);
+      } catch (error) {
+        // The response still works when the browser declines storage.
+      }
+    }
 
     function setOpen(open) {
       panel.hidden = !open;
@@ -933,12 +952,16 @@
       var thinking = addMessage("Thinking…", "assistant", "ai-message-thinking");
 
       try {
-        var result = await requestJson(chatEndpoint, { message: prompt });
+        var result = await requestJson(chatEndpoint, {
+          message: prompt,
+          session_id: sessionId
+        });
         thinking.remove();
         if (!result.ok) {
           addMessage(result.data.error || "The guide could not answer just now. Please try again.", "assistant");
           return;
         }
+        saveSessionId(result.data.session_id);
         addMessage(result.data.reply, "assistant");
         addRecommendations(result.data.recommendations || []);
       } catch (error) {

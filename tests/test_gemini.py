@@ -18,7 +18,7 @@ if str(DJANGO_APP_DIR) not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "theoria_site.settings")
 django.setup()
 
-from assistant.gemini import generate_companion_reply  # noqa: E402
+from assistant.gemini import generate_companion_reply, plan_companion_message  # noqa: E402
 
 
 def _candidate():
@@ -74,3 +74,36 @@ def test_gemini_reply_accepts_decimal_ratings_from_the_warehouse():
 
     assert reply == "Arrival fits."
     assert '"imdb_rating": 7.9' in client.interactions.create.call_args.kwargs["input"]
+
+
+def test_gemini_conversation_plan_uses_history_and_returns_validated_intent():
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(
+        output_text='{"intent": "repeat_concern", "reply": "You’re right — I will avoid those titles."}'
+    )
+    provider = SimpleNamespace(Client=Mock(return_value=client))
+
+    with (
+        patch("assistant.gemini.config.GEMINI_API_KEY", "test-key"),
+        patch("assistant.gemini.genai", provider),
+    ):
+        plan = plan_companion_message(
+            "Why are those the same movies again?",
+            [{"role": "assistant", "message": "Try Arrival."}],
+            [{"content_id": 101, "content_type": "movie", "title": "Arrival"}],
+        )
+
+    assert plan.intent == "repeat_concern"
+    assert not plan.needs_recommendations
+    request = client.interactions.create.call_args.kwargs
+    assert request["response_format"]["mime_type"] == "application/json"
+    assert "Arrival" in request["input"]
+
+
+def test_gemini_conversation_plan_has_a_honest_fallback_for_a_greeting():
+    with patch("assistant.gemini.config.GEMINI_API_KEY", ""):
+        plan = plan_companion_message("Hi", [], [])
+
+    assert plan.intent == "small_talk"
+    assert not plan.needs_recommendations
+    assert "tell me" in plan.reply.lower()

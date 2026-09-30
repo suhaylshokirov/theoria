@@ -21,6 +21,9 @@ from django.contrib.auth import get_user_model  # noqa: E402
 from django.test import Client, override_settings  # noqa: E402
 from django.urls import reverse  # noqa: E402
 
+from assistant.gemini import ConversationPlan  # noqa: E402
+from assistant.models import ChatSession, ChatTurn, RecommendationEvent  # noqa: E402
+
 User = get_user_model()
 _TEST_EMAIL = "assistant-view-test@example.com"
 
@@ -59,6 +62,10 @@ def test_chat_returns_rule_based_recommendations_for_signed_in_user():
             patch("assistant.views.select_movie_candidates", return_value=[_candidate()]),
             patch("assistant.views.build_taste_summary", return_value={}),
             patch(
+                "assistant.views.plan_companion_message",
+                return_value=ConversationPlan("recommend", ""),
+            ),
+            patch(
                 "assistant.views.generate_companion_reply",
                 return_value="Arrival is a thoughtful, personal pick for tonight.",
             ),
@@ -82,6 +89,11 @@ def test_chat_returns_rule_based_recommendations_for_signed_in_user():
             }
         ]
         assert payload["reply"] == "Arrival is a thoughtful, personal pick for tonight."
+        assert payload["intent"] == "recommend"
+        assert payload["session_id"]
+        assert ChatTurn.objects.filter(role="user", message="Something funny").exists()
+        assert ChatTurn.objects.filter(role="assistant", intent="recommend").exists()
+        assert RecommendationEvent.objects.filter(content_id=101).exists()
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
 
@@ -96,6 +108,10 @@ def test_chat_skips_recommendations_for_a_taste_assessment_request():
         with (
             patch("assistant.views.select_movie_candidates") as select_candidates,
             patch("assistant.views.build_taste_summary", return_value={}),
+            patch(
+                "assistant.views.plan_companion_message",
+                return_value=ConversationPlan("taste_assessment", ""),
+            ),
             patch(
                 "assistant.views.generate_companion_reply",
                 return_value="You lean toward thoughtful sci-fi and steer clear of horror.",
@@ -113,7 +129,85 @@ def test_chat_skips_recommendations_for_a_taste_assessment_request():
         assert payload["reply"] == "You lean toward thoughtful sci-fi and steer clear of horror."
         select_candidates.assert_not_called()
         generate_reply.assert_called_once_with(
-            "What do you think of my taste in movies?", {}, []
+            "What do you think of my taste in movies?", {}, [], recent_turns=[]
+        )
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_chat_handles_a_repeat_concern_without_new_recommendations():
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="assistant-reader")
+    session = ChatSession.objects.create(user=user)
+    RecommendationEvent.objects.create(
+        session=session, content_type="movie", content_id=101, title="Arrival"
+    )
+    client = Client()
+    client.force_login(user)
+    try:
+        with (
+            patch("assistant.views.select_movie_candidates") as select_candidates,
+            patch(
+                "assistant.views.plan_companion_message",
+                return_value=ConversationPlan(
+                    "repeat_concern",
+                    "You’re right — I repeated myself. I will avoid those titles from here.",
+                ),
+            ),
+        ):
+            response = client.post(
+                reverse("assistant:chat"),
+                data=json.dumps(
+                    {
+                        "message": "Why do you keep recommending the same movies?",
+                        "session_id": str(session.pk),
+                    }
+                ),
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["intent"] == "repeat_concern"
+        assert payload["recommendations"] == []
+        assert "repeated myself" in payload["reply"]
+        assert payload["session_id"] == str(session.pk)
+        select_candidates.assert_not_called()
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_chat_excludes_titles_already_shown_in_the_same_session():
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="assistant-reader")
+    session = ChatSession.objects.create(user=user)
+    RecommendationEvent.objects.create(
+        session=session, content_type="movie", content_id=101, title="Arrival"
+    )
+    client = Client()
+    client.force_login(user)
+    try:
+        with (
+            patch(
+                "assistant.views.plan_companion_message",
+                return_value=ConversationPlan("recommend", ""),
+            ),
+            patch("assistant.views.select_movie_candidates", return_value=[]) as select_candidates,
+        ):
+            response = client.post(
+                reverse("assistant:chat"),
+                data=json.dumps(
+                    {"message": "Show me another smart sci-fi movie", "session_id": str(session.pk)}
+                ),
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        assert response.json()["recommendations"] == []
+        select_candidates.assert_called_once_with(
+            user, "Show me another smart sci-fi movie", exclude_movie_ids={101}
         )
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
