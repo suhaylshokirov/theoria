@@ -1909,6 +1909,14 @@ msgstr "Да, выйти"
 msgid "Film guide"
 msgstr "Помощник по фильмам"
 
+#: templates/base.html:291
+msgid "Expand film guide"
+msgstr "Развернуть помощника по фильмам"
+
+#: templates/base.html:291
+msgid "Shrink film guide"
+msgstr "Уменьшить помощника по фильмам"
+
 #: templates/base.html:324
 msgid "Hi — not sure what to watch?"
 msgstr "Не знаете, что посмотреть?"

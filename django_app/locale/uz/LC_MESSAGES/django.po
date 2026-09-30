@@ -1876,6 +1876,14 @@ msgstr "Ha, chiqaman"
 msgid "Film guide"
 msgstr "Film yordamchisi"
 
+#: templates/base.html:291
+msgid "Expand film guide"
+msgstr "Film yordamchisini kengaytirish"
+
+#: templates/base.html:291
+msgid "Shrink film guide"
+msgstr "Film yordamchisini kichraytirish"
+
 #: templates/base.html:324
 msgid "Hi — not sure what to watch?"
 msgstr "Nima tomosha qilishni bilmayapsizmi?"
