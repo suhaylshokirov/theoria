@@ -3043,7 +3043,7 @@ html.has-js .bio-body.is-collapsed {
   right: 0;
   bottom: 68px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(368px, calc(100vw - 2 * var(--space-6)));
   height: min(540px, calc(100vh - 112px));
   overflow: hidden;
@@ -3251,7 +3251,7 @@ a.ai-recommendation-title:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  padding: 0 var(--space-6) var(--space-5);
+  margin-top: var(--space-1);
 }
 
 .ai-assistant-actions button {

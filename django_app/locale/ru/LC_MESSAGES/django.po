@@ -1930,28 +1930,28 @@ msgid "Close"
 msgstr "Закрыть"
 
 #: templates/base.html:299
-msgid "Hi there! Let’s find a movie."
-msgstr "Здравствуйте! Давайте найдём фильм."
+msgid "👋 Hi there! Want to find a movie to watch? I’m here to help."
+msgstr "👋 Здравствуйте! Хотите найти фильм для просмотра? Я помогу."
 
 #: templates/base.html:302
-msgid "Ask me, or choose below."
+msgid "Ask me or select an option below."
 msgstr "Спросите меня или выберите вариант ниже."
 
 #: templates/base.html:304
-msgid "Pick for tonight"
-msgstr "Выбор на вечер"
+msgid "🍿 Pick for tonight"
+msgstr "🍿 Выбор на вечер"
 
 #: templates/base.html:305
-msgid "Find by mood"
-msgstr "Подбор по настроению"
+msgid "😊 Find by mood"
+msgstr "😊 Подбор по настроению"
 
 #: templates/base.html:307
-msgid "Browse by genre"
-msgstr "Выбрать по жанру"
+msgid "🎬 Browse by genre"
+msgstr "🎬 Выбрать по жанру"
 
 #: templates/base.html:306
-msgid "Surprise me"
-msgstr "Удивите меня"
+msgid "🎲 Surprise me"
+msgstr "🎲 Удивите меня"
 
 #: templates/base.html:310
 msgid "Message the film guide"
