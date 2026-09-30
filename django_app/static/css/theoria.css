@@ -3269,9 +3269,9 @@ a.ai-recommendation-title:focus-visible {
 
 .ai-assistant-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 40px;
+  grid-template-columns: minmax(0, 1fr) 42px;
   gap: var(--space-2);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4);
   background: var(--sheet);
   border-top: var(--hairline);
 }
@@ -3279,12 +3279,13 @@ a.ai-recommendation-title:focus-visible {
 .ai-assistant-form input {
   width: 100%;
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
+  min-height: 42px;
+  padding: var(--space-2) var(--space-5);
   font: inherit;
   color: var(--ink);
   background: var(--paper);
   border: var(--hairline);
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
   outline: none;
 }
 
@@ -3298,8 +3299,10 @@ a.ai-recommendation-title:focus-visible {
 }
 
 .ai-assistant-send {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
 }
 
 .ai-assistant-send:not(:disabled) {
