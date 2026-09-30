@@ -800,6 +800,7 @@
     var trigger = root.querySelector("[data-ai-trigger]");
     var panel = root.querySelector("#ai-assistant-panel");
     var close = root.querySelector("[data-ai-close]");
+    var resize = root.querySelector("[data-ai-resize]");
     var welcome = root.querySelector("[data-ai-welcome]");
     var welcomeOpen = root.querySelector("[data-ai-welcome-open]");
     var welcomeClose = root.querySelector("[data-ai-welcome-close]");
@@ -860,6 +861,15 @@
       } else {
         trigger.focus();
       }
+    }
+
+    function setExpanded(expanded) {
+      if (!resize) return;
+      panel.classList.toggle("is-expanded", expanded);
+      resize.setAttribute("aria-pressed", expanded ? "true" : "false");
+      var label = resize.getAttribute(expanded ? "data-shrink-label" : "data-expand-label");
+      resize.setAttribute("aria-label", label);
+      resize.setAttribute("title", label);
     }
 
     function addMessage(text, role, extraClass) {
@@ -997,6 +1007,12 @@
       setOpen(false);
     });
 
+    if (resize) {
+      resize.addEventListener("click", function () {
+        setExpanded(!panel.classList.contains("is-expanded"));
+      });
+    }
+
     if (welcomeOpen) {
       welcomeOpen.addEventListener("click", function () {
         dismissWelcome();
@@ -1031,6 +1047,7 @@
 
     window.addEventListener("pageshow", function () {
       panel.hidden = true;
+      setExpanded(false);
       trigger.setAttribute("aria-expanded", "false");
       trigger.setAttribute("aria-label", t("Open film guide"));
     });
