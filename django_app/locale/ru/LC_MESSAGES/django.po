@@ -1930,12 +1930,12 @@ msgid "Close"
 msgstr "Закрыть"
 
 #: templates/base.html:299
-msgid "Hi there! I’m your personal film guide."
-msgstr "Здравствуйте! Я ваш личный помощник по фильмам."
+msgid "Hi there! Let’s find a movie."
+msgstr "Здравствуйте! Давайте найдём фильм."
 
 #: templates/base.html:302
-msgid "I’m here to help you discover something great to watch. Ask me anything, or choose an option below to get started."
-msgstr "Я помогу вам найти отличный фильм. Задайте любой вопрос или выберите вариант ниже, чтобы начать."
+msgid "Ask me, or choose below."
+msgstr "Спросите меня или выберите вариант ниже."
 
 #: templates/base.html:304
 msgid "Pick for tonight"

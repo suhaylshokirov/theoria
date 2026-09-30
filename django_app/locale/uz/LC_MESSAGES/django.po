@@ -1897,12 +1897,12 @@ msgid "Close"
 msgstr "Yopish"
 
 #: templates/base.html:299
-msgid "Hi there! I’m your personal film guide."
-msgstr "Salom! Men sizning shaxsiy film yordamchingizman."
+msgid "Hi there! Let’s find a movie."
+msgstr "Salom! Keling, film topamiz."
 
 #: templates/base.html:302
-msgid "I’m here to help you discover something great to watch. Ask me anything, or choose an option below to get started."
-msgstr "Men sizga tomosha qilish uchun ajoyib film topishga yordam beraman. Istalgan savolni bering yoki boshlash uchun quyidagi variantlardan birini tanlang."
+msgid "Ask me, or choose below."
+msgstr "Mendan so‘rang yoki quyidagi variantni tanlang."
 
 #: templates/base.html:304
 msgid "Pick for tonight"
