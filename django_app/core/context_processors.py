@@ -25,6 +25,15 @@ def js_strings(request):
             "Video": _("Video"),
             "Open film guide": _("Open film guide"),
             "Close film guide": _("Close film guide"),
+            "Your last three chats will appear here.": _("Your last three chats will appear here."),
+            "Loading chats…": _("Loading chats…"),
+            "Your chats could not be loaded just now.": _("Your chats could not be loaded just now."),
+            "That chat could not be opened just now. Please try again.": _(
+                "That chat could not be opened just now. Please try again."
+            ),
+            "A new chat could not be started just now. Please try again.": _(
+                "A new chat could not be started just now. Please try again."
+            ),
             "Sending…": _("Sending…"),
             "Enter a valid email address.": _("Enter a valid email address."),
             "Pick for tonight": _(

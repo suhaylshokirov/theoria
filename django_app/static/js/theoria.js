@@ -800,6 +800,11 @@
     var trigger = root.querySelector("[data-ai-trigger]");
     var panel = root.querySelector("#ai-assistant-panel");
     var close = root.querySelector("[data-ai-close]");
+    var newChat = root.querySelector("[data-ai-new]");
+    var historyToggle = root.querySelector("[data-ai-history-toggle]");
+    var historyClose = root.querySelector("[data-ai-history-close]");
+    var history = root.querySelector("[data-ai-history]");
+    var historyList = root.querySelector("[data-ai-history-list]");
     var resize = root.querySelector("[data-ai-resize]");
     var welcome = root.querySelector("[data-ai-welcome]");
     var welcomeOpen = root.querySelector("[data-ai-welcome-open]");
@@ -811,6 +816,8 @@
     var actions = root.querySelectorAll("[data-ai-prompt]");
     var chatEndpoint = root.getAttribute("data-ai-chat-endpoint");
     var feedbackEndpoint = root.getAttribute("data-ai-feedback-endpoint");
+    var conversationsEndpoint = root.getAttribute("data-ai-conversations-endpoint");
+    var newConversationEndpoint = root.getAttribute("data-ai-new-conversation-endpoint");
     var authenticated = root.getAttribute("data-ai-authenticated") === "true";
     var csrf = form.querySelector("[name='csrfmiddlewaretoken']");
     var pending = false;
@@ -820,6 +827,7 @@
     var welcomeDismissed = false;
     var closeTimer = null;
     var closeDuration = reduce ? 0 : 220;
+    var openingMarkup = messages.innerHTML;
     var promptRequests = {
       tonight: "Pick a movie for tonight",
       mood: "Find a movie for my mood",
@@ -845,6 +853,21 @@
       }
     }
 
+    function closeHistory() {
+      if (!history) return;
+      history.hidden = true;
+      historyToggle.setAttribute("aria-expanded", "false");
+    }
+
+    function resetConversation() {
+      messages.innerHTML = openingMarkup;
+      actions = root.querySelectorAll("[data-ai-prompt]");
+      bindActions();
+      messages.scrollTop = 0;
+      input.value = "";
+      send.disabled = true;
+    }
+
     function dismissWelcome() {
       if (!welcome) return;
       welcome.hidden = true;
@@ -868,6 +891,7 @@
         panel.classList.remove("is-closing");
         window.setTimeout(function () { input.focus(); }, 0);
       } else {
+        closeHistory();
         if (panel.hidden) return;
         panel.classList.add("is-closing");
         closeTimer = window.setTimeout(function () {
@@ -922,6 +946,102 @@
         return response.json().catch(function () { return {}; }).then(function (data) {
           return { ok: response.ok, data: data };
         });
+      });
+    }
+
+    function getJson(endpoint) {
+      return fetch(endpoint, {
+        credentials: "same-origin",
+        headers: { "Accept": "application/json" }
+      }).then(function (response) {
+        return response.json().catch(function () { return {}; }).then(function (data) {
+          return { ok: response.ok, data: data };
+        });
+      });
+    }
+
+    function renderHistory(conversations) {
+      historyList.textContent = "";
+      if (!conversations.length) {
+        var empty = document.createElement("p");
+        empty.className = "ai-assistant-history-empty";
+        empty.textContent = t("Your last three chats will appear here.");
+        historyList.appendChild(empty);
+        return;
+      }
+      conversations.forEach(function (conversation) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "ai-assistant-history-item";
+        if (conversation.id === sessionId) button.classList.add("is-current");
+        button.textContent = conversation.title;
+        button.addEventListener("click", function () {
+          loadConversation(conversation.id);
+        });
+        historyList.appendChild(button);
+      });
+    }
+
+    function showHistory() {
+      if (!authenticated) {
+        signInMessage();
+        return;
+      }
+      history.hidden = false;
+      historyToggle.setAttribute("aria-expanded", "true");
+      historyList.textContent = "";
+      var loading = document.createElement("p");
+      loading.className = "ai-assistant-history-empty";
+      loading.textContent = t("Loading chats…");
+      historyList.appendChild(loading);
+      getJson(conversationsEndpoint).then(function (result) {
+        if (!result.ok) throw new Error("could not load chats");
+        renderHistory(result.data.conversations || []);
+      }).catch(function () {
+        historyList.textContent = "";
+        var error = document.createElement("p");
+        error.className = "ai-assistant-history-error";
+        error.textContent = t("Your chats could not be loaded just now.");
+        historyList.appendChild(error);
+      });
+    }
+
+    function loadConversation(nextSessionId) {
+      if (pending) return;
+      setPending(true);
+      getJson(conversationsEndpoint + encodeURIComponent(nextSessionId) + "/").then(function (result) {
+        if (!result.ok) throw new Error("could not load chat");
+        saveSessionId(result.data.conversation.id);
+        messages.textContent = "";
+        actions = [];
+        (result.data.turns || []).forEach(function (turn) {
+          addMessage(turn.message, turn.role);
+        });
+        if (!(result.data.turns || []).length) resetConversation();
+        closeHistory();
+      }).catch(function () {
+        addMessage(t("That chat could not be opened just now. Please try again."), "assistant");
+      }).finally(function () {
+        setPending(false);
+      });
+    }
+
+    function startNewConversation() {
+      if (pending) return;
+      if (!authenticated) {
+        signInMessage();
+        return;
+      }
+      setPending(true);
+      requestJson(newConversationEndpoint, {}).then(function (result) {
+        if (!result.ok) throw new Error("could not start chat");
+        saveSessionId(result.data.conversation.id);
+        resetConversation();
+        closeHistory();
+      }).catch(function () {
+        addMessage(t("A new chat could not be started just now. Please try again."), "assistant");
+      }).finally(function () {
+        setPending(false);
       });
     }
 
@@ -1029,6 +1149,21 @@
       });
     }
 
+    if (newChat) {
+      newChat.addEventListener("click", startNewConversation);
+    }
+
+    if (historyToggle) {
+      historyToggle.addEventListener("click", function () {
+        if (history.hidden) showHistory();
+        else closeHistory();
+      });
+    }
+
+    if (historyClose) {
+      historyClose.addEventListener("click", closeHistory);
+    }
+
     if (welcomeOpen) {
       welcomeOpen.addEventListener("click", function () {
         dismissWelcome();
@@ -1040,12 +1175,16 @@
       welcomeClose.addEventListener("click", dismissWelcome);
     }
 
-    actions.forEach(function (action) {
-      action.addEventListener("click", function () {
-        var promptKey = action.getAttribute("data-ai-prompt");
-        respond(promptRequests[promptKey] || promptKey, action.textContent.trim());
+    function bindActions() {
+      actions.forEach(function (action) {
+        action.addEventListener("click", function () {
+          var promptKey = action.getAttribute("data-ai-prompt");
+          respond(promptRequests[promptKey] || promptKey, action.textContent.trim());
+        });
       });
-    });
+    }
+
+    bindActions();
 
     input.addEventListener("input", function () {
       send.disabled = !input.value.trim();

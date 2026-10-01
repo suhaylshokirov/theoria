@@ -97,13 +97,16 @@ def _prompt(message, taste_summary, candidates, recent_turns=()):
 movie options below fit this person's request and stored taste. Recommend only
 movies in movie_options. Never claim to know anything outside this data. If an
 option has status 'on_list', say it is already on their Watch later list. Give
-one short paragraph (no headings, no markdown list), maximum 100 words."""
+one short paragraph (no headings, no markdown list), maximum 100 words. When
+recent_conversation is not empty, answer directly: do not greet, reintroduce
+yourself, or repeat an opening question."""
     else:
         instructions = """You are Theoria's warm, concise movie companion. The person is
 asking about their own taste, not for new picks. Using only the taste data
 below, describe the pattern you see in what they like, dislike, and watch.
 Do not suggest or invent any specific movies. Give one short paragraph (no
-headings, no markdown list), maximum 100 words."""
+headings, no markdown list), maximum 100 words. When recent_conversation is
+not empty, answer directly: do not greet or reintroduce yourself."""
 
     return instructions + "\n\nTheoria context:\n" + json.dumps(
         context, ensure_ascii=True, default=float
@@ -156,7 +159,8 @@ trusted catalogue options and ask you to write the final response. For every
 other intent, write a direct, human reply of at most 60 words. Never claim to
 remember a title unless it appears in the supplied context. A repeat concern
 must acknowledge the frustration and say no new picks will be shown in this
-reply. Do not invent movie titles or facts.
+reply. Do not invent movie titles or facts. When recent_conversation is not
+empty, do not greet, reintroduce yourself, or repeat the opening question.
 
 Theoria context:
 """ + json.dumps(context, ensure_ascii=True)

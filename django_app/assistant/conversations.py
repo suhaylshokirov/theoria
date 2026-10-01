@@ -4,11 +4,34 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from django.db import transaction
+
 from assistant.models import ChatSession, ChatTurn, RecommendationEvent
 
 
 MAX_CONTEXT_TURNS = 8
 MAX_RECENT_RECOMMENDATIONS = 12
+MAX_SAVED_CHATS = 3
+
+
+def _title_from_message(message):
+    """Turn a first message into a short, useful recent-chat label."""
+    title = " ".join(message.split())
+    return title if len(title) <= 80 else title[:77].rstrip() + "…"
+
+
+def create_session(user):
+    """Create a private chat and retain only the user's three newest chats."""
+    with transaction.atomic():
+        session = ChatSession.objects.create(user=user)
+        stale_session_ids = list(
+            ChatSession.objects.filter(user=user)
+            .order_by("-updated_at", "-created_at")
+            .values_list("pk", flat=True)[MAX_SAVED_CHATS:]
+        )
+        if stale_session_ids:
+            ChatSession.objects.filter(pk__in=stale_session_ids).delete()
+    return session
 
 
 def get_session(user, session_id):
@@ -27,7 +50,12 @@ def get_session(user, session_id):
             session = ChatSession.objects.filter(pk=parsed_id, user=user).first()
             if session is not None:
                 return session
-    return ChatSession.objects.create(user=user)
+    return create_session(user)
+
+
+def recent_sessions(user):
+    """Return the reader's saved chats, newest first."""
+    return ChatSession.objects.filter(user=user).order_by("-updated_at", "-created_at")[:MAX_SAVED_CHATS]
 
 
 def recent_turns(session):
@@ -53,7 +81,11 @@ def recent_recommendations(session):
 
 
 def record_turn(session, role, message, *, intent=""):
-    session.save(update_fields=["updated_at"])
+    update_fields = ["updated_at"]
+    if role == ChatTurn.USER and not session.title:
+        session.title = _title_from_message(message)
+        update_fields.append("title")
+    session.save(update_fields=update_fields)
     return ChatTurn.objects.create(session=session, role=role, message=message, intent=intent)
 
 

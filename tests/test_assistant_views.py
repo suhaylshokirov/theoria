@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,6 +20,7 @@ django.setup()
 
 from django.contrib.auth import get_user_model  # noqa: E402
 from django.test import Client, override_settings  # noqa: E402
+from django.utils import timezone  # noqa: E402
 from django.urls import reverse  # noqa: E402
 
 from assistant.gemini import ConversationPlan  # noqa: E402
@@ -49,6 +51,81 @@ def test_chat_requires_a_signed_in_user():
 
     assert response.status_code == 401
     assert "Sign in" in response.json()["error"]
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_recent_conversations_are_private_and_returned_newest_first():
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="assistant-reader")
+    other_user = User.objects.create_user(
+        email="other-assistant-view-test@example.com", username="other-assistant-reader"
+    )
+    older = ChatSession.objects.create(user=user, title="Older chat")
+    ChatSession.objects.filter(pk=older.pk).update(updated_at=timezone.now() - timedelta(days=1))
+    newer = ChatSession.objects.create(user=user, title="Newer chat")
+    ChatSession.objects.create(user=other_user, title="Private chat")
+    client = Client()
+    client.force_login(user)
+    try:
+        response = client.get(reverse("assistant:conversations"))
+
+        assert response.status_code == 200
+        conversations = response.json()["conversations"]
+        assert [item["id"] for item in conversations] == [str(newer.pk), str(older.pk)]
+        assert [item["title"] for item in conversations] == ["Newer chat", "Older chat"]
+    finally:
+        User.objects.filter(email__in=[_TEST_EMAIL, "other-assistant-view-test@example.com"]).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_new_conversation_keeps_only_the_three_most_recent_chats():
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="assistant-reader")
+    oldest = ChatSession.objects.create(user=user, title="Oldest")
+    ChatSession.objects.filter(pk=oldest.pk).update(updated_at=timezone.now() - timedelta(days=1))
+    ChatSession.objects.create(user=user, title="Second")
+    ChatSession.objects.create(user=user, title="Third")
+    client = Client()
+    client.force_login(user)
+    try:
+        response = client.post(reverse("assistant:new_conversation"), data="{}", content_type="application/json")
+
+        assert response.status_code == 201
+        assert ChatSession.objects.filter(user=user).count() == 3
+        assert not ChatSession.objects.filter(pk=oldest.pk).exists()
+        assert response.json()["conversation"]["title"] == "New chat"
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_conversation_detail_restores_only_the_owner_messages():
+    User.objects.filter(email__in=[_TEST_EMAIL, "other-assistant-view-test@example.com"]).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="assistant-reader")
+    session = ChatSession.objects.create(user=user, title="Funny movies")
+    ChatTurn.objects.create(session=session, role="user", message="Something fun")
+    ChatTurn.objects.create(session=session, role="assistant", message="Try a comedy.")
+    other_user = User.objects.create_user(
+        email="other-assistant-view-test@example.com", username="other-assistant-reader"
+    )
+    other_session = ChatSession.objects.create(user=other_user, title="Private chat")
+    client = Client()
+    client.force_login(user)
+    try:
+        response = client.get(reverse("assistant:conversation_detail", kwargs={"session_id": session.pk}))
+        private_response = client.get(
+            reverse("assistant:conversation_detail", kwargs={"session_id": other_session.pk})
+        )
+
+        assert response.status_code == 200
+        assert response.json()["conversation"]["title"] == "Funny movies"
+        assert response.json()["turns"] == [
+            {"role": "user", "message": "Something fun"},
+            {"role": "assistant", "message": "Try a comedy."},
+        ]
+        assert private_response.status_code == 404
+    finally:
+        User.objects.filter(email__in=[_TEST_EMAIL, "other-assistant-view-test@example.com"]).delete()
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
