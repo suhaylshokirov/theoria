@@ -60,7 +60,21 @@ def is_taste_assessment(request_text):
 def read_request_constraints(request_text):
     """Turn a few common user phrases into clear catalogue filters."""
     message = request_text.lower()
-    genres = {genre for word, genre in GENRE_WORDS.items() if word in message}
+    excluded_genres = set()
+    genres = set()
+    for word, genre in GENRE_WORDS.items():
+        if word not in message:
+            continue
+        escaped_word = re.escape(word)
+        if re.search(
+            rf"\b(?:no|not|without|avoid)\s+{escaped_word}\b|"
+            rf"\b(?:do not|don't)\s+(?:want|recommend|show).*?\b{escaped_word}\b|"
+            rf"\bnot in (?:the )?mood for\s+{escaped_word}\b",
+            message,
+        ):
+            excluded_genres.add(genre)
+        else:
+            genres.add(genre)
     duration = re.search(r"(?:under|less than|within)\s+(\d{2,3})\s*(?:minutes?|mins?)", message)
     if duration is None:
         duration = re.search(r"(\d{2,3})\s*(?:minutes?|mins?)", message)
@@ -68,7 +82,11 @@ def read_request_constraints(request_text):
     if max_runtime is None and "short" in message:
         max_runtime = 100
 
-    return {"genres": genres, "max_runtime": max_runtime}
+    return {
+        "genres": genres - excluded_genres,
+        "excluded_genres": excluded_genres,
+        "max_runtime": max_runtime,
+    }
 
 
 def _catalogue_movie_candidates(constraints):
@@ -82,6 +100,10 @@ def _catalogue_movie_candidates(constraints):
         movies = movies.filter(
             moviemetrics__genre__genre_name__in=constraints["genres"]
         ).distinct()
+    if constraints["excluded_genres"]:
+        movies = movies.exclude(
+            moviemetrics__genre__genre_name__in=constraints["excluded_genres"]
+        )
     movies = (
         movies.annotate(
             imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
@@ -117,6 +139,8 @@ def _reason_for(candidate, constraints, saved_for_later):
     details = []
     if constraints["genres"]:
         details.append("matches your requested genre")
+    if constraints["excluded_genres"]:
+        details.append("avoids the genres you ruled out")
     if constraints["max_runtime"] is not None:
         details.append(f"fits your {constraints['max_runtime']}-minute limit")
     if details:
@@ -149,9 +173,16 @@ def rank_movie_candidates(taste_summary, candidates, constraints, *, exclude_mov
     return ranked[:MAX_RESULTS]
 
 
-def select_movie_candidates(user, request_text, *, exclude_movie_ids=()):
+def select_movie_candidates(user, request_text, *, exclude_movie_ids=(), chat_memory=None):
     """Return up to three explainable movie choices, excluding prior chat picks."""
     constraints = read_request_constraints(request_text)
+    chat_memory = chat_memory if isinstance(chat_memory, dict) else {}
+    remembered_exclusions = chat_memory.get("excluded_genres", [])
+    if isinstance(remembered_exclusions, list):
+        constraints["excluded_genres"].update(remembered_exclusions)
+    remembered_runtime = chat_memory.get("max_runtime")
+    if isinstance(remembered_runtime, int) and remembered_runtime > 0:
+        constraints["max_runtime"] = remembered_runtime
     taste_summary = build_taste_summary(user)
     candidates = _catalogue_movie_candidates(constraints)
     return rank_movie_candidates(

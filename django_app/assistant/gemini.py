@@ -18,6 +18,7 @@ except ImportError:  # Keeps local commands usable before dependencies are insta
 logger = logging.getLogger(__name__)
 MAX_REPLY_LENGTH = 1_200
 PROFILE_TITLES_PER_LIST = 6
+REPEATED_GREETING = re.compile(r"^\s*(?:hi|hello|hey)(?:\s+(?:there|again))?[!,.\s]+", re.I)
 RECOMMENDATION_INTENTS = frozenset({"recommend", "refine"})
 CONVERSATION_INTENTS = frozenset(
     {
@@ -67,7 +68,7 @@ def _titles(summary, kind):
     ]
 
 
-def _prompt(message, taste_summary, candidates, recent_turns=()):
+def _prompt(message, taste_summary, candidates, recent_turns=(), chat_memory=None):
     """Build the only information Theoria shares with Gemini for one reply."""
     context = {
         "request": message,
@@ -91,6 +92,7 @@ def _prompt(message, taste_summary, candidates, recent_turns=()):
             for candidate in candidates
         ],
         "recent_conversation": list(recent_turns),
+        "active_chat_rules": chat_memory or {},
     }
     if candidates:
         instructions = """You are Theoria's warm, concise movie companion. Explain why the
@@ -99,21 +101,23 @@ movies in movie_options. Never claim to know anything outside this data. If an
 option has status 'on_list', say it is already on their Watch later list. Give
 one short paragraph (no headings, no markdown list), maximum 100 words. When
 recent_conversation is not empty, answer directly: do not greet, reintroduce
-yourself, or repeat an opening question."""
+yourself, or repeat an opening question. Obey every active_chat_rules item;
+the movie options have already been filtered to enforce those rules."""
     else:
         instructions = """You are Theoria's warm, concise movie companion. The person is
 asking about their own taste, not for new picks. Using only the taste data
 below, describe the pattern you see in what they like, dislike, and watch.
 Do not suggest or invent any specific movies. Give one short paragraph (no
 headings, no markdown list), maximum 100 words. When recent_conversation is
-not empty, answer directly: do not greet or reintroduce yourself."""
+not empty, answer directly: do not greet or reintroduce yourself. Obey every
+active_chat_rules item."""
 
     return instructions + "\n\nTheoria context:\n" + json.dumps(
         context, ensure_ascii=True, default=float
     )  # ratings arrive as Decimal
 
 
-def generate_companion_reply(message, taste_summary, candidates, *, recent_turns=()):
+def generate_companion_reply(message, taste_summary, candidates, *, recent_turns=(), chat_memory=None):
     """Return Gemini's explanation, or ``None`` so the caller can use rules.
 
     Gemini never decides which catalogue records are returned to the browser.
@@ -127,22 +131,25 @@ def generate_companion_reply(message, taste_summary, candidates, *, recent_turns
         client = genai.Client(api_key=config.GEMINI_API_KEY)
         interaction = client.interactions.create(
             model=config.GEMINI_MODEL,
-            input=_prompt(message, taste_summary, candidates, recent_turns),
+            input=_prompt(message, taste_summary, candidates, recent_turns, chat_memory),
         )
         reply = (interaction.output_text or "").strip()
     except Exception:  # The rule-based assistant remains available on outage/quota errors.
         logger.warning("Gemini movie companion request failed", exc_info=True)
         return None
 
+    if recent_turns:
+        reply = REPEATED_GREETING.sub("", reply).lstrip()
     return reply[:MAX_REPLY_LENGTH] or None
 
 
-def _conversation_plan_prompt(message, recent_turns, recent_recommendations):
+def _conversation_plan_prompt(message, recent_turns, recent_recommendations, chat_memory=None):
     """Keep the model's job conversational before any catalogue query runs."""
     context = {
         "latest_message": message,
         "recent_conversation": list(recent_turns),
         "titles_already_shown": list(recent_recommendations),
+        "active_chat_rules": chat_memory or {},
     }
     return """You are Theoria's warm, concise movie companion. Classify the
 latest message before the application decides whether to search its catalogue.
@@ -161,15 +168,22 @@ remember a title unless it appears in the supplied context. A repeat concern
 must acknowledge the frustration and say no new picks will be shown in this
 reply. Do not invent movie titles or facts. When recent_conversation is not
 empty, do not greet, reintroduce yourself, or repeat the opening question.
+Treat active_chat_rules as firm instructions that remain active until the
+person clearly changes them.
 
 Theoria context:
 """ + json.dumps(context, ensure_ascii=True)
 
 
-def _fallback_conversation_plan(message):
+def _fallback_conversation_plan(message, recent_turns=()):
     """Keep basic chat useful during a provider outage without false claims."""
     normalized = re.sub(r"\s+", " ", message.lower()).strip()
     if normalized in {"hi", "hello", "hey", "good morning", "good evening"}:
+        if recent_turns:
+            return ConversationPlan(
+                "small_talk",
+                "Tell me what you would like to watch next, and I will keep your chat preferences in mind.",
+            )
         return ConversationPlan(
             "small_talk", "Hi — tell me what you feel like watching, and I will help narrow it down."
         )
@@ -191,16 +205,18 @@ def _fallback_conversation_plan(message):
     return ConversationPlan("recommend", "")
 
 
-def plan_companion_message(message, recent_turns, recent_recommendations):
+def plan_companion_message(message, recent_turns, recent_recommendations, *, chat_memory=None):
     """Ask Gemini how to handle the turn, with a deterministic safe fallback."""
     if not config.GEMINI_API_KEY or genai is None:
-        return _fallback_conversation_plan(message)
+        return _fallback_conversation_plan(message, recent_turns)
 
     try:
         client = genai.Client(api_key=config.GEMINI_API_KEY)
         interaction = client.interactions.create(
             model=config.GEMINI_MODEL,
-            input=_conversation_plan_prompt(message, recent_turns, recent_recommendations),
+            input=_conversation_plan_prompt(
+                message, recent_turns, recent_recommendations, chat_memory
+            ),
             response_format={
                 "type": "text",
                 "mime_type": "application/json",
@@ -214,6 +230,9 @@ def plan_companion_message(message, recent_turns, recent_recommendations):
             raise ValueError("Gemini returned an invalid conversation plan")
     except Exception:
         logger.warning("Gemini conversation planning failed", exc_info=True)
-        return _fallback_conversation_plan(message)
+        return _fallback_conversation_plan(message, recent_turns)
 
-    return ConversationPlan(intent, reply.strip()[:MAX_REPLY_LENGTH])
+    reply = reply.strip()
+    if recent_turns:
+        reply = REPEATED_GREETING.sub("", reply).lstrip()
+    return ConversationPlan(intent, reply[:MAX_REPLY_LENGTH])

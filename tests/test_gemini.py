@@ -96,6 +96,27 @@ def test_gemini_reply_for_an_existing_chat_forbids_another_greeting():
     assert "do not greet, reintroduce" in prompt
 
 
+def test_gemini_reply_strips_a_repeated_greeting_from_an_existing_chat():
+    client = Mock()
+    client.interactions.create.return_value = SimpleNamespace(output_text="Hey there! Arrival fits.")
+    provider = SimpleNamespace(Client=Mock(return_value=client))
+
+    with (
+        patch("assistant.gemini.config.GEMINI_API_KEY", "test-key"),
+        patch("assistant.gemini.genai", provider),
+    ):
+        reply = generate_companion_reply(
+            "Something fun",
+            {},
+            [_candidate()],
+            recent_turns=[{"role": "user", "message": "Hi"}],
+            chat_memory={"excluded_genres": ["Horror"]},
+        )
+
+    assert reply == "Arrival fits."
+    assert '"excluded_genres": ["Horror"]' in client.interactions.create.call_args.kwargs["input"]
+
+
 def test_gemini_conversation_plan_uses_history_and_returns_validated_intent():
     client = Mock()
     client.interactions.create.return_value = SimpleNamespace(
@@ -127,3 +148,11 @@ def test_gemini_conversation_plan_has_a_honest_fallback_for_a_greeting():
     assert plan.intent == "small_talk"
     assert not plan.needs_recommendations
     assert "tell me" in plan.reply.lower()
+
+
+def test_gemini_fallback_does_not_greet_again_in_an_existing_chat():
+    with patch("assistant.gemini.config.GEMINI_API_KEY", ""):
+        plan = plan_companion_message("Hi", [{"role": "user", "message": "Earlier message"}], [])
+
+    assert plan.intent == "small_talk"
+    assert not plan.reply.lower().startswith(("hi", "hello", "hey"))
