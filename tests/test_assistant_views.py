@@ -24,6 +24,7 @@ from django.utils import timezone  # noqa: E402
 from django.urls import reverse  # noqa: E402
 
 from assistant.gemini import ConversationPlan  # noqa: E402
+from assistant.memory import update_chat_memory  # noqa: E402
 from assistant.models import ChatSession, ChatTurn, RecommendationEvent  # noqa: E402
 
 User = get_user_model()
@@ -123,6 +124,7 @@ def test_conversation_detail_restores_only_the_owner_messages():
             {"role": "user", "message": "Something fun"},
             {"role": "assistant", "message": "Try a comedy."},
         ]
+        assert response.json()["memory"] == {"excluded_genres": [], "max_runtime": None}
         assert private_response.status_code == 404
     finally:
         User.objects.filter(email__in=[_TEST_EMAIL, "other-assistant-view-test@example.com"]).delete()
@@ -206,7 +208,11 @@ def test_chat_skips_recommendations_for_a_taste_assessment_request():
         assert payload["reply"] == "You lean toward thoughtful sci-fi and steer clear of horror."
         select_candidates.assert_not_called()
         generate_reply.assert_called_once_with(
-            "What do you think of my taste in movies?", {}, [], recent_turns=[]
+            "What do you think of my taste in movies?",
+            {},
+            [],
+            recent_turns=[],
+            chat_memory={"excluded_genres": [], "max_runtime": None},
         )
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
@@ -284,8 +290,77 @@ def test_chat_excludes_titles_already_shown_in_the_same_session():
         assert response.status_code == 200
         assert response.json()["recommendations"] == []
         select_candidates.assert_called_once_with(
-            user, "Show me another smart sci-fi movie", exclude_movie_ids={101}
+            user,
+            "Show me another smart sci-fi movie",
+            exclude_movie_ids={101},
+            chat_memory={"excluded_genres": [], "max_runtime": None},
         )
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_chat_keeps_a_direct_no_horror_rule_for_the_rest_of_that_chat():
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="assistant-reader")
+    session = ChatSession.objects.create(user=user)
+    update_chat_memory(session, "I do not want horror movies this evening.")
+    ChatTurn.objects.create(session=session, role="user", message="I do not want horror movies this evening.")
+    for number in range(6):
+        ChatTurn.objects.create(session=session, role="assistant", message=f"Reply {number}")
+        ChatTurn.objects.create(session=session, role="user", message=f"Detail {number}")
+    client = Client()
+    client.force_login(user)
+    try:
+        with (
+            patch(
+                "assistant.views.plan_companion_message",
+                return_value=ConversationPlan("recommend", ""),
+            ) as plan_message,
+            patch("assistant.views.select_movie_candidates", return_value=[]) as select_candidates,
+        ):
+            response = client.post(
+                reverse("assistant:chat"),
+                data=json.dumps({"message": "Something fun", "session_id": str(session.pk)}),
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        remembered = {"excluded_genres": ["Horror"], "max_runtime": None}
+        assert plan_message.call_args.kwargs["chat_memory"] == remembered
+        assert len(plan_message.call_args.args[1]) == 13
+        select_candidates.assert_called_once_with(
+            user,
+            "Something fun",
+            exclude_movie_ids=set(),
+            chat_memory=remembered,
+        )
+        session.refresh_from_db()
+        assert session.memory == remembered
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_chat_memory_can_be_changed_inside_one_chat_and_starts_empty_in_a_new_one():
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="assistant-reader")
+    session = ChatSession.objects.create(user=user)
+    try:
+        assert update_chat_memory(session, "No horror tonight") == {
+            "excluded_genres": ["Horror"],
+            "max_runtime": None,
+        }
+        assert update_chat_memory(session, "Something fun") == {
+            "excluded_genres": ["Horror"],
+            "max_runtime": None,
+        }
+        assert update_chat_memory(session, "Actually, horror is fine") == {
+            "excluded_genres": [],
+            "max_runtime": None,
+        }
+        new_session = ChatSession.objects.create(user=user)
+        assert new_session.memory == {}
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
 

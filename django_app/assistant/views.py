@@ -19,6 +19,7 @@ from assistant.conversations import (
     record_turn,
 )
 from assistant.gemini import generate_companion_reply, plan_companion_message
+from assistant.memory import normalise_chat_memory, update_chat_memory
 from assistant.models import ChatSession
 from core.recommendations import select_movie_candidates
 from core.services import build_taste_summary, record_title_feedback
@@ -101,6 +102,7 @@ def conversation_detail(request, session_id):
         {
             "conversation": _conversation_summary(session),
             "turns": list(session.turns.order_by("created_at").values("role", "message")),
+            "memory": normalise_chat_memory(session.memory),
         }
     )
 
@@ -121,19 +123,27 @@ def chat(request):
     conversation = recent_turns(session)
     shown_titles = recent_recommendations(session)
     record_turn(session, "user", message)
-    plan = plan_companion_message(message, conversation, shown_titles)
+    chat_memory = update_chat_memory(session, message)
+    plan = plan_companion_message(message, conversation, shown_titles, chat_memory=chat_memory)
 
     if plan.needs_recommendations:
         shown_movie_ids = {
             item["content_id"] for item in shown_titles if item["content_type"] == "movie"
         }
         candidates = select_movie_candidates(
-            request.user, message, exclude_movie_ids=shown_movie_ids
+            request.user,
+            message,
+            exclude_movie_ids=shown_movie_ids,
+            chat_memory=chat_memory,
         )
         if candidates:
             taste_summary = build_taste_summary(request.user)
             reply = generate_companion_reply(
-                message, taste_summary, candidates, recent_turns=conversation
+                message,
+                taste_summary,
+                candidates,
+                recent_turns=conversation,
+                chat_memory=chat_memory,
             )
             reply = reply or "Here are a few picks from Theoria that fit your request."
             record_recommendations(session, candidates)
@@ -142,7 +152,11 @@ def chat(request):
     elif plan.intent == "taste_assessment":
         taste_summary = build_taste_summary(request.user)
         reply = generate_companion_reply(
-            message, taste_summary, [], recent_turns=conversation
+            message,
+            taste_summary,
+            [],
+            recent_turns=conversation,
+            chat_memory=chat_memory,
         )
         reply = reply or "Like or watch a few more movies and ask me again — I need more to go on."
         candidates = []

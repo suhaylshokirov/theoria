@@ -9,7 +9,6 @@ from django.db import transaction
 from assistant.models import ChatSession, ChatTurn, RecommendationEvent
 
 
-MAX_CONTEXT_TURNS = 8
 MAX_RECENT_RECOMMENDATIONS = 12
 MAX_SAVED_CHATS = 3
 
@@ -59,9 +58,12 @@ def recent_sessions(user):
 
 
 def recent_turns(session):
-    """Return the small, chronological window the model may use as context."""
-    turns = list(session.turns.order_by("-created_at")[:MAX_CONTEXT_TURNS])
-    turns.reverse()
+    """Return every turn from one chat, in the order it was said.
+
+    Chats are deliberately isolated. Their messages remain available for the
+    life of the saved chat and disappear only when that chat is removed.
+    """
+    turns = session.turns.order_by("created_at")
     return [{"role": turn.role, "message": turn.message} for turn in turns]
 
 

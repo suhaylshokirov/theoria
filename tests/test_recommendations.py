@@ -61,8 +61,16 @@ def test_read_request_constraints_understands_common_genre_and_time_words():
 
     assert constraints == {
         "genres": {"Comedy", "Science Fiction"},
+        "excluded_genres": set(),
         "max_runtime": 90,
     }
+
+
+def test_read_request_constraints_turns_no_horror_into_an_exclusion():
+    constraints = read_request_constraints("Something fun, but no horror tonight")
+
+    assert constraints["genres"] == set()
+    assert constraints["excluded_genres"] == {"Horror"}
 
 
 def test_rank_movie_candidates_skips_known_favourites_and_promotes_watch_later():
@@ -71,7 +79,7 @@ def test_rank_movie_candidates_skips_known_favourites_and_promotes_watch_later()
         Collection.TOP: [_title(20)],
         Collection.WATCH_LATER: [_title(30)],
     }
-    constraints = {"genres": {"Comedy"}, "max_runtime": 100}
+    constraints = {"genres": {"Comedy"}, "excluded_genres": set(), "max_runtime": 100}
 
     ranked = rank_movie_candidates(
         summary,
@@ -100,7 +108,7 @@ def test_rank_movie_candidates_excludes_watched_and_rejected_movies():
     ranked = rank_movie_candidates(
         summary,
         [_candidate(10), _candidate(20), _candidate(30), _candidate(40)],
-        {"genres": set(), "max_runtime": None},
+        {"genres": set(), "excluded_genres": set(), "max_runtime": None},
     )
 
     assert [candidate["content_id"] for candidate in ranked] == [40]
@@ -120,3 +128,16 @@ def test_select_movie_candidates_combines_taste_catalogue_and_request_rules():
 
     assert [candidate["content_id"] for candidate in selected] == [30, 40]
     assert all(candidate["runtime"] <= 100 for candidate in selected)
+
+
+def test_select_movie_candidates_applies_a_chat_genre_exclusion():
+    with patch("core.recommendations.build_taste_summary", return_value={}), patch(
+        "core.recommendations._catalogue_movie_candidates", return_value=[]
+    ) as catalogue:
+        select_movie_candidates(
+            object(),
+            "Something fun",
+            chat_memory={"excluded_genres": ["Horror"], "max_runtime": None},
+        )
+
+    assert catalogue.call_args.args[0]["excluded_genres"] == {"Horror"}
