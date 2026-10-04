@@ -1483,6 +1483,39 @@
     });
   }
 
+  /* --- Language menu ------------------------------------------------------
+     base.html's [data-lang-menu] is a native <details>, so it already opens
+     and closes on a click with no JS. This only adds what <details> lacks:
+     closing on an outside click, on Escape (returning focus to the trigger),
+     and when focus tabs out -- plus on a back/forward-cache restore, which
+     can bring the page back with it open. */
+  function initLangMenu() {
+    document.querySelectorAll("[data-lang-menu]").forEach(function (menu) {
+      var trigger = menu.querySelector("summary");
+
+      document.addEventListener("pointerdown", function (e) {
+        if (menu.open && !menu.contains(e.target)) menu.open = false;
+      }, true);
+
+      menu.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && menu.open) {
+          menu.open = false;
+          if (trigger) trigger.focus();
+        }
+      });
+
+      menu.addEventListener("focusout", function (e) {
+        if (menu.open && e.relatedTarget && !menu.contains(e.relatedTarget)) {
+          menu.open = false;
+        }
+      });
+
+      window.addEventListener("pageshow", function () {
+        menu.open = false;
+      });
+    });
+  }
+
   /* --- Collection actions (Like / Watch later / Add to top) ---------------
      Optimistic: the pill flips (and blooms) the instant it's pressed, and
      the request catches up behind it. Waiting on the round-trip first --
@@ -1804,6 +1837,7 @@
     initAuthFormSubmitState();
     initInlineValidation();
     initAccountMenu();
+    initLangMenu();
     initSignOutConfirm();
     initCollectionActions();
     initAccountSections();

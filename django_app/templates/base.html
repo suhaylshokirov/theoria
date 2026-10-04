@@ -109,7 +109,7 @@
                     <ellipse cx="13" cy="16" rx="9.9" ry="13.3" fill="none" stroke="currentColor" stroke-width="6.4"/>
                     <rect x="3.6" y="12.7" width="18.8" height="6.6" fill="#a3e635"/>
                 </svg>
-                Theoria
+                <span class="brand-name">Theoria</span>
             </a>
             {% if not request.user.is_authenticated %}
             {% comment %} Phone-width twin of the nav's Sign in chip, kept in the
@@ -193,24 +193,41 @@
                     {% translate "Sign in" %}
                 </a>
                 {% endif %}
-                {% comment %} Language switcher: a real POST form to Django's
-                   set_language, so it works with no JS. `next` is the current
-                   URL and set_language re-prefixes it for the chosen language,
-                   so the reader lands on this same page, not the homepage. The
-                   hidden `lang`/`hreflang` marks each option in its own language
-                   for screen readers; the visible label is the ISO code. {% endcomment %}
-                <form class="lang-switch" action="{% url 'set_language' %}" method="post"
-                      role="group" aria-label="{% translate "Language" context "language switcher" %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                    {% for code, name in LANGUAGES %}
-                    <button type="submit" name="language" value="{{ code }}" class="lang-switch__opt"
-                            lang="{{ code }}" hreflang="{{ code }}" title="{{ name }}" aria-label="{{ name }}"
-                            {% if code == LANGUAGE_CODE %}aria-current="true" aria-pressed="true"{% else %}aria-pressed="false"{% endif %}>{{ code|upper }}</button>
-                    {% endfor %}
-                </form>
             </div>
             {% endwith %}
+            {% comment %} Language switcher. A sibling of .nav-links, not inside it:
+               on a phone it stays in the header row beside Sign in instead of
+               folding away behind the hamburger. A real POST form to Django's
+               set_language, so it works with no JS. `next` is the current
+               URL and set_language re-prefixes it for the chosen language,
+               so the reader lands on this same page, not the homepage. The
+               dropdown is a native <details>, so it opens and closes with
+               no JS too; theoria.js only adds outside-click/Escape closing.
+               The closed trigger shows the current ISO code; each option
+               in the list is labelled in its own language (`lang`/`hreflang`
+               mark it for screen readers) beside its code. {% endcomment %}
+            <form class="lang-switch" action="{% url 'set_language' %}" method="post">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <details class="lang-menu" data-lang-menu>
+                    <summary class="lang-menu__trigger">
+                        <span class="visually-hidden">{% translate "Language" context "language switcher" %}: </span>
+                        <span aria-hidden="true">{{ LANGUAGE_CODE|upper }}</span>
+                        <svg class="lang-menu__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M6 9l6 6 6-6"/>
+                        </svg>
+                    </summary>
+                    <div class="lang-menu__panel" role="group"
+                         aria-label="{% translate "Language" context "language switcher" %}">
+                        {% for code, name in LANGUAGES %}
+                        <button type="submit" name="language" value="{{ code }}" class="lang-switch__opt"
+                                lang="{{ code }}" hreflang="{{ code }}"
+                                {% if code == LANGUAGE_CODE %}aria-current="true" aria-pressed="true"{% else %}aria-pressed="false"{% endif %}><span class="lang-switch__code" aria-hidden="true">{{ code|upper }}</span><span class="lang-switch__name">{{ name }}</span></button>
+                        {% endfor %}
+                    </div>
+                </details>
+            </form>
             <button type="button" class="theme-toggle" id="theme-toggle"
                     aria-label="{% translate "Switch to dark theme" %}" title="{% translate "Switch theme" %}">
                 {% comment %} Moon = "go dark", sun = "go light". Only one is
