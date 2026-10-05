@@ -121,7 +121,7 @@ def filter_by_title(queryset, term):
     """Narrow a movie queryset to titles containing `term`.
 
     On a translated request this matches the translated title *or* the
-    English one (a reader on /ru/ may type "Начало" or "Inception" — the
+    English one (a Russian reader may type "Начало" or "Inception" — the
     English title is still printed on the page as the original), which needs
     the queryset to have been through localize_movies().
     """

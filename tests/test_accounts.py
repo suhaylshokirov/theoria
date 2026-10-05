@@ -509,3 +509,17 @@ def test_account_page_empty_collections_link_to_browse():
     content = response.content.decode()
     assert content.count('href="/browse/"') >= 3
     User.objects.filter(email=email).delete()
+
+
+def test_login_sub_line_matches_the_gated_path_in_any_language():
+    # `next` is the bare path in every language now (no /ru/ prefix), so the
+    # gate table matches it directly.
+    from django.utils import translation
+
+    from accounts.views import _login_sub_line
+
+    for lang in ("en", "ru", "uz"):
+        with translation.override(lang):
+            movie = _login_sub_line("/movies/inception/")
+            assert movie != _login_sub_line("/")
+            assert movie != _login_sub_line("/analytics/")

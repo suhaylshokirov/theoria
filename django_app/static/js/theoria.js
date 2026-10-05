@@ -1516,6 +1516,97 @@
     });
   }
 
+  /* --- Language switch ----------------------------------------------------
+     A page has one URL in every language; the choice is the language cookie.
+     With JS the switcher posts without `next` -- Django's set_language then
+     answers 204 and sets the cookie, with no redirect-and-render -- and the
+     page reloads in place: same history entry, so switching adds nothing to
+     Back. Any failure falls back to the plain form submit (the no-JS path). */
+  function initLangSwitch() {
+    document.querySelectorAll("form[data-lang-switch]").forEach(function (form) {
+      function onSubmit(event) {
+        var submitter = event.submitter;
+        if (!submitter || !submitter.value) return;
+        event.preventDefault();
+
+        var menu = form.querySelector("[data-lang-menu]");
+        if (menu) menu.open = false;
+        if (submitter.value === document.documentElement.lang) return;
+
+        var body = new FormData(form);
+        body.delete("next");
+        body.set("language", submitter.value);
+
+        function fallback() {
+          form.removeEventListener("submit", onSubmit);
+          form.requestSubmit(submitter);
+        }
+
+        fetch(form.action, {
+          method: "POST",
+          body: body,
+          headers: { Accept: "application/json" },
+          credentials: "same-origin"
+        }).then(function (response) {
+          if (response.status === 204) window.location.reload();
+          else fallback();
+        }).catch(fallback);
+      }
+      form.addEventListener("submit", onSubmit);
+    });
+  }
+
+  /* --- Language freshness -------------------------------------------------
+     The back/forward cache (and the plain HTTP cache) can bring back a page
+     rendered in a language the reader has since left. Compare the language
+     this page was rendered in with the cookie on every pageshow, and when
+     the tab becomes visible again (a switch made in another tab); on a
+     mismatch, hide the stale text and reload. A sessionStorage key stops a
+     browser that blocks the cookie, or a server that ignores it, from
+     reloading forever. */
+  function initLanguageFreshness() {
+    var form = document.querySelector("form[data-lang-switch]");
+    if (!form) return;
+    var cookieName = form.getAttribute("data-lang-cookie");
+    var known = {};
+    form.querySelectorAll("button[name=language]").forEach(function (b) {
+      known[b.value] = true;
+    });
+    var rendered = document.documentElement.lang;
+    var GUARD = "theoria-lang-reload";
+
+    function wanted() {
+      var match = document.cookie.match(
+        new RegExp("(?:^|;\\s*)" + cookieName + "=([^;]*)")
+      );
+      var value = match ? decodeURIComponent(match[1]) : "";
+      return known[value] ? value : "en";
+    }
+
+    function check() {
+      var want = wanted();
+      var key = want + window.location.pathname;
+      try {
+        if (want === rendered) {
+          sessionStorage.removeItem(GUARD);
+          return;
+        }
+        if (sessionStorage.getItem(GUARD) === key) return;
+        sessionStorage.setItem(GUARD, key);
+      } catch (e) {
+        return;
+      }
+      document.documentElement.style.visibility = "hidden";
+      window.location.reload();
+    }
+
+    window.addEventListener("pageshow", check);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") check();
+    });
+    check();
+  }
+
   /* --- Collection actions (Like / Watch later / Add to top) ---------------
      Optimistic: the pill flips (and blooms) the instant it's pressed, and
      the request catches up behind it. Waiting on the round-trip first --
@@ -1838,6 +1929,8 @@
     initInlineValidation();
     initAccountMenu();
     initLangMenu();
+    initLangSwitch();
+    initLanguageFreshness();
     initSignOutConfirm();
     initCollectionActions();
     initAccountSections();

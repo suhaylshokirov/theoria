@@ -37,6 +37,10 @@ the site every night — Vercel does not honour `[skip ci]`. See `docs/architect
 `.mo` files** (Vercel's build may lack `msgfmt`, and a missing `.mo` silently serves English). Translate what
 readers see, never what code compares (`DEPARTMENT_ORDER`, `job == "Director"` stay raw English). Machine-read
 numbers in templates need `|unlocalize`. `USE_THOUSAND_SEPARATOR` stays off.
+The language is a **cookie, not a URL prefix** (Task 107): one URL per page in every language,
+`core.middleware.LanguageCookieMiddleware` reads `django_language` (no cookie → English, `Accept-Language`
+ignored), and old `/ru/` `/uz/` links 302 to the bare URL. The cookie is deliberately **not HttpOnly** —
+`theoria.js` reads it to refresh stale back/forward-cache pages; don't harden it.
 
 **Warehouse topology:** the nightly GitHub Actions job writes **Neon** (`eu-central-1`, source of
 truth). Django runs locally and reads a **local Postgres replica** — reading Neon directly costs

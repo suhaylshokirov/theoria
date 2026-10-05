@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.utils.translation import gettext as _
 
 
@@ -12,6 +13,9 @@ def js_strings(request):
     whether markup or script displays it -- never a copy in each file.
     """
     return {
+        # Read by theoria.js (the switcher form carries it as a data- attribute)
+        # so the cookie's name is never hardcoded in the script.
+        "language_cookie_name": settings.LANGUAGE_COOKIE_NAME,
         "js_strings": {
             "Open menu": _("Open menu"),
             "Close menu": _("Close menu"),

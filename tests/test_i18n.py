@@ -26,7 +26,19 @@ from django.utils.translation import gettext, ngettext
 from movies.models import Genre, Movie, MovieRating, Person, Series
 
 LOCALE_DIR = Path(__file__).resolve().parent.parent / "django_app" / "locale"
-PREFIXES = {"en": "", "ru": "/ru", "uz": "/uz"}
+COOKIE = "django_language"
+
+
+def _get(lang, path, client=client, **extra):
+    """GET `path` as a reader whose language cookie is `lang`.
+
+    The module shares one client, so the cookie is always popped afterwards.
+    """
+    client.cookies[COOKIE] = lang
+    try:
+        return client.get(path, **extra)
+    finally:
+        client.cookies.pop(COOKIE, None)
 
 
 def _home_mocks():
@@ -83,22 +95,21 @@ def test_english_urls_are_unprefixed_and_unchanged():
         assert reverse("profile") == "/me/"
 
 
-@pytest.mark.parametrize("lang", ["ru", "uz"])
-def test_other_languages_get_a_prefix_and_keep_the_english_slug(lang):
+@pytest.mark.parametrize("lang", ["en", "ru", "uz"])
+def test_every_language_reverses_to_the_same_unprefixed_path(lang):
     with translation.override(lang):
-        assert reverse("movies:movie_list") == f"/{lang}/movies/"
+        assert reverse("movies:movie_list") == "/movies/"
         # Slugs are the URL identity and never translate.
-        assert reverse("movies:movie_detail", args=["fight-club"]) == \
-            f"/{lang}/movies/fight-club/"
+        assert reverse("movies:movie_detail", args=["fight-club"]) == "/movies/fight-club/"
 
 
-# --- Pages render under all three prefixes ----------------------------------
+# --- Pages render in all three languages ----------------------------------
 
 
 @pytest.mark.parametrize("lang", ["en", "ru", "uz"])
 def test_home_renders_in_every_language(lang):
     with _home_mocks():
-        response = client.get(f"{PREFIXES[lang]}/")
+        response = _get(lang, "/")
     assert response.status_code == 200
     assert f'<html lang="{lang}">' in response.content.decode()
 
@@ -106,7 +117,7 @@ def test_home_renders_in_every_language(lang):
 @pytest.mark.parametrize("lang", ["en", "ru", "uz"])
 def test_movie_list_renders_in_every_language(lang):
     with _movie_list_mocks():
-        response = client.get(f"{PREFIXES[lang]}/movies/")
+        response = _get(lang, "/movies/")
     assert response.status_code == 200
 
 
@@ -114,22 +125,22 @@ def test_movie_list_renders_in_every_language(lang):
 def test_auth_pages_render_in_every_language(lang):
     anon = type(client)()
     for path in ("/accounts/login/", "/accounts/signup/"):
-        assert anon.get(f"{PREFIXES[lang]}{path}").status_code == 200
+        assert _get(lang, path, client=anon).status_code == 200
 
 
 @pytest.mark.parametrize("lang", ["en", "ru", "uz"])
 def test_404_renders_in_every_language(lang):
     with override_settings(DEBUG=False):
-        response = client.get(f"{PREFIXES[lang]}/no/such/page/")
+        response = _get(lang, "/no/such/page/")
     assert response.status_code == 404
 
 
 def test_interface_is_actually_translated_not_silently_english():
     """A missing .mo fails silently — the site would just serve English."""
     with _movie_list_mocks():
-        ru = client.get("/ru/movies/").content.decode()
+        ru = _get("ru", "/movies/").content.decode()
     with _movie_list_mocks():
-        uz = client.get("/uz/movies/").content.decode()
+        uz = _get("uz", "/movies/").content.decode()
     assert "Сериалы" in ru and "TV Shows" not in ru
     assert "Seriallar" in uz and "TV Shows" not in uz
 
@@ -144,7 +155,7 @@ def test_compiled_catalogs_are_committed():
 
 def test_switcher_marks_the_current_language_and_offers_all_three():
     with _movie_list_mocks():
-        body = client.get("/ru/movies/").content.decode()
+        body = _get("ru", "/movies/").content.decode()
     assert body.count('class="lang-switch__opt"') == 3
     assert re.search(r'value="ru"[^>]*aria-current="true"', body)
     assert 'value="en"' in body and 'value="uz"' in body
@@ -153,21 +164,94 @@ def test_switcher_marks_the_current_language_and_offers_all_three():
 @pytest.mark.parametrize("source", ["en", "ru", "uz"])
 @pytest.mark.parametrize("target", ["en", "ru", "uz"])
 def test_switcher_round_trips_to_the_same_page(source, target):
-    """The form posts to the page's own language endpoint; the reader lands on
-    the same page in the new language, query string kept -- not the homepage.
-    Runs from every source language, because set_language only re-prefixes
-    `next` correctly when the request itself is in the source language."""
-    client.cookies.pop("django_language", None)
+    """The form posts to one endpoint with `next` = the page's own URL; the
+    reader lands on the same URL (query string kept) with the cookie set."""
     with _movie_list_mocks():
-        page = client.get(f"{PREFIXES[source]}/movies/?q=fight").content.decode()
+        page = _get(source, "/movies/?q=fight").content.decode()
     action = re.search(r'<form class="lang-switch" action="([^"]+)"', page).group(1)
-    assert action == f"{PREFIXES[source]}/i18n/setlang/"
+    assert action == "/i18n/setlang/"
     next_url = re.search(r'name="next" value="([^"]+)"', page).group(1)
+    assert next_url == "/movies/?q=fight"
     response = client.post(action, {"language": target, "next": next_url})
     assert response.status_code == 302
-    assert response["Location"] == f"{PREFIXES[target]}/movies/?q=fight"
-    assert response.cookies["django_language"].value == target
-    client.cookies.pop("django_language", None)
+    assert response["Location"] == "/movies/?q=fight"
+    cookie = response.cookies[COOKIE]
+    assert cookie.value == target
+    assert cookie["max-age"] == 60 * 60 * 24 * 365
+    client.cookies.pop(COOKIE, None)
+
+
+def test_switcher_without_next_answers_204_and_sets_the_cookie():
+    """What theoria.js sends: no `next`, Accept: application/json."""
+    response = client.post(
+        "/i18n/setlang/", {"language": "uz"}, HTTP_ACCEPT="application/json"
+    )
+    assert response.status_code == 204
+    assert response.cookies[COOKIE].value == "uz"
+    client.cookies.pop(COOKIE, None)
+
+
+def test_switcher_form_carries_the_hooks_the_script_needs():
+    with _movie_list_mocks():
+        body = client.get("/movies/").content.decode()
+    assert "data-lang-switch" in body
+    assert f'data-lang-cookie="{COOKIE}"' in body
+
+
+# --- Language selection (cookie only) ---------------------------------------
+
+
+@pytest.mark.parametrize("value", ["fr", "", "en-us", "<script>"])
+def test_unsupported_cookie_values_fall_back_to_english(value):
+    with _home_mocks():
+        response = _get(value, "/")
+    assert response.status_code == 200
+    assert '<html lang="en">' in response.content.decode()
+    assert response["Content-Language"] == "en"
+
+
+def test_accept_language_is_ignored_without_a_cookie():
+    with _home_mocks():
+        response = client.get("/", HTTP_ACCEPT_LANGUAGE="ru")
+    assert '<html lang="en">' in response.content.decode()
+
+
+@pytest.mark.parametrize("lang", ["en", "ru", "uz"])
+def test_html_responses_vary_on_cookie_and_name_their_language(lang):
+    with _home_mocks():
+        response = _get(lang, "/")
+    assert "Cookie" in response["Vary"]
+    assert response["Content-Language"] == lang
+
+
+def test_language_cookie_is_readable_by_script():
+    response = client.post("/i18n/setlang/", {"language": "ru", "next": "/"})
+    assert response.cookies[COOKIE]["httponly"] == ""
+    client.cookies.pop(COOKIE, None)
+
+
+# --- Old /ru/ and /uz/ links ------------------------------------------------
+
+
+@pytest.mark.parametrize("lang", ["ru", "uz"])
+def test_legacy_prefixed_urls_redirect_to_the_bare_url_with_the_cookie(lang):
+    response = client.get(f"/{lang}/movies/?q=fight")
+    assert response.status_code == 302
+    assert response["Location"] == "/movies/?q=fight"
+    assert response.cookies[COOKIE].value == lang
+    client.cookies.pop(COOKIE, None)
+
+
+def test_legacy_redirect_covers_the_prefix_root():
+    response = client.get("/ru/")
+    assert response.status_code == 302
+    assert response["Location"] == "/"
+    client.cookies.pop(COOKIE, None)
+
+
+def test_unknown_language_prefix_is_a_404_not_a_redirect():
+    with override_settings(DEBUG=False):
+        assert client.get("/fr/movies/").status_code == 404
 
 
 # --- Plurals ----------------------------------------------------------------
@@ -250,7 +334,7 @@ def test_machine_read_numbers_never_get_a_decimal_comma(lang):
     """Django localizes floats in ru/uz (7,5). Displayed text may; an attribute
     the script parses with parseFloat may not."""
     with _home_mocks():
-        body = client.get(f"/{lang}/").content.decode()
+        body = _get(lang, "/").content.decode()
     counts = re.findall(r'data-count="([^"]*)"', body)
     assert counts, "home page should carry count-up figures"
     assert all("," not in c and " " not in c for c in counts)
@@ -373,7 +457,7 @@ def test_russian_title_search_finds_the_film_on_the_list_page():
     with _movie_list_mocks():
         with patch("movies.views.filter_by_title") as search:
             search.side_effect = lambda qs, term: qs
-            response = client.get("/ru/movies/?q=Начало")
+            response = _get("ru", "/movies/?q=Начало")
     assert response.status_code == 200
     search.assert_called_once()
     assert search.call_args.args[1] == "Начало"
@@ -382,15 +466,15 @@ def test_russian_title_search_finds_the_film_on_the_list_page():
 # --- The movie page ---------------------------------------------------------
 
 
-def _detail(url_prefix, movie):
+def _detail(lang, movie):
     with _movie_detail_video_mocks(movie, []):
-        response = client.get(f"{url_prefix}/movies/{movie.slug}/")
+        response = _get(lang, f"/movies/{movie.slug}/")
     assert response.status_code == 200
     return response.content.decode()
 
 
 def test_russian_movie_page_shows_the_russian_text():
-    body = _detail("/ru", _translated_movie())
+    body = _detail("ru", _translated_movie())
     assert "Начало" in body
     assert "Вор крадёт секреты." in body
     assert "Ваш разум — место преступления." in body
@@ -415,7 +499,7 @@ def test_uzbek_page_falls_back_to_english_prose_with_a_quiet_marker():
         overview_tr=None, overview_i18n="A thief steals secrets.",
         tagline_tr=None, tagline_i18n="Your mind is the scene of the crime.",
     )
-    body = _detail("/uz", movie)
+    body = _detail("uz", movie)
     assert "A thief steals secrets." in body
     # The English paragraph is marked as English for screen readers.
     assert 'class="specimen-synopsis" lang="en"' in body
@@ -424,14 +508,14 @@ def test_uzbek_page_falls_back_to_english_prose_with_a_quiet_marker():
 
 
 def test_marker_never_names_a_pipeline_internal():
-    body = _detail("/uz", _translated_movie(overview_tr=None, overview_i18n="x"))
+    body = _detail("uz", _translated_movie(overview_tr=None, overview_i18n="x"))
     note = re.search(r'<p class="prose-note">(.*?)</p>', body).group(1)
     for internal in ("translation", "_tr", "dim_", "movie_id", ".sql"):
         assert internal not in note
 
 
 def test_translated_prose_shows_no_marker():
-    body = _detail("/uz", _translated_movie())
+    body = _detail("uz", _translated_movie())
     assert 'class="prose-note"' not in body
 
 
@@ -448,7 +532,7 @@ def test_movie_slug_is_the_same_in_every_language(lang):
     """A translated title never leaks into the URL: the slug is the identity."""
     with translation.override(lang):
         assert reverse("movies:movie_detail", args=["inception"]) == \
-            f"{PREFIXES[lang]}/movies/inception/"
+            "/movies/inception/"
 
 
 def test_genre_chip_keeps_the_english_slug_and_shows_the_translated_label():
@@ -459,7 +543,7 @@ def test_genre_chip_keeps_the_english_slug_and_shows_the_translated_label():
         with patch("movies.views.localize_genres", side_effect=lambda g: g):
             with patch.object(Genre, "objects", new=MagicMock()) as mgr:
                 mgr.using.return_value.filter.return_value.distinct.return_value = [genre]
-                body = client.get("/ru/movies/inception/").content.decode()
+                body = _get("ru", "/movies/inception/").content.decode()
     assert "?genre=science-fiction" in body
     assert ">фантастика</a>" in body
 
@@ -527,7 +611,7 @@ def test_analytics_dashboard_translates_genre_and_country_names():
     with patch("analytics.views._run_query", side_effect=lambda f: fake[f]), \
             patch("analytics.views.genre_labels", return_value={"Action": "боевик"}), \
             patch("analytics.views.country_labels", return_value={"Japan": "Япония"}):
-        response = client.get("/ru/analytics/")
+        response = _get("ru", "/analytics/")
     assert response.status_code == 200
     body = response.content.decode()
     assert "боевик" in body and "Япония" in body

@@ -750,6 +750,24 @@ untranslated Russian film) shows English prose, the paragraph carries `lang="en"
 line under it says so in the reader's language. Person *names* are not translated (TMDB has none),
 so person search and sort are unchanged.
 
+### 6.2 Choosing the language (Task 107, supersedes Task 92's URL prefixes)
+
+A page has one URL in every language. The reader's choice is the `django_language` cookie
+(1 year, not `HttpOnly` — `theoria.js` reads it, so don't "harden" it). `LanguageCookieMiddleware`
+(`core/middleware.py`) replaces Django's `LocaleMiddleware`: it activates the cookie's language,
+falls back to English for a missing or unsupported value, and **ignores `Accept-Language`** on
+purpose (a Russian-locale browser would otherwise get the machine-drafted Russian unasked). Every
+response carries `Vary: Cookie` and `Content-Language`, since one URL now has three renderings.
+
+Why not URL prefixes: history is a list of addresses, so with `/uz/movies/x/` and `/movies/x/` as
+different entries, Back after a switch landed on the old language. The switcher is still a real
+`<form>` POST to `set_language`, so it works without JS; with JS it posts without `next` (a 204),
+then reloads in place — no new history entry. A page restored from the back/forward cache in the
+wrong language notices the cookie disagrees with `<html lang>` and reloads (`initLanguageFreshness`,
+with a `sessionStorage` loop guard). Old `/ru/…` and `/uz/…` links 302 to the bare URL and set the
+cookie (302, so the cookie keeps being set). Accepted cost: a shared link opens in the recipient's
+language, and search engines see English only.
+
 ## 7. URL and page design
 
 ### 7.1 Slugs instead of surrogate keys
