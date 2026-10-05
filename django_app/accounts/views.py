@@ -164,12 +164,6 @@ _GATE_SUB_LINES = (
 
 
 def _login_sub_line(next_url: str) -> str:
-    # `next` arrives language-prefixed on the ru/uz sites (/ru/movies/...);
-    # the gate table below is written against the bare path.
-    for code, _name in settings.LANGUAGES:
-        if next_url.startswith(f"/{code}/"):
-            next_url = next_url[len(code) + 1:]
-            break
     for prefix, sub in _GATE_SUB_LINES:
         if next_url.startswith(prefix):
             return sub

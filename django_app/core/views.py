@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.conf import settings
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
@@ -193,3 +194,32 @@ def move_item(request, kind, item_id, direction):
     except (ValueError, CollectionItem.DoesNotExist):
         return HttpResponseBadRequest(gettext("That collection item could not be moved."))
     return _redirect_back(request, "profile")
+
+
+def set_language_cookie(response, code):
+    """Write the language cookie exactly as Django's set_language does."""
+    response.set_cookie(
+        settings.LANGUAGE_COOKIE_NAME,
+        code,
+        max_age=settings.LANGUAGE_COOKIE_AGE,
+        path=settings.LANGUAGE_COOKIE_PATH,
+        domain=settings.LANGUAGE_COOKIE_DOMAIN,
+        secure=settings.LANGUAGE_COOKIE_SECURE,
+        httponly=settings.LANGUAGE_COOKIE_HTTPONLY,
+        samesite=settings.LANGUAGE_COOKIE_SAMESITE,
+    )
+
+
+def legacy_language_redirect(request, lang, rest):
+    """Old /ru/... and /uz/... links: set the language, go to the bare URL.
+
+    302, not 301: a cached 301 would skip the server next time and never set
+    the cookie.
+    """
+    target = "/" + rest
+    query = request.META.get("QUERY_STRING")
+    if query:
+        target += "?" + query
+    response = redirect(target)
+    set_language_cookie(response, lang)
+    return response

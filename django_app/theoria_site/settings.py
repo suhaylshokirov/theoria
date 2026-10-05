@@ -105,10 +105,10 @@ AUTH_USER_MODEL = 'accounts.User'
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    # Between Session and Common, and the order is load-bearing: it reads the
-    # session/cookie language set by the switcher, and must run before
-    # CommonMiddleware so its language-prefix 404 fallback sees the URLconf.
-    'django.middleware.locale.LocaleMiddleware',
+    # Reads the language cookie the switcher sets. Kept ahead of
+    # CommonMiddleware so every later layer (and its error pages) already
+    # runs in the reader's language.
+    'core.middleware.LanguageCookieMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -245,6 +245,7 @@ if ON_VERCEL:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
+    LANGUAGE_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     # SECURE_HSTS_SECONDS is deliberately unset. HSTS is a promise a browser
     # caches and honours for its full duration, so a misconfiguration is not
@@ -312,14 +313,20 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en'
 
-# English is the unprefixed default (its URLs are unchanged); ru/uz live under
-# /ru/ and /uz/. Endonyms, because a reader hunting for their language must be
+# One URL per page in every language; the reader's choice lives in a cookie
+# (core.middleware.LanguageCookieMiddleware). Endonyms, because a reader hunting for their language must be
 # able to recognise it without reading the current one.
 LANGUAGES = [
     ('en', 'English'),
     ('ru', 'Русский'),
     ('uz', 'Oʻzbekcha'),
 ]
+
+LANGUAGE_COOKIE_AGE = 60 * 60 * 24 * 365
+# Deliberately left at the default HttpOnly=False: theoria.js reads this cookie
+# to notice a stale page restored from the back/forward cache or switched in
+# another tab. Don't "harden" it.
+LANGUAGE_COOKIE_HTTPONLY = False
 
 # Compiled .mo files are committed: Vercel's build image is not guaranteed to
 # have msgfmt, and a missing .mo fails silently (the site just serves English).
