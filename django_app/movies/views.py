@@ -58,6 +58,10 @@ MOSAIC_LIMIT = 120
 
 # ?sort= values accepted by movie_list, mapped to an order_by expression.
 # Nulls always sort last so movies missing a field don't lead the list.
+# Every caller appends "movie_id" after it (SERIES_SORTS: "series_id"):
+# hundreds of films share an IMDb rating or a release date, Postgres may
+# return ties in any order, and without a unique last key a page can repeat
+# a title that the next page then never shows (Task 112).
 #
 # "rating" points at imdb_rating — the single filtered annotation
 # (Max("movierating__rating", filter=Q(movierating__source="imdb"))) that
@@ -106,12 +110,12 @@ def home(request):
     top_rated = (
         localize_movies(Movie.objects.using("warehouse"))
         .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
-        .order_by(F("imdb_rating").desc(nulls_last=True))[:12]
+        .order_by(F("imdb_rating").desc(nulls_last=True), "movie_id")[:12]
     )
     newest = (
         localize_movies(Movie.objects.using("warehouse"))
         .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
-        .order_by(F("release_date").desc(nulls_last=True))[:12]
+        .order_by(F("release_date").desc(nulls_last=True), "movie_id")[:12]
     )
     # Task 90: TV's "what's new" analogue orders by *last* air date, not
     # first — a long-running show that just aired a new episode is genuinely
@@ -121,7 +125,7 @@ def home(request):
     recently_aired = (
         localize_series(Series.objects.using("warehouse"))
         .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
-        .order_by(F("last_air_date").desc(nulls_last=True))[:12]
+        .order_by(F("last_air_date").desc(nulls_last=True), "series_id")[:12]
     )
     for show in recently_aired:
         show.year_span = _series_year_span(show)
@@ -140,7 +144,7 @@ def home(request):
         for slug, poster_path in
         Movie.objects.using("warehouse")
         .filter(poster_path__isnull=False)
-        .order_by(F("release_date").desc(nulls_last=True))
+        .order_by(F("release_date").desc(nulls_last=True), "movie_id")
         .values_list("slug", "poster_path")[:100]
     ]
     series_tiles = [
@@ -148,7 +152,7 @@ def home(request):
         for slug, poster_path in
         Series.objects.using("warehouse")
         .filter(poster_path__isnull=False)
-        .order_by(F("first_air_date").desc(nulls_last=True))
+        .order_by(F("first_air_date").desc(nulls_last=True), "series_id")
         .values_list("slug", "poster_path")[:20]
     ]
     mosaic = _interleave_mosaic(movie_tiles, series_tiles, ratio=5)
@@ -255,7 +259,7 @@ def movie_list(request):
     movies = movies.annotate(
         imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
     )
-    movies = movies.order_by(title_order(sort, MOVIE_SORTS[sort]))
+    movies = movies.order_by(title_order(sort, MOVIE_SORTS[sort]), "movie_id")
 
     page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
@@ -331,7 +335,7 @@ def series_list(request):
     series = series.annotate(
         imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb"))
     )
-    series = series.order_by(series_name_order(sort, SERIES_SORTS[sort]))
+    series = series.order_by(series_name_order(sort, SERIES_SORTS[sort]), "series_id")
 
     page_obj = Paginator(series, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
     for row in page_obj:
@@ -1227,7 +1231,7 @@ def studio_detail(request, company_slug):
     )
     if q:
         movies = filter_by_title(movies, q)
-    movies = movies.order_by(title_order(sort, MOVIE_SORTS[sort]))
+    movies = movies.order_by(title_order(sort, MOVIE_SORTS[sort]), "movie_id")
 
     page_obj = Paginator(movies, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 

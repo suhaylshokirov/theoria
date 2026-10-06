@@ -228,8 +228,9 @@ def test_movie_list_sort_by_rating_uses_the_imdb_annotation():
     assert imdb_rating.source_expressions[0].name == "movierating__rating"
     assert imdb_rating.filter == Q(movierating__source="imdb")
     # order_by() was handed the same F("imdb_rating") this annotation defines.
-    (order_expr,), _ = qs.order_by.call_args
+    (order_expr, tiebreaker), _ = qs.order_by.call_args
     assert order_expr.expression.name == "imdb_rating"
+    assert tiebreaker == "movie_id"  # unique last key, so pages never overlap
 
 
 def test_movie_list_invalid_sort_falls_back_to_release():
@@ -353,8 +354,9 @@ def test_movie_list_genre_composes_with_revenue_sort():
     (_, kwargs), = qs.annotate.call_args_list
     assert isinstance(kwargs["imdb_rating"], Max)
     assert kwargs["imdb_rating"].filter == Q(movierating__source="imdb")
-    (order_expr,), _ = qs.order_by.call_args
+    (order_expr, tiebreaker), _ = qs.order_by.call_args
     assert order_expr.expression.name == "revenue"
+    assert tiebreaker == "movie_id"  # unique last key, so pages never overlap
     assert response.context["sort"] == "revenue"
 
 
@@ -465,8 +467,9 @@ def test_series_list_sort_by_rating_uses_the_imdb_annotation():
     assert isinstance(imdb_rating, Max)
     assert imdb_rating.source_expressions[0].name == "seriesrating__rating"
     assert imdb_rating.filter == Q(seriesrating__source="imdb")
-    (order_expr,), _ = qs.order_by.call_args
+    (order_expr, tiebreaker), _ = qs.order_by.call_args
     assert order_expr.expression.name == "imdb_rating"
+    assert tiebreaker == "series_id"  # unique last key, so pages never overlap
 
 
 def test_series_list_invalid_sort_falls_back_to_first_air():
@@ -571,8 +574,9 @@ def test_series_list_genre_composes_with_name_sort():
 
     assert response.status_code == 200
     qs.filter.assert_called_once_with(series_genres__genre_id=28)
-    (order_expr,), _ = qs.order_by.call_args
+    (order_expr, tiebreaker), _ = qs.order_by.call_args
     assert order_expr.expression.name == "name"
+    assert tiebreaker == "series_id"  # unique last key, so pages never overlap
     assert response.context["sort"] == "name"
 
 
@@ -2947,6 +2951,9 @@ def test_studio_detail_returns_200_with_expected_stats():
     assert response.context["q"] == ""
     assert response.context["sort"] == "release"
     assert list(response.context["page_obj"]) == [movie]
+    (order_expr, tiebreaker), _ = all_movies_qs.order_by.call_args
+    assert order_expr.expression.name == "release_date"
+    assert tiebreaker == "movie_id"  # unique last key, so pages never overlap
     body = response.content.decode()
     assert "Warner Bros. Pictures" in body
 
