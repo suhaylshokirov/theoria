@@ -27,6 +27,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "theoria_site.settings")
 django.setup()
 
 from django.contrib.auth import get_user_model  # noqa: E402
+from django.db.models import Exists  # noqa: E402
 from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 from django.urls import reverse  # noqa: E402
@@ -227,8 +228,9 @@ def test_movie_list_sort_by_rating_uses_the_imdb_annotation():
     assert imdb_rating.source_expressions[0].name == "movierating__rating"
     assert imdb_rating.filter == Q(movierating__source="imdb")
     # order_by() was handed the same F("imdb_rating") this annotation defines.
-    (order_expr,), _ = qs.order_by.call_args
+    (order_expr, tiebreaker), _ = qs.order_by.call_args
     assert order_expr.expression.name == "imdb_rating"
+    assert tiebreaker == "movie_id"  # unique last key, so pages never overlap
 
 
 def test_movie_list_invalid_sort_falls_back_to_release():
@@ -352,8 +354,9 @@ def test_movie_list_genre_composes_with_revenue_sort():
     (_, kwargs), = qs.annotate.call_args_list
     assert isinstance(kwargs["imdb_rating"], Max)
     assert kwargs["imdb_rating"].filter == Q(movierating__source="imdb")
-    (order_expr,), _ = qs.order_by.call_args
+    (order_expr, tiebreaker), _ = qs.order_by.call_args
     assert order_expr.expression.name == "revenue"
+    assert tiebreaker == "movie_id"  # unique last key, so pages never overlap
     assert response.context["sort"] == "revenue"
 
 
@@ -464,8 +467,9 @@ def test_series_list_sort_by_rating_uses_the_imdb_annotation():
     assert isinstance(imdb_rating, Max)
     assert imdb_rating.source_expressions[0].name == "seriesrating__rating"
     assert imdb_rating.filter == Q(seriesrating__source="imdb")
-    (order_expr,), _ = qs.order_by.call_args
+    (order_expr, tiebreaker), _ = qs.order_by.call_args
     assert order_expr.expression.name == "imdb_rating"
+    assert tiebreaker == "series_id"  # unique last key, so pages never overlap
 
 
 def test_series_list_invalid_sort_falls_back_to_first_air():
@@ -570,8 +574,9 @@ def test_series_list_genre_composes_with_name_sort():
 
     assert response.status_code == 200
     qs.filter.assert_called_once_with(series_genres__genre_id=28)
-    (order_expr,), _ = qs.order_by.call_args
+    (order_expr, tiebreaker), _ = qs.order_by.call_args
     assert order_expr.expression.name == "name"
+    assert tiebreaker == "series_id"  # unique last key, so pages never overlap
     assert response.context["sort"] == "name"
 
 
@@ -1197,6 +1202,22 @@ def _person(person_id=1, name="Test Person", slug="test-person"):
                   popularity=Decimal("9.5"))
 
 
+def _assert_filtered_by_credit_department(people, department):
+    """One Exists() over fact_credit for `department` -- not a join, whose
+    per-credit fan-out needed a .distinct() over every dim_person column."""
+    (condition,), kwargs = people.filter.call_args
+    assert not kwargs
+    assert isinstance(condition, Exists)
+    assert condition.query.model is Credit
+    lookups = {
+        (child.lhs.target.column, child.lookup_name): child.rhs
+        for child in condition.query.where.children
+    }
+    assert lookups[("department", "exact")] == department
+    assert ("person_id", "exact") in lookups  # correlated to the outer person
+    people.filter.return_value.distinct.assert_not_called()
+
+
 def test_person_list_returns_200_with_search():
     person = _person()
 
@@ -1219,13 +1240,12 @@ def test_actor_list_filters_people_by_acting_credit():
 
     with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
         using = person_mgr.using.return_value
-        scoped = using.filter.return_value.distinct.return_value
-        scoped.order_by.return_value = [person]
+        using.filter.return_value.order_by.return_value = [person]
 
         response = client.get("/actors/")
 
     assert response.status_code == 200
-    using.filter.assert_called_once_with(credits__department="Acting")
+    _assert_filtered_by_credit_department(using, "Acting")
     assert response.context["scope"] == "acting"
 
 
@@ -1234,13 +1254,12 @@ def test_director_list_filters_people_by_directing_credit():
 
     with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
         using = person_mgr.using.return_value
-        scoped = using.filter.return_value.distinct.return_value
-        scoped.order_by.return_value = [person]
+        using.filter.return_value.order_by.return_value = [person]
 
         response = client.get("/directors/")
 
     assert response.status_code == 200
-    using.filter.assert_called_once_with(credits__department="Directing")
+    _assert_filtered_by_credit_department(using, "Directing")
     assert response.context["scope"] == "directing"
 
 
@@ -1293,7 +1312,8 @@ def test_person_list_sorts_by_name_when_requested():
 
 def test_person_list_pins_jessica_alba_ahead_of_every_sort():
     """PINNED_PERSON_ID leads the ordering whichever sort is chosen — the
-    Case() is order_by's first argument, the requested sort only its second."""
+    Case() is order_by's first argument, the requested sort only its second —
+    and person_id breaks ties last, so pages never overlap or skip anyone."""
     from movies.views import PERSON_SORTS, PINNED_PERSON_ID
 
     assert PINNED_PERSON_ID == 56731
@@ -1304,9 +1324,10 @@ def test_person_list_pins_jessica_alba_ahead_of_every_sort():
 
             client.get("/people/", {"sort": sort})
 
-        pinned, requested = qs.order_by.call_args.args
+        pinned, requested, tiebreaker = qs.order_by.call_args.args
         assert requested == PERSON_SORTS[sort]
         assert pinned.cases[0].condition.children == [("person_id", 56731)]
+        assert tiebreaker == "person_id"
 
 
 def test_person_list_ajax_request_renders_results_fragment_only():
@@ -2930,6 +2951,9 @@ def test_studio_detail_returns_200_with_expected_stats():
     assert response.context["q"] == ""
     assert response.context["sort"] == "release"
     assert list(response.context["page_obj"]) == [movie]
+    (order_expr, tiebreaker), _ = all_movies_qs.order_by.call_args
+    assert order_expr.expression.name == "release_date"
+    assert tiebreaker == "movie_id"  # unique last key, so pages never overlap
     body = response.content.decode()
     assert "Warner Bros. Pictures" in body
 
