@@ -119,7 +119,7 @@ MAX_PAGES = int(_optional("MAX_PAGES", "5"))
 # films exist* in the warehouse: the most-voted titles of each year in the range
 # that clear a vote-count floor. Widening the years deepens the historical
 # corpus; raising the floor trades breadth for recognisability.
-DISCOVER_START_YEAR = int(_optional("DISCOVER_START_YEAR", "1970"))
+DISCOVER_START_YEAR = int(_optional("DISCOVER_START_YEAR", "1971"))
 DISCOVER_END_YEAR = int(_optional("DISCOVER_END_YEAR", "2026"))
 DISCOVER_PAGES_PER_YEAR = int(_optional("DISCOVER_PAGES_PER_YEAR", "1"))
 DISCOVER_MIN_VOTES = int(_optional("DISCOVER_MIN_VOTES", "300"))
