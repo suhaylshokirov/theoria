@@ -31,6 +31,14 @@ from typing import Any
 # the value stored in every *_translation.lang column.
 TRANSLATION_LANGUAGES = ("ru", "uz")
 
+# A film's `title` and a show's `name` are kept only for these languages. Uzbek
+# titles stay in their original form on purpose: TMDB's Uzbek titles cover ~15%
+# of films and ~5% of shows, so a Uzbek page would be a patchwork of translated
+# and untranslated titles, and the original is what a reader searches for anyway.
+# Uzbek overviews and taglines are still kept where TMDB has them.
+NAME_FIELDS = ("title", "name")
+NAME_LANGUAGES = ("ru",)
+
 
 def _clean(value: Any) -> str | None:
     """Strip a text field; "" / whitespace / null / a non-string all become None."""
@@ -69,6 +77,10 @@ def select_translations(
     home country (``ru``→``RU``, ``uz``→``UZ``) wins; otherwise the first one
     seen does.
 
+    ``title`` / ``name`` are dropped for any language outside NAME_LANGUAGES
+    (before the all-empty test, so a Uzbek entry whose only text was a title is
+    omitted rather than written as a blank row).
+
     Returns None when the payload has no ``translations`` block at all.
     """
     block = payload.get("translations")
@@ -81,7 +93,10 @@ def select_translations(
         if lang not in TRANSLATION_LANGUAGES:
             continue
         data = entry.get("data") or {}
-        values = {f: _clean(data.get(f)) for f in fields}
+        values = {
+            f: None if f in NAME_FIELDS and lang not in NAME_LANGUAGES else _clean(data.get(f))
+            for f in fields
+        }
         if all(v is None for v in values.values()):
             continue
         home = (entry.get("iso_3166_1") or "").upper() == lang.upper()

@@ -99,7 +99,20 @@ def test_select_translations_normalises_empty_strings_to_none():
     )
     assert picked["ru"]["tagline"] == "«Интриги»"
     assert picked["uz"]["tagline"] is None          # "" -> None
-    assert picked["uz"]["title"] == "Jang klubi"
+    # Uzbek titles are deliberately not kept; its overview still is.
+    assert picked["uz"]["title"] is None
+    assert picked["uz"]["overview"] == "Hech qanday"
+    assert picked["ru"]["title"] == "Бойцовский клуб"
+
+
+def test_select_translations_omits_a_language_whose_only_text_is_a_name():
+    only_title = _entry("uz", "UZ", title="Jang klubi", overview="", tagline="")
+    picked = select_translations(
+        _movie_with_translations(1, RU_FIGHT_CLUB, only_title), ("title", "overview", "tagline")
+    )
+    assert set(picked) == {"ru"}
+    show_only_name = _entry("uz", "UZ", name="Rik va Morti", overview="", tagline="")
+    assert select_translations(_movie_with_translations(1, show_only_name), ("name", "overview")) == {}
 
 
 def test_select_translations_omits_a_language_with_no_text_at_all():

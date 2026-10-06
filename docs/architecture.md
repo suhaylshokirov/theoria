@@ -472,8 +472,10 @@ no second dimension to bridge to. Row-per-language rather than `title_ru` / `tit
 means a fourth language is a new value in `lang`, not an `ALTER TABLE`. `lang` holds the bare
 ISO-639-1 code. Film, show and person rows are replaced by parent id on load (a film's translation set
 can shrink when TMDB withdraws one); the two vocabularies are plain upserts. **Russian is real
-data; Uzbek prose does not exist in TMDB** — Uzbek is chrome plus the genre seed and country
-names, and its overviews and biographies fall back to English (§6.1).
+data; Uzbek prose barely exists in TMDB** — Uzbek is chrome plus the genre seed and country
+names, and its overviews and biographies fall back to English (§6.1). Film titles and show names
+are kept for Russian only (`etl.translations.NAME_LANGUAGES`, Task 110): Uzbek covers ~15% of
+films, so Uzbek pages show original titles rather than a patchwork.
 
 ## 4. Idempotency & incremental loads
 
