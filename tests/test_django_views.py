@@ -1308,7 +1308,8 @@ def test_person_list_sorts_by_name_when_requested():
 
 def test_person_list_pins_jessica_alba_ahead_of_every_sort():
     """PINNED_PERSON_ID leads the ordering whichever sort is chosen — the
-    Case() is order_by's first argument, the requested sort only its second."""
+    Case() is order_by's first argument, the requested sort only its second —
+    and person_id breaks ties last, so pages never overlap or skip anyone."""
     from movies.views import PERSON_SORTS, PINNED_PERSON_ID
 
     assert PINNED_PERSON_ID == 56731
@@ -1319,9 +1320,10 @@ def test_person_list_pins_jessica_alba_ahead_of_every_sort():
 
             client.get("/people/", {"sort": sort})
 
-        pinned, requested = qs.order_by.call_args.args
+        pinned, requested, tiebreaker = qs.order_by.call_args.args
         assert requested == PERSON_SORTS[sort]
         assert pinned.cases[0].condition.children == [("person_id", 56731)]
+        assert tiebreaker == "person_id"
 
 
 def test_person_list_ajax_request_renders_results_fragment_only():

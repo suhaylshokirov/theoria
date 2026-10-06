@@ -649,7 +649,10 @@ def _person_list(request, people, list_title, scope):
         default=Value(1),
         output_field=IntegerField(),
     )
-    people = people.order_by(pinned_first, PERSON_SORTS[sort])
+    # person_id last: thousands of people share a popularity (and some a
+    # name), and Postgres may return ties in any order — without a unique
+    # final key a person can land on two pages while another lands on none.
+    people = people.order_by(pinned_first, PERSON_SORTS[sort], "person_id")
 
     page_obj = Paginator(people, PEOPLE_PER_PAGE).get_page(request.GET.get("page"))
 
