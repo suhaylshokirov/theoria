@@ -27,6 +27,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "theoria_site.settings")
 django.setup()
 
 from django.contrib.auth import get_user_model  # noqa: E402
+from django.db.models import Exists  # noqa: E402
 from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 from django.urls import reverse  # noqa: E402
@@ -1197,6 +1198,22 @@ def _person(person_id=1, name="Test Person", slug="test-person"):
                   popularity=Decimal("9.5"))
 
 
+def _assert_filtered_by_credit_department(people, department):
+    """One Exists() over fact_credit for `department` -- not a join, whose
+    per-credit fan-out needed a .distinct() over every dim_person column."""
+    (condition,), kwargs = people.filter.call_args
+    assert not kwargs
+    assert isinstance(condition, Exists)
+    assert condition.query.model is Credit
+    lookups = {
+        (child.lhs.target.column, child.lookup_name): child.rhs
+        for child in condition.query.where.children
+    }
+    assert lookups[("department", "exact")] == department
+    assert ("person_id", "exact") in lookups  # correlated to the outer person
+    people.filter.return_value.distinct.assert_not_called()
+
+
 def test_person_list_returns_200_with_search():
     person = _person()
 
@@ -1219,13 +1236,12 @@ def test_actor_list_filters_people_by_acting_credit():
 
     with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
         using = person_mgr.using.return_value
-        scoped = using.filter.return_value.distinct.return_value
-        scoped.order_by.return_value = [person]
+        using.filter.return_value.order_by.return_value = [person]
 
         response = client.get("/actors/")
 
     assert response.status_code == 200
-    using.filter.assert_called_once_with(credits__department="Acting")
+    _assert_filtered_by_credit_department(using, "Acting")
     assert response.context["scope"] == "acting"
 
 
@@ -1234,13 +1250,12 @@ def test_director_list_filters_people_by_directing_credit():
 
     with patch.object(Person, "objects", new=MagicMock()) as person_mgr:
         using = person_mgr.using.return_value
-        scoped = using.filter.return_value.distinct.return_value
-        scoped.order_by.return_value = [person]
+        using.filter.return_value.order_by.return_value = [person]
 
         response = client.get("/directors/")
 
     assert response.status_code == 200
-    using.filter.assert_called_once_with(credits__department="Directing")
+    _assert_filtered_by_credit_department(using, "Directing")
     assert response.context["scope"] == "directing"
 
 

@@ -683,10 +683,19 @@ def _person_queryset(department=None):
     "Actors" and "Directors" are no longer separate tables — they're the people
     holding an Acting or Directing credit, which is a question about
     fact_credit, not about which dimension someone landed in.
+
+    Exists(), not a join + .distinct(): the join fans each person out once per
+    credit, and DISTINCT then has to compare every dim_person column
+    (biography included) to fold them back — for the page and its COUNT.
     """
     people = Person.objects.using("warehouse")
     if department:
-        people = people.filter(credits__department=department).distinct()
+        people = people.filter(
+            Exists(
+                Credit.objects.using("warehouse")
+                .filter(person_id=OuterRef("pk"), department=department)
+            )
+        )
     return people
 
 
