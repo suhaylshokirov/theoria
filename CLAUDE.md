@@ -45,7 +45,7 @@ ignored), and old `/ru/` `/uz/` links 302 to the bare URL. The cookie is deliber
 **Warehouse topology:** the nightly GitHub Actions job writes **Neon** (`eu-central-1`, source of
 truth). Django runs locally and reads a **local Postgres replica** — reading Neon directly costs
 ~90 ms/query (seconds/page). `manage.py serve` calls `sync_if_stale()` first: one date query
-against Neon, and a full truncate-and-reload (`scripts/sync_warehouse_from_neon.py`, ~60s, ~624k
+against Neon, and a full truncate-and-reload (`scripts/sync_warehouse_from_neon.py`, ~1.2M
 rows) *only* when Neon's `ingestion_date` is newer than the replica's — a normal restart is
 instant. `python -m scripts.sync_warehouse_from_neon [--if-stale]` runs it standalone (e.g. from
 cron). `.env` locally: `DATABASE_URL` = local replica, `NEON_DATABASE_URL` = Neon (sync source
