@@ -111,6 +111,15 @@ NEON_DATABASE_URL = _optional("NEON_DATABASE_URL", "")
 #     wiped between invocations.
 AUTH_DATABASE_URL = _optional("AUTH_DATABASE_URL", "")
 
+# --- Redis cache -------------------------------------------------------------
+# REDIS_URL (a rediss:// URL) points the site's read-layer cache, and the
+# pipeline's "data version" marker, at one Redis. It is deliberately NOT in any
+# required role: the cache is an optimisation, so an unset value means "no
+# shared cache" (per-process fallback, short TTLs), never "refuse to start" --
+# unlike AUTH_DATABASE_URL, whose absence would silently lose user accounts.
+# Leave it blank locally.
+REDIS_URL = _optional("REDIS_URL", "")
+
 # --- Ingestion tuning ------------------------------------------------------
 MAX_PAGES = int(_optional("MAX_PAGES", "5"))
 

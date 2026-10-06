@@ -23,6 +23,7 @@ PROJECT_ROOT = BASE_DIR.parent
 # environment-derived value, including this project's own settings.
 sys.path.insert(0, str(PROJECT_ROOT))
 import config  # noqa: E402
+from core.cache_backend import build_caches  # noqa: E402
 
 # config.py only enforces the variables *every* process needs on import; this
 # is the Django site starting up, so this is where its own required set is
@@ -115,7 +116,17 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.PrivatePagesMiddleware',
+    # Innermost, so the Server-Timing it reports covers only the view's own
+    # cache reads.
+    'core.middleware.CacheTimingMiddleware',
 ]
+
+# Cache (Task 113)
+#
+# Redis when REDIS_URL is set, else a per-process cache -- see
+# core/cache_backend.py for the fail-open behaviour and the `theoria:<key>`
+# key contract the nightly job relies on (core/datacache.py is what views use).
+CACHES = build_caches(config.REDIS_URL, on_vercel=ON_VERCEL)
 
 # Sessions belong to the durable application database. The warehouse remains
 # read-only and never receives Django migrations.

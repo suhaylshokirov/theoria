@@ -4,6 +4,8 @@ from django.conf import settings
 from django.utils import translation
 from django.utils.cache import patch_cache_control, patch_vary_headers
 
+from core import datacache
+
 
 class PrivatePagesMiddleware:
     """Keep rendered pages out of every cache that could serve them stale.
@@ -56,4 +58,25 @@ class LanguageCookieMiddleware:
         patch_vary_headers(response, ("Cookie",))
         if "Content-Language" not in response:
             response["Content-Language"] = code
+        return response
+
+
+class CacheTimingMiddleware:
+    """Report which cached reads a request hit, in a Server-Timing header.
+
+    `Server-Timing: cache;desc="home=hit,labels=miss"` lets anyone confirm
+    from the browser's network panel (or curl -I) that a page is being served
+    from the cache, without log access. It also opens the per-request scope in
+    which datacache reads the data version once instead of once per call.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        with datacache.request_scope() as scope:
+            response = self.get_response(request)
+        timing = scope.server_timing()
+        if timing:
+            response["Server-Timing"] = timing
         return response

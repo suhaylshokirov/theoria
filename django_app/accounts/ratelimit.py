@@ -3,11 +3,12 @@
 Separate from codes.py's per-email/purpose cooldown, which stops one address
 from being issued too many codes -- this stops one IP from hammering the
 signup endpoint itself with many different usernames/emails (enumeration,
-scripted abuse). Backed by Django's cache (LocMemCache, this project's
-unconfigured default), so a count resets on process restart and isn't shared
-across serverless instances on Vercel -- an accepted trade-off at this
-project's scale, the same posture codes.py already takes for its own,
-lower-stakes limits.
+scripted abuse). Backed by Django's default cache. With REDIS_URL set (the
+deployed site) the count lives in Redis, so it is shared across serverless
+instances and survives a cold start; without it (local development) it falls
+back to per-process LocMemCache, where a count resets on restart. If Redis is
+unreachable the cache reads as empty and the limit fails open -- the same
+accepted trade-off codes.py already takes for its own, lower-stakes limits.
 """
 
 from __future__ import annotations
