@@ -11,12 +11,12 @@
 <div class="poster-card is-film">
     <a href="{% url 'movies:series_detail' series.slug %}">
         {% if series.poster_path %}
-        <img class="poster" src="{{ series.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=series.name %}{{ title }} poster{% endblocktranslate %}" loading="lazy" decoding="async">
+        <img class="poster" src="{{ series.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=series.display_title %}{{ title }} poster{% endblocktranslate %}" loading="lazy" decoding="async">
         {% else %}
         <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}
         <div class="card-body">
-            <span class="card-title">{{ series.name }}</span>
+            <span class="card-title">{{ series.display_title }}</span>
             {% if card_sub %}
             <span class="card-role">{{ card_sub }}</span>
             {% else %}

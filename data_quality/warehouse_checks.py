@@ -28,7 +28,7 @@ for a given ingestion_date (the third, translations, is described at the end):
            table, not this date's rows: an unchanged row keeps its old
            ingestion_date (see _upsert), so a no-change night tags none.
 
-    3. Translations (Task 93) — the four *_translation tables carry only
+    3. Translations (Task 93, 109) — the five *_translation tables carry only
        languages the site ships, and are non-empty whenever their Silver file
        was. See check_translation_sanity().
 
@@ -116,9 +116,10 @@ _FK_CHECKS = [
     # Empty on a warehouse with no series videos loaded yet, so this passes
     # trivially until the first load.
     ("dim_series_video", "series_id", "dim_series", "series_id"),
-    # Task 93: the four translation tables. Empty until the first partition
+    # Task 93, 109: the five translation tables. Empty until the first partition
     # carrying translations is loaded, so they pass trivially until then.
     ("movie_translation", "movie_id", "dim_movie", "movie_id"),
+    ("series_translation", "series_id", "dim_series", "series_id"),
     ("person_translation", "person_id", "dim_person", "person_id"),
     ("genre_translation", "genre_id", "dim_genre", "genre_id"),
     ("country_translation", "country_code", "dim_country", "country_code"),
@@ -876,6 +877,7 @@ def check_fact_load_sanity(
 # (silver entity, warehouse table, parent id column)
 _TRANSLATION_ENTITIES = [
     ("movie_translations", "movie_translation", "movie_id"),
+    ("series_translations", "series_translation", "series_id"),
     ("person_translations", "person_translation", "person_id"),
     ("genre_translations", "genre_translation", "genre_id"),
     ("country_translations", "country_translation", "country_code"),
@@ -893,7 +895,7 @@ def _rows_per_lang(session: Session, table: str) -> dict[str, int]:
 def check_translation_sanity(
     session: Session, bucket: str, ingestion_date: dt.date,
 ) -> list[CheckResult]:
-    """Row counts and the `lang` domain for the four *_translation tables.
+    """Row counts and the `lang` domain for the five *_translation tables.
 
     Two checks per table whose Silver file exists for the date:
 

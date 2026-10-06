@@ -23,8 +23,9 @@ from movies.models import (
     SeriesGenre, SeriesLanguage, SeriesNetwork, SeriesRating, SeriesVideo,
 )
 from movies.i18n import (
-    attach_movie_titles, country_labels, filter_by_title, genre_labels,
-    is_translated_request, localize_genres, localize_movies, localize_people,
+    attach_movie_titles, attach_series_titles, country_labels, filter_by_series_name,
+    filter_by_title, genre_labels, is_translated_request, localize_genres,
+    localize_movies, localize_people, localize_series, series_name_order,
     title_order,
 )
 from movies.vocab import display_department, display_job
@@ -118,7 +119,7 @@ def home(request):
     # same year is not. A movie has one date that means both things at once;
     # a show doesn't, so this can't just reuse newest's ordering.
     recently_aired = (
-        Series.objects.using("warehouse")
+        localize_series(Series.objects.using("warehouse"))
         .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
         .order_by(F("last_air_date").desc(nulls_last=True))[:12]
     )
@@ -319,9 +320,9 @@ def series_list(request):
     if genre not in genre_slugs:
         genre = ""
 
-    series = Series.objects.using("warehouse").all()
+    series = localize_series(Series.objects.using("warehouse").all())
     if q:
-        series = series.filter(name__icontains=q)
+        series = filter_by_series_name(series, q)
     if genre:
         series = series.filter(series_genres__genre_id=genre_slugs[genre])
     # Annotated unconditionally, same reasoning as movie_list()'s imdb_rating:
@@ -330,7 +331,7 @@ def series_list(request):
     series = series.annotate(
         imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb"))
     )
-    series = series.order_by(SERIES_SORTS[sort])
+    series = series.order_by(series_name_order(sort, SERIES_SORTS[sort]))
 
     page_obj = Paginator(series, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
     for row in page_obj:
@@ -399,10 +400,11 @@ def _browse_rows(q, sort):
     movies = localize_movies(Movie.objects.using("warehouse").all())
     if q:
         movies = filter_by_title(movies, q)
-    # A translated title sorts under its translated spelling, so the movie
-    # side of the union reads title_i18n where the show side reads `name`
-    # (series carry no translations).
+    # A translated title sorts under its translated spelling, so each side of
+    # the union reads its translated column (title_i18n / name_i18n) on a
+    # translated request, and the English one otherwise.
     title_column = "title_i18n" if is_translated_request() else "title"
+    name_column = "name_i18n" if is_translated_request() else "name"
     movies = movies.annotate(
         kind=Value("movie", output_field=CharField()),
         item_id=F("movie_id"),
@@ -412,14 +414,14 @@ def _browse_rows(q, sort):
         rating=Max("movierating__rating", filter=Q(movierating__source="imdb")),
     ).values("kind", "item_id", "sort_title", "sort_title_lower", "sort_date", "rating")
 
-    series = Series.objects.using("warehouse").all()
+    series = localize_series(Series.objects.using("warehouse").all())
     if q:
-        series = series.filter(name__icontains=q)
+        series = filter_by_series_name(series, q)
     series = series.annotate(
         kind=Value("series", output_field=CharField()),
         item_id=F("series_id"),
-        sort_title=F("name"),
-        sort_title_lower=Lower("name"),
+        sort_title=F(name_column),
+        sort_title_lower=Lower(name_column),
         sort_date=F("first_air_date"),
         rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")),
     ).values("kind", "item_id", "sort_title", "sort_title_lower", "sort_date", "rating")
@@ -457,7 +459,7 @@ def browse(request):
 
     series_by_id = {
         show.series_id: show
-        for show in Series.objects.using("warehouse")
+        for show in localize_series(Series.objects.using("warehouse"))
         .filter(series_id__in=series_ids)
         .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
     }
@@ -541,7 +543,7 @@ def cartoon_list(request):
         imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
     )
 
-    series = Series.objects.using("warehouse").filter(
+    series = localize_series(Series.objects.using("warehouse")).filter(
         Exists(
             SeriesGenre.objects.using("warehouse")
             .filter(series_id=OuterRef("pk"), genre_id=CARTOON_ANIMATION_GENRE_ID)
@@ -552,7 +554,7 @@ def cartoon_list(request):
         ),
     )
     if q:
-        series = series.filter(name__icontains=q)
+        series = filter_by_series_name(series, q)
     series = series.annotate(
         imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb"))
     )
@@ -566,7 +568,7 @@ def cartoon_list(request):
     for show in series:
         show.kind = "series"
         show.sort_date = show.first_air_date
-        show.sort_title = show.name
+        show.sort_title = show.display_title
         show.year_span = _series_year_span(show)
         items.append(show)
 
@@ -930,7 +932,9 @@ def series_detail(request, series_slug):
     (Task 88), and a trailer via dim_series_video (Task 90) reusing
     movie_detail()'s _pick_trailer() unchanged.
     """
-    series = get_object_or_404(Series.objects.using("warehouse"), slug=series_slug)
+    series = get_object_or_404(
+        localize_series(Series.objects.using("warehouse")), slug=series_slug
+    )
     series_id = series.series_id
 
     genres = localize_genres(
@@ -1394,13 +1398,9 @@ FILMOGRAPHY_SORTS = {
 
 
 def _filmography_title(title_obj):
-    """A title's display name, read generically since Task 89 mixed a
-    movie's `.title` and a show's `.name` into one filmography list."""
-    return (
-        getattr(title_obj, "display_title", None)
-        or getattr(title_obj, "name", None)
-        or ""
-    )
+    """A title's display name. Movie and Series both expose `display_title`
+    (translated, else English), so the mixed filmography reads one attribute."""
+    return title_obj.display_title or ""
 
 
 def _filmography_sort_key(row, sort):
@@ -1540,6 +1540,9 @@ def person_detail(request, person_slug):
     filmography = _merge_person_credits(credits + series_credits)
     # Movies reach this page through fact_credit's join, so there is no movie
     # queryset to annotate; title_i18n is attached in one extra query instead.
+    attach_series_titles(
+        row["title_obj"] for row in filmography if row["kind"] == "series"
+    )
     attach_movie_titles(
         row["title_obj"] for row in filmography if row["kind"] == "movie"
     )
@@ -1595,8 +1598,12 @@ def person_detail(request, person_slug):
         rows = [
             r for r in rows
             if needle in _filmography_title(r["title_obj"]).lower()
-            # A film's English title stays searchable on a translated page.
-            or needle in (getattr(r["title_obj"], "title", None) or "").lower()
+            # A title's English spelling stays searchable on a translated page.
+            or needle in (
+                getattr(r["title_obj"], "title", None)
+                or getattr(r["title_obj"], "name", None)
+                or ""
+            ).lower()
         ]
     rows = _sorted_filmography(rows, sort)
 

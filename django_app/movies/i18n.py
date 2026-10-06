@@ -2,9 +2,10 @@
 
 Two kinds of translated text reach a page, and they take different routes:
 
-* Per-entity prose (a film's title/overview/tagline, a person's biography) is
-  annotated onto the queryset by `localize_movies()` / `localize_people()`, so
-  a search or a sort can run against the translated column in SQL.
+* Per-entity prose (a film's title/overview/tagline, a show's name/overview/
+  tagline, a person's biography) is annotated onto the queryset by
+  `localize_movies()` / `localize_series()` / `localize_people()`, so a search
+  or a sort can run against the translated column in SQL.
 * The two fixed vocabularies (genre names, country names) are small enough to
   load whole: `genre_labels()` / `country_labels()` return {English name:
   translated name}, applied wherever a name is rendered — including the
@@ -23,6 +24,7 @@ from django.utils.translation import get_language
 
 from movies.models import (
     CountryTranslation, GenreTranslation, MovieTranslation, PersonTranslation,
+    SeriesTranslation,
 )
 
 DEFAULT_LANG = "en"
@@ -74,6 +76,27 @@ def localize_movies(queryset):
     )
 
 
+def localize_series(queryset):
+    """Annotate name/overview/tagline in the reader's language (Task 109).
+
+    The TV twin of localize_movies(): adds `name_i18n`, `overview_i18n`,
+    `tagline_i18n` (translated, else English) and the raw `name_tr`,
+    `overview_tr`, `tagline_tr` (translated, else NULL).
+    """
+    lang = current_lang()
+    if lang == DEFAULT_LANG:
+        return queryset
+    return queryset.annotate(
+        name_tr=_column(SeriesTranslation, "series_id", "name", lang),
+        overview_tr=_column(SeriesTranslation, "series_id", "overview", lang),
+        tagline_tr=_column(SeriesTranslation, "series_id", "tagline", lang),
+    ).annotate(
+        name_i18n=Coalesce("name_tr", "name"),
+        overview_i18n=Coalesce("overview_tr", "overview"),
+        tagline_i18n=Coalesce("tagline_tr", "tagline"),
+    )
+
+
 def localize_people(queryset):
     """Annotate `biography_i18n` and the raw `biography_tr` (see above)."""
     lang = current_lang()
@@ -106,6 +129,28 @@ def attach_movie_titles(movies):
             movie.title_i18n = titles[movie.movie_id]
 
 
+def attach_series_titles(series):
+    """Set `name_i18n` on already-loaded Series objects (in place).
+
+    The show-side twin of attach_movie_titles(), for a person's filmography
+    where shows arrive through fact_series_credit.
+    """
+    lang = current_lang()
+    series = list(series)
+    if lang == DEFAULT_LANG or not series:
+        return
+    names = dict(
+        SeriesTranslation.objects.using("warehouse")
+        .filter(series_id__in={s.series_id for s in series}, lang=lang)
+        .exclude(name__isnull=True)
+        .exclude(name="")
+        .values_list("series_id", "name")
+    )
+    for show in series:
+        if show.series_id in names:
+            show.name_i18n = names[show.series_id]
+
+
 def title_order(sort_key, english_order):
     """`english_order` for English; the translated-title ordering otherwise.
 
@@ -128,6 +173,26 @@ def filter_by_title(queryset, term):
     if is_translated_request():
         return queryset.filter(Q(title_i18n__icontains=term) | Q(title__icontains=term))
     return queryset.filter(title__icontains=term)
+
+
+def series_name_order(sort_key, english_order):
+    """`english_order` for English; the translated-name ordering otherwise.
+
+    The show-side twin of title_order(): only the "name" sort has a translated
+    column; the rest are numbers or dates.
+    """
+    if sort_key == "name" and is_translated_request():
+        return F("name_i18n").asc()
+    return english_order
+
+
+def filter_by_series_name(queryset, term):
+    """Narrow a show queryset to names containing `term` — the translated name
+    or the English one, as filter_by_title() does for films. Needs the queryset
+    to have been through localize_series()."""
+    if is_translated_request():
+        return queryset.filter(Q(name_i18n__icontains=term) | Q(name__icontains=term))
+    return queryset.filter(name__icontains=term)
 
 
 def genre_labels():

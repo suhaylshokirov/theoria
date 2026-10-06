@@ -26,6 +26,7 @@ S3 sources:
     silver/movie_videos/ingestion_date=YYYY-MM-DD/movie_videos.parquet  (optional)
     silver/series_videos/ingestion_date=YYYY-MM-DD/series_videos.parquet  (optional)
     silver/movie_translations/ingestion_date=YYYY-MM-DD/movie_translations.parquet  (optional)
+    silver/series_translations/ingestion_date=YYYY-MM-DD/series_translations.parquet  (optional)
     silver/person_translations/ingestion_date=YYYY-MM-DD/person_translations.parquet  (optional)
     silver/genre_translations/ingestion_date=YYYY-MM-DD/genre_translations.parquet  (optional)
     silver/country_translations/ingestion_date=YYYY-MM-DD/country_translations.parquet  (optional)
@@ -502,6 +503,16 @@ def load_movie_translation(
     )
 
 
+def load_series_translation(
+    session: Session, df: pd.DataFrame, ingestion_date: dt.date,
+) -> tuple[int, list[dict[str, Any]]]:
+    """Replace every series_translation row for the shows in this Silver partition."""
+    return _load_translations(
+        session, df, ingestion_date, table="series_translation", parent_col="series_id",
+        parent_table="dim_series", text_cols=["name", "overview", "tagline"], replace=True,
+    )
+
+
 def load_person_translation(
     session: Session, df: pd.DataFrame, ingestion_date: dt.date,
 ) -> tuple[int, list[dict[str, Any]]]:
@@ -945,6 +956,9 @@ def load_dimensions(
     movie_translations_df = _optional_silver(
         bucket, "movie_translations", ingestion_date, "movie_translations.parquet"
     )
+    series_translations_df = _optional_silver(
+        bucket, "series_translations", ingestion_date, "series_translations.parquet"
+    )
     person_translations_df = _optional_silver(
         bucket, "person_translations", ingestion_date, "person_translations.parquet"
     )
@@ -983,6 +997,13 @@ def load_dimensions(
         tv = series_df is not None and not series_df.empty
         if tv:
             counts["dim_series"] = load_dim_series(session, series_df)
+            # Task 109: after dim_series — series_translation has an FK to it.
+            # Gated on its own Silver file too, so 29_series_translation.sql
+            # need not be applied until a partition carrying one is loaded.
+            if series_translations_df is not None and not series_translations_df.empty:
+                counts["series_translation"], translation_rejects["series_translation"] = (
+                    load_series_translation(session, series_translations_df, ingestion_date)
+                )
             if networks_df is not None and not networks_df.empty:
                 counts["dim_network"] = load_dim_network(session, networks_df)
             else:

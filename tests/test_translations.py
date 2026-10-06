@@ -567,7 +567,9 @@ def test_check_translation_sanity_passes_when_loaded_and_in_domain(monkeypatch):
 
     results = check_translation_sanity(session, "b", DATE)
 
-    assert len(results) == 8 and all(r.passed for r in results)
+    # Two checks per table with a Silver file; series_translation has none here,
+    # so only its lang_domain check runs.
+    assert len(results) == 9 and all(r.passed for r in results)
     assert "ru=1200, uz=800" in next(r for r in results if r.check == "translations:movie_translation:load").detail
 
 
@@ -606,7 +608,7 @@ def test_check_translation_sanity_pre_task_93_partition_skips_the_load_check(mon
     assert not any(r.check.endswith(":load") and "person" in r.check for r in results)
 
 
-def test_check_fk_integrity_covers_the_four_translation_tables():
+def test_check_fk_integrity_covers_the_translation_tables():
     session = MagicMock()
     session.execute.return_value.scalar.return_value = 0
     checks = {r.check for r in check_fk_integrity(session)}

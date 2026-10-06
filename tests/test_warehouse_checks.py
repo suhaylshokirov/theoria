@@ -53,14 +53,14 @@ def test_check_fk_integrity_all_clean_all_pass():
 
     results = check_fk_integrity(mock_session)
 
-    assert len(results) == 30  # 13 movie/person (2 fact_collaboration checks dropped, Task 87; person_alias check dropped with the table, 26_drop_person_alias.sql) + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81) + 3 episode grain (84) + 1 dim_series_video (90) + 4 translation tables (93)
+    assert len(results) == 31  # 13 movie/person (2 fact_collaboration checks dropped, Task 87; person_alias check dropped with the table, 26_drop_person_alias.sql) + 6 series bridges (79) + 2 fact_series_credit (80) + 1 fact_series_rating (81) + 3 episode grain (84) + 1 dim_series_video (90) + 4 translation tables (93) + 1 series_translation (109)
     assert all(r.passed for r in results)
 
 
 def test_check_fk_integrity_flags_orphans():
     mock_session = MagicMock()
     # First FK check has orphans, rest are clean.
-    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 30
+    mock_session.execute.return_value.scalar.side_effect = [5] + [0] * 31
 
     results = check_fk_integrity(mock_session)
 

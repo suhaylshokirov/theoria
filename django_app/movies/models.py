@@ -37,39 +37,16 @@ class Genre(models.Model):
         return getattr(self, "name_i18n", None) or self.genre_name
 
 
-class Movie(models.Model):
-    movie_id = models.IntegerField(primary_key=True)
-    title = models.TextField()
-    release_date = models.DateField(null=True)
-    runtime = models.IntegerField(null=True)
-    budget = models.BigIntegerField(null=True)
-    revenue = models.BigIntegerField(null=True)
-    original_language = models.CharField(max_length=10, null=True)
-    status = models.CharField(max_length=50, null=True)
-    overview = models.TextField(null=True)
-    tagline = models.TextField(null=True)
-    poster_path = models.TextField(null=True)
-    backdrop_path = models.TextField(null=True)
-    slug = models.SlugField(max_length=300, unique=True, null=True)
-    imdb_id = models.CharField(max_length=20, null=True)
-    original_title = models.TextField(null=True)
-    homepage = models.TextField(null=True)
+class TranslatedProse:
+    """Overview/tagline display helpers shared by Movie and Series (Tasks 94, 109).
 
-    class Meta:
-        managed = False
-        db_table = "dim_movie"
-
-    def __str__(self):
-        return self.title
-
-    # Translated text (Task 94). movies.i18n.localize_movies() annotates
-    # `title_i18n` / `overview_i18n` / `tagline_i18n` (and the raw, possibly
-    # NULL `*_tr` columns) for a non-English request. The properties fall back
-    # to the English column when nothing was annotated, so a code path that
-    # forgets to localize renders English rather than a blank.
-    @property
-    def display_title(self):
-        return getattr(self, "title_i18n", None) or self.title
+    `localize_movies()` / `localize_series()` annotate `overview_i18n` /
+    `tagline_i18n` (translated, else English) and the raw `overview_tr` /
+    `tagline_tr` (translated, else NULL) for a non-English request. The
+    properties fall back to the English column when nothing was annotated, and
+    the `*_is_fallback` ones are how a template learns the English text is
+    standing in for a translation that does not exist.
+    """
 
     @property
     def display_overview(self):
@@ -100,6 +77,40 @@ class Movie(models.Model):
     @property
     def prose_is_fallback(self):
         return self.overview_is_fallback or self.tagline_is_fallback
+
+
+class Movie(TranslatedProse, models.Model):
+    movie_id = models.IntegerField(primary_key=True)
+    title = models.TextField()
+    release_date = models.DateField(null=True)
+    runtime = models.IntegerField(null=True)
+    budget = models.BigIntegerField(null=True)
+    revenue = models.BigIntegerField(null=True)
+    original_language = models.CharField(max_length=10, null=True)
+    status = models.CharField(max_length=50, null=True)
+    overview = models.TextField(null=True)
+    tagline = models.TextField(null=True)
+    poster_path = models.TextField(null=True)
+    backdrop_path = models.TextField(null=True)
+    slug = models.SlugField(max_length=300, unique=True, null=True)
+    imdb_id = models.CharField(max_length=20, null=True)
+    original_title = models.TextField(null=True)
+    homepage = models.TextField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_movie"
+
+    def __str__(self):
+        return self.title
+
+    # Translated text (Task 94). movies.i18n.localize_movies() annotates
+    # `title_i18n` (see TranslatedProse for overview/tagline). The property
+    # falls back to the English column when nothing was annotated, so a code
+    # path that forgets to localize renders English rather than a blank.
+    @property
+    def display_title(self):
+        return getattr(self, "title_i18n", None) or self.title
 
 
 class Date(models.Model):
@@ -522,7 +533,7 @@ class MovieLanguage(models.Model):
 # ---------------------------------------------------------------------------
 
 
-class Series(models.Model):
+class Series(TranslatedProse, models.Model):
     """dim_series: a TV show (Task 79)."""
 
     series_id = models.IntegerField(primary_key=True)
@@ -550,6 +561,33 @@ class Series(models.Model):
 
     def __str__(self):
         return self.name
+
+    # Translated name (Task 109), annotated by movies.i18n.localize_series().
+    # Named display_title, not display_name, to match Movie: the mixed lists
+    # (filmography, browse, cartoons, collections) read one attribute off
+    # either kind.
+    @property
+    def display_title(self):
+        return getattr(self, "name_i18n", None) or self.name
+
+
+class SeriesTranslation(models.Model):
+    series = models.ForeignKey(
+        Series, on_delete=models.DO_NOTHING, db_column="series_id",
+        primary_key=True, related_name="translations",
+    )
+    lang = models.CharField(max_length=5)
+    name = models.TextField(null=True)
+    overview = models.TextField(null=True)
+    tagline = models.TextField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "series_translation"
+
+    def __str__(self):
+        return f"{self.series_id}/{self.lang}"
 
 
 class Network(models.Model):

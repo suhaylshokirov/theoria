@@ -128,7 +128,7 @@ def _hydrate(items):
     # (for collection_flags), so an eager import back the other way would be
     # circular. By the time this function runs, movies.views has already
     # finished importing, so this just fetches it from sys.modules.
-    from movies.i18n import localize_movies
+    from movies.i18n import localize_movies, localize_series
     from movies.models import Movie, Series
     from movies.views import _series_year_span
 
@@ -143,7 +143,7 @@ def _hydrate(items):
     }
     series = {}
     for obj in (
-        Series.objects.using("warehouse")
+        localize_series(Series.objects.using("warehouse"))
         .filter(series_id__in=series_ids)
         .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
     ):
@@ -160,7 +160,7 @@ def _hydrate(items):
             item.content = series.get(item.content_id)
             if item.content is None:
                 continue
-            item.title = item.content.name or ""
+            item.title = item.content.display_title or ""
         rows.append(item)
     return rows
 

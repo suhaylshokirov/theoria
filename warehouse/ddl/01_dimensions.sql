@@ -369,6 +369,19 @@ CREATE TABLE IF NOT EXISTS movie_translation (
         FOREIGN KEY (movie_id) REFERENCES dim_movie (movie_id)
 );
 
+-- Task 109: the TV counterpart of movie_translation (29_series_translation.sql).
+CREATE TABLE IF NOT EXISTS series_translation (
+    series_id      INTEGER      NOT NULL,
+    lang           VARCHAR(5)   NOT NULL,
+    name           TEXT,
+    overview       TEXT,
+    tagline        TEXT,
+    ingestion_date DATE         NOT NULL,
+    CONSTRAINT pk_series_translation PRIMARY KEY (series_id, lang),
+    CONSTRAINT fk_series_translation_series
+        FOREIGN KEY (series_id) REFERENCES dim_series (series_id)
+);
+
 CREATE TABLE IF NOT EXISTS person_translation (
     person_id      INTEGER      NOT NULL,
     lang           VARCHAR(5)   NOT NULL,

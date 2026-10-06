@@ -153,7 +153,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> **33 tables** as of 2026-09-24 on the local replica: **29** as of 2026-09-23 on live Neon (and the
+> **34 tables** (Task 109's `series_translation`, DDL `29`; Neon only once `29` is applied there) — **33 tables** as of 2026-09-24 on the local replica: **29** as of 2026-09-23 on live Neon (and the
 > replica) plus Task 93's four `*_translation` tables (see the Translations block below) — Neon gets
 > those only once `27`/`28` are applied there. The **18
 > movie-side tables** were verified 2026-09-06 against `information_schema` and a fresh scratch DB
@@ -225,7 +225,8 @@ free-tier cap started to bind.
 (`also_known_as` from `GET /person/{id}`) — was dropped 2026-09-23 (`26_drop_person_alias.sql`) as
 write-only; Silver still produces `silver/person_aliases/`.
 
-**Translations (4, Tasks 93–94):** `movie_translation(movie_id FK, lang, title, overview, tagline)`,
+**Translations (5, Tasks 93–94, 109):** `movie_translation(movie_id FK, lang, title, overview, tagline)`,
+`series_translation(series_id FK, lang, name, overview, tagline)` (Task 109; seasons/episodes stay English),
 `person_translation(person_id FK, lang, biography)`, `genre_translation(genre_id FK, lang, genre_name)`,
 `country_translation(country_code FK, lang, name)` — PK `(entity id, lang)`, `lang` = bare ISO code
 (`ru`, `uz`). Not `dim_`/`fact_`/`bridge_`: each attaches repeating text to one dimension, no measure,

@@ -5,9 +5,12 @@ endpoint for every supplied series_id and writes each response as a separate
 raw JSON file to the Bronze layer on S3.
 
 One TMDB call per series. `append_to_response=aggregate_credits,external_ids,
-videos` folds three sub-resources into that one payload (verified live to
-return all three): the series-level cast/crew roll-up, the `imdb_id` join key,
-and the trailer/clip metadata.
+videos,translations` folds four sub-resources into that one payload: the
+series-level cast/crew roll-up, the `imdb_id` join key, the trailer/clip
+metadata, and (Task 109) the per-language name/overview/tagline. The
+translations block is trimmed to the shipped languages at write time
+(`etl.translations.trim_translations`) — a show carries ~50-75 languages and
+the full block would dwarf the ~3 KB base payload.
 
 `aggregate_credits` stays **inline** in this JSON — it is not split onto its
 own Bronze entity. This follows the Task 73 `videos` precedent, not the movie
@@ -39,11 +42,12 @@ import time
 import config
 from etl import s3_utils
 from etl.tmdb_client import TMDBClient
+from etl.translations import trim_translations
 
 logger = logging.getLogger(__name__)
 
-# One call per series covers details + cast/crew + imdb_id + videos.
-_APPEND_TO_RESPONSE = "aggregate_credits,external_ids,videos"
+# One call per series covers details + cast/crew + imdb_id + videos + translations.
+_APPEND_TO_RESPONSE = "aggregate_credits,external_ids,videos,translations"
 
 
 def ingest_series_details(
@@ -78,8 +82,10 @@ def ingest_series_details(
 
     for series_id in series_ids:
         try:
-            payload = client.get_series_details(
-                series_id, append_to_response=_APPEND_TO_RESPONSE
+            payload = trim_translations(
+                client.get_series_details(
+                    series_id, append_to_response=_APPEND_TO_RESPONSE
+                )
             )
 
             key = s3_utils.build_path(

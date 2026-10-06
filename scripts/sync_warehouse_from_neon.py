@@ -61,6 +61,8 @@ WAREHOUSE_TABLES = [
     # TV series dimensions (Tasks 79/84). Parents before children: dim_season /
     # dim_episode reference dim_series, so they follow it in the reload order.
     "dim_series",
+    # Task 109: a show's per-language name/overview/tagline; FK to dim_series.
+    "series_translation",
     "dim_network",
     "dim_season",
     "dim_episode",

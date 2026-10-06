@@ -770,8 +770,8 @@ def test_ingest_series_details_writes_one_file_per_series():
     assert "bronze/series_details/ingestion_date=2026-09-09/1399.json" in keys_written
 
 
-def test_ingest_series_details_sends_one_call_with_all_three_blocks_appended():
-    """One TMDB call per series, folding in aggregate_credits + external_ids + videos."""
+def test_ingest_series_details_sends_one_call_with_all_four_blocks_appended():
+    """One TMDB call per series, folding in credits, ids, videos and translations."""
     mock_client = MagicMock()
     mock_client.get_series_details.return_value = _series_detail(1396)
     mock_s3 = MagicMock()
@@ -786,7 +786,7 @@ def test_ingest_series_details_sends_one_call_with_all_three_blocks_appended():
 
     assert mock_client.get_series_details.call_count == 1
     _, kwargs = mock_client.get_series_details.call_args
-    assert kwargs["append_to_response"] == "aggregate_credits,external_ids,videos"
+    assert kwargs["append_to_response"] == "aggregate_credits,external_ids,videos,translations"
 
 
 def test_ingest_series_details_logs_failed_series_id_and_continues():
@@ -5737,7 +5737,7 @@ def test_refresh_series_writes_series_details_per_show():
     assert (succeeded, failed) == ([1396, 1399], [])
     assert mock_client.get_series_details.call_count == 2
     for _, kwargs in mock_client.get_series_details.call_args_list:
-        assert kwargs["append_to_response"] == "aggregate_credits,external_ids,videos"
+        assert kwargs["append_to_response"] == "aggregate_credits,external_ids,videos,translations"
 
     bodies = _bodies_by_key(mock_s3)
     assert set(bodies) == {
