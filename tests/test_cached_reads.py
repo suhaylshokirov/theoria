@@ -33,7 +33,9 @@ from movies import i18n  # noqa: E402
 from movies.models import (  # noqa: E402
     CountryTranslation, Genre, GenreTranslation, Movie, MovieRating, Person, Series,
 )
-from tests.test_django_views import _movie, _series  # noqa: E402
+from tests.test_django_views import (  # noqa: E402
+    _episode, _movie, _season, _series, _series_detail_mocks,
+)
 
 User = get_user_model()
 
@@ -381,3 +383,133 @@ def test_a_labels_callers_edit_cannot_reach_the_next_caller():
     with patch.object(CountryTranslation, "objects", new=manager), translation.override("ru"):
         i18n.country_labels()["Japan"] = "mutated"
         assert i18n.country_labels() == {"Japan": "Япония"}
+
+
+# --- {% datacache %} and the series episode list (Task 118) -------------------------
+
+
+def _render_fragment(template, **context):
+    from django.template import Context, Template
+
+    return Template("{% load datacache %}" + template).render(Context(context))
+
+
+def test_datacache_tag_renders_once_per_key():
+    from django.utils import translation
+
+    tag = '{% datacache "frag" item_id %}[{{ label }}]{% enddatacache %}'
+    with translation.override("en"):
+        assert _render_fragment(tag, item_id=1, label="first") == "[first]"
+        assert _render_fragment(tag, item_id=1, label="second") == "[first]"  # served from cache
+        assert _render_fragment(tag, item_id=2, label="other") == "[other]"  # another id, another entry
+
+
+def test_datacache_tag_keeps_languages_apart_without_being_asked():
+    from django.utils import translation
+
+    tag = '{% datacache "frag" %}[{{ label }}]{% enddatacache %}'
+    with translation.override("ru"):
+        assert _render_fragment(tag, label="привет") == "[привет]"
+    with translation.override("en"):
+        assert _render_fragment(tag, label="hello") == "[hello]"
+    with translation.override("ru"):
+        assert _render_fragment(tag, label="ignored") == "[привет]"
+
+
+def test_datacache_tag_rolls_over_with_the_data_version():
+    from django.utils import translation
+
+    tag = '{% datacache "frag" %}[{{ label }}]{% enddatacache %}'
+    with translation.override("en"):
+        cache.set("data_version", "v1")
+        assert _render_fragment(tag, label="old") == "[old]"
+        cache.set("data_version", "v2")
+        assert _render_fragment(tag, label="new") == "[new]"
+
+
+def test_datacache_tag_output_is_not_escaped_twice():
+    from django.utils import translation
+
+    tag = '{% datacache "frag" %}<b>{{ label }}</b>{% enddatacache %}'
+    with translation.override("en"):
+        first = _render_fragment(tag, label="a & b")
+        second = _render_fragment(tag, label="ignored")
+    assert first == second == "<b>a &amp; b</b>"
+
+
+def test_datacache_tag_needs_a_name():
+    from django.template import TemplateSyntaxError
+
+    with pytest.raises(TemplateSyntaxError):
+        _render_fragment("{% datacache %}x{% enddatacache %}")
+
+
+def _show_with_episodes():
+    show = _series()
+    season = _season(1, show, 1, "Season 1")
+    episode = _episode(101, show, 1, 1, name="Pilot", imdb_rating=Decimal("8.20"),
+                       imdb_vote_count=1200, imdb_id="tt0000001")
+    return show, season, episode
+
+
+def test_a_second_series_page_runs_no_season_or_episode_queries():
+    show, season, episode = _show_with_episodes()
+    with _series_detail_mocks(show, seasons=[season], episodes=[episode]) as mocks:
+        client = _signed_in_client()
+        first = client.get("/tv/test-show/")
+        assert mocks["season"].using.call_count == 1
+        assert mocks["episode"].using.call_count == 1
+        second = client.get("/tv/test-show/")
+        # Lazy `seasons`: on a hit the fragment is not rendered, so the
+        # queries behind it never run.
+        assert mocks["season"].using.call_count == 1
+        assert mocks["episode"].using.call_count == 1
+    assert b"Pilot" in first.content and b"Pilot" in second.content
+    assert 'series-episodes=miss' in first["Server-Timing"]
+    assert 'series-episodes=hit' in second["Server-Timing"]
+
+
+def test_a_cached_series_page_matches_the_uncached_one():
+    show, season, episode = _show_with_episodes()
+    with _series_detail_mocks(show, seasons=[season], episodes=[episode]):
+        client = _signed_in_client()
+        miss = _without_csrf(client.get("/tv/test-show/"))
+        hit = _without_csrf(client.get("/tv/test-show/"))
+    assert miss == hit
+
+
+def test_the_cached_episode_fragment_holds_nothing_per_reader():
+    from core.templatetags import datacache as tag_module
+
+    show, season, episode = _show_with_episodes()
+    fragments = []
+    real_cached = tag_module.cached
+
+    def spy(*args, **kwargs):
+        fragment = real_cached(*args, **kwargs)
+        fragments.append(fragment)
+        return fragment
+
+    with _series_detail_mocks(show, seasons=[season], episodes=[episode]), patch.object(
+        tag_module, "cached", spy
+    ):
+        _signed_in_client().get("/tv/test-show/")
+
+    (fragment,) = fragments
+    assert "Pilot" in fragment
+    assert "csrfmiddlewaretoken" not in fragment
+    assert user.username not in fragment and user.email not in fragment
+
+
+def test_the_series_page_renders_when_the_cache_is_down():
+    show, season, episode = _show_with_episodes()
+    broken = MagicMock()
+    broken.get.side_effect = RedisConnectionError("down")
+    broken.set.side_effect = RedisConnectionError("down")
+    with _series_detail_mocks(show, seasons=[season], episodes=[episode]) as mocks, patch.object(
+        datacache, "cache", broken
+    ):
+        response = _signed_in_client().get("/tv/test-show/")
+    assert response.status_code == 200
+    assert b"Pilot" in response.content
+    assert mocks["episode"].using.call_count == 1

@@ -8,6 +8,7 @@ from django.db.models import (
 )
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.functional import SimpleLazyObject
 from django.utils.http import urlencode
 from django.utils.text import slugify
 from django.utils.translation import gettext, gettext_lazy, pgettext
@@ -835,6 +836,49 @@ def _reconcile_languages(original_language, language_rows):
     return names
 
 
+def _build_seasons(series_id):
+    """Every season of a show as {season, episodes}, specials last."""
+    seasons = sorted(
+        Season.objects.using("warehouse").filter(series_id=series_id),
+        # "Specials" (season_number 0) reads last, not first, matching the
+        # convention every streaming app already uses — TMDB's season stub
+        # numbers it 0 because that's its position in the API array, not
+        # because a reader wants to watch it before Season 1.
+        key=lambda s: (s.season_number == 0, s.season_number),
+    )
+
+    # One query for every episode on the show, joined to its IMDb rating via
+    # the fact_episode_rating reverse relation (Task 88 step 1) — the same
+    # "one query, not one per season" posture as series_detail()'s credits query, and
+    # the same filtered-Max annotation Task 68 used for fact_movie_rating, so
+    # sorting and display can never disagree here either.
+    episodes = (
+        Episode.objects.using("warehouse")
+        .filter(series_id=series_id)
+        .annotate(
+            imdb_rating=Max("episoderating__rating", filter=Q(episoderating__source="imdb")),
+            imdb_vote_count=Max(
+                "episoderating__vote_count", filter=Q(episoderating__source="imdb")
+            ),
+        )
+        .order_by("episode_number")
+    )
+    episodes_by_season = {}
+    for episode in episodes:
+        episodes_by_season.setdefault(episode.season_number, []).append(episode)
+
+    # A season with no entry here isn't an error — Task 82's TV_SEASONS_MAX_NEW
+    # cap means dim_season already lists every season TMDB knows about while
+    # dim_episode only covers the 300/734 shows backfilled so far (Task 85).
+    # _episode_table.html renders that as a quiet "not catalogued yet" state,
+    # never an empty table.
+    seasons = [
+        {"season": season, "episodes": episodes_by_season.get(season.season_number, [])}
+        for season in seasons
+    ]
+    return seasons
+
+
 @login_required
 def series_detail(request, series_slug):
     """One show: mirrors movie_detail() — one query for every credit, split
@@ -957,45 +1001,6 @@ def series_detail(request, series_slug):
     )
     trailer = _pick_trailer(videos)
 
-    seasons = sorted(
-        Season.objects.using("warehouse").filter(series_id=series_id),
-        # "Specials" (season_number 0) reads last, not first, matching the
-        # convention every streaming app already uses — TMDB's season stub
-        # numbers it 0 because that's its position in the API array, not
-        # because a reader wants to watch it before Season 1.
-        key=lambda s: (s.season_number == 0, s.season_number),
-    )
-
-    # One query for every episode on the show, joined to its IMDb rating via
-    # the fact_episode_rating reverse relation (Task 88 step 1) — the same
-    # "one query, not one per season" posture as the credits query above, and
-    # the same filtered-Max annotation Task 68 used for fact_movie_rating, so
-    # sorting and display can never disagree here either.
-    episodes = (
-        Episode.objects.using("warehouse")
-        .filter(series_id=series_id)
-        .annotate(
-            imdb_rating=Max("episoderating__rating", filter=Q(episoderating__source="imdb")),
-            imdb_vote_count=Max(
-                "episoderating__vote_count", filter=Q(episoderating__source="imdb")
-            ),
-        )
-        .order_by("episode_number")
-    )
-    episodes_by_season = {}
-    for episode in episodes:
-        episodes_by_season.setdefault(episode.season_number, []).append(episode)
-
-    # A season with no entry here isn't an error — Task 82's TV_SEASONS_MAX_NEW
-    # cap means dim_season already lists every season TMDB knows about while
-    # dim_episode only covers the 300/734 shows backfilled so far (Task 85).
-    # _episode_table.html renders that as a quiet "not catalogued yet" state,
-    # never an empty table.
-    seasons = [
-        {"season": season, "episodes": episodes_by_season.get(season.season_number, [])}
-        for season in seasons
-    ]
-
     context = {
         "series": series,
         "genres": genres,
@@ -1010,7 +1015,10 @@ def series_detail(request, series_slug):
         "countries": countries,
         "languages": languages,
         "series_rating": series_rating,
-        "seasons": seasons,
+        # Lazy: the Season/Episode queries run only if the episodes fragment in
+        # series_detail.html is a cache miss (Task 118) -- on a hit nothing
+        # reads this, so the warehouse is never asked.
+        "seasons": SimpleLazyObject(lambda: _build_seasons(series_id)),
         "year_span": _series_year_span(series),
         "trailer": trailer,
         "collection_flags": collection_flags(
