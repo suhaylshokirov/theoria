@@ -111,6 +111,19 @@ NEON_DATABASE_URL = _optional("NEON_DATABASE_URL", "")
 #     wiped between invocations.
 AUTH_DATABASE_URL = _optional("AUTH_DATABASE_URL", "")
 
+# --- Redis cache -------------------------------------------------------------
+# REDIS_URL (a rediss:// URL) points the site's read-layer cache, and the
+# pipeline's "data version" marker, at one Redis. It is deliberately NOT in any
+# required role: the cache is an optimisation, so an unset value means "no
+# shared cache" (per-process fallback, short TTLs), never "refuse to start" --
+# unlike AUTH_DATABASE_URL, whose absence would silently lose user accounts.
+# Leave it blank locally.
+REDIS_URL = _optional("REDIS_URL", "")
+# Connect/read timeout in seconds. 0.3 is right for the site, which runs in the
+# same region as Redis; the nightly cache warm-up runs on a US runner where the
+# TLS handshake alone can exceed that, so its workflow step raises it.
+REDIS_SOCKET_TIMEOUT = float(_optional("REDIS_SOCKET_TIMEOUT", "0.3"))
+
 # --- Ingestion tuning ------------------------------------------------------
 MAX_PAGES = int(_optional("MAX_PAGES", "5"))
 

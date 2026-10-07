@@ -1,4 +1,3 @@
-import itertools
 from datetime import date
 
 from django.contrib.auth.decorators import login_required
@@ -9,6 +8,7 @@ from django.db.models import (
 )
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.functional import SimpleLazyObject
 from django.utils.http import urlencode
 from django.utils.text import slugify
 from django.utils.translation import gettext, gettext_lazy, pgettext
@@ -16,6 +16,7 @@ from django.utils.translation import gettext, gettext_lazy, pgettext
 from core.models import CollectionItem
 from core.services import collection_flags
 
+from movies import cached_reads
 from movies.models import (
     Company, Credit, Episode, Genre, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieMetrics, MovieRating, MovieVideo,
@@ -90,109 +91,19 @@ CARTOON_MOVIE_AUDIENCE_GENRE_ID = 10751
 CARTOON_SERIES_AUDIENCE_GENRE_IDS = (10751, 10762)
 
 
-def _approx(n):
-    """Round a count down to a rounder, approximate figure for the landing page:
-    1217 -> 1200, 122685 -> 120000. The homepage shows scale, not exact
-    inventory, and the number is rendered with a trailing "+"."""
-    if n < 100:
-        return n
-    if n < 10_000:
-        step = 100
-    elif n < 100_000:
-        step = 1_000
-    else:
-        step = 10_000
-    return n - (n % step)
-
-
 def home(request):
-    """Landing page: the catalog as a contact sheet, plus warehouse-wide stats."""
-    top_rated = (
-        localize_movies(Movie.objects.using("warehouse"))
-        .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
-        .order_by(F("imdb_rating").desc(nulls_last=True), "movie_id")[:12]
-    )
-    newest = (
-        localize_movies(Movie.objects.using("warehouse"))
-        .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
-        .order_by(F("release_date").desc(nulls_last=True), "movie_id")[:12]
-    )
-    # Task 90: TV's "what's new" analogue orders by *last* air date, not
-    # first — a long-running show that just aired a new episode is genuinely
-    # "recently aired" in a way a canceled show that merely premiered the
-    # same year is not. A movie has one date that means both things at once;
-    # a show doesn't, so this can't just reuse newest's ordering.
-    recently_aired = (
-        localize_series(Series.objects.using("warehouse"))
-        .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
-        .order_by(F("last_air_date").desc(nulls_last=True), "series_id")[:12]
-    )
-    for show in recently_aired:
-        show.year_span = _series_year_span(show)
+    """Landing page: the catalog as a contact sheet, plus warehouse-wide stats.
 
-    # The mosaic mixes movies and shows now (Task 90) — it's meant to read as
-    # "the whole catalog at once" (MOSAIC_LIMIT's own docstring), and TV is
-    # part of that catalog. A fixed 100:20 split, not the live ~5:3 catalog
-    # ratio (1,217 movies : 734 shows) — movies stay the dominant surface of
-    # the site (nav order, the "world of movies" hero copy) while TV still
-    # gets a real, visibly-present slice rather than a token single tile.
-    # Only films/shows with a poster (a missing image would punch a hole in
-    # the sheet); neither list renders through a card partial, so neither
-    # needs its imdb_rating annotated.
-    movie_tiles = [
-        {"kind": "movie", "slug": slug, "poster_path": poster_path}
-        for slug, poster_path in
-        Movie.objects.using("warehouse")
-        .filter(poster_path__isnull=False)
-        .order_by(F("release_date").desc(nulls_last=True), "movie_id")
-        .values_list("slug", "poster_path")[:100]
-    ]
-    series_tiles = [
-        {"kind": "series", "slug": slug, "poster_path": poster_path}
-        for slug, poster_path in
-        Series.objects.using("warehouse")
-        .filter(poster_path__isnull=False)
-        .order_by(F("first_air_date").desc(nulls_last=True), "series_id")
-        .values_list("slug", "poster_path")[:20]
-    ]
-    mosaic = _interleave_mosaic(movie_tiles, series_tiles, ratio=5)
-
+    Every query lives in movies/cached_reads.py; a cache hit costs the
+    warehouse nothing, which is what lets an anonymous visitor read this page
+    while Neon is asleep.
+    """
     context = {
-        # Shown as "1,200+" etc. — an approximate figure, not an exact count.
-        # Credits (every fact_credit row) was dropped: a raw join-table volume
-        # means nothing to a visitor, unlike Movies / People / Avg rating.
-        "movie_count": _approx(Movie.objects.using("warehouse").count()),
-        "person_count": _approx(Person.objects.using("warehouse").count()),
-        # Reads fact_movie_rating instead of fact_movie_metrics (Task 68):
-        # the old figure averaged every fact_movie_metrics row, silently
-        # over-weighting multi-genre films since a film's rating repeats
-        # once per genre there. This is a true per-film average.
-        "avg_rating": MovieRating.objects.using("warehouse").filter(
-            source="imdb"
-        ).aggregate(avg_rating=Avg("rating"))["avg_rating"],
-        "top_rated": top_rated,
-        "newest": newest,
-        "recently_aired": recently_aired,
-        "mosaic": mosaic,
+        **cached_reads.home_stats(),
+        **cached_reads.home_shelves(),
+        "mosaic": cached_reads.home_mosaic(),
     }
     return render(request, "movies/home.html", context)
-
-
-def _interleave_mosaic(primary, secondary, ratio):
-    """Merge two home-mosaic tile lists so `secondary` tiles are spaced
-    roughly one every `ratio` positions among `primary`'s, rather than
-    clumped at one end of the (decorative, aria-hidden) collage (Task 90)."""
-    merged = []
-    primary_iter = iter(primary)
-    secondary_iter = iter(secondary)
-    while True:
-        merged.extend(itertools.islice(primary_iter, ratio))
-        try:
-            merged.append(next(secondary_iter))
-        except StopIteration:
-            merged.extend(primary_iter)
-            break
-    return merged
 
 
 def movie_list(request):
@@ -219,13 +130,7 @@ def movie_list(request):
     # PK is (movie_id, date_id, genre_id), and a film whose release date
     # moved between ingestions holds two date_id rows per genre, which
     # would otherwise double-count its film_count.
-    genre_rows = (
-        Genre.objects.using("warehouse")
-        .annotate(film_count=Count("moviemetrics__movie", distinct=True))
-        .filter(film_count__gt=0)
-        .order_by("genre_name")
-        .values_list("genre_id", "genre_name")
-    )
+    genre_rows = cached_reads.genre_rows("movie")
     # The slug is always built from the English name, so ?genre= URLs are the
     # same in every language; only the visible label is translated (Task 94).
     labels = genre_labels()
@@ -305,13 +210,7 @@ def series_list(request):
     if sort not in SERIES_SORTS:
         sort = "first_air"
 
-    genre_rows = (
-        Genre.objects.using("warehouse")
-        .annotate(series_count=Count("series_genres"))
-        .filter(series_count__gt=0)
-        .order_by("genre_name")
-        .values_list("genre_id", "genre_name")
-    )
+    genre_rows = cached_reads.genre_rows("series")
     # The slug is always built from the English name, so ?genre= URLs are the
     # same in every language; only the visible label is translated (Task 94).
     labels = genre_labels()
@@ -937,6 +836,49 @@ def _reconcile_languages(original_language, language_rows):
     return names
 
 
+def _build_seasons(series_id):
+    """Every season of a show as {season, episodes}, specials last."""
+    seasons = sorted(
+        Season.objects.using("warehouse").filter(series_id=series_id),
+        # "Specials" (season_number 0) reads last, not first, matching the
+        # convention every streaming app already uses — TMDB's season stub
+        # numbers it 0 because that's its position in the API array, not
+        # because a reader wants to watch it before Season 1.
+        key=lambda s: (s.season_number == 0, s.season_number),
+    )
+
+    # One query for every episode on the show, joined to its IMDb rating via
+    # the fact_episode_rating reverse relation (Task 88 step 1) — the same
+    # "one query, not one per season" posture as series_detail()'s credits query, and
+    # the same filtered-Max annotation Task 68 used for fact_movie_rating, so
+    # sorting and display can never disagree here either.
+    episodes = (
+        Episode.objects.using("warehouse")
+        .filter(series_id=series_id)
+        .annotate(
+            imdb_rating=Max("episoderating__rating", filter=Q(episoderating__source="imdb")),
+            imdb_vote_count=Max(
+                "episoderating__vote_count", filter=Q(episoderating__source="imdb")
+            ),
+        )
+        .order_by("episode_number")
+    )
+    episodes_by_season = {}
+    for episode in episodes:
+        episodes_by_season.setdefault(episode.season_number, []).append(episode)
+
+    # A season with no entry here isn't an error — Task 82's TV_SEASONS_MAX_NEW
+    # cap means dim_season already lists every season TMDB knows about while
+    # dim_episode only covers the 300/734 shows backfilled so far (Task 85).
+    # _episode_table.html renders that as a quiet "not catalogued yet" state,
+    # never an empty table.
+    seasons = [
+        {"season": season, "episodes": episodes_by_season.get(season.season_number, [])}
+        for season in seasons
+    ]
+    return seasons
+
+
 @login_required
 def series_detail(request, series_slug):
     """One show: mirrors movie_detail() — one query for every credit, split
@@ -1059,45 +1001,6 @@ def series_detail(request, series_slug):
     )
     trailer = _pick_trailer(videos)
 
-    seasons = sorted(
-        Season.objects.using("warehouse").filter(series_id=series_id),
-        # "Specials" (season_number 0) reads last, not first, matching the
-        # convention every streaming app already uses — TMDB's season stub
-        # numbers it 0 because that's its position in the API array, not
-        # because a reader wants to watch it before Season 1.
-        key=lambda s: (s.season_number == 0, s.season_number),
-    )
-
-    # One query for every episode on the show, joined to its IMDb rating via
-    # the fact_episode_rating reverse relation (Task 88 step 1) — the same
-    # "one query, not one per season" posture as the credits query above, and
-    # the same filtered-Max annotation Task 68 used for fact_movie_rating, so
-    # sorting and display can never disagree here either.
-    episodes = (
-        Episode.objects.using("warehouse")
-        .filter(series_id=series_id)
-        .annotate(
-            imdb_rating=Max("episoderating__rating", filter=Q(episoderating__source="imdb")),
-            imdb_vote_count=Max(
-                "episoderating__vote_count", filter=Q(episoderating__source="imdb")
-            ),
-        )
-        .order_by("episode_number")
-    )
-    episodes_by_season = {}
-    for episode in episodes:
-        episodes_by_season.setdefault(episode.season_number, []).append(episode)
-
-    # A season with no entry here isn't an error — Task 82's TV_SEASONS_MAX_NEW
-    # cap means dim_season already lists every season TMDB knows about while
-    # dim_episode only covers the 300/734 shows backfilled so far (Task 85).
-    # _episode_table.html renders that as a quiet "not catalogued yet" state,
-    # never an empty table.
-    seasons = [
-        {"season": season, "episodes": episodes_by_season.get(season.season_number, [])}
-        for season in seasons
-    ]
-
     context = {
         "series": series,
         "genres": genres,
@@ -1112,7 +1015,10 @@ def series_detail(request, series_slug):
         "countries": countries,
         "languages": languages,
         "series_rating": series_rating,
-        "seasons": seasons,
+        # Lazy: the Season/Episode queries run only if the episodes fragment in
+        # series_detail.html is a cache miss (Task 118) -- on a hit nothing
+        # reads this, so the warehouse is never asked.
+        "seasons": SimpleLazyObject(lambda: _build_seasons(series_id)),
         "year_span": _series_year_span(series),
         "trailer": trailer,
         "collection_flags": collection_flags(

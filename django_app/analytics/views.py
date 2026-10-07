@@ -3,50 +3,37 @@
 Each panel runs one of the hand-written .sql files from warehouse/queries/
 directly against the warehouse connection, rather than reimplementing the
 same aggregation in the ORM — the project rule is that all analytics SQL
-lives in .sql files, so the dashboard reads and executes them as-is.
+lives in .sql files, so the dashboard reads and executes them as-is
+(analytics/cached_reads.py, which also caches the results, Task 116).
 """
 
-from pathlib import Path
-
 from django.contrib.auth.decorators import login_required
-from django.db import connections
 from django.shortcuts import render
 
+from analytics.cached_reads import dashboard_rows
 from movies.i18n import country_labels, genre_labels, localize_rows
-
-QUERIES_DIR = Path(__file__).resolve().parent.parent.parent / "warehouse" / "queries"
-
-
-def _run_query(filename):
-    """Execute a .sql file against the warehouse and return rows as dicts."""
-    sql = (QUERIES_DIR / filename).read_text()
-    with connections["warehouse"].cursor() as cursor:
-        cursor.execute(sql)
-        columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
 
 @login_required
 def dashboard(request):
-    movies_by_decade = _run_query("movies_by_decade.sql")
+    # The raw result sets come from the cache (or, on a miss, the warehouse).
     # The .sql files stay English (project rule: analytics SQL lives in .sql
     # files, unparameterized); genre and country names are translated here,
-    # after the query, from the same lookups the movie pages use — so the
+    # after the read, from the same lookups the movie pages use — so the
     # tables and the Chart.js labels below can never disagree.
+    rows = dashboard_rows()
+    movies_by_decade = rows["movies_by_decade.sql"]
     revenue_by_genre = localize_rows(
-        _run_query("revenue_by_genre.sql"), "genre_name", genre_labels()
+        rows["revenue_by_genre.sql"], "genre_name", genre_labels()
     )
-    top_studios_by_revenue = _run_query("top_studios_by_revenue.sql")
+    top_studios_by_revenue = rows["top_studios_by_revenue.sql"]
     films_by_production_country = localize_rows(
-        _run_query("films_by_production_country.sql"), "country_name", country_labels()
+        rows["films_by_production_country.sql"], "country_name", country_labels()
     )
-    # TV panels (Task 90) — all shaped for TV, not ported from the film
-    # queries: no revenue column anywhere (TV carries no money measure), and
-    # episode_rating_by_season has no film-side analogue at all.
-    series_by_decade = _run_query("series_by_decade.sql")
-    episode_rating_by_season = _run_query("episode_rating_by_season.sql")
-    longest_running_series = _run_query("longest_running_series.sql")
-    top_networks_by_series = _run_query("top_networks_by_series.sql")
+    series_by_decade = rows["series_by_decade.sql"]
+    episode_rating_by_season = rows["episode_rating_by_season.sql"]
+    longest_running_series = rows["longest_running_series.sql"]
+    top_networks_by_series = rows["top_networks_by_series.sql"]
 
     context = {
         "revenue_by_genre": revenue_by_genre,

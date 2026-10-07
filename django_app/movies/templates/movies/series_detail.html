@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n l10n tmdb_images i18n_vocab %}
+{% load i18n l10n tmdb_images i18n_vocab datacache %}
 
 {% block title %}Theoria — {{ series.display_title }}{% endblock %}
 
@@ -194,6 +194,12 @@
        _season_picker.html) is what narrows this to one at a time; a no-JS
        reader scrolls the stacked seasons instead, each under its own
        heading. {% endcomment %}
+    {% comment %} Cached as rendered markup (Task 118): this section is ~80%
+       of the page's render time and is identical for every reader, so it
+       holds nothing per-user -- no CSRF token, no username, no collection
+       buttons. `seasons` is lazy: on a hit the Season/Episode queries never
+       run. The tag adds the language and data version to the key. {% endcomment %}
+    {% datacache "series-episodes" series.series_id %}
     {% include "movies/_season_picker.html" with seasons=seasons only %}
     {% translate "Season" as season_word %}
     {% for block in seasons %}
@@ -204,5 +210,6 @@
     {% empty %}
     <p class="empty">{% translate "No seasons recorded for this show." %}</p>
     {% endfor %}
+    {% enddatacache %}
 </section>
 {% endblock %}

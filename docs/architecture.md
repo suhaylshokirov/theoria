@@ -678,6 +678,116 @@ The remaining cost is Neon's free tier, where scale-to-zero cannot be disabled: 
 minutes the next request pays a cold start, measured at 20–45 s on this project. For a low-traffic
 site that is most first visits. It is a plan setting, not an architectural problem.
 
+### 4.5 Caching: a data version instead of invalidation
+
+Hosting on Vercel (§4.4) left two costs the replica cannot fix. Every warehouse query is a network
+trip to Neon, and `/` issued 8, `/analytics/` 10, a movie page 8–10. And Neon's free tier scales to
+zero, so the first request after five idle minutes waits 20–45 s. A cache that lives *outside* Neon
+lets an anonymous visitor read the home page with **zero** Neon queries: an anonymous request has no
+session cookie, so it touches no database at all.
+
+**The one design idea: a data version in every key.** The warehouse changes only when the nightly
+refresh or the Monday discovery loads it, and the site can never write to it. So nothing is ever
+invalidated. After each committed load the pipeline publishes `theoria:data_version`, every key the
+site builds embeds that value, and a new load simply makes every old key unreachable; they expire on
+their own.
+
+```
+03:12  nightly loads Neon ──▶ publishes data_version = 2026-10-07.1791376920
+03:13  warm_cache builds     home_shelves:s1:2026-10-07.1791376920:ru, dashboard_rows:s1:…, …
+09:00  first visitor reads   home_shelves:s1:2026-10-07.1791376920:ru ──▶ hit, Neon never woken
+```
+
+The version is `<ingestion_date>.<unix seconds>`, not the date alone: the nightly (03:12) and the
+Monday discovery (04:20) stamp the same `ingestion_date` and both change the warehouse, so a
+date-only value would not roll the keys over after the second load. It is published immediately
+after `load_facts`, not after the warehouse checks: the checks only report, and one that raised must
+not leave yesterday's cache serving tonight's data.
+
+**Rules every cached read follows**
+
+1. **Fail open.** Redis down, slow or flushed is a miss, never a 500. `ResilientRedisCache` swallows
+   connection errors and answers like an empty cache, with 0.3 s socket timeouts and a 30 s
+   "Redis is down" flag so a dead server costs one timeout, not one per call. The single exception
+   kept on purpose: `incr` on a missing key still raises `ValueError`, which the sign-up rate
+   limiter relies on to mean "the counter expired". As a side effect that limiter, which always
+   ran on a per-process cache, now counts across serverless instances.
+2. **The language is part of every key whose value holds translated text.** Leave it out and the
+   first Russian reader fills the cache for everyone. Values that are language-free (stats,
+   mosaic, dashboard rows, genre ids) are cached once and translated *after* the read, so one
+   entry serves English, Russian and Uzbek. The `{% datacache %}` tag adds the language itself so a
+   template cannot forget it.
+3. **Cache plain data, evaluated.** A Django queryset is a recipe, not rows; cached lazily it would
+   re-run its query on every hit. Builders return numbers, dicts, or lists of model instances for
+   card shelves, never a queryset, a request, a user or a token. A hit unpickles a fresh copy
+   every time, which is what makes it safe for `localize_rows()` to edit analytics rows in place;
+   keeping an in-process copy in front of the cache would break that, and a test guards it.
+4. **No whole-page cache.** `PrivatePagesMiddleware` marks pages `private, no-cache` because the
+   navigation depends on who is signed in and the language is a cookie. A cached page would carry
+   one reader's CSRF token and sign-in state to the next. The data and fragments *underneath* are
+   cached, never the response. The one cached fragment (a show's episode list) contains no
+   username, token or per-user button, and a test fails if one ever appears in it.
+
+**Two contracts between processes**, because the pipeline and the site never import each other:
+
+- **The key** is exactly `theoria:<key>`. Django's default key function inserts a version number
+  in the middle, so `make_cache_key` replaces it, and `etl/data_version.py` writes the raw key with
+  a plain `redis` client and no Django.
+- **The value is a pickle.** Django's Redis cache unpickles everything except plain integers; a
+  raw string written by the pipeline fails to load on the site, which swallows the error and quietly
+  stays in 15-minute mode forever. The pipeline pickles the version itself and a test feeds its
+  bytes to Django's own reader, so the pair cannot drift apart unnoticed.
+
+**What is cached, with the measured effect** (warehouse queries per request on the local replica;
+latency is deliberately not claimed from a laptop):
+
+| Read | Key | Before | Warm |
+|---|---|---|---|
+| Home stats / mosaic | language-free | 8 queries for the page | 0 |
+| Home shelves | language | (in the 8) | 0 |
+| Analytics dashboard rows | language-free | 10 | 0 |
+| Genre choices on `/movies/`, `/tv/` | kind | 3–4 | 2 (the page and its count) |
+| Genre / country labels | language | 1–2 per translated page | 0 |
+| A show's episode list | show + language, rendered HTML | 11 | 9, and ~40% less render time |
+
+The last row is the one that is render time, not SQL: a 196-episode show spends most of its
+request in Django's template engine, so the cached unit is the finished fragment, with the season
+and episode queries behind a lazy object so a hit skips them too. Measured: the page is
+byte-identical cached and uncached, and the saving is about 40%, smaller than the profile that
+motivated it suggested. The cast and crew sections, which ship every credit for browser-side
+paging, are most of the page.
+
+**Warming.** After the load, `manage.py warm_cache` calls the same readers once per language so the
+first visitor of the day does not pay for the build, and Neon is still awake from the load that just
+finished. It runs as a `continue-on-error` workflow step: a failed warm-up must never fail a
+nightly. Because the cache fails open, a warm-up whose writes all timed out would look like a clean
+run, so the command asks the backend afterwards whether Redis dropped out and says so. The runner
+is in the US and Redis in Frankfurt, which is why the socket timeout is a setting
+(`REDIS_SOCKET_TIMEOUT`, 0.3 s for the site, 10 s for that step).
+
+**Deliberately not cached, and why**
+
+- *Detail pages* (movie, person, studio): all `@login_required`, so the auth database is hit
+  regardless, and a movie page loads up to ~1,200 credit rows with each person's biography; a
+  naive pickle would be multi-megabyte and trip the 900 KB ceiling. If measurements justify it,
+  cache a lean projection (name / slug / photo / job tuples), not model instances.
+- *Paginator counts* on the unfiltered lists: an 18–29 ms `COUNT(*)`, and only the no-search case is
+  cacheable without an unbounded key space.
+- *Sessions on Redis*: it would save an auth-database round trip on every signed-in request, but
+  it is the one setting the assistant's requests also pass through; held for an explicit decision.
+- *Per-user pages* (`/me`, collections, the assistant), *TMDB calls in the ETL* (Bronze already is
+  that cache, and the nightly exists to re-fetch).
+
+**Operating it.** `REDIS_URL` is optional everywhere: unset, the site caches per process and
+behaves as it did before Redis existed; deployed without it, settings log one warning. Bump
+`CACHE_SCHEMA` in `core/datacache.py` whenever the *shape* a builder returns changes, and on every
+Django upgrade (pickled model instances are stamped with the Django version that wrote them).
+`python -m etl.data_version` shows the published version and `--bump` publishes a new one: after a
+hand edit to Neon, or to restore the marker after a Redis flush. Every cached response carries
+`Server-Timing: cache;desc="home_stats=hit,…"`, so hit or miss can be checked from the browser's
+network panel or `curl -I` without log access. Tests run against a per-test in-process cache
+(`tests/conftest.py`) and never need a Redis.
+
 ## 5. Data quality: quarantine, never drop
 
 Two quality gates run at different layers, both following the same pattern: check → tag failing

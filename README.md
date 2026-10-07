@@ -28,7 +28,7 @@ TMDB API  →  Bronze (raw JSON)  →  Silver (typed Parquet)  →  Gold (aggreg
 | Ratings | IMDb for **1,242 / 1,246** movies, **737 / 740** shows, and **152,414** episodes; TMDB scores kept beside the movie ones |
 | Trailers and clips | **18,230** for 1,224 movies, **2,363** for 648 shows |
 | Warehouse tables | **34** — 14 dimensions, 6 facts, 8 bridges, 5 translation tables, 1 operational |
-| Test suite | **763** tests |
+| Test suite | **845** tests |
 
 The corpus is deliberate rather than incidental. TMDB's `movie/popular` endpoint returns whatever
 is trending at call time, which produced a catalog that was 69% movies from the 2020s. Switching
@@ -165,19 +165,29 @@ people whose details have been fetched with translations so far.
 
 ### Caching and staleness
 
-There is **no application-level data cache** — no Redis, no per-view or query cache — and that is
-a choice: the warehouse is small, nightly-updated and read-only, so the work went into putting the
-data close to the reader and into making sure a page is never served stale.
+The warehouse is small, nightly-updated and read-only, which makes caching it unusually safe: the
+only thing that can make a cached value wrong is a new load, and the pipeline knows exactly when
+that happens. So the site never *invalidates* anything.
 
-- **Where the data lives.** In production the site runs in `fra1`, the same region as Neon, so a
-  query costs milliseconds. Locally, Django reads a Postgres replica of the warehouse, which is
-  itself a read cache of Neon: it is rebuilt only when Neon's `ingestion_date` is newer (see
-  *Local read replica*). Hosted data needs no cache invalidation at all — the nightly job writes
-  Neon and the next request reads it.
+- **A data version in every key.** After each committed load the pipeline publishes
+  `theoria:data_version` to Redis. Every cache key the site builds embeds that value, so a new load
+  makes every old key unreachable and they expire on their own. Cached: the home page's figures,
+  poster mosaic and shelves, the analytics dashboard's result sets, the genre dropdowns and
+  translated genre/country names, and a show's rendered episode list. After the load,
+  `manage.py warm_cache` fills it, so the first visitor of the day doesn't wait for Neon to wake.
+- **Redis is an optimisation, never a dependency.** If it is unset, slow or down, the site computes
+  from the warehouse exactly as it did before there was a cache. The language is part of every key
+  that holds translated text, so one reader's Russian is never served to another. See
+  `docs/architecture.md` §4.5.
+- **Where the rest of the data lives.** In production the site runs in `fra1`, the same region as
+  Neon, so an uncached query costs milliseconds. Locally, Django reads a Postgres replica of the
+  warehouse, itself a read cache of Neon: it is rebuilt only when Neon's `ingestion_date` is newer
+  (see *Local read replica*). `REDIS_URL` is left blank locally.
 - **HTML is never reused blindly.** A page's navigation depends on who is signed in, so
   `PrivatePagesMiddleware` stamps `Cache-Control: private, no-cache` on every HTML response that
   doesn't choose its own policy: `private` keeps shared caches out, `no-cache` makes the browser
-  revalidate on each navigation. The sign-in views use `no-store`.
+  revalidate on each navigation. The sign-in views use `no-store`. The cache holds data and
+  fragments underneath the page, never a finished response.
 - **One URL, three renderings.** Because language is a cookie, every response carries
   `Vary: Cookie` and a `Content-Language` header so no cache can hand one reader's language to
   another.
@@ -345,6 +355,10 @@ run appends a line to `ops/refresh-history.md`; that commit doubles as the activ
 GitHub disabling the schedules after 60 idle days. See `docs/architecture.md` for why the snapshot
 is S3 and not a warehouse table, and why refresh is a separate orchestrator rather than a flag.
 
+After the warehouse load, both workflows publish the cache data version (`python -m etl.data_version`
+shows or, with `--bump`, republishes it) and run `manage.py warm_cache`. Both are best effort: a
+Redis problem is logged and never fails a load.
+
 ### Local read replica
 
 Neon lives in `eu-central-1`, so reading it directly from a laptop adds a ~90 ms round-trip to
@@ -418,8 +432,8 @@ collected assets from its CDN. `vercel.json` carries the three settings that mat
 | `functions.excludeFiles` | tests, ETL, scripts, docs | Python bundles are not tree-shaken: everything reachable at build time ships. |
 
 **Deployed data needs no deploy.** The nightly GitHub Actions job writes Neon; the site reads
-Neon. New ratings and translations appear on the site the moment the job finishes, with no build
-and no cache step. `scripts/sync_warehouse_from_neon.py` and `manage.py serve` stay a *local*
+Neon. New ratings and translations appear on the site once the job finishes, with no build and
+nothing to clear: the cache keys roll over by themselves. `scripts/sync_warehouse_from_neon.py` and `manage.py serve` stay a *local*
 concern — the hosted site is already co-located with the warehouse and reads it directly.
 
 **Schema changes go the other way round.** Django never migrates the warehouse (every model is
@@ -435,7 +449,9 @@ without it `settings.py` refuses to boot rather than silently point Django at Ve
 filesystem), `DJANGO_SECRET_KEY` (a fresh one — not the local development key), `EMAIL_HOST` +
 `EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD`/`EMAIL_PORT`/`EMAIL_USE_TLS` (a real SMTP provider — sign-up
 codes have nowhere to go without one) and `DEFAULT_FROM_EMAIL`, optionally `GEMINI_API_KEY` for the
-assistant, and optionally `DJANGO_ALLOWED_HOSTS` for a custom domain. No TMDB or AWS credentials:
+assistant, optionally `DJANGO_ALLOWED_HOSTS` for a custom domain, and `REDIS_URL` (a `rediss://` URL
+in the same region as the function; without it the site still works but caches per process only).
+The GitHub Actions secret of the same name lets the nightly publish the data version and warm the cache. No TMDB or AWS credentials:
 the site never calls either, and `config.py` no longer demands them of a process that doesn't.
 
 Settings adapt on their own via the platform's own `VERCEL` variable — `DEBUG` is forced off,
@@ -456,7 +472,7 @@ requests, and `/admin/` is not routed at all rather than 500-ing on a public URL
 pytest
 ```
 
-763 tests covering the ETL transforms, data quality checks, warehouse loaders, the translation
+845 tests covering the ETL transforms, data quality checks, warehouse loaders, the translation
 pipeline and the Django views, accounts and language handling. The suite mocks S3, TMDB and the
 warehouse **at the boundary** — no live infrastructure, no network. Django views are driven through
 their real URLs with the managers patched, so routing and template rendering are genuinely

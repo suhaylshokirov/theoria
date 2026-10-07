@@ -143,7 +143,7 @@ def test_home_returns_200_with_expected_context():
 
 
 def test_home_approx_rounds_counts_down():
-    from movies.views import _approx
+    from movies.cached_reads import _approx
 
     assert _approx(1217) == 1200
     assert _approx(122685) == 120000
@@ -3185,7 +3185,7 @@ def test_analytics_dashboard_returns_200_with_expected_context():
         ],
     }
 
-    with patch("analytics.views._run_query", side_effect=lambda fname: fake_rows[fname]):
+    with patch("analytics.cached_reads._run_query", side_effect=lambda fname: fake_rows[fname]):
         response = client.get("/analytics/")
 
     assert response.status_code == 200

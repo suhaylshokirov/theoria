@@ -39,6 +39,7 @@ from etl.bronze.ingest_movies import ingest_movies
 from etl.bronze.ingest_people import ingest_people
 from etl.bronze.ingest_seasons import ingest_seasons
 from etl.bronze.ingest_series_details import ingest_series_details
+from etl.data_version import publish_data_version
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.silver.transform_companies import transform_companies
 from etl.silver.transform_credits_bridge import transform_credits_bridge
@@ -355,6 +356,11 @@ def run_pipeline(
 
     load_dimensions(ingestion_date=ingestion_date)
     load_facts(ingestion_date=ingestion_date)
+
+    # The data is committed, so tell the site's cache. Published here rather
+    # than after the checks below: they only report, and a hiccup in one must
+    # not leave yesterday's cache serving tonight's data. Never raises (Task 114).
+    publish_data_version(ingestion_date)
 
     warehouse_results = run_warehouse_checks(ingestion_date=ingestion_date)
     warehouse_failed = [r for r in warehouse_results if not r.passed]
