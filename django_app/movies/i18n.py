@@ -22,6 +22,8 @@ from django.db.models import F, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.utils.translation import get_language
 
+from core.datacache import cached
+
 from movies.models import (
     CountryTranslation, GenreTranslation, MovieTranslation, PersonTranslation,
     SeriesTranslation,
@@ -200,10 +202,17 @@ def genre_labels():
     lang = current_lang()
     if lang == DEFAULT_LANG:
         return {}
-    return dict(
-        GenreTranslation.objects.using("warehouse")
-        .filter(lang=lang)
-        .values_list("genre__genre_name", "genre_name")
+    # Cached per language: every translated page that shows a genre asks, and
+    # the table only changes when the pipeline loads it. English returned above,
+    # before the cache is touched, so the common case costs nothing.
+    return cached(
+        "genre_labels",
+        lambda: dict(
+            GenreTranslation.objects.using("warehouse")
+            .filter(lang=lang)
+            .values_list("genre__genre_name", "genre_name")
+        ),
+        lang=lang,
     )
 
 
@@ -212,10 +221,14 @@ def country_labels():
     lang = current_lang()
     if lang == DEFAULT_LANG:
         return {}
-    return dict(
-        CountryTranslation.objects.using("warehouse")
-        .filter(lang=lang)
-        .values_list("country__name", "name")
+    return cached(
+        "country_labels",
+        lambda: dict(
+            CountryTranslation.objects.using("warehouse")
+            .filter(lang=lang)
+            .values_list("country__name", "name")
+        ),
+        lang=lang,
     )
 
 

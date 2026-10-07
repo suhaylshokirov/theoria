@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import itertools
 
-from django.db.models import Avg, F, Max, Q
+from django.db.models import Avg, Count, F, Max, Q
 
 from core.datacache import cached
 from movies.i18n import current_lang, localize_movies, localize_series
-from movies.models import Movie, MovieRating, Person, Series
+from movies.models import Genre, Movie, MovieRating, Person, Series
 
 
 def _approx(n):
@@ -147,3 +147,42 @@ def home_shelves():
     # Titles are translated, so the language is part of the key; without it the
     # first Russian reader's titles would be served to everyone.
     return cached("home_shelves", build_home_shelves, lang=current_lang())
+
+
+# --- Genre choice lists (Task 117) -------------------------------------------
+
+
+def build_genre_rows(kind):
+    """`[(genre_id, english_name)]` for the genres that have at least one title.
+
+    `kind` is "movie" or "series". Language-free: the views build the
+    ?genre= slugs from the English name and translate only the visible label,
+    so one entry per kind serves every language.
+    """
+    if kind == "movie":
+        # Only genres that actually have a film in the catalog are offered as a
+        # choice — Documentary currently has 0, and a choice that can never
+        # return anything is worse than not offering it. distinct=True matters
+        # because fact_movie_metrics' PK is (movie_id, date_id, genre_id), and a
+        # film whose release date moved between ingestions holds two date_id
+        # rows per genre, which would otherwise double-count its film_count.
+        queryset = Genre.objects.using("warehouse").annotate(
+            title_count=Count("moviemetrics__movie", distinct=True)
+        )
+    elif kind == "series":
+        # A plain count on bridge_series_genre: each (series, genre) pair is
+        # already unique there, unlike fact_movie_metrics' grain.
+        queryset = Genre.objects.using("warehouse").annotate(
+            title_count=Count("series_genres")
+        )
+    else:
+        raise ValueError(f"unknown genre kind: {kind!r}")
+    return list(
+        queryset.filter(title_count__gt=0)
+        .order_by("genre_name")
+        .values_list("genre_id", "genre_name")
+    )
+
+
+def genre_rows(kind):
+    return cached("genre_rows", lambda: build_genre_rows(kind), kind)

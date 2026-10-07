@@ -129,13 +129,7 @@ def movie_list(request):
     # PK is (movie_id, date_id, genre_id), and a film whose release date
     # moved between ingestions holds two date_id rows per genre, which
     # would otherwise double-count its film_count.
-    genre_rows = (
-        Genre.objects.using("warehouse")
-        .annotate(film_count=Count("moviemetrics__movie", distinct=True))
-        .filter(film_count__gt=0)
-        .order_by("genre_name")
-        .values_list("genre_id", "genre_name")
-    )
+    genre_rows = cached_reads.genre_rows("movie")
     # The slug is always built from the English name, so ?genre= URLs are the
     # same in every language; only the visible label is translated (Task 94).
     labels = genre_labels()
@@ -215,13 +209,7 @@ def series_list(request):
     if sort not in SERIES_SORTS:
         sort = "first_air"
 
-    genre_rows = (
-        Genre.objects.using("warehouse")
-        .annotate(series_count=Count("series_genres"))
-        .filter(series_count__gt=0)
-        .order_by("genre_name")
-        .values_list("genre_id", "genre_name")
-    )
+    genre_rows = cached_reads.genre_rows("series")
     # The slug is always built from the English name, so ?genre= URLs are the
     # same in every language; only the visible label is translated (Task 94).
     labels = genre_labels()

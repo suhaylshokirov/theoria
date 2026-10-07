@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import django
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -27,7 +29,10 @@ from core import datacache  # noqa: E402
 from analytics import cached_reads as cached_reads_analytics  # noqa: E402
 from movies import cached_reads  # noqa: E402
 from movies.i18n import current_lang  # noqa: E402
-from movies.models import Movie, MovieRating, Person, Series  # noqa: E402
+from movies import i18n  # noqa: E402
+from movies.models import (  # noqa: E402
+    CountryTranslation, Genre, GenreTranslation, Movie, MovieRating, Person, Series,
+)
 from tests.test_django_views import _movie, _series  # noqa: E402
 
 User = get_user_model()
@@ -256,3 +261,123 @@ def test_dashboard_renders_when_the_cache_is_down():
         response = _signed_in_client().get("/analytics/")
     assert response.status_code == 200
     assert run_query.call_count == 8
+
+
+# --- Genre choice lists and labels (Task 117) ---------------------------------------
+
+
+def _genre_manager():
+    manager = MagicMock()
+    manager.using.return_value.annotate.return_value.filter.return_value \
+        .order_by.return_value.values_list.return_value = [(28, "Action"), (18, "Drama")]
+    return manager
+
+
+def test_genre_rows_are_built_once_per_kind():
+    with patch.object(Genre, "objects", new=_genre_manager()) as manager:
+        assert cached_reads.genre_rows("movie") == [(28, "Action"), (18, "Drama")]
+        assert cached_reads.genre_rows("movie") == [(28, "Action"), (18, "Drama")]
+        assert manager.using.call_count == 1
+        cached_reads.genre_rows("series")  # a different kind is a different entry
+        assert manager.using.call_count == 2
+
+
+def test_genre_rows_reject_an_unknown_kind():
+    with pytest.raises(ValueError):
+        cached_reads.build_genre_rows("podcast")
+
+
+def test_movie_and_series_lists_read_genre_choices_from_the_cache():
+    movies = [_movie(movie_id=1, title="Movie 1")]
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=_genre_manager()
+    ) as genre_mgr:
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = movies
+        client = Client()
+        first = client.get("/movies/")
+        assert genre_mgr.using.call_count == 1
+        # A live-filter fetch (one per keystroke) must not re-count genres.
+        second = client.get("/movies/?q=mov", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        third = client.get("/movies/?genre=drama")
+    assert first.status_code == second.status_code == third.status_code == 200
+    assert genre_mgr.using.call_count == 1
+    assert first.context["genre_choices"] == [("action", "Action"), ("drama", "Drama")]
+    assert third.context["genre"] == "drama"  # the cached rows still resolve slug -> id
+
+
+def test_genre_urls_stay_english_in_every_language():
+    labels = {"Action": "Боевик", "Drama": "Драма"}
+    with patch.object(Genre, "objects", new=_genre_manager()), patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch("movies.views.genre_labels", return_value=labels):
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+        russian = Client()
+        russian.cookies["django_language"] = "ru"
+        response = russian.get("/movies/")
+    # The visible label is translated (and re-sorted by it); the slug -- what
+    # ?genre= carries -- is built from the English name, so URLs are shared.
+    assert response.context["genre_choices"] == [("action", "Боевик"), ("drama", "Драма")]
+
+
+def _translation_manager(rows):
+    manager = MagicMock()
+    manager.using.return_value.filter.return_value.values_list.return_value = rows
+    return manager
+
+
+def test_labels_are_empty_for_english_without_touching_the_cache():
+    broken = MagicMock()
+    broken.get.side_effect = AssertionError("English must not read the cache")
+    from django.utils import translation
+
+    # override(): an earlier request in this process may have left ru active
+    # (the language middleware activates it and nothing deactivates it).
+    with patch.object(datacache, "cache", broken), translation.override("en"):
+        assert i18n.genre_labels() == {}
+        assert i18n.country_labels() == {}
+
+
+def test_genre_labels_are_cached_per_language():
+    from django.utils import translation
+
+    rows = {"ru": [("Action", "Боевик")], "uz": [("Action", "Jangari")]}
+    manager = MagicMock()
+    manager.using.return_value.filter.side_effect = lambda lang: MagicMock(
+        values_list=MagicMock(return_value=rows[lang])
+    )
+    with patch.object(GenreTranslation, "objects", new=manager):
+        with translation.override("ru"):
+            assert i18n.genre_labels() == {"Action": "Боевик"}
+            assert i18n.genre_labels() == {"Action": "Боевик"}
+        assert manager.using.call_count == 1
+        with translation.override("uz"):
+            assert i18n.genre_labels() == {"Action": "Jangari"}
+        assert manager.using.call_count == 2
+        with translation.override("ru"):
+            assert i18n.genre_labels() == {"Action": "Боевик"}  # not overwritten by uz
+        assert manager.using.call_count == 2
+
+
+def test_country_labels_are_cached():
+    from django.utils import translation
+
+    manager = _translation_manager([("Japan", "Япония")])
+    with patch.object(CountryTranslation, "objects", new=manager), translation.override("ru"):
+        assert i18n.country_labels() == {"Japan": "Япония"}
+        assert i18n.country_labels() == {"Japan": "Япония"}
+    assert manager.using.call_count == 1
+
+
+def test_a_labels_callers_edit_cannot_reach_the_next_caller():
+    from django.utils import translation
+
+    manager = _translation_manager([("Japan", "Япония")])
+    with patch.object(CountryTranslation, "objects", new=manager), translation.override("ru"):
+        i18n.country_labels()["Japan"] = "mutated"
+        assert i18n.country_labels() == {"Japan": "Япония"}
