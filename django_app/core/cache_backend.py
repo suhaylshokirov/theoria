@@ -13,7 +13,9 @@ window closes.
 `make_cache_key` is the key contract the pipeline depends on: Django's default
 key function inserts a version number (`theoria:1:data_version`), but the
 nightly job writes the raw key `theoria:data_version` with a plain redis client
-and no Django. Both sides have to agree on exactly `<prefix>:<key>`.
+and no Django. Both sides have to agree on exactly `<prefix>:<key>` -- and on
+the value format: Django unpickles everything but plain ints, so etl/data_version.py
+writes a pickle (tests/test_data_version.py pins the pair together).
 """
 
 from __future__ import annotations

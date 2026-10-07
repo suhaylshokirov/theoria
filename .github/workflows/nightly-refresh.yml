@@ -43,6 +43,9 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       S3_BUCKET: ${{ secrets.S3_BUCKET }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Optional: after the warehouse load, publishes the cache data version.
+      # Unset, the step is skipped and the site's cache runs on short TTLs.
+      REDIS_URL: ${{ secrets.REDIS_URL }}
 
     steps:
       - uses: actions/checkout@v4
