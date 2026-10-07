@@ -43,7 +43,9 @@ def make_cache_key(key: str, key_prefix: str, version: int) -> str:
     return f"{key_prefix}:{key}" if key_prefix else key
 
 
-def build_caches(redis_url: str, *, on_vercel: bool = False) -> dict:
+def build_caches(
+    redis_url: str, *, on_vercel: bool = False, socket_timeout: float = SOCKET_TIMEOUT
+) -> dict:
     """The CACHES setting: Redis when REDIS_URL is set, else in-process.
 
     A missing URL is never fatal -- the site just caches per process, which is
@@ -58,8 +60,8 @@ def build_caches(redis_url: str, *, on_vercel: bool = False) -> dict:
                 "BACKEND": "core.cache_backend.ResilientRedisCache",
                 "LOCATION": redis_url,
                 "OPTIONS": {
-                    "socket_connect_timeout": SOCKET_TIMEOUT,
-                    "socket_timeout": SOCKET_TIMEOUT,
+                    "socket_connect_timeout": socket_timeout,
+                    "socket_timeout": socket_timeout,
                 },
                 **common,
             }
@@ -80,7 +82,7 @@ def _fail_open(miss):
     def decorate(method):
         @functools.wraps(method)
         def wrapper(self, *args, **kwargs):
-            if self._is_down():
+            if self.is_down():
                 return miss(self, *args, **kwargs)
             try:
                 return method(self, *args, **kwargs)
@@ -106,7 +108,8 @@ class ResilientRedisCache(RedisCache):
 
     _down_until = 0.0
 
-    def _is_down(self) -> bool:
+    def is_down(self) -> bool:
+        """True while a recent failure has Redis suspended (see DOWN_SECONDS)."""
         return time.monotonic() < self._down_until
 
     def _mark_down(self, exc: Exception) -> None:

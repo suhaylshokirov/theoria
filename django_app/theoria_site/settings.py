@@ -126,7 +126,9 @@ MIDDLEWARE = [
 # Redis when REDIS_URL is set, else a per-process cache -- see
 # core/cache_backend.py for the fail-open behaviour and the `theoria:<key>`
 # key contract the nightly job relies on (core/datacache.py is what views use).
-CACHES = build_caches(config.REDIS_URL, on_vercel=ON_VERCEL)
+CACHES = build_caches(
+    config.REDIS_URL, on_vercel=ON_VERCEL, socket_timeout=config.REDIS_SOCKET_TIMEOUT
+)
 
 # Sessions belong to the durable application database. The warehouse remains
 # read-only and never receives Django migrations.

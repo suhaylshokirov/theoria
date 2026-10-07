@@ -119,6 +119,10 @@ AUTH_DATABASE_URL = _optional("AUTH_DATABASE_URL", "")
 # unlike AUTH_DATABASE_URL, whose absence would silently lose user accounts.
 # Leave it blank locally.
 REDIS_URL = _optional("REDIS_URL", "")
+# Connect/read timeout in seconds. 0.3 is right for the site, which runs in the
+# same region as Redis; the nightly cache warm-up runs on a US runner where the
+# TLS handshake alone can exceed that, so its workflow step raises it.
+REDIS_SOCKET_TIMEOUT = float(_optional("REDIS_SOCKET_TIMEOUT", "0.3"))
 
 # --- Ingestion tuning ------------------------------------------------------
 MAX_PAGES = int(_optional("MAX_PAGES", "5"))

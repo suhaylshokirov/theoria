@@ -64,6 +64,22 @@ jobs:
       - name: Run refresh pipeline
         run: python -m scripts.run_refresh
 
+      # Fill the site's cache while Neon is awake from the load above, so the
+      # first visitor after the nightly doesn't pay to build it (Task 119). Best
+      # effort: a failed warm-up must never fail the run it follows.
+      - name: Warm site cache
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          # Django needs a secret key to import its settings. Nothing is signed
+          # or encrypted with this one, so it is a literal, not a real secret --
+          # the pipeline deliberately holds no web secrets (docs/architecture.md §4.4).
+          DJANGO_SECRET_KEY: cache-warm-only
+          # The runner is in the US and Redis in Frankfurt: the site's 0.3 s
+          # timeout would fail the TLS handshake and silently warm nothing.
+          REDIS_SOCKET_TIMEOUT: "10"
+        run: python django_app/manage.py warm_cache
+
       - name: Record run summary
         if: always()
         run: |

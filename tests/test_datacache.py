@@ -104,6 +104,11 @@ def test_with_redis_url_the_cache_is_the_resilient_backend_with_short_timeouts()
     assert default["OPTIONS"]["socket_timeout"] <= 0.5
 
 
+def test_the_socket_timeout_can_be_raised_for_a_distant_runner():
+    default = build_caches("rediss://example:6379", socket_timeout=10)["default"]
+    assert default["OPTIONS"] == {"socket_connect_timeout": 10, "socket_timeout": 10}
+
+
 def test_deployed_without_redis_warns_instead_of_raising(caplog):
     with caplog.at_level("WARNING", logger="core.cache_backend"):
         caches = build_caches("", on_vercel=True)
