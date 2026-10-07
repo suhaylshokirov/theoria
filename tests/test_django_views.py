@@ -3185,7 +3185,7 @@ def test_analytics_dashboard_returns_200_with_expected_context():
         ],
     }
 
-    with patch("analytics.views._run_query", side_effect=lambda fname: fake_rows[fname]):
+    with patch("analytics.cached_reads._run_query", side_effect=lambda fname: fake_rows[fname]):
         response = client.get("/analytics/")
 
     assert response.status_code == 200

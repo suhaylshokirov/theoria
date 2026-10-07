@@ -608,7 +608,7 @@ def test_analytics_dashboard_translates_genre_and_country_names():
         "series_by_decade.sql": [], "episode_rating_by_season.sql": [],
         "longest_running_series.sql": [], "top_networks_by_series.sql": [],
     }
-    with patch("analytics.views._run_query", side_effect=lambda f: fake[f]), \
+    with patch("analytics.cached_reads._run_query", side_effect=lambda f: fake[f]), \
             patch("analytics.views.genre_labels", return_value={"Action": "боевик"}), \
             patch("analytics.views.country_labels", return_value={"Japan": "Япония"}):
         response = _get("ru", "/analytics/")

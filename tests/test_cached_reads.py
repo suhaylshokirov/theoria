@@ -17,24 +17,42 @@ django.setup()
 
 from decimal import Decimal  # noqa: E402
 
+from django.contrib.auth import get_user_model  # noqa: E402
 from django.core.cache import cache  # noqa: E402
 from django.test import Client  # noqa: E402
 from django.test.utils import setup_test_environment, teardown_test_environment  # noqa: E402
 from redis.exceptions import ConnectionError as RedisConnectionError  # noqa: E402
 
 from core import datacache  # noqa: E402
+from analytics import cached_reads as cached_reads_analytics  # noqa: E402
 from movies import cached_reads  # noqa: E402
 from movies.i18n import current_lang  # noqa: E402
 from movies.models import Movie, MovieRating, Person, Series  # noqa: E402
 from tests.test_django_views import _movie, _series  # noqa: E402
 
+User = get_user_model()
+
 
 def setup_module(module):
     setup_test_environment()
+    user, _ = User.objects.get_or_create(
+        email="cached-reads-test@example.com",
+        defaults={"username": "cached-reads-test"},
+    )
+    module.user = user
 
 
 def teardown_module(module):
+    User.objects.filter(email="cached-reads-test@example.com").delete()
     teardown_test_environment()
+
+
+def _signed_in_client(lang=None):
+    client = Client()
+    client.force_login(user)
+    if lang:
+        client.cookies["django_language"] = lang
+    return client
 
 
 def _patched_warehouse():
@@ -157,3 +175,84 @@ def test_the_page_still_renders_when_the_cache_is_down():
     assert response.status_code == 200
     assert b"Test Movie" in response.content  # built from the warehouse, as before
     assert managers[0].using.call_count > 0
+
+
+# --- Analytics dashboard (Task 116) -----------------------------------------------
+
+
+def _dashboard_rows():
+    return {
+        "revenue_by_genre.sql": [{"genre_name": "Action", "movie_count": 3, "total_revenue": Decimal("1000")}],
+        "movies_by_decade.sql": [{"decade": 2020, "avg_rating": Decimal("7.5")}],
+        "top_studios_by_revenue.sql": [],
+        "films_by_production_country.sql": [{"country_name": "Japan", "film_count": 7, "avg_rating": Decimal("7.4")}],
+        "series_by_decade.sql": [],
+        "episode_rating_by_season.sql": [],
+        "longest_running_series.sql": [],
+        "top_networks_by_series.sql": [],
+    }
+
+
+def _russian_only(mapping):
+    """A labels function that translates for ru and (like the real ones) returns {} for en."""
+    return lambda: mapping if current_lang() == "ru" else {}
+
+
+def _dashboard_patches(run_query):
+    return (
+        patch("analytics.cached_reads._run_query", run_query),
+        patch("analytics.views.genre_labels", _russian_only({"Action": "боевик"})),
+        patch("analytics.views.country_labels", _russian_only({"Japan": "Япония"})),
+    )
+
+
+def test_a_second_dashboard_request_runs_no_sql():
+    fake = _dashboard_rows()
+    run_query = MagicMock(side_effect=lambda f: fake[f])
+    p1, p2, p3 = _dashboard_patches(run_query)
+    with p1, p2, p3:
+        client = _signed_in_client()
+        first = client.get("/analytics/")
+        assert run_query.call_count == 8
+        second = client.get("/analytics/")
+    assert first.status_code == second.status_code == 200
+    assert run_query.call_count == 8  # the hit ran nothing
+    assert first["Server-Timing"] == 'cache;desc="dashboard_rows=miss"'
+    assert second["Server-Timing"] == 'cache;desc="dashboard_rows=hit"'
+
+
+def test_dashboard_translation_never_leaks_into_the_cached_rows():
+    # localize_rows() edits the row dicts in place. The first (miss) request in
+    # Russian must not poison what the English request after it reads.
+    fake = _dashboard_rows()
+    run_query = MagicMock(side_effect=lambda f: fake[f])
+    p1, p2, p3 = _dashboard_patches(run_query)
+    with p1, p2, p3:
+        ru_first = _signed_in_client("ru").get("/analytics/").content.decode()
+        en = _signed_in_client().get("/analytics/").content.decode()
+        ru_again = _signed_in_client("ru").get("/analytics/").content.decode()
+        raw = cached_reads_analytics.dashboard_rows()
+    assert "боевик" in ru_first and "Япония" in ru_first
+    assert "Action" in en and "боевик" not in en and "Япония" not in en
+    assert "боевик" in ru_again
+    assert raw["revenue_by_genre.sql"][0]["genre_name"] == "Action"  # the cached copy stays English
+    assert run_query.call_count == 8  # one build served all three languages
+
+
+def test_dashboard_still_requires_sign_in():
+    response = Client().get("/analytics/")
+    assert response.status_code == 302
+    assert "/analytics/" in response["Location"]  # bounced to sign-in with ?next=
+
+
+def test_dashboard_renders_when_the_cache_is_down():
+    fake = _dashboard_rows()
+    run_query = MagicMock(side_effect=lambda f: fake[f])
+    broken = MagicMock()
+    broken.get.side_effect = RedisConnectionError("down")
+    broken.set.side_effect = RedisConnectionError("down")
+    p1, p2, p3 = _dashboard_patches(run_query)
+    with p1, p2, p3, patch.object(datacache, "cache", broken):
+        response = _signed_in_client().get("/analytics/")
+    assert response.status_code == 200
+    assert run_query.call_count == 8
