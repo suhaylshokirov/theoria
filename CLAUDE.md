@@ -14,6 +14,7 @@ python -c "import config"                    # verify env is set up (core vars)
 python -c "import config; config.require_etl()"   # the pipeline's own required set
 pytest                                       # run all tests
 python manage.py serve                        # auto-sync replica if stale, then runserver
+python django_app/manage.py warm_cache        # fill the Redis read cache (needs REDIS_URL; best effort)
 ```
 
 **Two requirements files:** `requirements.txt` is the *web runtime only* (Django, psycopg2,
@@ -23,6 +24,11 @@ Install the ETL one locally and in CI. `config.py` groups required env vars by *
 (`DATABASE_URL`), web (`DJANGO_SECRET_KEY`), etl (`TMDB_API_KEY`, `AWS_*`, `S3_BUCKET`) — enforced
 by `require_web()`/`require_etl()` where that role starts, so neither process demands the other's
 secrets. See `docs/architecture.md` §4.4.
+
+**Caching:** reads go through Redis (`REDIS_URL`, optional — blank locally) keyed by a *data version* the
+pipeline publishes after each load (`etl/data_version.py`), so nothing is ever invalidated by hand; every cached
+read fails open and puts the language in its key. Builders live in `*/cached_reads.py`, the API is
+`core/datacache.py`. See `docs/architecture.md` §4.5.
 
 **Hosting:** the site deploys to Vercel as one Python function, pinned to `fra1` so it sits in
 the same region as Neon (the default `iad1` would re-create the ~90 ms/query problem the local
