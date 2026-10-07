@@ -143,7 +143,7 @@ def test_home_returns_200_with_expected_context():
 
 
 def test_home_approx_rounds_counts_down():
-    from movies.views import _approx
+    from movies.cached_reads import _approx
 
     assert _approx(1217) == 1200
     assert _approx(122685) == 120000
