@@ -21,6 +21,12 @@ def _isolated_cache():
     from django.core.cache import cache
     from django.test import override_settings
 
+    from core.cache_backend import ResilientRedisCache
+
+    # The "Redis is down" window is process-wide state; one test's simulated
+    # outage must not suspend Redis for the next.
+    ResilientRedisCache._down_until = 0.0
+
     caches = {
         "default": {
             "BACKEND": "django.core.cache.backends.locmem.LocMemCache",

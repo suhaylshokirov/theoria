@@ -281,6 +281,20 @@ def test_down_flag_skips_redis_until_the_window_closes():
         assert backend.get("k") == 1
 
 
+def test_down_flag_is_shared_by_every_instance():
+    # Django hands each thread its own cache instance; a flag kept per
+    # instance would cost every thread (every request, on a threaded server) a
+    # fresh socket timeout instead of one per process per window.
+    first_client = FakeRedisClient(fail=True)
+    first = redis_shaped_cache(first_client)
+    second_client = FakeRedisClient(fail=True)
+    second = redis_shaped_cache(second_client)
+    first.get("k")
+    assert first_client.calls == 1
+    second.get("k")
+    assert second_client.calls == 0  # skipped: the first instance already learned
+
+
 def test_incr_on_a_missing_key_still_raises_value_error():
     backend = redis_shaped_cache(FakeRedisClient())
     with pytest.raises(ValueError):
