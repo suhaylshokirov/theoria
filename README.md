@@ -175,6 +175,9 @@ that happens. So the site never *invalidates* anything.
   poster mosaic and shelves, the analytics dashboard's result sets, the genre dropdowns and
   translated genre/country names, and a show's rendered episode list. After the load,
   `manage.py warm_cache` fills it, so the first visitor of the day doesn't wait for Neon to wake.
+- **Sessions are read through the cache too** (`cached_db`): the database remains the source of
+  truth and takes the writes, Redis serves the reads, and a flushed or unreachable Redis costs a
+  database read rather than a sign-out.
 - **Redis is an optimisation, never a dependency.** If it is unset, slow or down, the site computes
   from the warehouse exactly as it did before there was a cache. The language is part of every key
   that holds translated text, so one reader's Russian is never served to another. See

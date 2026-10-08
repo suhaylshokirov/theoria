@@ -767,6 +767,18 @@ run, so the command asks the backend afterwards whether Redis dropped out and sa
 is in the US and Redis in Frankfurt, which is why the socket timeout is a setting
 (`REDIS_SOCKET_TIMEOUT`, 0.3 s for the site, 10 s for that step).
 
+**Sessions (Task 121).** `SESSION_ENGINE` is `cached_db`: the database stays the source of truth
+and takes every write, and reads are served from the cache first. Most of the site is behind
+sign-in, so this removes the session lookup, one of the two auth-database queries every signed-in
+request used to make (measured: 2 queries, now 1). The other is the user row, which is deliberately
+still read each time, so deactivating an account signs the person out immediately even while their
+session sits in Redis. It is not the pure-cache engine, because with that a Redis flush, eviction
+or outage would sign everyone out; here it costs one database read. The same fail-open backend
+sits underneath, so a dead Redis falls straight through to the database, and logout deletes the
+cached copy as well as the row. The application never touches the session table directly (no bulk
+deletes), which is what makes a write-through cache safe. A session key appears in the Redis key
+name, so the Redis credentials deserve the same care as the database ones.
+
 **Deliberately not cached, and why**
 
 - *Detail pages* (movie, person, studio): all `@login_required`, so the auth database is hit
@@ -775,8 +787,6 @@ is in the US and Redis in Frankfurt, which is why the socket timeout is a settin
   cache a lean projection (name / slug / photo / job tuples), not model instances.
 - *Paginator counts* on the unfiltered lists: an 18–29 ms `COUNT(*)`, and only the no-search case is
   cacheable without an unbounded key space.
-- *Sessions on Redis*: it would save an auth-database round trip on every signed-in request, but
-  it is the one setting the assistant's requests also pass through; held for an explicit decision.
 - *Per-user pages* (`/me`, collections, the assistant), *TMDB calls in the ETL* (Bronze already is
   that cache, and the nightly exists to re-fetch).
 
