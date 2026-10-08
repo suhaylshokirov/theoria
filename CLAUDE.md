@@ -28,7 +28,7 @@ secrets. See `docs/architecture.md` §4.4.
 **Caching:** reads go through Redis (`REDIS_URL`, optional — blank locally) keyed by a *data version* the
 pipeline publishes after each load (`etl/data_version.py`), so nothing is ever invalidated by hand; every cached
 read fails open and puts the language in its key. Builders live in `*/cached_reads.py`, the API is
-`core/datacache.py`. See `docs/architecture.md` §4.5.
+`core/datacache.py`. Sessions use `cached_db` (DB is the source of truth, Redis serves reads). See `docs/architecture.md` §4.5.
 
 **Hosting:** the site deploys to Vercel as one Python function, pinned to `fra1` so it sits in
 the same region as Neon (the default `iad1` would re-create the ~90 ms/query problem the local

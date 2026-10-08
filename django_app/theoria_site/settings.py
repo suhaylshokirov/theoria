@@ -132,7 +132,17 @@ CACHES = build_caches(
 
 # Sessions belong to the durable application database. The warehouse remains
 # read-only and never receives Django migrations.
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+#
+# cached_db (Task 121): the database stays the source of truth and every write
+# goes to it, but reads are served from the default cache (Redis when deployed)
+# first. That removes the session SELECT from every signed-in request -- most of
+# the site is behind sign-in, and each query is a network trip to Neon. It is
+# not the pure-cache engine on purpose: a Redis flush or outage must cost a
+# database read, never log everyone out. The cache is fail-open (see
+# core/cache_backend.py), so a dead Redis falls straight through to the database.
+# Logout and flush() delete from both, and the user row is still read from the
+# database on every request, so deactivating an account takes effect at once.
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
 
 # No custom AUTHENTICATION_BACKENDS: accounts.views logs a user in directly
 # after a verified email code (never via authenticate()), and with Django's
