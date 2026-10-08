@@ -20,8 +20,8 @@
        colour, so whichever one the browser matches gives the same answer.
        Chrome for Android honours only the first matching tag, which is why they
        are not left to disagree. {% endcomment %}
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#12120f" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
 
     {% comment %} Every poster, headshot and studio logo on the site is served
        from image.tmdb.org, and a grid page asks for 24 of them at once — the
@@ -40,7 +40,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..700&family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&family=Work+Sans:wght@400;500;600&display=swap">
+          href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&family=Work+Sans:wght@400;500;600&display=swap">
 
     <link rel="stylesheet" href="{% static 'css/theoria.css' %}">
     {% block extra_head %}{% endblock %}
@@ -65,15 +65,13 @@
             var el = document.documentElement;
             var prev = el.getAttribute("data-theme");
             var t = localStorage.getItem("theoria-theme");
-            if (t === "dark" || t === "light") {
-              el.setAttribute("data-theme", t);
-            } else {
-              el.removeAttribute("data-theme");
-            }
+            // The cinema redesign opens dark: a saved "light" from the header
+            // toggle is honoured, anything else (no choice yet) is dark.
+            el.setAttribute("data-theme", t === "light" ? "light" : "dark");
             var now = el.getAttribute("data-theme");
             if (evt && evt.persisted && now !== prev) {
               document.dispatchEvent(new CustomEvent("themechange", {
-                detail: { theme: now || "light" },
+                detail: { theme: now },
               }));
             }
           } catch (e) {}
@@ -94,9 +92,15 @@
        more"), so a phrase has one translation, not one per file. {% endcomment %}
     {{ js_strings|json_script:"js-strings" }}
     <script defer src="{% static 'js/theoria.js' %}"></script>
+    <script defer src="{% static 'js/cinema.js' %}"></script>
 </head>
 <body class="{% block body_class %}{% endblock %}" data-signed-in="{% if request.user.is_authenticated %}1{% else %}0{% endif %}">
     <a class="skip-link" href="#content">{% translate "Skip to content" %}</a>
+    {% comment %} The room lights: a soft glow tinted by whatever film is on
+       screen (cinema.js samples a backdrop or poster and sets --glow), and a
+       fine film grain over the whole page. Both decorative. {% endcomment %}
+    <div class="ambient" aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
 
     <header class="site-header">
         <nav class="nav container" aria-label="{% translate "Main" %}">
@@ -195,6 +199,13 @@
                 {% endif %}
             </div>
             {% endwith %}
+            {% comment %} Opens the search palette (cinema.js). Without JS it is a
+               plain link to the Movies index, whose own search box does the job. {% endcomment %}
+            <a class="search-btn" href="{% url 'movies:movie_list' %}" data-search-open>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <span class="search-btn__label">{% translate "Search" %}</span>
+                <kbd class="search-btn__kbd">Ctrl K</kbd>
+            </a>
             {% comment %} Language switcher. A sibling of .nav-links, not inside it:
                on a phone it stays in the header row beside Sign in instead of
                folding away behind the hamburger. A real POST form to Django's
@@ -262,6 +273,7 @@
     </main>
 
     <footer class="site-footer">
+        <div class="footer-mark" aria-hidden="true">Theoria</div>
         <div class="container footer-row">
             <span>{% translate "Theoria — a movie catalog measured end to end." %}</span>
             <span class="mono">{% block footer_meta %}{% translate "Source · TMDB" %}{% endblock %}</span>
@@ -284,6 +296,26 @@
         </div>
     </dialog>
     {% endif %}
+
+    {% comment %} The search palette (Ctrl+K or the header button). Results come
+       from movies:search_suggest as the reader types; the visible strings live
+       here as data- attributes so cinema.js never owns a phrase. {% endcomment %}
+    <div class="palette" id="search-palette" hidden data-search-palette
+         data-endpoint="{% url 'movies:search_suggest' %}"
+         data-label-movie="{% translate "Movie" %}" data-label-series="{% translate "TV show" %}"
+         data-empty="{% translate "No title matches that search. Try another title." %}"
+         data-hint="{% translate "Type at least two letters of a title." %}">
+        <div class="palette__box" role="dialog" aria-modal="true" aria-label="{% translate "Search" %}">
+            <div class="palette__field">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                <input id="search-palette-input" type="text" autocomplete="off" spellcheck="false"
+                       placeholder="{% translate "Search movies and TV shows" %}" aria-label="{% translate "Search movies and TV shows" %}"
+                       role="combobox" aria-expanded="true" aria-controls="search-palette-list">
+                <kbd>Esc</kbd>
+            </div>
+            <div class="palette__list" id="search-palette-list" role="listbox"></div>
+        </div>
+    </div>
 
     <div class="ai-assistant" data-ai-assistant data-ai-chat-endpoint="{% url 'assistant:chat' %}"
          data-ai-feedback-endpoint="{% url 'assistant:feedback' %}"

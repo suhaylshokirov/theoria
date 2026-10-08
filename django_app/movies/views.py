@@ -2,6 +2,8 @@ from datetime import date
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.http import JsonResponse
+from django.urls import reverse
 from django.db.models import (
     Avg, Case, CharField, Count, Exists, F, IntegerField, Max, Min, OuterRef, Q, Sum,
     Value, When,
@@ -29,6 +31,7 @@ from movies.i18n import (
     localize_movies, localize_people, localize_series, series_name_order,
     title_order,
 )
+from movies.templatetags.tmdb_images import tmdb_image
 from movies.vocab import display_department, display_job
 
 MOVIES_PER_PAGE = 24
@@ -98,12 +101,22 @@ def home(request):
     warehouse nothing, which is what lets an anonymous visitor read this page
     while Neon is asleep.
     """
+    stats = cached_reads.home_stats()
+    shelves = cached_reads.home_shelves()
+    mosaic = cached_reads.home_mosaic()
     context = {
-        **cached_reads.home_stats(),
-        **cached_reads.home_shelves(),
-        "mosaic": cached_reads.home_mosaic(),
+        **stats,
+        **shelves,
+        "mosaic": mosaic,
+        # The poster wall's two drifting rows.
+        "mosaic_rows": [row for row in (mosaic[:WALL_ROW], mosaic[WALL_ROW:2 * WALL_ROW]) if row],
     }
     return render(request, "movies/home.html", context)
+
+
+# Posters per row of the home page's poster wall. Each row is printed twice
+# for a seamless loop, so this is half the row's DOM.
+WALL_ROW = 24
 
 
 def movie_list(request):
@@ -742,6 +755,18 @@ def movie_detail(request, movie_slug):
     )
     trailer = _pick_trailer(videos)
 
+    # "Ranked #N of M films" beside the score ring: one aggregate over
+    # fact_movie_rating, which holds one IMDb row per film. Films tied on the
+    # rating share a rank, so N counts only the films rated strictly higher.
+    rating_rank = rated_total = None
+    if movie_rating and movie_rating.rating is not None:
+        ranks = MovieRating.objects.using("warehouse").filter(source="imdb").aggregate(
+            total=Count("movie_id"),
+            above=Count("movie_id", filter=Q(rating__gt=movie_rating.rating)),
+        )
+        rating_rank = int(ranks["above"]) + 1
+        rated_total = int(ranks["total"])
+
     context = {
         "movie": movie,
         "genres": genres,
@@ -755,12 +780,77 @@ def movie_detail(request, movie_slug):
         "countries": countries,
         "languages": languages,
         "movie_rating": movie_rating,
+        "rating_rank": rating_rank,
+        "rated_total": rated_total,
+        "box_office": _box_office(movie.budget, movie.revenue),
         "trailer": trailer,
         "collection_flags": collection_flags(
             request.user, CollectionItem.MOVIE, movie_id
         ),
     }
     return render(request, "movies/movie_detail.html", context)
+
+
+def _box_office(budget, revenue):
+    """How many times over a film earned back its budget, plus the two bar
+    widths (as a share of the larger figure) the film page draws under it.
+    None unless both figures are known: TMDB records 0 for "not reported",
+    and a 0 budget would make the multiple meaningless."""
+    if not budget or not revenue:
+        return None
+    larger = max(budget, revenue)
+    return {
+        "multiple": revenue / budget,
+        "budget_pct": round(budget / larger * 100, 1),
+        "revenue_pct": round(revenue / larger * 100, 1),
+    }
+
+
+# How many matches the header search (Ctrl+K) lists, films first then shows.
+SUGGEST_MOVIES = 6
+SUGGEST_SERIES = 3
+
+
+def search_suggest(request):
+    """JSON for the header search palette: titles matching ?q=, best rated first.
+
+    Matches the reader's language the same way the list pages' search does
+    (filter_by_title / filter_by_series_name). Under two characters returns
+    nothing, so a first keystroke doesn't scan the whole catalog.
+    """
+    term = request.GET.get("q", "").strip()
+    if len(term) < 2:
+        return JsonResponse({"results": []})
+
+    movies = (
+        filter_by_title(localize_movies(Movie.objects.using("warehouse")), term)
+        .annotate(imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb")))
+        .order_by(F("imdb_rating").desc(nulls_last=True), "movie_id")[:SUGGEST_MOVIES]
+    )
+    series = (
+        filter_by_series_name(localize_series(Series.objects.using("warehouse")), term)
+        .annotate(imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")))
+        .order_by(F("imdb_rating").desc(nulls_last=True), "series_id")[:SUGGEST_SERIES]
+    )
+
+    def row(kind, obj, url, when):
+        return {
+            "kind": kind,
+            "title": obj.display_title,
+            "year": when.year if when else None,
+            "url": url,
+            "poster": tmdb_image(obj.poster_path, "w92"),
+            "rating": float(obj.imdb_rating) if obj.imdb_rating is not None else None,
+        }
+
+    results = [
+        row("movie", m, reverse("movies:movie_detail", args=[m.slug]), m.release_date)
+        for m in movies
+    ] + [
+        row("series", s, reverse("movies:series_detail", args=[s.slug]), s.first_air_date)
+        for s in series
+    ]
+    return JsonResponse({"results": results})
 
 
 def _pick_trailer(videos):

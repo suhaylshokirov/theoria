@@ -2040,3 +2040,97 @@ msgstr "Не для меня"
 
 msgid "{minutes} min"
 msgstr "{minutes} мин"
+
+msgid "Now showing"
+msgstr "Сейчас на экране"
+
+#, python-format
+msgid "%(n)s of %(total)s"
+msgstr "%(n)s из %(total)s"
+
+#, python-format
+msgid "Directed by %(name)s"
+msgstr "Режиссёр: %(name)s"
+
+msgid "Open film"
+msgstr "Открыть фильм"
+
+msgid "Featured films"
+msgstr "Избранные фильмы"
+
+msgid "The catalogue"
+msgstr "Каталог"
+
+msgid "Every title."
+msgstr "Каждое название."
+
+msgid "Every performance."
+msgstr "Каждая роль."
+
+msgid "Hover a poster to stop the wall and tilt it toward the light."
+msgstr "Наведите на постер, чтобы остановить ленту и повернуть его к свету."
+
+msgid "The top twelve,"
+msgstr "Лучшие двенадцать,"
+
+msgid "by IMDb rating."
+msgstr "по рейтингу IMDb."
+
+msgid "Scroll back"
+msgstr "Прокрутить назад"
+
+msgid "Scroll forward"
+msgstr "Прокрутить вперёд"
+
+msgid "Films by decade,"
+msgstr "Фильмы по десятилетиям,"
+
+msgid "and how they rate."
+msgstr "и их рейтинг."
+
+msgid "Bars count the films released in each decade. The line tracks their average IMDb rating."
+msgstr "Столбцы — число фильмов, вышедших за десятилетие. Линия — их средний рейтинг IMDb."
+
+msgid "{decade}s"
+msgstr "{decade}-е"
+
+msgid "{decade}s · {films} films · average {rating}"
+msgstr "{decade}-е · фильмов: {films} · в среднем {rating}"
+
+#, python-format
+msgid "%(decade)ss"
+msgstr "%(decade)s-е"
+
+msgid "Films released"
+msgstr "Вышло фильмов"
+
+msgid "Average IMDb rating"
+msgstr "Средний рейтинг IMDb"
+
+msgid "Films released and average IMDb rating, by decade"
+msgstr "Число вышедших фильмов и средний рейтинг IMDb по десятилетиям"
+
+msgid "Search"
+msgstr "Поиск"
+
+msgid "No title matches that search. Try another title."
+msgstr "По этому запросу ничего не найдено. Попробуйте другое название."
+
+msgid "Type at least two letters of a title."
+msgstr "Введите хотя бы две буквы названия."
+
+msgid "Search movies and TV shows"
+msgstr "Поиск фильмов и сериалов"
+
+msgid "IMDb rating"
+msgstr "Рейтинг IMDb"
+
+#, python-format
+msgid "Ranked #%(rank)s of %(total)s rated films on Theoria"
+msgstr "№%(rank)s из %(total)s оценённых фильмов на Theoria"
+
+msgid "Box office"
+msgstr "Кассовые сборы"
+
+msgid "its budget, earned back at the box office"
+msgstr "бюджета вернулось в прокате"

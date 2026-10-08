@@ -14,11 +14,12 @@ from __future__ import annotations
 
 import itertools
 
-from django.db.models import Avg, Count, F, Max, Q
+from django.db.models import Avg, Count, F, IntegerField, Max, Q
+from django.db.models.functions import Cast, ExtractYear
 
 from core.datacache import cached
-from movies.i18n import current_lang, localize_movies, localize_series
-from movies.models import Genre, Movie, MovieRating, Person, Series
+from movies.i18n import current_lang, genre_labels, localize_movies, localize_series
+from movies.models import Credit, Genre, Movie, MovieMetrics, MovieRating, Person, Series
 
 
 def _approx(n):
@@ -57,12 +58,16 @@ def _interleave_mosaic(primary, secondary, ratio):
 
 
 def build_home_stats():
-    """The three figures under the hero. Plain numbers, language-free."""
+    """The figures under the hero, plus the decade chart. Plain numbers,
+    language-free."""
     return {
         # Shown as "1,200+" etc. — an approximate figure, not an exact count.
         # Credits (every fact_credit row) was dropped: a raw join-table volume
         # means nothing to a visitor, unlike Movies / People / Avg rating.
         "movie_count": _approx(Movie.objects.using("warehouse").count()),
+        # int() before _approx(): the count is already an int in production;
+        # the home view's tests mock Series without configuring a count.
+        "series_count": _approx(int(Series.objects.using("warehouse").count())),
         "person_count": _approx(Person.objects.using("warehouse").count()),
         # Reads fact_movie_rating instead of fact_movie_metrics (Task 68):
         # the old figure averaged every fact_movie_metrics row, silently
@@ -71,7 +76,43 @@ def build_home_stats():
         "avg_rating": MovieRating.objects.using("warehouse").filter(
             source="imdb"
         ).aggregate(avg_rating=Avg("rating"))["avg_rating"],
+        "decades": build_home_decades(),
     }
+
+
+def build_home_decades():
+    """Films released and their average IMDb rating, per decade of release.
+
+    The same figures as the dashboard's movies_by_decade panel, kept here as an
+    ORM read so the home page doesn't pay for all eight dashboard queries on a
+    cold cache. Each bar's height is a share of the tallest decade, worked out
+    here so the template only has to print it.
+    """
+    rows = list(
+        Movie.objects.using("warehouse")
+        .filter(release_date__isnull=False)
+        # Cast first: Postgres EXTRACT returns numeric, and numeric / 10 keeps
+        # the remainder (1994 / 10 * 10 = 1994) where integer division drops it.
+        .annotate(decade=Cast(ExtractYear("release_date"), IntegerField()) / 10 * 10)
+        .values("decade")
+        .annotate(
+            film_count=Count("movie_id", distinct=True),
+            avg_rating=Avg("movierating__rating", filter=Q(movierating__source="imdb")),
+        )
+        .order_by("decade")
+    )
+    tallest = max((row["film_count"] for row in rows), default=0)
+    best = max((row["avg_rating"] for row in rows if row["avg_rating"]), default=None)
+    return [
+        {
+            "decade": row["decade"],
+            "film_count": row["film_count"],
+            "avg_rating": round(float(row["avg_rating"]), 2) if row["avg_rating"] else None,
+            "height_pct": round(row["film_count"] / tallest * 100, 1) if tallest else 0,
+            "is_best": best is not None and row["avg_rating"] == best,
+        }
+        for row in rows
+    ]
 
 
 def build_home_mosaic():
@@ -132,7 +173,55 @@ def build_home_shelves():
     )
     for show in recently_aired:
         show.year_span = _series_year_span(show)
-    return {"top_rated": top_rated, "newest": newest, "recently_aired": recently_aired}
+    return {
+        "top_rated": top_rated,
+        "newest": newest,
+        "recently_aired": recently_aired,
+        "featured": _featured_films(top_rated),
+    }
+
+
+# How many films the home page's "Now showing" reel cycles through.
+FEATURED_LIMIT = 6
+
+
+def _featured_films(top_rated):
+    """The hero reel: the highest-rated films that have a backdrop to show.
+
+    Drawn from the top_rated shelf already in hand, so the reel and the shelf
+    can never disagree. Each film gets `reel_genres` (display names, at most
+    two) and `reel_director` set in place -- two queries for the whole reel,
+    none at all when no film has a backdrop.
+    """
+    featured = [m for m in top_rated if m.backdrop_path][:FEATURED_LIMIT]
+    if not featured:
+        return []
+    ids = [m.movie_id for m in featured]
+
+    labels = genre_labels()
+    genres = {}
+    for movie_id, name in (
+        MovieMetrics.objects.using("warehouse")
+        .filter(movie_id__in=ids)
+        .values_list("movie_id", "genre__genre_name")
+        .distinct()
+        .order_by("movie_id", "genre__genre_name")
+    ):
+        genres.setdefault(movie_id, []).append(labels.get(name, name))
+
+    directors = {}
+    for movie_id, name in (
+        Credit.objects.using("warehouse")
+        .filter(movie_id__in=ids, job="Director")
+        .order_by(F("ordering").asc(nulls_last=True), "person_id")
+        .values_list("movie_id", "person__name")
+    ):
+        directors.setdefault(movie_id, name)
+
+    for movie in featured:
+        movie.reel_genres = genres.get(movie.movie_id, [])[:2]
+        movie.reel_director = directors.get(movie.movie_id, "")
+    return featured
 
 
 def home_stats():
