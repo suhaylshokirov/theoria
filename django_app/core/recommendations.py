@@ -119,6 +119,7 @@ def _catalogue_movie_candidates(constraints):
             "runtime": movie.runtime,
             "year": movie.release_date.year if movie.release_date else None,
             "imdb_rating": movie.imdb_rating,
+            "poster_path": movie.poster_path,
         }
         for movie in movies
     ]

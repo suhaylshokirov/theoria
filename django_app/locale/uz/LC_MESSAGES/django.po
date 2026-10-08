@@ -1971,3 +1971,39 @@ msgstr "Bu chatni hozir ochib bo‘lmadi. Qayta urinib ko‘ring."
 #: core/context_processors.py:29
 msgid "A new chat could not be started just now. Please try again."
 msgstr "Yangi chatni hozir boshlab bo‘lmadi. Qayta urinib ko‘ring."
+
+msgid "Film guide"
+msgstr "Film yordamchisi"
+
+msgid "Picks from Theoria"
+msgstr "Theoria tanlovlari"
+
+msgid "What are we watching?"
+msgstr "Nima tomosha qilamiz?"
+
+msgid "Tell me a mood, a genre, or how much time you have. Or start with one of these."
+msgstr "Kayfiyatingizni, janrni yoki qancha vaqtingiz borligini ayting. Yoki quyidagilardan birini tanlang."
+
+msgid "Pick for tonight"
+msgstr "Bugun kechqurun uchun tanlov"
+
+msgid "Find by mood"
+msgstr "Kayfiyat boʻyicha topish"
+
+msgid "Browse by genre"
+msgstr "Janr boʻyicha tanlash"
+
+msgid "Surprise me"
+msgstr "Meni hayratga soling"
+
+msgid "On your list"
+msgstr "Roʻyxatingizda"
+
+msgid "Already watched"
+msgstr "Allaqachon koʻrganman"
+
+msgid "Not for me"
+msgstr "Menga emas"
+
+msgid "{minutes} min"
+msgstr "{minutes} daq"

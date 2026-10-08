@@ -23,6 +23,7 @@ from assistant.memory import normalise_chat_memory, update_chat_memory
 from assistant.models import ChatSession
 from core.recommendations import select_movie_candidates
 from core.services import build_taste_summary, record_title_feedback
+from movies.templatetags.tmdb_images import tmdb_image
 
 MAX_MESSAGE_LENGTH = 300
 FEEDBACK_ACTIONS = {
@@ -56,6 +57,12 @@ def _recommendation_response(candidate):
         "url": url,
         "status": candidate["status"],
         "reason": candidate["reason"],
+        # Display-only extras for the pick card; .get() because a candidate
+        # can come from a source that does not carry them.
+        "poster": tmdb_image(candidate.get("poster_path"), "w185"),
+        "year": candidate.get("year"),
+        "runtime": candidate.get("runtime"),
+        "rating": float(candidate["imdb_rating"]) if candidate.get("imdb_rating") is not None else None,
     }
 
 

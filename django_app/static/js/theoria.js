@@ -912,12 +912,28 @@
       resize.setAttribute("title", label);
     }
 
+    // The model writes film titles as **Title**. Render those as <strong>
+    // by building text nodes, never innerHTML, so a reply cannot inject markup.
+    function appendEmphasis(parent, text) {
+      String(text).split(/\*\*(.+?)\*\*/g).forEach(function (part, index) {
+        if (!part) return;
+        if (index % 2) {
+          var strong = document.createElement("strong");
+          strong.textContent = part;
+          parent.appendChild(strong);
+        } else {
+          parent.appendChild(document.createTextNode(part));
+        }
+      });
+    }
+
     function addMessage(text, role, extraClass) {
       var message = document.createElement("div");
       message.className = "ai-message ai-message-" + role;
       if (extraClass) message.classList.add(extraClass);
       var paragraph = document.createElement("p");
-      paragraph.textContent = text;
+      if (role === "assistant") appendEmphasis(paragraph, text);
+      else paragraph.textContent = text;
       message.appendChild(paragraph);
       messages.appendChild(message);
       messages.scrollTop = messages.scrollHeight;
@@ -1046,30 +1062,83 @@
     }
 
     function addRecommendations(recommendations) {
-      recommendations.forEach(function (recommendation) {
+      if (!recommendations.length) return;
+      var group = document.createElement("div");
+      group.className = "ai-picks";
+
+      recommendations.forEach(function (recommendation, index) {
         var card = document.createElement("article");
         card.className = "ai-recommendation";
+        card.style.setProperty("--pick-index", index);
+
+        // The poster repeats the title link, so it is hidden from assistive
+        // tech and the keyboard; the title stays the one real link.
+        var poster = document.createElement(recommendation.url ? "a" : "span");
+        poster.className = "ai-recommendation-poster";
+        poster.setAttribute("aria-hidden", "true");
+        if (recommendation.url) {
+          poster.href = recommendation.url;
+          poster.tabIndex = -1;
+        }
+        if (recommendation.poster) {
+          var image = document.createElement("img");
+          image.src = recommendation.poster;
+          image.alt = "";
+          image.loading = "lazy";
+          image.width = 64;
+          image.height = 96;
+          poster.appendChild(image);
+        }
+        card.appendChild(poster);
+
+        var body = document.createElement("div");
+        body.className = "ai-recommendation-body";
+
         var title = document.createElement(recommendation.url ? "a" : "span");
         title.className = "ai-recommendation-title";
         title.textContent = recommendation.title;
         if (recommendation.url) title.href = recommendation.url;
-        card.appendChild(title);
+        body.appendChild(title);
 
-        var status = document.createElement("p");
-        status.className = "ai-recommendation-status";
-        status.textContent = recommendation.status === "on_list" ? "On your Watch later list" : "New pick";
-        card.appendChild(status);
+        var meta = document.createElement("p");
+        meta.className = "ai-recommendation-meta";
+        if (recommendation.year) {
+          var year = document.createElement("span");
+          year.textContent = recommendation.year;
+          meta.appendChild(year);
+        }
+        if (recommendation.runtime) {
+          var runtime = document.createElement("span");
+          runtime.textContent = t("{minutes} min", { minutes: recommendation.runtime });
+          meta.appendChild(runtime);
+        }
+        if (recommendation.rating) {
+          var rating = document.createElement("span");
+          rating.className = "ai-recommendation-rating";
+          rating.textContent = "IMDb " + Number(recommendation.rating).toLocaleString(numberLocale(), {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1
+          });
+          meta.appendChild(rating);
+        }
+        if (recommendation.status === "on_list") {
+          var status = document.createElement("span");
+          status.className = "ai-recommendation-status";
+          status.textContent = t("On your list");
+          meta.appendChild(status);
+        }
+        if (meta.childNodes.length) body.appendChild(meta);
 
         var reason = document.createElement("p");
         reason.className = "ai-recommendation-reason";
         reason.textContent = recommendation.reason;
-        card.appendChild(reason);
+        body.appendChild(reason);
 
         var feedback = document.createElement("div");
         feedback.className = "ai-recommendation-feedback";
         [
-          { action: "watched", label: "Already watched" },
-          { action: "not_interested", label: "Not for me" }
+          { action: "watched", label: t("Already watched") },
+          { action: "not_interested", label: t("Not for me") }
         ].forEach(function (item) {
           var button = document.createElement("button");
           button.type = "button";
@@ -1092,9 +1161,11 @@
           });
           feedback.appendChild(button);
         });
-        card.appendChild(feedback);
-        messages.appendChild(card);
+        body.appendChild(feedback);
+        card.appendChild(body);
+        group.appendChild(card);
       });
+      messages.appendChild(group);
       messages.scrollTop = messages.scrollHeight;
     }
 

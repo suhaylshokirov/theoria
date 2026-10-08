@@ -38,6 +38,10 @@ def js_strings(request):
             "A new chat could not be started just now. Please try again.": _(
                 "A new chat could not be started just now. Please try again."
             ),
+            "On your list": _("On your list"),
+            "Already watched": _("Already watched"),
+            "Not for me": _("Not for me"),
+            "{minutes} min": _("{minutes} min"),
             "Sending…": _("Sending…"),
             "Enter a valid email address.": _("Enter a valid email address."),
             "Pick for tonight": _(

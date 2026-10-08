@@ -23,6 +23,7 @@ from django.test import Client, override_settings  # noqa: E402
 from django.utils import timezone  # noqa: E402
 from django.urls import reverse  # noqa: E402
 
+import config  # noqa: E402
 from assistant.gemini import ConversationPlan  # noqa: E402
 from assistant.memory import update_chat_memory  # noqa: E402
 from assistant.models import ChatSession, ChatTurn, RecommendationEvent  # noqa: E402
@@ -37,6 +38,10 @@ def _candidate():
         "content_type": "movie",
         "title": "Arrival",
         "slug": "arrival",
+        "year": 2016,
+        "runtime": 116,
+        "imdb_rating": 7.9,
+        "poster_path": "/arrival.jpg",
         "status": "new",
         "reason": "It matches your requested genre.",
     }
@@ -165,6 +170,10 @@ def test_chat_returns_rule_based_recommendations_for_signed_in_user():
                 "url": "/movies/arrival/",
                 "status": "new",
                 "reason": "It matches your requested genre.",
+                "poster": f"{config.TMDB_IMAGE_BASE_URL}/w185/arrival.jpg",
+                "year": 2016,
+                "runtime": 116,
+                "rating": 7.9,
             }
         ]
         assert payload["reply"] == "Arrival is a thoughtful, personal pick for tonight."
