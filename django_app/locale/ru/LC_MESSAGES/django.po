@@ -2004,3 +2004,39 @@ msgstr "Не удалось открыть этот чат. Попробуйте
 #: core/context_processors.py:29
 msgid "A new chat could not be started just now. Please try again."
 msgstr "Не удалось начать новый чат. Попробуйте ещё раз."
+
+msgid "Film guide"
+msgstr "Киногид"
+
+msgid "Picks from Theoria"
+msgstr "Подборки от Theoria"
+
+msgid "What are we watching?"
+msgstr "Что посмотрим?"
+
+msgid "Tell me a mood, a genre, or how much time you have. Or start with one of these."
+msgstr "Назовите настроение, жанр или сколько у вас времени. Или начните с одного из вариантов."
+
+msgid "Pick for tonight"
+msgstr "Выбор на вечер"
+
+msgid "Find by mood"
+msgstr "Подбор по настроению"
+
+msgid "Browse by genre"
+msgstr "Выбрать по жанру"
+
+msgid "Surprise me"
+msgstr "Удивите меня"
+
+msgid "On your list"
+msgstr "В вашем списке"
+
+msgid "Already watched"
+msgstr "Уже смотрел(а)"
+
+msgid "Not for me"
+msgstr "Не для меня"
+
+msgid "{minutes} min"
+msgstr "{minutes} мин"

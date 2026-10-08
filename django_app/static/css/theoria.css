@@ -2956,16 +2956,25 @@ html.has-js .bio-body.is-collapsed {
 }
 
 /* --- Film guide ------------------------------------------------------------ */
+/* A chat that hands back films, so it borrows the site's own vocabulary
+   instead of a support-widget look: the hero's heavy uppercase Archivo for the
+   greeting, mono for the numbers on each pick, and posters doing the visual
+   work. Shapes follow the site rule: sheets and plates are square-cornered
+   (--radius), anything you press to act is a pill or a circle. Colours are
+   tokens only, so the dark counterpart needs no rules of its own here. */
 
 .ai-assistant {
   position: fixed;
   right: var(--space-6);
   bottom: var(--space-6);
   z-index: var(--z-assistant);
+  --ai-header-height: 64px;
 }
 
 .ai-assistant-trigger,
 .ai-assistant-close,
+.ai-assistant-new,
+.ai-assistant-history-toggle,
 .ai-assistant-resize,
 .ai-assistant-send {
   display: inline-grid;
@@ -2992,6 +3001,10 @@ html.has-js .bio-body.is-collapsed {
   box-shadow: 0 12px 28px rgba(11, 11, 11, 0.3);
 }
 
+.ai-assistant-trigger:active {
+  transform: translateY(0) scale(0.96);
+}
+
 .ai-assistant-trigger svg {
   width: 27px;
   height: 33px;
@@ -3010,7 +3023,7 @@ html.has-js .bio-body.is-collapsed {
   letter-spacing: 0.08em;
   color: var(--paper);
   background: var(--ink);
-  border-radius: 2px;
+  border-radius: var(--radius);
   content: attr(data-label);
   opacity: 0;
   pointer-events: none;
@@ -3024,17 +3037,25 @@ html.has-js .bio-body.is-collapsed {
   transform: translateY(-50%);
 }
 
+/* The label only explains a closed button; once the panel is open the
+   button's job is obvious and the tooltip would sit on top of the panel. */
+.ai-assistant-trigger[aria-expanded="true"]::after {
+  display: none;
+}
+
+/* --- Welcome nudge --- */
+
 .ai-assistant-welcome {
   position: absolute;
   right: 0;
-  bottom: 68px;
-  width: min(310px, calc(100vw - 2 * var(--space-6)));
+  bottom: 70px;
+  width: min(320px, calc(100vw - 2 * var(--space-6)));
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 4px;
-  box-shadow: 0 18px 48px rgba(11, 11, 11, 0.22);
-  animation: ai-assistant-welcome-in 420ms var(--ease) both;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  animation: ai-rise var(--dur-slow) var(--ease-bloom) both;
 }
 
 .ai-assistant-welcome[hidden] {
@@ -3059,9 +3080,9 @@ html.has-js .bio-body.is-collapsed {
   z-index: 1;
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
-  gap: var(--space-3);
+  gap: var(--space-4);
   width: 100%;
-  padding: var(--space-5) var(--space-6) var(--space-5) var(--space-5);
+  padding: var(--space-5) var(--space-7) var(--space-5) var(--space-5);
   color: inherit;
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -3073,7 +3094,7 @@ html.has-js .bio-body.is-collapsed {
   background: transparent;
   border: 0;
   border-radius: 0;
-  cursor: default;
+  cursor: pointer;
   transition: none;
 }
 
@@ -3087,7 +3108,7 @@ html.has-js .bio-body.is-collapsed {
 
 .ai-assistant-welcome-open:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--ink);
+  box-shadow: inset 0 0 0 2px var(--lime-mark);
 }
 
 .ai-assistant-welcome-mark {
@@ -3095,30 +3116,30 @@ html.has-js .bio-body.is-collapsed {
   place-items: center;
   width: 38px;
   height: 38px;
-  color: var(--ink);
-  background: var(--lime);
+  color: #f2f1ed;
+  background: #0b0b0b;
   border-radius: 50%;
 }
 
 .ai-assistant-welcome-mark svg {
-  width: 18px;
-  height: 22px;
+  width: 17px;
+  height: 21px;
 }
 
 .ai-assistant-welcome-copy {
   display: grid;
   gap: var(--space-2);
-  padding-right: var(--space-3);
 }
 
 .ai-assistant-welcome-copy strong {
   font-family: var(--font-display);
   font-size: var(--text-md);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.15;
 }
 
 .ai-assistant-welcome-copy span {
+  color: var(--ink-muted);
   font-size: var(--text-sm);
   line-height: 1.45;
 }
@@ -3133,17 +3154,17 @@ html.has-js .bio-body.is-collapsed {
   width: 28px;
   height: 28px;
   padding: 0;
-  color: var(--ink-muted);
+  color: var(--ink-faint);
   background: transparent;
   border: 0;
-  border-radius: 2px;
+  border-radius: 50%;
   cursor: pointer;
 }
 
 .ai-assistant-welcome-close:hover,
 .ai-assistant-welcome-close:focus-visible {
   color: var(--ink);
-  background: var(--lime-wash);
+  background: var(--sheet);
   outline: none;
 }
 
@@ -3152,11 +3173,67 @@ html.has-js .bio-body.is-collapsed {
 }
 
 .ai-assistant-welcome-close svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 
-@keyframes ai-assistant-welcome-in {
+/* --- Panel --- */
+
+.ai-assistant-panel {
+  position: absolute;
+  right: 0;
+  bottom: 70px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  width: min(400px, calc(100vw - 2 * var(--space-6)));
+  height: min(600px, calc(100vh - 112px));
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card), 0 28px 64px -24px rgba(11, 11, 11, 0.28);
+  transform-origin: bottom right;
+  animation: ai-panel-in var(--dur) var(--ease-bloom) both;
+  transition: width var(--dur) var(--ease), height var(--dur) var(--ease),
+              opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
+/* The brand's lime band, drawn once across the top edge of the sheet. */
+.ai-assistant-panel::before {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
+  height: 3px;
+  background: var(--lime);
+  content: "";
+}
+
+.ai-assistant-panel.is-expanded {
+  width: min(680px, calc(100vw - 2 * var(--space-6)));
+  height: min(760px, calc(100vh - 112px));
+}
+
+.ai-assistant-panel.is-closing {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.98);
+}
+
+@keyframes ai-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ai-rise {
   from {
     opacity: 0;
     transform: translateY(8px);
@@ -3164,73 +3241,90 @@ html.has-js .bio-body.is-collapsed {
 
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
-}
-
-.ai-assistant-panel {
-  position: absolute;
-  right: 0;
-  bottom: 68px;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(368px, calc(100vw - 2 * var(--space-6)));
-  height: min(540px, calc(100vh - 112px));
-  overflow: hidden;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: 4px;
-  box-shadow: 0 18px 48px rgba(11, 11, 11, 0.22);
-  transition: width var(--dur) var(--ease), height var(--dur) var(--ease),
-              opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
-}
-
-.ai-assistant-panel.is-expanded {
-  width: min(640px, calc(100vw - 2 * var(--space-6)));
-  height: min(720px, calc(100vh - 112px));
-}
-
-.ai-assistant-panel.is-closing {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(8px);
 }
 
 .ai-assistant-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-5);
-  padding: var(--space-5) var(--space-6);
-  background: var(--sheet);
+  gap: var(--space-4);
+  height: var(--ai-header-height);
+  padding: 3px var(--space-4) 0 var(--space-5);
   border-bottom: var(--hairline);
 }
 
-.ai-assistant-kicker {
-  margin: 0 0 2px;
-  font-family: var(--font-label);
-  font-size: var(--text-3xs);
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  color: var(--lime-text);
+.ai-assistant-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.ai-assistant-identity > div {
+  min-width: 0;
+}
+
+.ai-assistant-badge {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: #f2f1ed;
+  background: #0b0b0b;
+  border-radius: 50%;
+}
+
+/* On the dark surface an ink disc would vanish into the header, so it gets
+   a hairline ring to keep its edge. */
+[data-theme="dark"] .ai-assistant-badge,
+[data-theme="dark"] .ai-assistant-welcome-mark {
+  box-shadow: 0 0 0 1px var(--rule-strong);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .ai-assistant-badge,
+  :root:not([data-theme]) .ai-assistant-welcome-mark {
+    box-shadow: 0 0 0 1px var(--rule-strong);
+  }
+}
+
+.ai-assistant-badge svg {
+  width: 15px;
+  height: 19px;
 }
 
 .ai-assistant-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--text-md);
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ai-assistant-subtitle {
+  margin: 1px 0 0;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: var(--text-2xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-assistant-controls {
+  display: flex;
+  flex: none;
+  gap: 2px;
 }
 
 .ai-assistant-close,
 .ai-assistant-new,
 .ai-assistant-history-toggle,
-.ai-assistant-resize,
-.ai-assistant-send {
-  width: 36px;
-  height: 36px;
-  flex: none;
+.ai-assistant-resize {
+  width: 34px;
+  height: 34px;
   padding: 0;
   color: var(--ink-muted);
   background: transparent;
@@ -3244,37 +3338,51 @@ html.has-js .bio-body.is-collapsed {
 .ai-assistant-new:focus-visible,
 .ai-assistant-history-toggle:hover,
 .ai-assistant-history-toggle:focus-visible,
+.ai-assistant-history-toggle[aria-expanded="true"],
 .ai-assistant-resize:hover,
-.ai-assistant-resize:focus-visible,
-.ai-assistant-send:not(:disabled):hover,
-.ai-assistant-send:not(:disabled):focus-visible {
+.ai-assistant-resize:focus-visible {
   color: var(--ink);
-  background: var(--lime-wash);
+  background: var(--sheet);
+  border-color: transparent;
+}
+
+.ai-assistant-controls button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--lime-mark);
 }
 
 .ai-assistant-close svg,
 .ai-assistant-new svg,
 .ai-assistant-history-toggle svg,
-.ai-assistant-resize svg,
-.ai-assistant-send svg {
-  width: 20px;
-  height: 20px;
+.ai-assistant-resize svg {
+  width: 18px;
+  height: 18px;
 }
 
-.ai-assistant-controls {
-  display: flex;
-  gap: var(--space-1);
+.ai-assistant-shrink-icon {
+  display: none;
 }
+
+.ai-assistant-panel.is-expanded .ai-assistant-expand-icon {
+  display: none;
+}
+
+.ai-assistant-panel.is-expanded .ai-assistant-shrink-icon {
+  display: inline;
+}
+
+/* --- Recent chats drawer --- */
 
 .ai-assistant-history {
   position: absolute;
   z-index: 2;
-  inset: 67px 0 0;
+  inset: var(--ai-header-height) 0 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
   padding: var(--space-5);
   background: var(--paper);
+  animation: ai-rise var(--dur) var(--ease-bloom) both;
 }
 
 .ai-assistant-history[hidden] {
@@ -3294,7 +3402,7 @@ html.has-js .bio-body.is-collapsed {
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .ai-assistant-history-close {
@@ -3313,16 +3421,17 @@ html.has-js .bio-body.is-collapsed {
 .ai-assistant-history-close:hover,
 .ai-assistant-history-close:focus-visible {
   color: var(--ink);
-  background: var(--lime-wash);
+  background: var(--sheet);
 }
 
 .ai-assistant-history-close svg {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 }
 
 .ai-assistant-history-list {
   display: grid;
+  align-content: start;
   gap: var(--space-2);
   padding-top: var(--space-4);
   overflow-y: auto;
@@ -3330,7 +3439,7 @@ html.has-js .bio-body.is-collapsed {
 
 .ai-assistant-history-item {
   width: 100%;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-5);
   overflow: hidden;
   color: var(--ink);
   font: inherit;
@@ -3339,17 +3448,23 @@ html.has-js .bio-body.is-collapsed {
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: var(--sheet);
+  background: var(--paper);
   border: var(--hairline);
-  border-radius: 2px;
+  border-radius: var(--radius);
   cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
 
 .ai-assistant-history-item:hover,
-.ai-assistant-history-item:focus-visible,
+.ai-assistant-history-item:focus-visible {
+  background: var(--sheet);
+  border-color: var(--rule-strong);
+}
+
 .ai-assistant-history-item.is-current {
-  border-color: var(--lime-mark);
   background: var(--lime-wash);
+  border-color: var(--lime-mark);
+  box-shadow: inset 3px 0 0 var(--lime-mark);
 }
 
 .ai-assistant-history-empty,
@@ -3360,55 +3475,157 @@ html.has-js .bio-body.is-collapsed {
   line-height: 1.45;
 }
 
-.ai-assistant-shrink-icon {
-  display: none;
-}
-
-.ai-assistant-panel.is-expanded .ai-assistant-expand-icon {
-  display: none;
-}
-
-.ai-assistant-panel.is-expanded .ai-assistant-shrink-icon {
-  display: inline;
-}
+/* --- Conversation --- */
 
 .ai-assistant-messages {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   min-height: 0;
-  padding: var(--space-6);
+  padding: var(--space-6) var(--space-5) var(--space-6);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+/* Opening state: the hero's voice, scaled to fit the sheet. */
+.ai-assistant-intro {
+  padding-top: var(--space-3);
+}
+
+.ai-assistant-greeting {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.625rem, 1.2rem + 1.4vw, 2rem);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.ai-assistant-lede {
+  max-width: 34ch;
+  margin: var(--space-4) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.ai-assistant-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.ai-assistant-panel.is-expanded .ai-assistant-actions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ai-assistant-actions button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-height: 92px;
+  padding: var(--space-4);
+  color: var(--ink);
+  font-family: var(--font-label);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: normal;
+  line-height: 1.2;
+  text-align: left;
+  text-transform: none;
+  background: var(--sheet);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  animation: ai-rise var(--dur-slow) var(--ease-bloom) both;
+  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
+}
+
+.ai-assistant-actions button:nth-child(2) { animation-delay: 40ms; }
+.ai-assistant-actions button:nth-child(3) { animation-delay: 80ms; }
+.ai-assistant-actions button:nth-child(4) { animation-delay: 120ms; }
+
+.ai-assistant-actions svg {
+  width: 22px;
+  height: 22px;
+  color: var(--lime-text);
+  transition: transform var(--dur) var(--ease-bloom);
+}
+
+.ai-assistant-actions button:hover,
+.ai-assistant-actions button:focus-visible {
+  color: var(--ink);
+  background: var(--lime-wash);
+  border-color: var(--lime-mark);
+  outline: none;
+}
+
+.ai-assistant-actions button:hover svg,
+.ai-assistant-actions button:focus-visible svg {
+  transform: translateY(-2px) rotate(-6deg);
+}
+
+.ai-assistant-actions button:active {
+  transform: scale(0.98);
 }
 
 .ai-message {
-  max-width: 86%;
-  padding: var(--space-4);
+  max-width: 88%;
   font-size: var(--text-sm);
-  line-height: 1.45;
+  line-height: 1.55;
+  animation: ai-rise var(--dur) var(--ease-bloom) both;
 }
 
 .ai-message p {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
+.ai-message strong {
+  font-weight: 600;
+}
+
+/* The guide talks in plain type on the page; only the reader's own lines
+   get a block, so the eye can find "what did I ask" at a glance. */
 .ai-message-assistant {
   align-self: flex-start;
-  background: var(--sheet);
-  border: var(--hairline);
-  border-radius: 2px 8px 8px 8px;
+  max-width: 100%;
+  color: var(--ink);
 }
 
 .ai-message-user {
   align-self: flex-end;
-  color: var(--ink-on-lime);
-  background: var(--lime);
-  border-radius: 8px 2px 8px 8px;
+  padding: var(--space-3) var(--space-4);
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: var(--radius);
 }
 
 .ai-message-thinking {
   color: var(--ink-muted);
-  font-style: italic;
+}
+
+.ai-message-thinking p::after {
+  display: block;
+  width: 112px;
+  height: 2px;
+  margin-top: var(--space-3);
+  background: linear-gradient(90deg, var(--rule) 0%, var(--lime-mark) 50%, var(--rule) 100%);
+  background-size: 300% 100%;
+  content: "";
+  animation: ai-sweep 1.3s linear infinite;
+}
+
+@keyframes ai-sweep {
+  from { background-position: 100% 0; }
+  to { background-position: -50% 0; }
 }
 
 .ai-assistant-actions button:disabled,
@@ -3417,131 +3634,215 @@ html.has-js .bio-body.is-collapsed {
   opacity: 0.55;
 }
 
+/* --- Picks --- */
+
+.ai-picks {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: calc(-1 * var(--space-2));
+}
+
+.ai-assistant-panel.is-expanded .ai-picks {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .ai-recommendation {
-  padding: var(--space-4);
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-3);
   background: var(--paper);
   border: var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius);
+  animation: ai-rise var(--dur-slow) var(--ease-bloom) both;
+  animation-delay: calc(var(--pick-index, 0) * 70ms);
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.ai-recommendation:hover {
+  border-color: var(--rule-strong);
+}
+
+.ai-recommendation-poster {
+  display: block;
+  width: 64px;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  background: var(--sheet);
+  border-radius: var(--radius);
+}
+
+.ai-recommendation-poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform var(--dur-slow) var(--ease-bloom);
+}
+
+a.ai-recommendation-poster:hover img,
+a.ai-recommendation-poster:focus-visible img {
+  transform: scale(1.05);
+}
+
+.ai-recommendation-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-top: 2px;
 }
 
 .ai-recommendation-title {
   display: block;
   color: var(--ink);
   font-family: var(--font-display);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  font-size: var(--text-base);
+  font-weight: 700;
+  line-height: 1.2;
   text-decoration: none;
 }
 
 a.ai-recommendation-title:hover,
 a.ai-recommendation-title:focus-visible {
   color: var(--lime-text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
-.ai-recommendation-status,
-.ai-recommendation-reason {
+.ai-recommendation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
   margin: var(--space-2) 0 0;
-  font-size: var(--text-2xs);
-  line-height: 1.4;
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-3xs);
+}
+
+.ai-recommendation-rating {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 .ai-recommendation-status {
+  padding: 1px var(--space-2);
+  color: var(--ink-on-lime);
   font-family: var(--font-label);
+  font-size: var(--text-3xs);
   font-weight: 600;
-  color: var(--lime-text);
+  letter-spacing: 0.04em;
+  background: var(--lime);
+  border-radius: var(--radius-pill);
 }
 
 .ai-recommendation-reason {
+  margin: var(--space-3) 0 0;
   color: var(--ink-muted);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
 }
 
 .ai-recommendation-feedback {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin-top: var(--space-3);
-  color: var(--ink-muted);
+  margin-top: auto;
+  padding-top: var(--space-4);
+  color: var(--lime-text);
   font-size: var(--text-2xs);
+  font-weight: 500;
 }
 
 .ai-recommendation-feedback button {
-  padding: var(--space-2) var(--space-3);
-  color: var(--ink);
-  background: var(--sheet);
+  padding: var(--space-1) var(--space-4);
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
+  background: transparent;
   border: var(--hairline);
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
 }
 
 .ai-recommendation-feedback button:hover,
 .ai-recommendation-feedback button:focus-visible {
-  background: var(--lime-wash);
-  border-color: var(--lime-mark);
-}
-
-.ai-assistant-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-1);
-}
-
-.ai-assistant-actions button {
-  padding: var(--space-2) var(--space-4);
-  font-family: var(--font-label);
-  font-size: var(--text-3xs);
-  font-weight: 600;
-  letter-spacing: 0.06em;
   color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  transition: border-color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+  background: var(--sheet);
+  border-color: var(--rule-strong);
 }
 
-.ai-assistant-actions button:hover,
-.ai-assistant-actions button:focus-visible {
-  background: var(--lime-wash);
-  border-color: var(--lime-mark);
-}
+/* --- Composer --- */
 
 .ai-assistant-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 42px;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--sheet);
+  padding: var(--space-4) var(--space-4) var(--space-4);
+  background: var(--paper);
   border-top: var(--hairline);
 }
 
-.ai-assistant-form input {
+.ai-assistant-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px 4px 4px var(--space-5);
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease),
+              background var(--dur-fast) var(--ease);
+}
+
+.ai-assistant-field:focus-within {
+  background: var(--paper);
+  border-color: var(--lime-mark);
+  box-shadow: 0 0 0 3px var(--lime-wash);
+}
+
+.ai-assistant-field input {
   width: 100%;
   min-width: 0;
-  min-height: 42px;
-  padding: var(--space-2) var(--space-5);
+  min-height: 38px;
+  padding: 0;
   font: inherit;
+  font-size: var(--text-sm);
   color: var(--ink);
-  background: var(--paper);
-  border: var(--hairline);
-  border-radius: var(--radius-pill);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   outline: none;
 }
 
-.ai-assistant-form input::placeholder {
+.ai-assistant-field input:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.ai-assistant-field input::placeholder {
   color: var(--ink-faint);
 }
 
-.ai-assistant-form input:focus {
-  border-color: var(--lime-mark);
-  box-shadow: 0 0 0 2px var(--lime-wash);
+.ai-assistant-send {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: var(--ink-faint);
+  background: var(--rule);
+  border-radius: 50%;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
 }
 
-.ai-assistant-send {
-  width: 42px;
-  height: 42px;
-  padding: 0;
-  border-radius: 50%;
+.ai-assistant-send svg {
+  width: 18px;
+  height: 18px;
 }
 
 .ai-assistant-send:not(:disabled) {
@@ -3549,9 +3850,30 @@ a.ai-recommendation-title:focus-visible {
   background: var(--lime);
 }
 
+.ai-assistant-send:not(:disabled):hover,
+.ai-assistant-send:not(:disabled):focus-visible {
+  background: var(--lime-hover);
+  outline: none;
+}
+
+.ai-assistant-send:not(:disabled):active {
+  transform: scale(0.92);
+}
+
 .ai-assistant-send:disabled {
-  color: var(--ink-faint);
   cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-assistant-panel,
+  .ai-assistant-welcome,
+  .ai-assistant-history,
+  .ai-assistant-actions button,
+  .ai-message,
+  .ai-recommendation,
+  .ai-message-thinking p::after {
+    animation: none;
+  }
 }
 
 /* --- Responsive ------------------------------------------------------------- */
@@ -3792,7 +4114,7 @@ a.ai-recommendation-title:focus-visible {
   .ai-assistant-panel {
     position: fixed;
     right: var(--space-4);
-    bottom: 80px;
+    bottom: 82px;
     width: calc(100vw - 2 * var(--space-4));
     height: min(560px, calc(100dvh - 104px));
   }
@@ -3805,7 +4127,7 @@ a.ai-recommendation-title:focus-visible {
   .ai-assistant-welcome {
     position: fixed;
     right: var(--space-4);
-    bottom: 80px;
+    bottom: 82px;
     width: min(310px, calc(100vw - 2 * var(--space-4)));
   }
 }
