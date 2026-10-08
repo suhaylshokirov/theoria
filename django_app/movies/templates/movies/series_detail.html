@@ -151,6 +151,34 @@
     </div>
 </section>
 
+<section class="sheet-section" id="episodes">
+    <div class="section-head">
+        <h2>{% translate "Episodes" %}</h2>
+        <span class="section-note">{% if series.number_of_seasons %}{% blocktranslate trimmed count n=series.number_of_seasons %}{{ n }} season{% plural %}{{ n }} seasons{% endblocktranslate %}{% else %}—{% endif %} · {% if series.number_of_episodes %}{% blocktranslate trimmed count n=series.number_of_episodes %}{{ n }} episode{% plural %}{{ n }} episodes{% endblocktranslate %}{% else %}—{% endif %}</span>
+    </div>
+    {% comment %} All seasons render every time — the picker (JS-only, see
+       _season_picker.html) is what narrows this to one at a time; a no-JS
+       reader scrolls the stacked seasons instead, each under its own
+       heading. {% endcomment %}
+    {% comment %} Cached as rendered markup (Task 118): this section is ~80%
+       of the page's render time and is identical for every reader, so it
+       holds nothing per-user -- no CSRF token, no username, no collection
+       buttons. `seasons` is lazy: on a hit the Season/Episode queries never
+       run. The tag adds the language and data version to the key. {% endcomment %}
+    {% datacache "series-episodes" series.series_id %}
+    {% include "movies/_season_picker.html" with seasons=seasons only %}
+    {% translate "Season" as season_word %}
+    {% for block in seasons %}
+    <div class="season-panel{% if forloop.first %} is-active{% endif %}" data-season-panel="{{ block.season.season_number }}">
+        <h3 class="credit-department">{{ block.season.name|default:season_word }}</h3>
+        {% include "movies/_episode_table.html" with block=block only %}
+    </div>
+    {% empty %}
+    <p class="empty">{% translate "No seasons recorded for this show." %}</p>
+    {% endfor %}
+    {% enddatacache %}
+</section>
+
 <section class="sheet-section" id="crew">
     <div class="section-head">
         <h2>{% translate "Crew" %}</h2>
@@ -183,33 +211,5 @@
         {% endfor %}
         {% translate "crew" as crew_label %}{% include "movies/_pager_client.html" with label=crew_label only %}
     </div>
-</section>
-
-<section class="sheet-section" id="episodes">
-    <div class="section-head">
-        <h2>{% translate "Episodes" %}</h2>
-        <span class="section-note">{% if series.number_of_seasons %}{% blocktranslate trimmed count n=series.number_of_seasons %}{{ n }} season{% plural %}{{ n }} seasons{% endblocktranslate %}{% else %}—{% endif %} · {% if series.number_of_episodes %}{% blocktranslate trimmed count n=series.number_of_episodes %}{{ n }} episode{% plural %}{{ n }} episodes{% endblocktranslate %}{% else %}—{% endif %}</span>
-    </div>
-    {% comment %} All seasons render every time — the picker (JS-only, see
-       _season_picker.html) is what narrows this to one at a time; a no-JS
-       reader scrolls the stacked seasons instead, each under its own
-       heading. {% endcomment %}
-    {% comment %} Cached as rendered markup (Task 118): this section is ~80%
-       of the page's render time and is identical for every reader, so it
-       holds nothing per-user -- no CSRF token, no username, no collection
-       buttons. `seasons` is lazy: on a hit the Season/Episode queries never
-       run. The tag adds the language and data version to the key. {% endcomment %}
-    {% datacache "series-episodes" series.series_id %}
-    {% include "movies/_season_picker.html" with seasons=seasons only %}
-    {% translate "Season" as season_word %}
-    {% for block in seasons %}
-    <div class="season-panel{% if forloop.first %} is-active{% endif %}" data-season-panel="{{ block.season.season_number }}">
-        <h3 class="credit-department">{{ block.season.name|default:season_word }}</h3>
-        {% include "movies/_episode_table.html" with block=block only %}
-    </div>
-    {% empty %}
-    <p class="empty">{% translate "No seasons recorded for this show." %}</p>
-    {% endfor %}
-    {% enddatacache %}
 </section>
 {% endblock %}
