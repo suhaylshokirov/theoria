@@ -106,14 +106,18 @@ def _no_such_key(self, key, *args, **kwargs):
 class ResilientRedisCache(RedisCache):
     """RedisCache whose failures read as misses. See the module docstring."""
 
+    # Class-level on purpose. Django gives every thread its own cache instance,
+    # so a flag stored on `self` would be re-learned (one socket timeout) by
+    # every thread -- on a threaded server, by every request. Shared on the
+    # class, one failure suspends Redis for the whole process.
     _down_until = 0.0
 
     def is_down(self) -> bool:
         """True while a recent failure has Redis suspended (see DOWN_SECONDS)."""
-        return time.monotonic() < self._down_until
+        return time.monotonic() < ResilientRedisCache._down_until
 
     def _mark_down(self, exc: Exception) -> None:
-        self._down_until = time.monotonic() + DOWN_SECONDS
+        ResilientRedisCache._down_until = time.monotonic() + DOWN_SECONDS
         logger.warning("Redis cache unavailable, skipping it for %ds: %s", DOWN_SECONDS, exc)
 
     @_fail_open(lambda self, key, default=None, *a, **kw: default)
