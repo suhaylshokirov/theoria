@@ -675,14 +675,16 @@ resolves names through a manifest `collectstatic` writes — which means it fail
 step was skipped rather than quietly serving something stale.
 
 The remaining cost is Neon's free tier, where scale-to-zero cannot be disabled: after five idle
-minutes the next request pays a cold start, measured at 20–45 s on this project. For a low-traffic
-site that is most first visits. It is a plan setting, not an architectural problem.
+minutes the next request pays a cold start. It was measured at 20–45 s when this was first
+written; re-measured on 2026-10-08 (§4.5) it was under a second. Either way, for a low-traffic site
+that is most first visits. It is a plan setting, not an architectural problem.
 
 ### 4.5 Caching: a data version instead of invalidation
 
 Hosting on Vercel (§4.4) left two costs the replica cannot fix. Every warehouse query is a network
 trip to Neon, and `/` issued 8, `/analytics/` 10, a movie page 8–10. And Neon's free tier scales to
-zero, so the first request after five idle minutes waits 20–45 s. A cache that lives *outside* Neon
+zero, so the first request after five idle minutes pays a cold start (20–45 s when first measured;
+under a second when re-measured, see *Verified in production* below). A cache that lives *outside* Neon
 lets an anonymous visitor read the home page with **zero** Neon queries: an anonymous request has no
 session cookie, so it touches no database at all.
 
@@ -777,6 +779,37 @@ is in the US and Redis in Frankfurt, which is why the socket timeout is a settin
   it is the one setting the assistant's requests also pass through; held for an explicit decision.
 - *Per-user pages* (`/me`, collections, the assistant), *TMDB calls in the ETL* (Bronze already is
   that cache, and the nightly exists to re-fetch).
+
+**Verified in production (2026-10-08).** Against the deployed site, after the merge and the first
+nightly that ran the new code:
+
+- *The pipeline side works.* The nightly published the data version at the end of the load and its
+  warm-up step, running on the GitHub runner against Neon with the real secrets, built the 12
+  entries (three languages) in 10.6 s. This also settled the question of whether the runner's default
+  SSL mode connects to Neon: it does.
+- *The headers behave.* Repeated anonymous requests report `home_stats=hit,home_shelves=hit,
+  home_mosaic=hit`. After `python -m etl.data_version --bump` the next request reports all three as
+  `miss` and the one after as `hit`; a Russian request then rebuilds only its own shelves, because
+  stats and mosaic are language-free.
+- *A hit does not query Neon.* Postgres counts every transaction per database, so the counter was
+  read before and after batches of requests. A 10-second window with no requests moved it by
+  exactly 2 (the cost of reading it) in five trials. Six cached home-page requests moved it by 2, 2,
+  2, 4 and 4. Three requests for a page that has to query (`/movies/`) moved it by 12-14. Locally the
+  same request makes zero warehouse queries and sends no connection health-check ping (Django runs
+  that check lazily, at the first query, so a request that never queries never touches the
+  connection).
+- *The outage drill passes.* The real server, pointed at an unresolvable host and at an address
+  that never answers, returned 200 for the home page, both lists and the genre filter, with no
+  traceback. It also found a flaw: the 30-second "Redis is down" flag was stored on the cache
+  instance, and Django gives each thread its own, so a threaded server paid the connect timeout on
+  every request. The flag is now shared across the process, and a test pins it.
+- *The cold start was not reproduced.* With Neon suspended (its compute had restarted at the moment
+  of the probe), a fresh connection cost about 0.8 s more than a warm one, and the first uncached
+  request after an idle spell took 1.8 s against 0.9 s for the next. The 20-45 s recorded earlier
+  did not appear. The cache's remaining value is therefore fewer queries per request and less
+  dependence on the database being awake, not rescuing a 30-second wait. Because the compute was
+  also woken by other clients during the test windows, a clean idle-then-request comparison was not
+  possible; the transaction counts above are the evidence that cached requests do not reach it.
 
 **Operating it.** `REDIS_URL` is optional everywhere: unset, the site caches per process and
 behaves as it did before Redis existed; deployed without it, settings log one warning. Bump
