@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Bump whenever the *shape* a builder returns changes (an entry cached by the
 # old code would be read by the new), and whenever Django is upgraded: pickled
 # model instances are stamped with the Django version that wrote them.
-CACHE_SCHEMA = 1
+CACHE_SCHEMA = 2
 
 DATA_VERSION_KEY = "data_version"
 
