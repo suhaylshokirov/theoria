@@ -168,9 +168,13 @@
 /* --- Dark counterpart -------------------------------------------------------
    Every token is re-picked against the dark surface rather than flipped — an
    inverted light palette gets the lightness relationships wrong. Ratios
-   verified against --paper #12120f:
-     --ink 16.6:1 · --ink-muted 7.6:1 · --ink-faint 5.2:1 · --lime-text 14.4:1
-     --lime-mark 12.4:1 · --ink on --lime 13.1:1 (buttons keep ink labels)
+   verified against --paper #09090b (the cinema redesign's darkened theatre,
+   a hair cooler and deeper than the old #12120f):
+     --ink 17.6:1 · --ink-muted 8.3:1 · --ink-faint 5.6:1 · --lime-text 15.2:1
+     --lime-mark 13.2:1 · --ink on --lime 13.1:1 (buttons keep ink labels)
+
+   Dark is now the site's default (base.html's head script); light remains
+   one click away on the header toggle.
 
    The lime *swaps role* between modes. On white it was too light to serve as
    a mark, so marks stepped DOWN the ramp to a darker green. On ink it is the
@@ -184,19 +188,19 @@
    The :not([data-theme]) guard is what lets an explicit "light" choice win
    over a dark OS setting. */
 :root {
-  --dark-paper: #12120f;
-  --dark-sheet: #1b1b17;
-  --dark-sheet-2: #24241f;
-  --dark-rule: #2c2c26;
-  --dark-rule-strong: #423f38;
+  --dark-paper: #09090b;
+  --dark-sheet: #121215;
+  --dark-sheet-2: #1b1b1f;
+  --dark-rule: #232327;
+  --dark-rule-strong: #36363c;
   --dark-ink: #f2f1ed;
-  --dark-ink-muted: #a8a49c;
-  --dark-ink-faint: #8a867e;
+  --dark-ink-muted: #a9a7a1;
+  --dark-ink-faint: #8a8882;
   /* --lime-wash sits deliberately near the surface: on white it is a pale
      tint of the page, so on ink it must be a barely-lifted tint of the ink.
      Matching the light value's saturation produces olive slabs instead of a
      whisper behind the number. */
-  --dark-lime-wash: #1e2612;
+  --dark-lime-wash: #18200d;
   --dark-lime-text: #bef264;
   --dark-lime-mark: #a3e635;
   --dark-lime-deep: #d9f99d;
@@ -414,24 +418,57 @@ main.container {
 
 /* --- Header ---------------------------------------------------------------- */
 
+/* The header floats: a frosted bar inset from the page edges rather than a
+   full-width band, so a film's backdrop can run behind it on the home and
+   film pages. The <header> itself is transparent and click-through; only
+   the bar takes pointer events. */
 .site-header {
   position: sticky;
   top: 0;
   z-index: var(--z-header);
-  background: var(--paper);
-  border-bottom: var(--hairline);
+  padding-top: calc(env(safe-area-inset-top, 0px) + var(--space-4));
+  pointer-events: none;
 }
 
-.nav {
+/* Full-bleed pages (home, film) start their hero at the very top, under the
+   bar, so the header leaves the flow there. */
+.page-home .site-header,
+.page-film .site-header {
+  position: fixed;
+  left: 0;
+  right: 0;
+}
+
+.site-header .nav {
   /* A variable so the language switcher, which is a direct child of the row
      rather than one of the links, can offset itself back to the links' own
      spacing (see .lang-switch). */
-  --nav-gap: var(--space-7);
+  --nav-gap: var(--space-4);
+  pointer-events: auto;
   display: flex;
   align-items: center;
   gap: var(--nav-gap);
-  min-height: 60px;
+  min-height: 58px;
   flex-wrap: wrap;
+  width: calc(100% - 2 * var(--space-5));
+  max-width: 1180px;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-6);
+  border: 1px solid var(--rule);
+  border-radius: 29px;
+  background: color-mix(in srgb, var(--paper) 58%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+  transition: background var(--dur-slow) var(--ease),
+              box-shadow var(--dur-slow) var(--ease),
+              border-color var(--dur-slow) var(--ease);
+}
+
+/* Set by cinema.js once the page has scrolled: the bar firms up so links
+   stay legible over busy posters. */
+.site-header.is-scrolled .nav {
+  background: color-mix(in srgb, var(--paper) 84%, transparent);
+  border-color: var(--rule-strong);
+  box-shadow: 0 18px 40px -24px rgb(0 0 0 / 0.6);
 }
 
 .brand {
@@ -464,7 +501,7 @@ main.container {
 
 .nav-links {
   display: flex;
-  gap: var(--space-6);
+  gap: var(--space-1);
   flex-wrap: wrap;
   margin-left: auto;
 }
@@ -474,15 +511,18 @@ main.container {
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--ink-muted);
-  padding-block: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-pill);
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 
 .nav-links a:hover {
   color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
   text-decoration: none;
 }
 
-/* Active page: the lime rule under the label. Same "this one is measured"
+/* Active page: a lime point under the label. Same "this one is measured"
    logic as the keyed frames on the contact sheet. */
 .nav-links a[aria-current="page"] {
   color: var(--ink);
@@ -492,11 +532,14 @@ main.container {
 .nav-links a[aria-current="page"]::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: calc(-1 * var(--space-2) - 1px);
-  height: 3px;
+  left: 50%;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
   background: var(--lime);
+  box-shadow: 0 0 10px var(--lime);
 }
 
 /* --- Theme toggle & nav toggle ----------------------------------------------
@@ -513,7 +556,7 @@ main.container {
   padding: 0;
   background: none;
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
+  border-radius: 50%;
   color: var(--ink-muted);
   cursor: pointer;
   transition: color var(--dur-fast) var(--ease),
@@ -925,10 +968,31 @@ main.container {
 /* --- Footer ---------------------------------------------------------------- */
 
 .site-footer {
+  position: relative;
   border-top: var(--hairline);
-  padding-block: var(--space-7);
+  margin-top: var(--space-9);
+  padding-block: var(--space-9) var(--space-7);
   color: var(--ink-faint);
   font-size: var(--text-xs);
+}
+
+/* The wordmark set huge and hollow above the footer line: the last thing on
+   every page, like the title card after the credits. */
+.footer-mark {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-stretch: 125%;
+  font-size: clamp(4rem, 19vw, 17rem);
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--rule-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  user-select: none;
+  padding-bottom: var(--space-7);
 }
 
 .site-footer .footer-row {
@@ -2080,7 +2144,7 @@ input[type="email"]:focus {
    .account-menu--header twin in the header row (base.html) covers a signed-
    in reader instead, the same way .nav-links a.signin-btn below cedes to
    .signin-btn--header. */
-@media (max-width: 680px) {
+@media (max-width: 1100px) {
   html.has-js .nav-links .account-menu {
     display: none;
   }
@@ -3876,6 +3940,389 @@ a.ai-recommendation-title:focus-visible {
   }
 }
 
+/* --- Cinema layer (redesign) --------------------------------------------------
+   The pieces every page shares since the cinema redesign: the room light,
+   the film grain, the search palette, the hero buttons and page-to-page
+   transitions. Page stylesheets (home.css, film.css) build on these.
+
+   Lime keeps its job as the measurement mark. The new colour on the page is
+   --glow, which is never a token pick: cinema.js samples it from the film on
+   screen, so the room takes on the colour of what is showing. */
+
+:root {
+  --glow: 120 110 90;   /* "r g b", rewritten per film by cinema.js */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The room light: two soft pools of the film's colour, drifting slowly.
+   Fixed behind everything; main and footer sit above it. */
+.ambient {
+  position: fixed;
+  inset: -20vh -20vw auto;
+  height: 120vh;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(50% 45% at 30% 30%, rgb(var(--glow) / 0.26), transparent 70%),
+    radial-gradient(40% 40% at 75% 20%, rgb(var(--glow) / 0.15), transparent 70%);
+  filter: blur(40px);
+  transition: background 1.6s var(--ease);
+  animation: ambient-drift 18s ease-in-out infinite alternate;
+}
+
+/* On light paper the same light reads as a stain, so it is kept faint. */
+[data-theme="light"] .ambient { opacity: 0.45; }
+
+@keyframes ambient-drift {
+  to { transform: translate3d(4vw, 6vh, 0) scale(1.08); }
+}
+
+/* Film grain: a tiled noise texture jittered a few frames a second. */
+.grain {
+  position: fixed;
+  inset: -50%;
+  z-index: 300;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: grain-shift 0.9s steps(6) infinite;
+}
+
+[data-theme="light"] .grain { opacity: 0.04; }
+
+@keyframes grain-shift {
+  0%   { transform: translate(0, 0); }
+  20%  { transform: translate(-3%, 2%); }
+  40%  { transform: translate(2%, -4%); }
+  60%  { transform: translate(-4%, -1%); }
+  80%  { transform: translate(3%, 3%); }
+  100% { transform: translate(0, 0); }
+}
+
+main,
+.site-footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* Eyebrow: a short label above a heading, led by a lit lime point. */
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-3xs);
+  line-height: 1;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.eyebrow::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lime);
+  box-shadow: 0 0 12px var(--lime);
+}
+
+/* Hero buttons: larger than .btn, with a light sweep across the primary. */
+.cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 14px 22px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-2xs);
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--lime);
+  color: var(--ink-on-lime);
+  border: 0;
+  cursor: pointer;
+  transition: transform var(--dur-slow) var(--ease-out), background var(--dur) var(--ease);
+}
+
+.cta:hover {
+  background: var(--lime-hover);
+  color: var(--ink-on-lime);
+  text-decoration: none;
+}
+
+.cta:active { transform: scale(0.97); }
+
+.cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.55), transparent 70%);
+}
+
+.cta:hover::after {
+  transform: translateX(120%);
+  transition: transform 0.8s var(--ease);
+}
+
+.cta svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.cta:hover svg { transform: translateX(3px); }
+
+.cta--ghost {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--ink) 22%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.cta--ghost:hover {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  border-color: var(--ink-muted);
+  color: var(--ink);
+}
+
+.cta--ghost::after { display: none; }
+
+/* Round icon button (rail arrows). */
+.round-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--rule-strong);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.round-btn:hover {
+  background: var(--sheet-2);
+  border-color: var(--ink-muted);
+  color: var(--ink);
+}
+
+.round-btn svg { width: 16px; height: 16px; }
+
+/* --- Header search ----------------------------------------------------------- */
+
+.search-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 9px 8px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+
+.search-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-faint);
+  text-decoration: none;
+}
+
+.search-btn svg { width: 15px; height: 15px; flex: none; }
+
+.search-btn__kbd,
+.palette__field kbd {
+  font: 500 var(--text-3xs) / 1 var(--font-mono);
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: var(--sheet-2);
+  color: var(--ink-muted);
+}
+
+/* The palette: a centred sheet over a dimmed page. */
+.palette {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: grid;
+  place-items: start center;
+  padding: 14vh var(--space-5) 0;
+  background: rgb(0 0 0 / 0.55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.palette[hidden] { display: none; }
+
+.palette__box {
+  width: min(620px, 100%);
+  border-radius: 18px;
+  background: var(--sheet);
+  border: 1px solid var(--rule-strong);
+  box-shadow: 0 40px 100px -20px rgb(0 0 0 / 0.7);
+  overflow: hidden;
+  animation: palette-pop 0.35s var(--ease-out);
+}
+
+@keyframes palette-pop {
+  from { transform: translateY(-10px) scale(0.98); opacity: 0.3; }
+}
+
+.palette__field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-5);
+  border-bottom: var(--hairline);
+  color: var(--ink-faint);
+}
+
+.palette__field svg { width: 18px; height: 18px; flex: none; }
+
+.palette__field input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 20px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 400 var(--text-md) var(--font-body);
+  outline: none;
+  box-shadow: none;
+}
+
+.palette__list {
+  max-height: 52vh;
+  overflow-y: auto;
+  padding: var(--space-3);
+}
+
+.palette__item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: var(--space-5);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-radius: 10px;
+  color: var(--ink);
+}
+
+.palette__item:hover,
+.palette__item[aria-selected="true"] {
+  background: var(--sheet-2);
+  text-decoration: none;
+}
+
+.palette__item img,
+.palette__item .palette__ph {
+  width: 36px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--sheet-2);
+}
+
+.palette__item b {
+  display: block;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette__item small {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+}
+
+.palette__note {
+  padding: var(--space-6);
+  color: var(--ink-faint);
+  text-align: center;
+  font-size: var(--text-sm);
+}
+
+/* --- Posters come alive ---------------------------------------------------------
+   Every poster card on the site lifts toward the reader on hover. */
+
+.poster-card .poster,
+.poster-card .headshot,
+.poster-card .placeholder {
+  border-radius: 8px;
+}
+
+.poster-card a:hover .poster,
+.poster-card a:focus-visible .poster,
+.poster-card a:hover .headshot,
+.poster-card a:focus-visible .headshot {
+  transform: translateY(-6px);
+  box-shadow: 0 24px 40px -18px rgb(0 0 0 / 0.7), 0 0 0 1px var(--rule-strong);
+}
+
+/* --- Page transitions -------------------------------------------------------------
+   Same-origin navigations cross-fade (Chrome/Edge 126+; other browsers just
+   navigate). A poster clicked on one page morphs into the film page's poster:
+   cinema.js names the clicked image "film-poster", and film.css gives the
+   film page's poster the same name. */
+@view-transition { navigation: auto; }
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.35s;
+}
+
+::view-transition-group(film-poster) {
+  animation-duration: 0.5s;
+  animation-timing-function: var(--ease-out);
+}
+
+/* Sections ease in as they scroll into view, where the browser supports
+   scroll-driven animation. Everything is fully visible without it. */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: reveal-in linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 60%;
+  }
+
+  @keyframes reveal-in {
+    from { opacity: 0.15; transform: translateY(40px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@media (max-width: 1240px) {
+  .search-btn__label,
+  .search-btn__kbd { display: none; }
+  .search-btn { padding: 9px; }
+}
+
+/* Below the hamburger breakpoint the search button joins the header row's
+   controls, between Sign in (or the account trigger, which carries the
+   row's auto margin) and the language pill -- the ordering scheme of the
+   mobile nav block below. */
+@media (max-width: 1100px) {
+  html.has-js .search-btn { order: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient,
+  .grain { animation: none; }
+}
+
 /* --- Responsive ------------------------------------------------------------- */
 
 @media (max-width: 720px) {
@@ -3937,7 +4384,7 @@ a.ai-recommendation-title:focus-visible {
    hamburger button with nothing behind it. With it, the links collapse into
    a panel that opens below the header, and the hamburger takes their place
    in the row. */
-@media (max-width: 680px) {
+@media (max-width: 1100px) {
   html.has-js .nav-toggle {
     display: inline-grid;
     order: 2;
@@ -4044,7 +4491,7 @@ a.ai-recommendation-title:focus-visible {
 
 /* Just above the hamburger breakpoint the full nav, the Sign in chip and the
    theme toggle overflow one row, so the links close up until there's room. */
-@media (min-width: 681px) and (max-width: 800px) {
+@media (min-width: 1101px) and (max-width: 1240px) {
   .nav-links {
     gap: var(--space-4);
   }

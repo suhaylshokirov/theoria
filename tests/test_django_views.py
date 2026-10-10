@@ -2169,7 +2169,9 @@ def test_pick_trailer_prefers_official_then_trailer_then_teaser():
     assert _pick_trailer([]) is None
 
 
-def test_movie_detail_trailer_takes_the_backdrop_slot():
+def test_movie_detail_trailer_plays_below_the_backdrop_hero():
+    """Since the cinema redesign the backdrop fills the film page's hero, so a
+    trailer no longer displaces it: both render, the trailer below."""
     movie = _movie()
     movie.backdrop_path = "/bd.jpg"
     trailer = _video("t1", key="TRAILERKEY")
@@ -2182,10 +2184,11 @@ def test_movie_detail_trailer_takes_the_backdrop_slot():
     body = response.content.decode()
     assert 'class="video-strip"' in body
     assert "img.youtube.com/vi/TRAILERKEY/hqdefault.jpg" in body
-    assert 'class="backdrop-strip"' not in body
+    assert 'class="film-hero__backdrop"' in body
+    assert body.index('class="film-hero__backdrop"') < body.index('class="video-strip"')
 
 
-def test_movie_detail_keeps_backdrop_when_there_is_no_trailer():
+def test_movie_detail_backdrop_fills_the_hero_when_there_is_no_trailer():
     movie = _movie()
     movie.backdrop_path = "/bd.jpg"
 
@@ -2194,7 +2197,8 @@ def test_movie_detail_keeps_backdrop_when_there_is_no_trailer():
 
     assert response.context["trailer"] is None
     body = response.content.decode()
-    assert 'class="backdrop-strip"' in body
+    assert 'class="film-hero__backdrop"' in body
+    assert "/w1280/bd.jpg" in body
     assert 'class="video-strip"' not in body
 
 
@@ -2230,6 +2234,7 @@ def test_movie_detail_no_video_blocks_when_film_has_no_videos():
     assert response.context["trailer"] is None
     body = response.content.decode()
     assert 'class="video-strip"' not in body
+    assert 'class="film-hero__backdrop"' not in body
     assert 'id="clips"' not in body
 
 
@@ -3305,3 +3310,87 @@ def test_list_and_index_pages_stay_open_to_anonymous():
         response = anon.get(url)
         assert response.status_code == 200, url
 
+
+
+# ---------------------------------------------------------------------------
+# Cinema redesign: header search, film page score and box office
+# ---------------------------------------------------------------------------
+
+
+def test_search_suggest_ignores_a_single_character():
+    """Under two characters nothing is queried: a first keystroke shouldn't
+    scan the whole catalog."""
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr:
+        response = client.get("/search/suggest/", {"q": "a"})
+
+    assert response.status_code == 200
+    assert response.json() == {"results": []}
+    movie_mgr.using.assert_not_called()
+
+
+def test_search_suggest_lists_films_then_shows_as_json():
+    movie = _movie(title="Inception")
+    movie.slug = "inception"
+    movie.poster_path = "/p.jpg"
+    movie.imdb_rating = Decimal("8.8")
+    show = _series(name="Dark", slug="dark")
+    show.poster_path = None
+    show.imdb_rating = None
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        movie_mgr.using.return_value.filter.return_value.annotate.return_value \
+            .order_by.return_value.__getitem__.return_value = [movie]
+        series_mgr.using.return_value.filter.return_value.annotate.return_value \
+            .order_by.return_value.__getitem__.return_value = [show]
+
+        response = client.get("/search/suggest/", {"q": "in"})
+
+    assert response.status_code == 200
+    movie_row, show_row = response.json()["results"]
+    assert movie_row == {
+        "kind": "movie", "title": "Inception", "year": 2020,
+        "url": "/movies/inception/", "poster": movie_row["poster"], "rating": 8.8,
+    }
+    assert movie_row["poster"].endswith("/w92/p.jpg")
+    assert show_row["kind"] == "series"
+    assert show_row["url"] == "/tv/dark/"
+    assert show_row["poster"] == ""
+    assert show_row["rating"] is None
+    # English matches the plain title column (filter_by_title).
+    movie_mgr.using.return_value.filter.assert_called_once_with(title__icontains="in")
+
+
+def test_box_office_multiple_and_bar_widths():
+    from movies.views import _box_office
+
+    assert _box_office(100, 540) == {"multiple": 5.4, "budget_pct": 18.5, "revenue_pct": 100.0}
+    # A film that lost money: the budget bar is the full one.
+    assert _box_office(200, 50)["budget_pct"] == 100.0
+    # TMDB's 0 means "not reported", so no multiple is drawn at all.
+    assert _box_office(0, 540) is None
+    assert _box_office(100, 0) is None
+    assert _box_office(None, None) is None
+
+
+def test_movie_detail_ranks_the_film_among_rated_films():
+    movie = _movie()
+
+    with _movie_detail_video_mocks(movie, []):
+        with patch.object(MovieRating, "objects", new=MagicMock()) as rating_mgr:
+            rated = rating_mgr.using.return_value.filter.return_value
+            rated.first.return_value = MovieRating(
+                movie=movie, source="imdb", rating=Decimal("9.1"), vote_count=10,
+            )
+            rated.aggregate.return_value = {"total": 1214, "above": 2}
+            response = client.get(f"/movies/{movie.movie_id}/")
+
+    assert response.context["rating_rank"] == 3
+    assert response.context["rated_total"] == 1214
+    body = response.content.decode()
+    assert "Ranked #3 of 1,214 rated films on Theoria" in body
+    # The score ring's arc is the rating x 10 on a pathLength of 100.
+    assert 'stroke-dasharray="91 100"' in body
+    # The fixture's budget 1,000 / revenue 5,000 earns the box-office card.
+    assert "5.0×" in body

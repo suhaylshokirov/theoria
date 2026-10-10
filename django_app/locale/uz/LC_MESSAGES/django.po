@@ -2007,3 +2007,97 @@ msgstr "Menga emas"
 
 msgid "{minutes} min"
 msgstr "{minutes} daq"
+
+msgid "Now showing"
+msgstr "Hozir ekranda"
+
+#, python-format
+msgid "%(n)s of %(total)s"
+msgstr "%(total)s tadan %(n)s"
+
+#, python-format
+msgid "Directed by %(name)s"
+msgstr "Rejissyor: %(name)s"
+
+msgid "Open film"
+msgstr "Filmni ochish"
+
+msgid "Featured films"
+msgstr "Tanlangan filmlar"
+
+msgid "The catalogue"
+msgstr "Katalog"
+
+msgid "Every title."
+msgstr "Har bir nom."
+
+msgid "Every performance."
+msgstr "Har bir rol."
+
+msgid "Hover a poster to stop the wall and tilt it toward the light."
+msgstr "Lentani to'xtatish va afishani yorug'likka burish uchun ustiga olib boring."
+
+msgid "The top twelve,"
+msgstr "Eng yaxshi o'n ikkitasi,"
+
+msgid "by IMDb rating."
+msgstr "IMDb reytingi bo'yicha."
+
+msgid "Scroll back"
+msgstr "Orqaga aylantirish"
+
+msgid "Scroll forward"
+msgstr "Oldinga aylantirish"
+
+msgid "Films by decade,"
+msgstr "Filmlar o'n yilliklar bo'yicha,"
+
+msgid "and how they rate."
+msgstr "va ularning reytingi."
+
+msgid "Bars count the films released in each decade. The line tracks their average IMDb rating."
+msgstr "Ustunlar har o'n yillikda chiqqan filmlar sonini ko'rsatadi. Chiziq ularning o'rtacha IMDb reytingini kuzatadi."
+
+msgid "{decade}s"
+msgstr "{decade}-yillar"
+
+msgid "{decade}s · {films} films · average {rating}"
+msgstr "{decade}-yillar · {films} ta film · o'rtacha {rating}"
+
+#, python-format
+msgid "%(decade)ss"
+msgstr "%(decade)s-yillar"
+
+msgid "Films released"
+msgstr "Chiqqan filmlar"
+
+msgid "Average IMDb rating"
+msgstr "O'rtacha IMDb reytingi"
+
+msgid "Films released and average IMDb rating, by decade"
+msgstr "O'n yilliklar bo'yicha chiqqan filmlar soni va o'rtacha IMDb reytingi"
+
+msgid "Search"
+msgstr "Qidiruv"
+
+msgid "No title matches that search. Try another title."
+msgstr "Bu qidiruv bo'yicha hech narsa topilmadi. Boshqa nomni sinab ko'ring."
+
+msgid "Type at least two letters of a title."
+msgstr "Nomning kamida ikki harfini kiriting."
+
+msgid "Search movies and TV shows"
+msgstr "Filmlar va seriallarni qidirish"
+
+msgid "IMDb rating"
+msgstr "IMDb reytingi"
+
+#, python-format
+msgid "Ranked #%(rank)s of %(total)s rated films on Theoria"
+msgstr "Theoria'dagi %(total)s ta baholangan film ichida %(rank)s-o'rin"
+
+msgid "Box office"
+msgstr "Kassa tushumi"
+
+msgid "its budget, earned back at the box office"
+msgstr "byudjeti prokatda qaytarildi"

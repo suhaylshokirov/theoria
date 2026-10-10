@@ -1,134 +1,190 @@
 {% extends "base.html" %}
-{% load i18n l10n tmdb_images %}
+{% load static i18n l10n tmdb_images %}
 
 {% block title %}Theoria — {{ movie.display_title }}{% endblock %}
+
+{% block body_class %}page-film{% endblock %}
 
 {% comment %} Only a film page with a trailer loads a YouTube still, so the
    handshake for it is opened here rather than in base.html, where it would be
    dead weight on every other route. No crossorigin — an img src fetch is not a
    CORS request, and the mismatch would leave the socket unused. {% endcomment %}
-{% block extra_head %}{% if trailer %}<link rel="preconnect" href="https://img.youtube.com">{% endif %}{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/film.css' %}">
+{% if trailer %}<link rel="preconnect" href="https://img.youtube.com">{% endif %}
+{% endblock %}
 
 {% block content %}
-{% comment %} A specimen record, not a streaming-app splash: the poster is a framed
-   plate with its own caption, the facts sit beside it as a record, and the
-   backdrop is a thin strip below rather than a darkened image behind text. {% endcomment %}
-<article class="specimen">
-    <div class="specimen-plate">
-        {% if movie.poster_path %}
-        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=movie.display_title %}{{ title }} poster{% endblocktranslate %}" decoding="async">
-        {% else %}
-        <div class="placeholder" aria-hidden="true">◻</div>
+{% comment %} The film page as a screening: the backdrop fills the top of the
+   page under the floating header, the poster sits on it as a lifted plate,
+   and the title is set large over the image. The backdrop carries
+   crossorigin so cinema.js can sample its colour into the room light
+   (image.tmdb.org allows it); the poster is named "film-poster" in film.css,
+   so a poster clicked elsewhere on the site morphs into it. {% endcomment %}
+<article class="film">
+    <header class="film-hero">
+        {% if movie.backdrop_path %}
+        <img class="film-hero__backdrop" src="{{ movie.backdrop_path|tmdb_image:'w1280' }}" alt=""
+             crossorigin="anonymous" decoding="async" fetchpriority="high" data-glow-source>
         {% endif %}
-        {% if movie.release_date %}<p class="plate-caption mono">{{ movie.release_date|date:"Y" }}</p>{% endif %}
-        {% include "movies/_collection_actions.html" with content_type="movie" content_id=movie.movie_id collection_flags=collection_flags request=request csrf_token=csrf_token only %}
-    </div>
+        <div class="container film-hero__grid">
+            <div class="film-hero__plate">
+                {% if movie.poster_path %}
+                <img class="film-poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=movie.display_title %}{{ title }} poster{% endblocktranslate %}" decoding="async"{% if not movie.backdrop_path %} crossorigin="anonymous" data-glow-source{% endif %}>
+                {% else %}
+                <div class="film-poster placeholder" aria-hidden="true">◻</div>
+                {% endif %}
+                {% include "movies/_collection_actions.html" with content_type="movie" content_id=movie.movie_id collection_flags=collection_flags request=request csrf_token=csrf_token only %}
+            </div>
 
-    <div class="specimen-record">
-        <h1 class="sheet-title">{{ movie.display_title }}</h1>
-        {% if movie.original_title and movie.original_title != movie.display_title %}
-        <p class="specimen-original-title mono">{% blocktranslate trimmed with title=movie.original_title %}originally “{{ title }}”{% endblocktranslate %}</p>
-        {% endif %}
-        {% if movie.display_tagline %}<p class="specimen-tagline"{% if movie.tagline_is_fallback %} lang="en"{% endif %}>{{ movie.display_tagline }}</p>{% endif %}
-        {% if movie.display_overview %}<p class="specimen-synopsis"{% if movie.overview_is_fallback %} lang="en"{% endif %}>{{ movie.display_overview }}</p>{% endif %}
-        {% if movie.prose_is_fallback %}<p class="prose-note">{% translate "Shown in English — no translation yet" %}</p>{% endif %}
-
-        <dl class="record-list">
-            {% if movie_rating.rating %}
-            <div class="record-row record-row--rating">
-                <dt class="label">{% translate "Rating" %}</dt>
-                <dd>{% include "movies/_rating_badge.html" with rating=movie_rating.rating vote_count=movie_rating.vote_count imdb_id=movie.imdb_id only %}</dd>
+            <div class="film-hero__copy film-stagger">
+                <p class="eyebrow">
+                    {% if movie.release_date %}<span class="mono">{{ movie.release_date|date:"Y" }}</span>{% endif %}
+                    {% if movie.runtime %}<span>· {% blocktranslate trimmed with n=movie.runtime %}{{ n }} min{% endblocktranslate %}</span>{% endif %}
+                    {% if movie.original_language %}<span>· {{ movie.original_language|upper }}</span>{% endif %}
+                </p>
+                <h1 class="film-title">{{ movie.display_title }}</h1>
+                {% if movie.original_title and movie.original_title != movie.display_title %}
+                <p class="specimen-original-title mono">{% blocktranslate trimmed with title=movie.original_title %}originally “{{ title }}”{% endblocktranslate %}</p>
+                {% endif %}
+                {% if movie.display_tagline %}<p class="film-tagline"{% if movie.tagline_is_fallback %} lang="en"{% endif %}>{{ movie.display_tagline }}</p>{% endif %}
+                {% comment %} Each genre links back to the Movies index filtered to it
+                   (Task 71). The slug is built with the same slugify the view's
+                   {slug: genre_id} map uses, so the two can't drift. {% endcomment %}
+                {% if genres %}
+                <div class="chips film-genres">
+                    {% for genre in genres %}
+                    <a class="chip" href="{% url 'movies:movie_list' %}?genre={{ genre.genre_name|slugify }}">{{ genre.display_name }}</a>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
-            <div class="record-row">
-                <dt class="label">{% translate "Released" %}</dt>
-                <dd class="mono">{% if movie.release_date %}{{ movie.release_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
-            </div>
-            <div class="record-row">
-                <dt class="label">{% translate "Runtime" %}</dt>
-                <dd class="mono">{% if movie.runtime %}{% blocktranslate trimmed with n=movie.runtime %}{{ n }} min{% endblocktranslate %}{% else %}—{% endif %}</dd>
-            </div>
-            <div class="record-row">
-                <dt class="label">{% blocktranslate trimmed count n=languages|length|default:1 %}Language{% plural %}Languages{% endblocktranslate %}</dt>
-                <dd>{% if languages %}{{ languages|join:", " }}{% else %}—{% endif %}</dd>
-            </div>
-            {% if countries.countries %}
-            <div class="record-row">
-                <dt class="label">{% translate "Countries" %}</dt>
-                <dd>{{ countries.countries|join:", " }}</dd>
-            </div>
-            {% elif countries.origin or countries.production %}
-            {% if countries.origin %}
-            <div class="record-row">
-                <dt class="label">{% translate "Country of origin" %}</dt>
-                <dd>{{ countries.origin|join:", " }}</dd>
-            </div>
-            {% endif %}
-            {% if countries.production %}
-            <div class="record-row">
-                <dt class="label">{% translate "Production countries" %}</dt>
-                <dd>{{ countries.production|join:", " }}</dd>
-            </div>
-            {% endif %}
-            {% endif %}
-            <div class="record-row">
-                <dt class="label">{% translate "Budget" %}</dt>
-                <dd class="mono">{% if movie.budget %}${{ movie.budget|floatformat:"0g" }}{% else %}—{% endif %}</dd>
-            </div>
-            <div class="record-row">
-                <dt class="label">{% translate "Revenue" %}</dt>
-                <dd class="mono">{% if movie.revenue %}${{ movie.revenue|floatformat:"0g" }}{% else %}—{% endif %}</dd>
-            </div>
-            {% if directors %}
-            <div class="record-row">
-                <dt class="label">{% translate "Directed by" %}</dt>
-                <dd>
-                    {% for director in directors %}<a href="{% url 'movies:person_detail' director.slug %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
-                </dd>
-            </div>
-            {% endif %}
-            {% if studios %}
-            <div class="record-row">
-                <dt class="label">{% translate "Studios" %}</dt>
-                <dd>
-                    {% for studio in studios %}<a href="{% url 'movies:studio_detail' studio.slug %}">{{ studio.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
-                </dd>
-            </div>
-            {% endif %}
-        </dl>
-
-        {% comment %} Each genre links back to the Movies index filtered to it (Task 71).
-           No ?sort= on the link: /movies/ already defaults to newest-first, which
-           is what a reader clicking "Horror" wants to land on. The slug is built
-           with the same django.utils.text.slugify the view's {slug: genre_id} map
-           uses, so the two can't drift — dim_genre has no slug column to read.
-           These chips were plain text from 2026-08-14, when the /genres/ index was
-           removed and left them pointing nowhere; .chip:hover has been waiting for
-           a link ever since, so this needs no new CSS. {% endcomment %}
-        {% if genres %}
-        <div class="chips">
-            {% for genre in genres %}
-            <a class="chip" href="{% url 'movies:movie_list' %}?genre={{ genre.genre_name|slugify }}">{{ genre.display_name }}</a>
-            {% endfor %}
         </div>
+    </header>
+
+    <div class="container film-body">
+        <div class="film-main film-stagger">
+            {% if movie.display_overview %}<p class="film-synopsis"{% if movie.overview_is_fallback %} lang="en"{% endif %}>{{ movie.display_overview }}</p>{% endif %}
+            {% if movie.prose_is_fallback %}<p class="prose-note">{% translate "Shown in English — no translation yet" %}</p>{% endif %}
+
+            <dl class="facts">
+                {% if movie_rating.rating %}
+                <div class="fact fact--wide">
+                    <dt class="label">{% translate "Rating" %}</dt>
+                    <dd>{% include "movies/_rating_badge.html" with rating=movie_rating.rating vote_count=movie_rating.vote_count imdb_id=movie.imdb_id only %}</dd>
+                </div>
+                {% endif %}
+                <div class="fact">
+                    <dt class="label">{% translate "Released" %}</dt>
+                    <dd class="mono">{% if movie.release_date %}{{ movie.release_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
+                </div>
+                <div class="fact">
+                    <dt class="label">{% translate "Runtime" %}</dt>
+                    <dd class="mono">{% if movie.runtime %}{% blocktranslate trimmed with n=movie.runtime %}{{ n }} min{% endblocktranslate %}{% else %}—{% endif %}</dd>
+                </div>
+                <div class="fact">
+                    <dt class="label">{% blocktranslate trimmed count n=languages|length|default:1 %}Language{% plural %}Languages{% endblocktranslate %}</dt>
+                    <dd>{% if languages %}{{ languages|join:", " }}{% else %}—{% endif %}</dd>
+                </div>
+                {% if countries.countries %}
+                <div class="fact">
+                    <dt class="label">{% translate "Countries" %}</dt>
+                    <dd>{{ countries.countries|join:", " }}</dd>
+                </div>
+                {% elif countries.origin or countries.production %}
+                {% if countries.origin %}
+                <div class="fact">
+                    <dt class="label">{% translate "Country of origin" %}</dt>
+                    <dd>{{ countries.origin|join:", " }}</dd>
+                </div>
+                {% endif %}
+                {% if countries.production %}
+                <div class="fact">
+                    <dt class="label">{% translate "Production countries" %}</dt>
+                    <dd>{{ countries.production|join:", " }}</dd>
+                </div>
+                {% endif %}
+                {% endif %}
+                <div class="fact">
+                    <dt class="label">{% translate "Budget" %}</dt>
+                    <dd class="mono">{% if movie.budget %}${{ movie.budget|floatformat:"0g" }}{% else %}—{% endif %}</dd>
+                </div>
+                <div class="fact">
+                    <dt class="label">{% translate "Revenue" %}</dt>
+                    <dd class="mono">{% if movie.revenue %}${{ movie.revenue|floatformat:"0g" }}{% else %}—{% endif %}</dd>
+                </div>
+                {% if directors %}
+                <div class="fact">
+                    <dt class="label">{% translate "Directed by" %}</dt>
+                    <dd>
+                        {% for director in directors %}<a href="{% url 'movies:person_detail' director.slug %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                    </dd>
+                </div>
+                {% endif %}
+                {% if studios %}
+                <div class="fact">
+                    <dt class="label">{% translate "Studios" %}</dt>
+                    <dd>
+                        {% for studio in studios %}<a href="{% url 'movies:studio_detail' studio.slug %}">{{ studio.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+        </div>
+
+        {% if movie_rating.rating or box_office %}
+        <aside class="film-side film-stagger">
+            {% comment %} The score ring: the IMDb rating as a share of 10. The
+               circle's pathLength is 100, so the arc length is simply the
+               rating x 10 (widthratio does the multiply in the template). {% endcomment %}
+            {% if movie_rating.rating %}
+            <div class="score">
+                <div class="score__ring" aria-hidden="true">
+                    <svg viewBox="0 0 110 110">
+                        <circle class="score__track" cx="55" cy="55" r="48" pathLength="100"/>
+                        <circle class="score__arc" cx="55" cy="55" r="48" pathLength="100"
+                                style="--fill: {% widthratio movie_rating.rating 1 10 %}"
+                                stroke-dasharray="{% widthratio movie_rating.rating 1 10 %} 100"/>
+                    </svg>
+                    <span class="score__value mono">{{ movie_rating.rating|floatformat:1 }}</span>
+                </div>
+                <p>
+                    <strong>{% translate "IMDb rating" %}</strong>
+                    {% if rating_rank and rated_total %}
+                    {% blocktranslate trimmed with rank=rating_rank total=rated_total %}Ranked #{{ rank }} of {{ total }} rated films on Theoria{% endblocktranslate %}
+                    {% endif %}
+                </p>
+            </div>
+            {% endif %}
+
+            {% comment %} Box office: how many times over the film earned back
+               its budget, with the two figures as bars on one scale. Only when
+               both are known (see views._box_office). {% endcomment %}
+            {% if box_office %}
+            <div class="box-office">
+                <p class="eyebrow">{% translate "Box office" %}</p>
+                <p class="box-office__multiple">{{ box_office.multiple|floatformat:1 }}×</p>
+                <p class="box-office__note">{% translate "its budget, earned back at the box office" %}</p>
+                <div class="box-office__bars">
+                    <div class="box-office__row"><span>{% translate "Budget" %}</span><i style="width: {{ box_office.budget_pct|unlocalize }}%"></i></div>
+                    <div class="box-office__row is-revenue"><span>{% translate "Revenue" %}</span><i style="width: {{ box_office.revenue_pct|unlocalize }}%"></i></div>
+                </div>
+            </div>
+            {% endif %}
+        </aside>
         {% endif %}
     </div>
 </article>
 
-{% comment %} A trailer and a backdrop are two large pieces of art competing for
-   the same slot below the record, so the trailer takes it when there is one and
-   the backdrop stays only otherwise (Task 75). {% endcomment %}
+{% comment %} The trailer plays below the record. The backdrop no longer
+   competes with it for this slot: since the redesign it fills the hero. {% endcomment %}
 {% if trailer %}
 <figure class="video-strip">
     {% translate "trailer" as trailer_word %}{% include "movies/_video_embed.html" with video=trailer kind=trailer_word only %}
 </figure>
-{% elif movie.backdrop_path %}
-<figure class="backdrop-strip">
-    <img src="{{ movie.backdrop_path|tmdb_image:'w1280' }}" alt="" loading="lazy" decoding="async">
-</figure>
 {% endif %}
 
-<section class="sheet-section" id="cast">
+<section class="sheet-section film-cast" id="cast">
     <div class="section-head">
         <h2>{% translate "Cast" %}</h2>
         <span class="section-note">{% blocktranslate trimmed with cast=cast_count count counter=credit_count %}{{ cast }} cast · {{ counter }} credit{% plural %}{{ cast }} cast · {{ counter }} credits{% endblocktranslate %}</span>

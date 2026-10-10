@@ -502,7 +502,7 @@ def test_uzbek_page_falls_back_to_english_prose_with_a_quiet_marker():
     body = _detail("uz", movie)
     assert "A thief steals secrets." in body
     # The English paragraph is marked as English for screen readers.
-    assert 'class="specimen-synopsis" lang="en"' in body
+    assert 'class="film-synopsis" lang="en"' in body
     assert 'class="prose-note"' in body
     assert "Inglizcha" in body
 

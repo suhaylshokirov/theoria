@@ -1,0 +1,353 @@
+/* Theoria — the film page (movie_detail.html). A screening, not a record card:
+   the backdrop fills the top of the page under the floating header, the
+   poster sits on it as a lifted plate and the title is set large over it.
+   Per the contract in theoria.css this file only ADDS components. */
+
+.page-film {
+  overflow-x: clip;
+}
+
+.page-film main.container {
+  padding-top: 0;
+}
+
+/* --- Hero ------------------------------------------------------------------------- */
+
+.film-hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: flex-end;
+  width: 100vw;
+  min-height: min(78vh, 760px);
+  margin-inline: calc(50% - 50vw);
+  padding-top: 120px;
+  overflow: hidden;
+}
+
+.film-hero__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  object-fit: cover;
+  transform: scale(1.06);
+  animation: film-settle 2.4s var(--ease-out) forwards;
+}
+
+@keyframes film-settle {
+  to { transform: scale(1); }
+}
+
+.film-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(to top, var(--paper) 4%, color-mix(in srgb, var(--paper) 55%, transparent) 45%,
+                    color-mix(in srgb, var(--paper) 20%, transparent)),
+    linear-gradient(to right, color-mix(in srgb, var(--paper) 80%, transparent), transparent 70%);
+}
+
+.film-hero__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 56px);
+  align-items: end;
+  padding-bottom: var(--space-8);
+}
+
+.film-hero__plate {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.film-poster {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 14px;
+  background: var(--sheet-2);
+  box-shadow: 0 40px 80px -30px rgb(0 0 0 / 0.9), 0 0 0 1px var(--rule-strong);
+  view-transition-name: film-poster;
+}
+
+.film-poster.placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--ink-faint);
+}
+
+.film-hero__copy .eyebrow {
+  flex-wrap: wrap;
+}
+
+.film-title {
+  margin-top: var(--space-5);
+  font-family: var(--font-display);
+  font-weight: 850;
+  font-stretch: 115%;
+  font-size: clamp(2.4rem, 6vw, 5.4rem);
+  line-height: 0.9;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+.film-tagline {
+  margin-top: var(--space-5);
+  font-size: var(--text-lg);
+  color: var(--ink-muted);
+}
+
+.film-genres {
+  margin-top: var(--space-6);
+}
+
+/* --- Body ------------------------------------------------------------------------- */
+
+.film-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
+  gap: clamp(32px, 6vw, 80px);
+  padding-top: var(--space-8);
+}
+
+/* main.container already carries the page gutter; the body is a grid inside
+   it, not a second gutter. */
+.film-body.container {
+  padding-inline: 0;
+}
+
+.film-synopsis {
+  max-width: 62ch;
+  font-size: var(--text-md);
+  line-height: 1.7;
+}
+
+.film-synopsis + .prose-note {
+  margin-top: var(--space-3);
+}
+
+/* Facts: a ruled grid of two columns, the record restated as tiles. */
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: var(--space-8);
+  border: var(--hairline);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--rule);
+}
+
+.fact {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  background: var(--paper);
+}
+
+.fact--wide {
+  grid-column: 1 / -1;
+}
+
+/* Facts pair up two to a row after the full-width rating; a last fact left
+   on its own takes the whole row rather than leaving an empty cell. */
+.facts:has(.fact--wide) .fact:last-child:nth-child(even),
+.facts:not(:has(.fact--wide)) .fact:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.fact dd {
+  margin: 0;
+  font-size: var(--text-md);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.fact dd a {
+  color: var(--lime-text);
+}
+
+/* --- Side: score and box office -------------------------------------------------- */
+
+.film-side {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+}
+
+.score {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: center;
+  padding: var(--space-6);
+  border: var(--hairline);
+  border-radius: 20px;
+  background: radial-gradient(120% 120% at 0% 0%, rgb(var(--glow) / 0.16), transparent 60%);
+}
+
+.score__ring {
+  position: relative;
+  width: 110px;
+  height: 110px;
+}
+
+.score__ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.score__ring circle {
+  fill: none;
+  stroke-width: 7;
+}
+
+.score__track { stroke: var(--rule); }
+
+.score__arc {
+  stroke: var(--lime);
+  stroke-linecap: round;
+  animation: score-fill 1.6s var(--ease-out) 0.3s both;
+}
+
+/* The arc grows from nothing to its rating. --fill is the rating x 10 on the
+   circle's pathLength of 100, set inline by the template. */
+@keyframes score-fill {
+  from { stroke-dashoffset: var(--fill); }
+  to { stroke-dashoffset: 0; }
+}
+
+.score__value {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 1.7rem;
+}
+
+.score p {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.score strong {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.box-office {
+  padding: var(--space-6);
+  border: var(--hairline);
+  border-radius: 20px;
+}
+
+.box-office__multiple {
+  margin-top: var(--space-4);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-stretch: 110%;
+  font-size: 2.6rem;
+  line-height: 1;
+}
+
+.box-office__note {
+  margin-top: var(--space-2);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.box-office__bars {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.box-office__row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+.box-office__row i {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--ink-faint);
+  transform-origin: left;
+  animation: bar-grow 1.2s var(--ease-out) 0.4s both;
+}
+
+.box-office__row.is-revenue i { background: var(--lime); }
+
+@keyframes bar-grow {
+  from { transform: scaleX(0); }
+}
+
+/* --- Entrances and the cast ----------------------------------------------------------- */
+
+/* The hero copy and the body columns arrive in a short stagger. */
+.film-stagger > * {
+  animation: film-rise 0.8s var(--ease-out) both;
+}
+
+.film-stagger > *:nth-child(2) { animation-delay: 80ms; }
+.film-stagger > *:nth-child(3) { animation-delay: 160ms; }
+.film-stagger > *:nth-child(4) { animation-delay: 240ms; }
+.film-stagger > *:nth-child(5) { animation-delay: 320ms; }
+
+@keyframes film-rise {
+  from { transform: translateY(14px); opacity: 0.2; }
+  to { transform: none; opacity: 1; }
+}
+
+.page-film .video-strip {
+  margin-top: var(--space-9);
+}
+
+/* Cast headshots in black and white, coming into colour under the pointer. */
+.film-cast .poster-card .headshot {
+  filter: grayscale(1) contrast(1.05);
+  transition: filter var(--dur-slow) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.film-cast .poster-card a:hover .headshot,
+.film-cast .poster-card a:focus-visible .headshot {
+  filter: none;
+}
+
+.page-film .film-cast {
+  margin-top: var(--space-9);
+}
+
+@media (max-width: 900px) {
+  .film-hero__grid,
+  .film-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Only the poster narrows; the collection buttons under it keep the
+     column's full width. */
+  .film-hero__plate .film-poster {
+    width: 150px;
+  }
+}
+
+@media (max-width: 520px) {
+  .facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -11,75 +11,212 @@
 {% endblock %}
 
 {% block content %}
-{% comment %} The contact sheet: the whole catalog at thumbnail size. It is the
-   real catalog, not decoration — every tile links to its film, and hovering
-   one outlines it in lime. {% endcomment %}
-<section class="sheet-hero">
-    <div class="hero-card">
-        <h1 class="hero-title">{% translate "Welcome<br>to the world<br>of movies." %}</h1>
-        <p class="hero-lead">
-            {% translate "Built for people who love the craft of cinema — every movie, every performance, gathered in one place to explore." %}
-        </p>
+<h1 class="visually-hidden">{% translate "Theoria — Welcome to the world of movies" %}</h1>
 
-        <dl class="hero-counts">
-            <div class="count">
-                <dt class="stat-label">{% translate "Movies" %}</dt>
-                <dd class="stat-value" data-count="{{ movie_count|unlocalize }}" data-suffix="+">{{ movie_count }}+</dd>
-            </div>
-            <div class="count">
-                <dt class="stat-label">{% translate "People" %}</dt>
-                <dd class="stat-value" data-count="{{ person_count|unlocalize }}" data-suffix="+">{{ person_count }}+</dd>
-            </div>
-            <div class="count">
-                <dt class="stat-label">{% translate "Avg rating" %}</dt>
-                <dd class="stat-value">
-                    {% if avg_rating %}<span data-count="{{ avg_rating|floatformat:"1u" }}" data-decimals="1">{{ avg_rating|floatformat:"1u" }}</span>{% else %}—{% endif %}
-                </dd>
-            </div>
-        </dl>
+{% comment %} The "Now showing" reel: the highest-rated films that have a
+   backdrop, full-bleed under the floating header. cinema.js cross-fades the
+   backdrops, advances the reel every few seconds and samples each backdrop's
+   colour into the page's ambient light. With JS off the first film simply
+   stays on screen and the tabs are hidden (they are has-js gated in
+   home.css). Images carry crossorigin so cinema.js may read their pixels —
+   image.tmdb.org answers with Access-Control-Allow-Origin: *. {% endcomment %}
+{% if featured %}
+<section class="reel" data-reel aria-roledescription="carousel" aria-label="{% translate "Now showing" %}">
+    <div class="reel__stage" aria-hidden="true">
+        {% for film in featured %}
+        <img class="reel__image{% if forloop.first %} is-on{% endif %}" data-reel-image
+             src="{{ film.backdrop_path|tmdb_image:'w1280' }}" alt="" crossorigin="anonymous" decoding="async"
+             {% if forloop.first %}fetchpriority="high"{% else %}loading="lazy"{% endif %}>
+        {% endfor %}
+    </div>
 
-        <div class="hero-actions">
-            <a class="btn" href="{% url 'movies:browse' %}">{% translate "Browse movies" %}</a>
-            <a class="hero-link" href="{% url 'analytics:dashboard' %}">{% translate "See the analytics →" %}</a>
+    <div class="container reel__copy">
+        {% for film in featured %}
+        <div class="reel__slide" data-reel-slide{% if not forloop.first %} hidden{% endif %}
+             role="group" aria-roledescription="slide"
+             aria-label="{% blocktranslate trimmed with n=forloop.counter total=featured|length %}{{ n }} of {{ total }}{% endblocktranslate %}">
+            <p class="eyebrow">{% translate "Now showing" %} · {% translate "Highest rated" %}</p>
+            <h2 class="reel__title" data-reel-title>{{ film.display_title }}</h2>
+            {% if film.display_tagline %}
+            <p class="reel__tagline">{{ film.display_tagline }}</p>
+            {% elif film.display_overview %}
+            <p class="reel__tagline">{{ film.display_overview|truncatewords:22 }}</p>
+            {% endif %}
+            <div class="reel__meta">
+                {% include "movies/_rating_badge.html" with rating=film.imdb_rating only %}
+                {% if film.release_date %}<span class="mono">{{ film.release_date|date:"Y" }}</span>{% endif %}
+                {% if film.runtime %}<span>{% blocktranslate trimmed with n=film.runtime %}{{ n }} min{% endblocktranslate %}</span>{% endif %}
+                {% if film.reel_genres %}<span>{{ film.reel_genres|join:" · " }}</span>{% endif %}
+                {% if film.reel_director %}<span>{% blocktranslate trimmed with name=film.reel_director %}Directed by {{ name }}{% endblocktranslate %}</span>{% endif %}
+            </div>
+            <div class="reel__actions">
+                <a class="cta" href="{% url 'movies:movie_detail' film.slug %}">
+                    {% translate "Open film" %}
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+                </a>
+                <a class="cta cta--ghost" href="{% url 'movies:browse' %}">{% translate "Browse movies" %}</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="container">
+        <div class="reel__tabs" role="tablist" aria-label="{% translate "Featured films" %}">
+            {% for film in featured %}
+            <button type="button" class="reel__tab{% if forloop.first %} is-on{% endif %}" role="tab" data-reel-tab
+                    aria-selected="{% if forloop.first %}true{% else %}false{% endif %}">
+                <span class="reel__bar" aria-hidden="true"><i></i></span>
+                <span class="reel__tab-title">{{ film.display_title }}</span>
+                {% if film.release_date %}<span class="reel__tab-year mono">{{ film.release_date|date:"Y" }}</span>{% endif %}
+            </button>
+            {% endfor %}
         </div>
     </div>
+</section>
+{% endif %}
 
-    {% comment %} Task 90: the mosaic mixes movies and shows — it reads as
-       "the whole catalog at once" (see MOSAIC_LIMIT's docstring in
-       views.py), and TV is now part of that catalog. Each tile is a plain
-       {kind, slug, poster_path} dict from home(), so the href branches on
-       kind rather than assuming every tile is a Movie. {% endcomment %}
-    <div class="contact-sheet" aria-hidden="true">
-        {% for tile in mosaic %}
-        <a class="frame"
-           href="{% if tile.kind == 'series' %}{% url 'movies:series_detail' tile.slug %}{% else %}{% url 'movies:movie_detail' tile.slug %}{% endif %}"
-           tabindex="-1"
-           style="--i: {{ forloop.counter0 }}">
-            <img src="{{ tile.poster_path|tmdb_image:'w185' }}" alt="" loading="lazy" decoding="async">
-        </a>
+{% comment %} The catalogue in figures. Approximate counts ("1,200+"), ticked
+   up from zero by theoria.js's initCounters(). {% endcomment %}
+<dl class="figures">
+    <div class="figure">
+        <dt>{% translate "Movies" %}</dt>
+        <dd class="mono" data-count="{{ movie_count|unlocalize }}" data-suffix="+">{{ movie_count }}+</dd>
+    </div>
+    {% if series_count %}
+    <div class="figure">
+        <dt>{% translate "TV Shows" %}</dt>
+        <dd class="mono" data-count="{{ series_count|unlocalize }}" data-suffix="+">{{ series_count }}+</dd>
+    </div>
+    {% endif %}
+    <div class="figure">
+        <dt>{% translate "People" %}</dt>
+        <dd class="mono" data-count="{{ person_count|unlocalize }}" data-suffix="+">{{ person_count }}+</dd>
+    </div>
+    <div class="figure">
+        <dt>{% translate "Avg rating" %}</dt>
+        <dd class="mono">{% if avg_rating %}<span data-count="{{ avg_rating|floatformat:"2u" }}" data-decimals="2">{{ avg_rating|floatformat:"2" }}</span>{% else %}—{% endif %}</dd>
+    </div>
+</dl>
+
+{% comment %} The poster wall: the contact sheet, set moving. Two rows drift in
+   opposite directions and stop under the pointer. Each row is printed twice
+   back to back so the loop is seamless; the second copy is hidden from
+   assistive tech and the tab order, since it repeats the first. {% endcomment %}
+{% if mosaic %}
+<section class="home-section" aria-labelledby="h-wall">
+    <header class="home-head reveal">
+        <div>
+            <p class="eyebrow">{% translate "The catalogue" %}</p>
+            <h2 class="home-title" id="h-wall">{% translate "Every title." %} <em>{% translate "Every performance." %}</em></h2>
+        </div>
+        <p class="home-note">{% translate "Hover a poster to stop the wall and tilt it toward the light." %}</p>
+    </header>
+    <div class="wall">
+        {% for row in mosaic_rows %}
+        <div class="wall__track{% if forloop.counter|divisibleby:2 %} is-reverse{% endif %}">
+            {% for copy in "ab" %}
+            {% for tile in row %}
+            <a class="wall__tile" data-tilt
+               href="{% if tile.kind == 'series' %}{% url 'movies:series_detail' tile.slug %}{% else %}{% url 'movies:movie_detail' tile.slug %}{% endif %}"
+               {% if copy == "b" %}tabindex="-1" aria-hidden="true"{% endif %}>
+                <img src="{{ tile.poster_path|tmdb_image:'w342' }}" alt="" loading="lazy" decoding="async">
+            </a>
+            {% endfor %}
+            {% endfor %}
+        </div>
         {% endfor %}
     </div>
 </section>
+{% endif %}
 
-<section class="sheet-section">
-    <div class="section-head">
-        <h2>{% translate "Highest rated" %}</h2>
-        <span class="section-note">{% translate "top 12" %}</span>
-    </div>
-    <div class="poster-grid">
+{% comment %} Highest rated: a ranked strip, dragged or scrolled sideways. The
+   outlined numeral behind each poster is its rank. {% endcomment %}
+<section class="home-section" aria-labelledby="h-rated">
+    <header class="home-head reveal">
+        <div>
+            <p class="eyebrow">{% translate "Highest rated" %}</p>
+            <h2 class="home-title" id="h-rated">{% translate "The top twelve," %} <em>{% translate "by IMDb rating." %}</em></h2>
+        </div>
+        <div class="rail-controls" data-rail-controls="rated">
+            <button type="button" class="round-btn" data-rail-prev aria-label="{% translate "Scroll back" %}">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
+            </button>
+            <button type="button" class="round-btn" data-rail-next aria-label="{% translate "Scroll forward" %}">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+            </button>
+        </div>
+    </header>
+    {% if top_rated %}
+    <ol class="rail" data-rail="rated">
         {% for movie in top_rated %}
-        {% include "movies/_movie_card.html" with movie=movie only %}
-        {% empty %}
-        <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the catalog." %}</p>
+        <li class="rank">
+            <span class="rank__num" aria-hidden="true">{{ forloop.counter }}</span>
+            <a class="rank__card" href="{% url 'movies:movie_detail' movie.slug %}">
+                <span class="rank__poster" data-tilt>
+                    {% if movie.poster_path %}
+                    <img src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="" loading="lazy" decoding="async">
+                    {% endif %}
+                </span>
+                <span class="rank__meta">
+                    <span class="rank__title">{{ movie.display_title }}</span>
+                    {% if movie.imdb_rating %}<span class="mono">{{ movie.imdb_rating|floatformat:1 }}</span>{% endif %}
+                </span>
+            </a>
+        </li>
         {% endfor %}
-    </div>
+    </ol>
+    {% else %}
+    <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the catalog." %}</p>
+    {% endif %}
 </section>
 
-<section class="sheet-section">
-    <div class="section-head">
-        <h2>{% translate "See what's new" %}</h2>
-        <span class="section-note">{% translate "by release date" %}</span>
+{% comment %} Films released and their average IMDb rating per decade. The
+   table is the record (screen readers, no JS); cinema.js draws the chart
+   from the same rows into the SVG and the table is then visually hidden. {% endcomment %}
+{% if decades %}
+<section class="home-section" aria-labelledby="h-decades">
+    <header class="home-head reveal">
+        <div>
+            <p class="eyebrow">{% translate "Analytics" %}</p>
+            <h2 class="home-title" id="h-decades">{% translate "Films by decade," %} <em>{% translate "and how they rate." %}</em></h2>
+        </div>
+        <p class="home-note">{% translate "Bars count the films released in each decade. The line tracks their average IMDb rating." %}
+            <a href="{% url 'analytics:dashboard' %}">{% translate "See the analytics →" %}</a></p>
+    </header>
+    <div class="decades reveal" data-decades
+         data-label-decade="{% blocktranslate %}{decade}s{% endblocktranslate %}"
+         data-label-tip="{% blocktranslate %}{decade}s · {films} films · average {rating}{% endblocktranslate %}">
+        <div class="decades__legend" aria-hidden="true">
+            <span><i class="is-bar"></i>{% translate "Films released" %}</span>
+            <span><i class="is-line"></i>{% translate "Average IMDb rating" %}</span>
+        </div>
+        <svg class="decades__chart" viewBox="0 0 1000 380" aria-hidden="true" focusable="false" data-decades-chart></svg>
+        <div class="decades__tip" aria-hidden="true" data-decades-tip></div>
+        <table class="decades__table">
+            <caption>{% translate "Films released and average IMDb rating, by decade" %}</caption>
+            <thead><tr><th scope="col">{% translate "Decade" %}</th><th scope="col">{% translate "Films released" %}</th><th scope="col">{% translate "Average IMDb rating" %}</th></tr></thead>
+            <tbody>
+                {% for row in decades %}
+                <tr data-decade="{{ row.decade|unlocalize }}" data-films="{{ row.film_count|unlocalize }}"
+                    data-rating="{% if row.avg_rating %}{{ row.avg_rating|unlocalize }}{% endif %}"{% if row.is_best %} data-best{% endif %}>
+                    <th scope="row">{% blocktranslate trimmed with decade=row.decade|unlocalize %}{{ decade }}s{% endblocktranslate %}</th>
+                    <td>{{ row.film_count }}</td>
+                    <td>{% if row.avg_rating %}{{ row.avg_rating|floatformat:2 }}{% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
+</section>
+{% endif %}
+
+<section class="home-section" aria-labelledby="h-new">
+    <header class="home-head reveal">
+        <div>
+            <p class="eyebrow">{% translate "by release date" %}</p>
+            <h2 class="home-title" id="h-new">{% translate "See what's new" %}</h2>
+        </div>
+    </header>
     <div class="poster-grid">
         {% for movie in newest %}
         {% include "movies/_movie_card.html" with movie=movie only %}
@@ -92,15 +229,16 @@
 {% comment %} TV gets its own strip rather than folding into "See what's
    new" (Task 90) — a heading a reader scans expecting one comparable kind
    of card; mixing movies and shows under it would need a per-card kind cue
-   just to avoid confusion, and the person page's Task 89 "separate stats,
-   not one merged count" call already set that precedent. Ordered by *last*
-   air date, not first — see _series_year_span()'s caller in views.py for why
-   that's the right "new" for a show. {% endcomment %}
-<section class="sheet-section">
-    <div class="section-head">
-        <h2>{% translate "Recently aired" %}</h2>
-        <span class="section-note">{% translate "by last air date" %}</span>
-    </div>
+   just to avoid confusion. Ordered by *last* air date, not first — see
+   _series_year_span()'s caller in views.py for why that's the right "new"
+   for a show. {% endcomment %}
+<section class="home-section" aria-labelledby="h-aired">
+    <header class="home-head reveal">
+        <div>
+            <p class="eyebrow">{% translate "by last air date" %}</p>
+            <h2 class="home-title" id="h-aired">{% translate "Recently aired" %}</h2>
+        </div>
+    </header>
     <div class="poster-grid">
         {% for series in recently_aired %}
         {% include "movies/_series_card.html" with series=series only %}

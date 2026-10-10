@@ -1479,7 +1479,7 @@
       var closeTimer = null;
       // Hover only where there is a real hovering pointer and the desktop
       // dropdown layout -- inside the phone menu the panel is an inline list.
-      var canHover = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 681px)");
+      var canHover = window.matchMedia("(hover: hover) and (pointer: fine) and (min-width: 1101px)");
 
       function setOpen(next) {
         open = next;
