@@ -141,6 +141,26 @@ def attach_movie_titles(movies):
             movie.title_i18n = titles[movie.movie_id]
 
 
+def movie_titles_by_slug(slugs):
+    """{slug: translated title} for the given movie slugs; {} for English.
+
+    For the analytics callouts, which arrive as plain dict rows keyed by slug
+    rather than as Movie objects. Slugs with no translation are simply absent,
+    so the caller keeps the English title.
+    """
+    lang = current_lang()
+    slugs = {slug for slug in slugs if slug}
+    if lang == DEFAULT_LANG or not slugs:
+        return {}
+    return dict(
+        MovieTranslation.objects.using("warehouse")
+        .filter(movie__slug__in=slugs, lang=lang)
+        .exclude(title__isnull=True)
+        .exclude(title="")
+        .values_list("movie__slug", "title")
+    )
+
+
 def attach_series_titles(series):
     """Set `name_i18n` on already-loaded Series objects (in place).
 

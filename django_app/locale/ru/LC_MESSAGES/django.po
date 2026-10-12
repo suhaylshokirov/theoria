@@ -2240,3 +2240,308 @@ msgstr "сезоны"
 #, python-format
 msgid "Average IMDb rating %(value)s out of 10"
 msgstr "Средний рейтинг IMDb: %(value)s из 10"
+
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
+
+msgid "The archive, measured: ratings, money, decades and the people behind them."
+msgstr "Архив в цифрах: рейтинги, деньги, десятилетия и люди за кадром."
+
+msgid "Median movie rating"
+msgstr "Медианный рейтинг фильмов"
+
+msgid "Median return on budget"
+msgstr "Медианная окупаемость бюджета"
+
+msgid "Not in English"
+msgstr "Не на английском"
+
+msgid "Sections of this page"
+msgstr "Разделы страницы"
+
+msgid "Ratings"
+msgstr "Рейтинги"
+
+msgid "Money"
+msgstr "Деньги"
+
+msgid "Decades"
+msgstr "Десятилетия"
+
+msgid "Origins"
+msgstr "Происхождение"
+
+msgid "TV shows"
+msgstr "Сериалы"
+
+msgid "How movies and shows are rated"
+msgstr "Как оценены фильмы и сериалы"
+
+msgid "IMDb, by half point"
+msgstr "IMDb, по полбалла"
+
+msgid "Show ratings for"
+msgstr "Показать рейтинги для"
+
+msgid "Number of movies and shows at each IMDb rating, bar chart"
+msgstr "Число фильмов и сериалов по рейтингу IMDb, столбчатая диаграмма"
+
+msgid "Each bar counts the movies or shows whose rating falls in that half-point band; the dashed line marks the median."
+msgstr "Каждый столбец показывает, сколько фильмов или сериалов попало в этот полубалльный интервал рейтинга; пунктир отмечает медиану."
+
+msgid "Show the numbers"
+msgstr "Показать цифры"
+
+msgid "Reading the scores"
+msgstr "Как читать оценки"
+
+msgid "Median show rating"
+msgstr "Медианный рейтинг сериалов"
+
+msgid "IMDb and TMDB agree"
+msgstr "IMDb и TMDB сходятся"
+
+msgid "How closely the two rating sources move together, from 0 (not at all) to 1 (identical), for movies with at least 50 TMDB votes."
+msgstr "Насколько согласованно меняются оценки двух источников: от 0 (никак) до 1 (полностью совпадают), для фильмов минимум с 50 голосами на TMDB."
+
+msgid "Budget and revenue"
+msgstr "Бюджет и сборы"
+
+msgid "log scale"
+msgstr "логарифмическая шкала"
+
+msgid "Budget against revenue for each movie, scatter chart"
+msgstr "Бюджет и сборы каждого фильма, точечная диаграмма"
+
+msgid "Each point is a movie. Above the lower dashed line it earned more than it cost; above the upper one, five times as much. Select a point to open the movie."
+msgstr "Каждая точка — фильм. Выше нижней пунктирной линии он заработал больше, чем стоил; выше верхней — в пять раз больше. Выберите точку, чтобы открыть фильм."
+
+msgid "Return on budget by genre"
+msgstr "Окупаемость бюджета по жанрам"
+
+msgid "30+ movies each"
+msgstr "от 30 фильмов"
+
+msgid "Share of each genre's movies by how much they returned on their budget, stacked bar chart"
+msgstr "Доля фильмов каждого жанра по тому, какую часть бюджета они вернули, диаграмма с накоплением"
+
+msgid "Share of each genre's movies in each return band, ordered by median return."
+msgstr "Доля фильмов каждого жанра в каждом диапазоне окупаемости; жанры упорядочены по медианной окупаемости."
+
+msgid "Median return"
+msgstr "Медианная окупаемость"
+
+msgid "Studios with the most movies"
+msgstr "Студии с наибольшим числом фильмов"
+
+msgid "5+ movies"
+msgstr "от 5 фильмов"
+
+msgid "Two extremes"
+msgstr "Два полюса"
+
+msgid "Biggest return"
+msgstr "Наибольшая окупаемость"
+
+msgid "Most expensive"
+msgstr "Самый дорогой"
+
+msgid "Each decade holds roughly the same number of movies by design, so these charts compare shares and typical values, never totals."
+msgstr "В каждом десятилетии примерно одинаковое число фильмов — так задумано, поэтому здесь сравниваются доли и типичные значения, а не итоги."
+
+msgid "Typical running time"
+msgstr "Типичная продолжительность"
+
+msgid "median, minutes"
+msgstr "медиана, минуты"
+
+msgid "Median running time by decade, line chart"
+msgstr "Медианная продолжительность фильмов по десятилетиям, линейный график"
+
+msgid "Median minutes"
+msgstr "Медиана, мин"
+
+msgid "Movies not in English"
+msgstr "Фильмы не на английском"
+
+msgid "share of each decade"
+msgstr "доля в каждом десятилетии"
+
+msgid "Share of movies not in English by decade, bar chart"
+msgstr "Доля фильмов не на английском по десятилетиям, столбчатая диаграмма"
+
+msgid "This reflects how the archive was assembled as much as how cinema changed."
+msgstr "Здесь сказывается и то, как собирался архив, а не только то, как менялось кино."
+
+msgid "Genre mix"
+msgstr "Жанровый состав"
+
+msgid "share of each decade's movies"
+msgstr "доля фильмов десятилетия"
+
+msgid "This describes the archive, which leans heavily towards English-language movies, not cinema worldwide."
+msgstr "Это описывает архив, где заметно преобладают фильмы на английском языке, а не мировое кино."
+
+msgid "Share"
+msgstr "Доля"
+
+msgid "Original language"
+msgstr "Язык оригинала"
+
+msgctxt "table column"
+msgid "Language"
+msgstr "Язык"
+
+msgid "Other languages"
+msgstr "Другие языки"
+
+msgid "Top-rated directors"
+msgstr "Режиссёры с лучшими рейтингами"
+
+msgid "4+ movies"
+msgstr "от 4 фильмов"
+
+msgid "Recurring partnerships"
+msgstr "Постоянные творческие союзы"
+
+msgid "3+ movies together"
+msgstr "от 3 общих фильмов"
+
+msgid "Worked with"
+msgstr "Совместно с"
+
+msgid "Role"
+msgstr "Должность"
+
+msgid "Rating by season, against season 1"
+msgstr "Рейтинг по сезонам относительно первого сезона"
+
+msgid "15+ shows per season"
+msgstr "от 15 сериалов на сезон"
+
+msgid "Change in average episode rating from season 1, by season number, line chart"
+msgstr "Изменение среднего рейтинга серий относительно первого сезона по номеру сезона, линейный график"
+
+msgid "Each show is compared with its own first season, so shows cancelled early don’t flatter the later seasons."
+msgstr "Каждый сериал сравнивается с собственным первым сезоном, поэтому рано закрытые сериалы не приукрашивают поздние сезоны."
+
+msgid "Change"
+msgstr "Изменение"
+
+msgid "Rating by show status"
+msgstr "Рейтинг по статусу сериала"
+
+msgid "median"
+msgstr "медиана"
+
+msgid "Median rating"
+msgstr "Медианный рейтинг"
+
+msgid "Networks with the most shows"
+msgstr "Каналы с наибольшим числом сериалов"
+
+msgid "5+ rated shows"
+msgstr "от 5 оценённых сериалов"
+
+msgid "Shows are rated higher than movies: the typical show scores ★ <strong>%(show)s</strong> against ★ <strong>%(movie)s</strong> for a movie, %(gap)s points apart."
+msgstr "Сериалы оцениваются выше фильмов: типичный сериал набирает ★ <strong>%(show)s</strong> против ★ <strong>%(movie)s</strong> у фильма, разница — %(gap)s балла."
+
+msgid "Movies are rated higher than shows: the typical movie scores ★ <strong>%(movie)s</strong> against ★ <strong>%(show)s</strong> for a show, %(gap)s points apart."
+msgstr "Фильмы оцениваются выше сериалов: типичный фильм набирает ★ <strong>%(movie)s</strong> против ★ <strong>%(show)s</strong> у сериала, разница — %(gap)s балла."
+
+msgid "Movies and shows are rated about the same: ★ <strong>%(movie)s</strong> for the typical movie, ★ <strong>%(show)s</strong> for the typical show."
+msgstr "Фильмы и сериалы оцениваются примерно одинаково: ★ <strong>%(movie)s</strong> у типичного фильма, ★ <strong>%(show)s</strong> у типичного сериала."
+
+msgid "<strong>%(over)s%%</strong> of movies with a known budget returned five times it or more; only <strong>%(under)s%%</strong> earned less than they cost."
+msgstr "<strong>%(over)s%%</strong> фильмов с известным бюджетом окупили его в пять раз и больше; лишь <strong>%(under)s%%</strong> заработали меньше, чем стоили."
+
+msgid "The typical movie of the %(last)ss runs <strong>%(minutes)s minutes longer</strong> than one from the %(first)ss."
+msgstr "Типичный фильм %(last)s-х идёт на <strong>%(minutes)s мин дольше</strong>, чем фильм %(first)s-х."
+
+msgid "The typical movie of the %(last)ss runs <strong>%(minutes)s minutes shorter</strong> than one from the %(first)ss."
+msgstr "Типичный фильм %(last)s-х идёт на <strong>%(minutes)s мин короче</strong>, чем фильм %(first)s-х."
+
+msgid "The typical movie runs <strong>about the same length</strong> in the %(last)ss as in the %(first)ss."
+msgstr "Типичный фильм идёт <strong>примерно столько же</strong> в %(last)s-х, сколько в %(first)s-х."
+
+msgid "%(d)ss"
+msgstr "%(d)s-е"
+
+msgid "<strong>%(english)s%%</strong> of the archive’s movies are in English, and %(country)s took part in <strong>%(pct)s%%</strong> of them."
+msgstr "<strong>%(english)s%%</strong> фильмов архива сняты на английском языке; страна «%(country)s» участвовала в производстве <strong>%(pct)s%%</strong> фильмов."
+
+msgid "<strong>%(name)s</strong> is the highest-rated director with at least four movies here: ★ %(rating)s across %(count)s movies."
+msgstr "<strong>%(name)s</strong> — режиссёр с самым высоким рейтингом среди тех, у кого здесь не менее четырёх фильмов: ★ %(rating)s (фильмов: %(count)s)."
+
+msgid "Shows hold their first-season rating <strong>all the way to season %(last)s</strong>."
+msgstr "Сериалы сохраняют рейтинг первого сезона <strong>вплоть до %(last)s-го сезона</strong>."
+
+msgid "Shows hold their first-season rating <strong>through season %(hold)s</strong>, then slip about <strong>%(size)s points</strong> across seasons %(first)s–%(last)s."
+msgstr "Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</strong>, а затем теряют около <strong>%(size)s балла</strong> в сезонах %(first)s–%(last)s."
+
+msgid "Shows hold their first-season rating <strong>through season %(hold)s</strong>, then climb about <strong>%(size)s points</strong> across seasons %(first)s–%(last)s."
+msgstr "Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</strong>, а затем прибавляют около <strong>%(size)s балла</strong> в сезонах %(first)s–%(last)s."
+
+msgid "Composer"
+msgstr "Композитор"
+
+msgid "Cinematographer"
+msgstr "Оператор-постановщик"
+
+msgid "Production designer"
+msgstr "Художник-постановщик"
+
+msgid "Screenwriter"
+msgstr "Сценарист"
+
+msgid "Still running"
+msgstr "Продолжается"
+
+msgid "Cancelled"
+msgstr "Закрыт"
+
+msgid "Movies: {count}"
+msgstr "Фильмов: {count}"
+
+msgid "Shows: {count}"
+msgstr "Сериалов: {count}"
+
+msgid "Median"
+msgstr "Медиана"
+
+msgid "Break-even"
+msgstr "Порог окупаемости"
+
+msgid "5× budget"
+msgstr "5× бюджета"
+
+msgid "Under 1×"
+msgstr "Меньше 1×"
+
+msgid "5× or more"
+msgstr "5× и больше"
+
+msgid "Season {n}"
+msgstr "Сезон {n}"
+
+msgid "vs season 1"
+msgstr "к 1-му сезону"
+
+msgid "Based on %(counter)s movie with a known budget of at least $1M and box-office revenue. Not adjusted for inflation; streaming releases and movies still in cinemas can read low."
+msgid_plural "Based on %(counter)s movies with a known budget of at least $1M and box-office revenue. Not adjusted for inflation; streaming releases and movies still in cinemas can read low."
+msgstr[0] "Основано на %(counter)s фильме с известным бюджетом от $1 млн и кассовыми сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё идут в кино, могут выглядеть скромнее."
+msgstr[1] "Основано на %(counter)s фильмах с известным бюджетом от $1 млн и кассовыми сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё идут в кино, могут выглядеть скромнее."
+msgstr[2] "Основано на %(counter)s фильмах с известным бюджетом от $1 млн и кассовыми сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё идут в кино, могут выглядеть скромнее."
+msgstr[3] "Основано на %(counter)s фильмах с известным бюджетом от $1 млн и кассовыми сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё идут в кино, могут выглядеть скромнее."
+
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
+
+msgid "A movie counts in every genre it belongs to, so each decade's shares add up to more than 100 percent. The ten most common genres."
+msgstr "Фильм учитывается в каждом своём жанре, поэтому доли за десятилетие в сумме дают больше 100 процентов. Десять самых частых жанров."
+
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
+
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)

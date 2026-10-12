@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static i18n %}
+{% load static i18n l10n tmdb_images dash_format %}
 
 {% block title %}{% translate "Theoria — Analytics" %}{% endblock %}
 
@@ -10,250 +10,602 @@
 {% endblock %}
 
 {% block content %}
-{% translate "Analytics" as analytics_title %}{% translate "Stats for nerds." as analytics_sub %}
+{% translate "Analytics" as analytics_title %}{% translate "The archive, measured: ratings, money, decades and the people behind them." as analytics_sub %}
 {% include "movies/_sheet_header.html" with title=analytics_title sub=analytics_sub only %}
 
-<div class="panel-grid">
-    <section class="panel is-wide" aria-labelledby="decade-h">
-        <div class="section-head">
-            <h2 id="decade-h">{% translate "Rating by decade" %}</h2>
-            <span class="section-note">{% translate "by decade" %}</span>
-        </div>
-        {% if movies_by_decade %}
-        <div class="chart-stage">
-            <canvas id="decade-chart" role="img" aria-label="{% translate "Average rating by decade, line chart" %}"></canvas>
-        </div>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col">{% translate "Decade" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th><th scope="col" class="num">{% translate "Total revenue" %}</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in movies_by_decade %}
-                    <tr>
-                        <th scope="row" class="mono">{{ row.decade }}</th>
-                        <td class="num" data-meter>{{ row.movie_count }}</td>
-                        <td class="num">{{ row.avg_rating|floatformat:"2u"|default:"—" }}</td>
-                        <td class="num">{{ row.total_revenue|default:"—" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
-        {% endif %}
-    </section>
-
-    <section class="panel is-wide" aria-labelledby="revenue-h">
-        <div class="section-head">
-            <h2 id="revenue-h">{% translate "Revenue by genre" %}</h2>
-            <span class="section-note">{% translate "by genre" %}</span>
-        </div>
-        {% if revenue_by_genre %}
-        <div class="chart-stage">
-            <canvas id="revenue-chart" role="img" aria-label="{% translate "Total revenue by genre, bar chart" %}"></canvas>
-        </div>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col">{% translate "Genre" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Total revenue" %}</th><th scope="col" class="num">{% translate "Avg / movie" %}</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in revenue_by_genre %}
-                    <tr>
-                        <th scope="row">{{ row.genre_name }}</th>
-                        <td class="num">{{ row.movie_count }}</td>
-                        <td class="num" data-meter>{{ row.total_revenue|default:"—" }}</td>
-                        <td class="num">{{ row.avg_revenue_per_movie|floatformat:0|default:"—" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
-        {% endif %}
-    </section>
-
-    <section class="panel is-wide" aria-labelledby="studio-revenue-h">
-        <div class="section-head">
-            <h2 id="studio-revenue-h">{% translate "Top studios by revenue" %}</h2>
-            <span class="section-note">{% translate "3+ movies" %}</span>
-        </div>
-        {% if top_studios_by_revenue %}
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col">{% translate "Studio" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Total revenue" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in top_studios_by_revenue %}
-                    <tr>
-                        <th scope="row"><a href="{% url 'movies:studio_detail' row.studio_slug %}">{{ row.studio_name }}</a></th>
-                        <td class="num">{{ row.movie_count }}</td>
-                        <td class="num" data-meter>{{ row.total_revenue|default:"—" }}</td>
-                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="empty">{% translate "No studios loaded yet. Run the pipeline to fill the warehouse." %}</p>
-        {% endif %}
-    </section>
-
-    <section class="panel is-wide" aria-labelledby="country-h">
-        <div class="section-head">
-            <h2 id="country-h">{% translate "Movies by production country" %}</h2>
-            <span class="section-note">{% translate "co-productions counted once each" %}</span>
-        </div>
-        {% if films_by_production_country %}
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col">{% translate "Country" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in films_by_production_country %}
-                    <tr>
-                        <th scope="row">{{ row.country_name }}</th>
-                        <td class="num" data-meter>{{ row.film_count }}</td>
-                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
-        {% endif %}
-    </section>
-
-    <section class="panel is-wide" aria-labelledby="series-decade-h">
-        <div class="section-head">
-            <h2 id="series-decade-h">{% translate "Shows by decade" %}</h2>
-            <span class="section-note">{% translate "by decade" %}</span>
-        </div>
-        {% if series_by_decade %}
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col">{% translate "Decade" %}</th><th scope="col" class="num">{% translate "Shows" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in series_by_decade %}
-                    <tr>
-                        <th scope="row" class="mono">{{ row.decade }}</th>
-                        <td class="num" data-meter>{{ row.series_count }}</td>
-                        <td class="num">{{ row.avg_rating|floatformat:"2u"|default:"—" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="empty">{% translate "No shows loaded yet. Run the pipeline to fill the warehouse." %}</p>
-        {% endif %}
-    </section>
-
-    <section class="panel is-wide" aria-labelledby="season-rating-h">
-        <div class="section-head">
-            <h2 id="season-rating-h">{% translate "Rating by season" %}</h2>
-            <span class="section-note">{% translate "does a show decline?" %}</span>
-        </div>
-        {% if episode_rating_by_season %}
-        <div class="chart-stage">
-            <canvas id="season-chart" role="img" aria-label="{% translate "Average episode rating by season number, line chart" %}"></canvas>
-        </div>
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col">{% translate "Season" %}</th><th scope="col" class="num">{% translate "Shows" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in episode_rating_by_season %}
-                    <tr>
-                        <th scope="row" class="mono">{{ row.season_number }}</th>
-                        <td class="num" data-meter>{{ row.show_count }}</td>
-                        <td class="num">{{ row.avg_rating|floatformat:"2u"|default:"—" }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="empty">{% translate "No episode ratings loaded yet. Run the pipeline to fill the warehouse." %}</p>
-        {% endif %}
-    </section>
-
-    <section class="panel is-wide" aria-labelledby="longest-running-h">
-        <div class="section-head">
-            <h2 id="longest-running-h">{% translate "Longest-running shows" %}</h2>
-            <span class="section-note">{% translate "by calendar span" %}</span>
-        </div>
-        {% if longest_running_series %}
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col">{% translate "Show" %}</th><th scope="col" class="num">{% translate "Years on air" %}</th><th scope="col" class="num">{% translate "Seasons" %}</th><th scope="col" class="num">{% translate "Episodes" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in longest_running_series %}
-                    <tr>
-                        <th scope="row"><a href="{% url 'movies:series_detail' row.series_slug %}">{{ row.series_name }}</a></th>
-                        <td class="num" data-meter>{{ row.years_on_air|default:"—" }}</td>
-                        <td class="num">{{ row.number_of_seasons|default:"—" }}</td>
-                        <td class="num">{{ row.number_of_episodes|default:"—" }}</td>
-                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="empty">{% translate "No shows loaded yet. Run the pipeline to fill the warehouse." %}</p>
-        {% endif %}
-    </section>
-
-    <section class="panel is-wide" aria-labelledby="networks-h">
-        <div class="section-head">
-            <h2 id="networks-h">{% translate "Top networks by series" %}</h2>
-            <span class="section-note">{% translate "3+ shows" %}</span>
-        </div>
-        {% if top_networks_by_series %}
-        <div class="table-wrap">
-            <table>
-                <thead>
-                    <tr><th scope="col">{% translate "Network" context "table column" %}</th><th scope="col" class="num">{% translate "Shows" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
-                </thead>
-                <tbody>
-                    {% for row in top_networks_by_series %}
-                    <tr>
-                        <th scope="row">{{ row.network_name }}</th>
-                        <td class="num" data-meter>{{ row.series_count }}</td>
-                        <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% else %}
-        <p class="empty">{% translate "No networks loaded yet. Run the pipeline to fill the warehouse." %}</p>
-        {% endif %}
-    </section>
-
+{% if kpis %}
+<div class="stats dash-kpis">
+    <div class="stat">
+        <span class="stat-value" data-count="{{ kpis.movie_count|unlocalize }}">{{ kpis.movie_count }}</span>
+        <span class="stat-label">{% translate "Movies" %}</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value" data-count="{{ kpis.series_count|unlocalize }}">{{ kpis.series_count }}</span>
+        <span class="stat-label">{% translate "Shows" %}</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value" data-count="{{ kpis.rated_episode_count|unlocalize }}">{{ kpis.rated_episode_count }}</span>
+        <span class="stat-label">{% translate "Rated episodes" %}</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value">★ <span data-count="{{ kpis.median_movie_rating|unlocalize }}" data-decimals="1">{{ kpis.median_movie_rating|floatformat:"1u" }}</span></span>
+        <span class="stat-label">{% translate "Median movie rating" %}</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value" data-count="{{ kpis.median_return_multiple|unlocalize }}" data-decimals="1" data-suffix="×">{{ kpis.median_return_multiple|floatformat:"1u" }}×</span>
+        <span class="stat-label">{% translate "Median return on budget" %}</span>
+    </div>
+    <div class="stat">
+        <span class="stat-value" data-count="{{ kpis.non_english_pct|unlocalize }}" data-decimals="1" data-suffix="%">{{ kpis.non_english_pct|floatformat:"1u" }}%</span>
+        <span class="stat-label">{% translate "Not in English" %}</span>
+    </div>
 </div>
+{% endif %}
+
+<nav class="chapters" aria-label="{% translate "Sections of this page" %}">
+    <ul>
+        <li><a href="#ratings">{% translate "Ratings" %}</a></li>
+        <li><a href="#money">{% translate "Money" %}</a></li>
+        <li><a href="#decades">{% translate "Decades" %}</a></li>
+        <li><a href="#origins">{% translate "Origins" %}</a></li>
+        <li><a href="#people">{% translate "People" %}</a></li>
+        <li><a href="#tv">{% translate "TV shows" %}</a></li>
+    </ul>
+</nav>
+
+{# ================================ Ratings ================================ #}
+<section class="chapter" id="ratings" aria-labelledby="ratings-h">
+    <header class="chapter-head">
+        <h2 id="ratings-h">{% translate "Ratings" %}</h2>
+        {% with f=quality.finding %}{% if f %}
+        <p class="finding">
+            {% if f.kind == "up" %}{% blocktranslate with show=f.series|floatformat:"1u" movie=f.movie|floatformat:"1u" gap=f.gap|floatformat:"1u" %}Shows are rated higher than movies: the typical show scores ★ <strong>{{ show }}</strong> against ★ <strong>{{ movie }}</strong> for a movie, {{ gap }} points apart.{% endblocktranslate %}
+            {% elif f.kind == "down" %}{% blocktranslate with show=f.series|floatformat:"1u" movie=f.movie|floatformat:"1u" gap=f.gap|floatformat:"1u" %}Movies are rated higher than shows: the typical movie scores ★ <strong>{{ movie }}</strong> against ★ <strong>{{ show }}</strong> for a show, {{ gap }} points apart.{% endblocktranslate %}
+            {% else %}{% blocktranslate with show=f.series|floatformat:"1u" movie=f.movie|floatformat:"1u" %}Movies and shows are rated about the same: ★ <strong>{{ movie }}</strong> for the typical movie, ★ <strong>{{ show }}</strong> for the typical show.{% endblocktranslate %}
+            {% endif %}
+        </p>
+        {% endif %}{% endwith %}
+    </header>
+
+    {% if quality.has_data %}
+    <div class="chapter-body">
+        <section class="panel span-8" aria-labelledby="rating-h">
+            <div class="section-head">
+                <h3 id="rating-h">{% translate "How movies and shows are rated" %}</h3>
+                <span class="section-note">{% translate "IMDb, by half point" %}</span>
+                <div class="seg" role="group" aria-label="{% translate "Show ratings for" %}">
+                    <button type="button" class="seg-btn" data-rating-kind="movie" aria-pressed="true">{% translate "Movies" %}</button>
+                    <button type="button" class="seg-btn" data-rating-kind="series" aria-pressed="false">{% translate "Shows" %}</button>
+                </div>
+            </div>
+            <div class="chart-stage">
+                <canvas id="rating-chart" data-chart="rating" role="img" aria-label="{% translate "Number of movies and shows at each IMDb rating, bar chart" %}"></canvas>
+            </div>
+            <p class="panel-caption">{% translate "Each bar counts the movies or shows whose rating falls in that half-point band; the dashed line marks the median." %}</p>
+            <details class="numbers">
+                <summary>{% translate "Show the numbers" %}</summary>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th scope="col">{% translate "Rating" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Shows" %}</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for row in quality.table %}
+                            <tr>
+                                <th scope="row" class="mono">{{ row.band|floatformat:"1u" }}</th>
+                                <td class="num">{{ row.movie }}</td>
+                                <td class="num">{{ row.series }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+
+        <section class="panel span-4" aria-labelledby="scores-h">
+            <div class="section-head">
+                <h3 id="scores-h">{% translate "Reading the scores" %}</h3>
+            </div>
+            <dl class="facts">
+                <div>
+                    <dt>{% translate "Median movie rating" %}</dt>
+                    <dd class="mono">★ {{ quality.movie_median|floatformat:"1u" }}</dd>
+                </div>
+                <div>
+                    <dt>{% translate "Median show rating" %}</dt>
+                    <dd class="mono">★ {{ quality.series_median|floatformat:"1u" }}</dd>
+                </div>
+                {% if quality.agreement is not None %}
+                <div>
+                    <dt>{% translate "IMDb and TMDB agree" %}</dt>
+                    <dd class="mono">{{ quality.agreement|floatformat:"2u" }}</dd>
+                    <dd class="fact-note">{% translate "How closely the two rating sources move together, from 0 (not at all) to 1 (identical), for movies with at least 50 TMDB votes." %}</dd>
+                </div>
+                {% endif %}
+            </dl>
+        </section>
+    </div>
+    {% else %}
+    <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
+    {% endif %}
+</section>
+
+{# ================================= Money ================================= #}
+<section class="chapter" id="money" aria-labelledby="money-h">
+    <header class="chapter-head">
+        <h2 id="money-h">{% translate "Money" %}</h2>
+        {% with f=money.finding %}{% if f %}
+        <p class="finding">{% blocktranslate with over=f.over_5x_pct|unlocalize under=f.under_1x_pct|unlocalize %}<strong>{{ over }}%</strong> of movies with a known budget returned five times it or more; only <strong>{{ under }}%</strong> earned less than they cost.{% endblocktranslate %}</p>
+        {% endif %}{% endwith %}
+        {% if money.has_data %}
+        <p class="chapter-note">{% blocktranslate count counter=money.movie_count %}Based on {{ counter }} movie with a known budget of at least $1M and box-office revenue. Not adjusted for inflation; streaming releases and movies still in cinemas can read low.{% plural %}Based on {{ counter }} movies with a known budget of at least $1M and box-office revenue. Not adjusted for inflation; streaming releases and movies still in cinemas can read low.{% endblocktranslate %}</p>
+        {% endif %}
+    </header>
+
+    {% if money.has_data %}
+    <div class="chapter-body">
+        <section class="panel span-7" aria-labelledby="scatter-h">
+            <div class="section-head">
+                <h3 id="scatter-h">{% translate "Budget and revenue" %}</h3>
+                <span class="section-note">{% translate "log scale" %}</span>
+            </div>
+            <div class="chart-stage is-tall">
+                <canvas id="scatter-chart" data-chart="scatter" data-movie-url="{% url 'movies:movie_detail' movie_slug='__slug__' %}" role="img" aria-label="{% translate "Budget against revenue for each movie, scatter chart" %}"></canvas>
+            </div>
+            <p class="panel-caption">{% translate "Each point is a movie. Above the lower dashed line it earned more than it cost; above the upper one, five times as much. Select a point to open the movie." %}</p>
+        </section>
+
+        <section class="panel span-5" aria-labelledby="bands-h">
+            <div class="section-head">
+                <h3 id="bands-h">{% translate "Return on budget by genre" %}</h3>
+                <span class="section-note">{% translate "30+ movies each" %}</span>
+            </div>
+            {% if money.bands %}
+            <div class="chart-stage is-rows" style="--rows: {{ money.bands.labels|length|unlocalize }}">
+                <canvas id="bands-chart" data-chart="bands" role="img" aria-label="{% translate "Share of each genre's movies by how much they returned on their budget, stacked bar chart" %}"></canvas>
+            </div>
+            <p class="panel-caption">{% translate "Share of each genre's movies in each return band, ordered by median return." %}</p>
+            <details class="numbers">
+                <summary>{% translate "Show the numbers" %}</summary>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th scope="col">{% translate "Genre" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Median return" %}</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for row in money.band_rows %}
+                            <tr>
+                                <th scope="row">{{ row.genre_name }}</th>
+                                <td class="num">{{ row.movie_count }}</td>
+                                <td class="num">{{ row.median_multiple|floatformat:"1u" }}×</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            {% else %}
+            <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
+            {% endif %}
+        </section>
+
+        <section class="panel span-8" aria-labelledby="studios-h">
+            <div class="section-head">
+                <h3 id="studios-h">{% translate "Studios with the most movies" %}</h3>
+                <span class="section-note">{% translate "5+ movies" %}</span>
+            </div>
+            {% if money.studios %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th scope="col">{% translate "Studio" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Median return" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th><th scope="col" class="num">{% translate "Total revenue" %}</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in money.studios %}
+                        <tr>
+                            <th scope="row"><a href="{% url 'movies:studio_detail' row.studio_slug %}">{{ row.studio_name }}</a></th>
+                            <td class="num" data-meter>{{ row.movie_count }}</td>
+                            <td class="num">{{ row.median_multiple|floatformat:"1u" }}×</td>
+                            <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
+                            <td class="num">{{ row.total_revenue|compact_money }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty">{% translate "No studios loaded yet. Run the pipeline to fill the warehouse." %}</p>
+            {% endif %}
+        </section>
+
+        <section class="panel span-4" aria-labelledby="extremes-h">
+            <div class="section-head">
+                <h3 id="extremes-h">{% translate "Two extremes" %}</h3>
+            </div>
+            <ul class="callouts">
+                {% with c=money.best %}{% if c %}
+                <li class="callout">
+                    {% if c.poster_path %}<img class="callout-poster" src="{{ c.poster_path|tmdb_image:'w185' }}" alt="" width="72" height="108" loading="lazy">{% endif %}
+                    <div class="callout-text">
+                        <a class="callout-title" href="{% url 'movies:movie_detail' c.slug %}">{{ c.title }}</a>
+                        <span class="callout-what">{% translate "Biggest return" %} · {{ c.year|unlocalize }}</span>
+                        <span class="callout-figures mono">{{ c.budget|compact_money }} → {{ c.revenue|compact_money }} · {{ c.multiple|floatformat:"0u" }}×</span>
+                    </div>
+                </li>
+                {% endif %}{% endwith %}
+                {% with c=money.priciest %}{% if c %}
+                <li class="callout">
+                    {% if c.poster_path %}<img class="callout-poster" src="{{ c.poster_path|tmdb_image:'w185' }}" alt="" width="72" height="108" loading="lazy">{% endif %}
+                    <div class="callout-text">
+                        <a class="callout-title" href="{% url 'movies:movie_detail' c.slug %}">{{ c.title }}</a>
+                        <span class="callout-what">{% translate "Most expensive" %} · {{ c.year|unlocalize }}</span>
+                        <span class="callout-figures mono">{{ c.budget|compact_money }} → {{ c.revenue|compact_money }} · {{ c.multiple|floatformat:"1u" }}×</span>
+                    </div>
+                </li>
+                {% endif %}{% endwith %}
+            </ul>
+        </section>
+    </div>
+    {% else %}
+    <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
+    {% endif %}
+</section>
+
+{# ================================ Decades ================================ #}
+<section class="chapter" id="decades" aria-labelledby="decades-h">
+    <header class="chapter-head">
+        <h2 id="decades-h">{% translate "Decades" %}</h2>
+        {% with f=time.finding %}{% if f %}
+        <p class="finding">
+            {% if f.kind == "up" %}{% blocktranslate with minutes=f.minutes|unlocalize last=f.last_decade|unlocalize first=f.first_decade|unlocalize %}The typical movie of the {{ last }}s runs <strong>{{ minutes }} minutes longer</strong> than one from the {{ first }}s.{% endblocktranslate %}
+            {% elif f.kind == "down" %}{% blocktranslate with minutes=f.minutes|unlocalize last=f.last_decade|unlocalize first=f.first_decade|unlocalize %}The typical movie of the {{ last }}s runs <strong>{{ minutes }} minutes shorter</strong> than one from the {{ first }}s.{% endblocktranslate %}
+            {% else %}{% blocktranslate with last=f.last_decade|unlocalize first=f.first_decade|unlocalize %}The typical movie runs <strong>about the same length</strong> in the {{ last }}s as in the {{ first }}s.{% endblocktranslate %}
+            {% endif %}
+        </p>
+        {% endif %}{% endwith %}
+        {% if time.has_data %}<p class="chapter-note">{% translate "Each decade holds roughly the same number of movies by design, so these charts compare shares and typical values, never totals." %}</p>{% endif %}
+    </header>
+
+    {% if time.has_data %}
+    <div class="chapter-body">
+        {% if time.runtime %}
+        <section class="panel span-6" aria-labelledby="runtime-h">
+            <div class="section-head">
+                <h3 id="runtime-h">{% translate "Typical running time" %}</h3>
+                <span class="section-note">{% translate "median, minutes" %}</span>
+            </div>
+            <div class="chart-stage is-short">
+                <canvas id="runtime-chart" data-chart="runtime" role="img" aria-label="{% translate "Median running time by decade, line chart" %}"></canvas>
+            </div>
+            <details class="numbers">
+                <summary>{% translate "Show the numbers" %}</summary>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th scope="col">{% translate "Decade" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Median minutes" %}</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for row in time.runtime_table %}
+                            <tr>
+                                <th scope="row" class="mono">{{ row.decade|unlocalize }}</th>
+                                <td class="num">{{ row.movie_count }}</td>
+                                <td class="num">{{ row.median_runtime|floatformat:"0u" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+        {% endif %}
+
+        {% if time.non_english %}
+        <section class="panel span-6" aria-labelledby="nonenglish-h">
+            <div class="section-head">
+                <h3 id="nonenglish-h">{% translate "Movies not in English" %}</h3>
+                <span class="section-note">{% translate "share of each decade" %}</span>
+            </div>
+            <div class="chart-stage is-short">
+                <canvas id="nonenglish-chart" data-chart="nonenglish" role="img" aria-label="{% translate "Share of movies not in English by decade, bar chart" %}"></canvas>
+            </div>
+            <p class="panel-caption">{% translate "This reflects how the archive was assembled as much as how cinema changed." %}</p>
+        </section>
+        {% endif %}
+
+        {% if time.heatmap %}
+        <section class="panel span-12" aria-labelledby="genremix-h">
+            <div class="section-head">
+                <h3 id="genremix-h">{% translate "Genre mix" %}</h3>
+                <span class="section-note">{% translate "share of each decade's movies" %}</span>
+            </div>
+            <div class="table-wrap">
+                <table class="heat">
+                    <thead>
+                        <tr>
+                            <th scope="col">{% translate "Genre" %}</th>
+                            {% for decade in time.heatmap.decades %}
+                            <th scope="col" class="num">{% blocktranslate with d=decade|unlocalize %}{{ d }}s{% endblocktranslate %}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in time.heatmap.rows %}
+                        <tr>
+                            <th scope="row">{{ row.name }}</th>
+                            {% for cell in row.cells %}
+                            <td class="num heat-cell" style="--v: {{ cell.v }}">{% if cell.pct is not None %}{{ cell.pct|floatformat:"0u" }}%{% else %}—{% endif %}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="panel-caption">{% translate "A movie counts in every genre it belongs to, so each decade's shares add up to more than 100 percent. The ten most common genres." %}</p>
+        </section>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
+    {% endif %}
+</section>
+
+{# ================================ Origins ================================ #}
+<section class="chapter" id="origins" aria-labelledby="origins-h">
+    <header class="chapter-head">
+        <h2 id="origins-h">{% translate "Origins" %}</h2>
+        {% with f=world.finding %}{% if f %}
+        <p class="finding">{% blocktranslate with english=f.english_pct|unlocalize country=f.country pct=f.country_pct|unlocalize %}<strong>{{ english }}%</strong> of the archive’s movies are in English, and {{ country }} took part in <strong>{{ pct }}%</strong> of them.{% endblocktranslate %}</p>
+        {% endif %}{% endwith %}
+        {% if world.has_data %}<p class="chapter-note">{% translate "This describes the archive, which leans heavily towards English-language movies, not cinema worldwide." %}</p>{% endif %}
+    </header>
+
+    {% if world.has_data %}
+    <div class="chapter-body">
+        <section class="panel span-7" aria-labelledby="country-h">
+            <div class="section-head">
+                <h3 id="country-h">{% translate "Production countries" %}</h3>
+                <span class="section-note">{% translate "co-productions counted once each" %}</span>
+            </div>
+            {% if world.countries %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th scope="col">{% translate "Country" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Share" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in world.countries %}
+                        <tr>
+                            <th scope="row">{{ row.country_name }}</th>
+                            <td class="num" data-meter>{{ row.film_count }}</td>
+                            <td class="num">{{ row.film_share_pct|floatformat:"1u" }}%</td>
+                            <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
+            {% endif %}
+        </section>
+
+        <section class="panel span-5" aria-labelledby="language-h">
+            <div class="section-head">
+                <h3 id="language-h">{% translate "Original language" %}</h3>
+            </div>
+            {% if world.languages %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th scope="col">{% translate "Language" context "table column" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Share" %}</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in world.languages %}
+                        <tr>
+                            <th scope="row">{% if row.name %}{{ row.name|capfirst }}{% else %}{% translate "Other languages" %}{% endif %}</th>
+                            <td class="num" data-meter>{{ row.count }}</td>
+                            <td class="num">{{ row.share|floatformat:"1u" }}%</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
+            {% endif %}
+        </section>
+    </div>
+    {% else %}
+    <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
+    {% endif %}
+</section>
+
+{# ================================= People ================================ #}
+<section class="chapter" id="people" aria-labelledby="people-h">
+    <header class="chapter-head">
+        <h2 id="people-h">{% translate "People" %}</h2>
+        {% with f=people.finding %}{% if f %}
+        <p class="finding">{% blocktranslate with name=f.name rating=f.rating|floatformat:"2u" count=f.movie_count|unlocalize %}<strong>{{ name }}</strong> is the highest-rated director with at least four movies here: ★ {{ rating }} across {{ count }} movies.{% endblocktranslate %}</p>
+        {% endif %}{% endwith %}
+    </header>
+
+    {% if people.has_data %}
+    <div class="chapter-body">
+        <section class="panel span-5" aria-labelledby="directors-h">
+            <div class="section-head">
+                <h3 id="directors-h">{% translate "Top-rated directors" %}</h3>
+                <span class="section-note">{% translate "4+ movies" %}</span>
+            </div>
+            {% if people.directors %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th scope="col">{% translate "Director" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in people.directors %}
+                        <tr>
+                            <th scope="row"><a href="{% url 'movies:director_detail' row.director_slug %}">{{ row.director_name }}</a></th>
+                            <td class="num">{{ row.movie_count }}</td>
+                            <td class="num">{% if row.avg_rating %}★ {{ row.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="panel span-7" aria-labelledby="partners-h">
+            <div class="section-head">
+                <h3 id="partners-h">{% translate "Recurring partnerships" %}</h3>
+                <span class="section-note">{% translate "3+ movies together" %}</span>
+            </div>
+            {% if people.partners %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th scope="col">{% translate "Director" %}</th><th scope="col">{% translate "Worked with" %}</th><th scope="col">{% translate "Role" %}</th><th scope="col" class="num">{% translate "Movies" %}</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in people.partners %}
+                        <tr>
+                            <th scope="row"><a href="{% url 'movies:director_detail' row.director_slug %}">{{ row.director_name }}</a></th>
+                            <td><a href="{% url 'movies:person_detail' row.collaborator_slug %}">{{ row.collaborator_name }}</a></td>
+                            <td>{{ row.craft_label }}</td>
+                            <td class="num" data-meter>{{ row.films_together }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </section>
+    </div>
+    {% else %}
+    <p class="empty">{% translate "No movies loaded yet. Run the pipeline to fill the warehouse." %}</p>
+    {% endif %}
+</section>
+
+{# ================================== TV =================================== #}
+<section class="chapter" id="tv" aria-labelledby="tv-h">
+    <header class="chapter-head">
+        <h2 id="tv-h">{% translate "TV shows" %}</h2>
+        {% with f=tv.finding %}{% if f %}
+        <p class="finding">
+            {% if f.kind == "holds" %}{% blocktranslate with last=f.last|unlocalize %}Shows hold their first-season rating <strong>all the way to season {{ last }}</strong>.{% endblocktranslate %}
+            {% elif f.kind == "slips" %}{% blocktranslate with hold=f.hold|unlocalize size=f.size|floatformat:"1u" first=f.first|unlocalize last=f.last|unlocalize %}Shows hold their first-season rating <strong>through season {{ hold }}</strong>, then slip about <strong>{{ size }} points</strong> across seasons {{ first }}–{{ last }}.{% endblocktranslate %}
+            {% else %}{% blocktranslate with hold=f.hold|unlocalize size=f.size|floatformat:"1u" first=f.first|unlocalize last=f.last|unlocalize %}Shows hold their first-season rating <strong>through season {{ hold }}</strong>, then climb about <strong>{{ size }} points</strong> across seasons {{ first }}–{{ last }}.{% endblocktranslate %}
+            {% endif %}
+        </p>
+        {% endif %}{% endwith %}
+    </header>
+
+    {% if tv.has_data %}
+    <div class="chapter-body">
+        {% if tv.seasons %}
+        <section class="panel span-7" aria-labelledby="season-h">
+            <div class="section-head">
+                <h3 id="season-h">{% translate "Rating by season, against season 1" %}</h3>
+                <span class="section-note">{% translate "15+ shows per season" %}</span>
+            </div>
+            <div class="chart-stage">
+                <canvas id="season-chart" data-chart="season" role="img" aria-label="{% translate "Change in average episode rating from season 1, by season number, line chart" %}"></canvas>
+            </div>
+            <p class="panel-caption">{% translate "Each show is compared with its own first season, so shows cancelled early don’t flatter the later seasons." %}</p>
+            <details class="numbers">
+                <summary>{% translate "Show the numbers" %}</summary>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th scope="col">{% translate "Season" %}</th><th scope="col" class="num">{% translate "Shows" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th><th scope="col" class="num">{% translate "Change" %}</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for row in tv.season_table %}
+                            <tr>
+                                <th scope="row" class="mono">{{ row.season }}</th>
+                                <td class="num">{{ row.shows }}</td>
+                                <td class="num">{{ row.rating|floatformat:"2u" }}</td>
+                                <td class="num">{{ row.change|floatformat:"2u" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+        </section>
+        {% endif %}
+
+        <div class="span-5 stack">
+        <section class="panel" aria-labelledby="status-h">
+            <div class="section-head">
+                <h3 id="status-h">{% translate "Rating by show status" %}</h3>
+                <span class="section-note">{% translate "median" %}</span>
+            </div>
+            {% if tv.status %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th scope="col">{% translate "Status" %}</th><th scope="col" class="num">{% translate "Shows" %}</th><th scope="col" class="num">{% translate "Median rating" %}</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in tv.status %}
+                        <tr>
+                            <th scope="row">{{ row.status_label }}</th>
+                            <td class="num">{{ row.series_count }}</td>
+                            <td class="num">★ {{ row.median_rating|floatformat:"2u" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty">{% translate "No shows loaded yet. Run the pipeline to fill the warehouse." %}</p>
+            {% endif %}
+        </section>
+
+        <section class="panel" aria-labelledby="networks-h">
+            <div class="section-head">
+                <h3 id="networks-h">{% translate "Networks with the most shows" %}</h3>
+                <span class="section-note">{% translate "5+ rated shows" %}</span>
+            </div>
+            {% if tv.networks %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th scope="col">{% translate "Network" context "table column" %}</th><th scope="col" class="num">{% translate "Shows" %}</th><th scope="col" class="num">{% translate "Median rating" %}</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in tv.networks %}
+                        <tr>
+                            <th scope="row">{{ row.network_name }}</th>
+                            <td class="num" data-meter>{{ row.series_count }}</td>
+                            <td class="num">★ {{ row.median_rating|floatformat:"2u" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="empty">{% translate "No networks loaded yet. Run the pipeline to fill the warehouse." %}</p>
+            {% endif %}
+        </section>
+        </div>
+    </div>
+    {% else %}
+    <p class="empty">{% translate "No shows loaded yet. Run the pipeline to fill the warehouse." %}</p>
+    {% endif %}
+</section>
 {% endblock %}
 
 {% block extra_js %}
-{{ decade_labels|json_script:"decade-labels" }}
-{{ decade_avg_ratings|json_script:"decade-avg-ratings" }}
-{{ genre_labels|json_script:"genre-labels" }}
-{{ genre_revenue|json_script:"genre-revenue" }}
-{{ season_labels|json_script:"season-labels" }}
-{{ season_avg_ratings|json_script:"season-avg-ratings" }}
+{% if quality.histogram %}{{ quality.histogram|json_script:"rating-data" }}{{ quality.movie_median|json_script:"rating-median-movie" }}{{ quality.series_median|json_script:"rating-median-series" }}{% endif %}
+{% if money.scatter %}{{ money.scatter|json_script:"scatter-data" }}{% endif %}
+{% if money.bands %}{{ money.bands|json_script:"bands-data" }}{% endif %}
+{% if time.runtime %}{{ time.runtime|json_script:"runtime-data" }}{% endif %}
+{% if time.non_english %}{{ time.non_english|json_script:"nonenglish-data" }}{% endif %}
+{% if tv.seasons %}{{ tv.seasons|json_script:"season-data" }}{% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script src="{% static 'js/analytics.js' %}"></script>

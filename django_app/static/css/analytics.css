@@ -1,49 +1,466 @@
 /* Theoria — Analytics dashboard only.
-   Adds the panel grid and chart stage. Per the contract in theoria.css, this
+   Adds the chapter layout, the sticky chapter nav, the chart stages and the
+   few components the dashboard needs. Per the contract in theoria.css, this
    file only ADDS components; it never restyles a shared one. Tokens, tables,
-   meters, headings and empty states all come from theoria.css unchanged. */
+   meters, the stat row, headings and empty states all come from theoria.css
+   unchanged.
 
-.panel-grid {
+   Lime stays the measurement mark: the measured series in a chart, the
+   caliper tick on a figure, the active chapter rule, the strength of a heatmap
+   cell. Nothing here uses it as decoration. */
+
+/* --- Smooth chapter jumps ---------------------------------------------------
+   Only for readers who haven't asked for less motion, and only on this page. */
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(body.page-analytics) {
+    scroll-behavior: smooth;
+  }
+}
+
+/* --- Headline figures -------------------------------------------------------
+   The shared .stats row, laid out as a six-up grid rather than a wrapping flex
+   row, so the figures line up with the chapters below. */
+
+.dash-kpis {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-7) var(--space-8);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-6);
+  margin-top: var(--space-7);
+}
+
+/* --- Chapter nav ------------------------------------------------------------
+   A plain row of anchors that sticks under the browser top while a chapter is
+   read. The site header slides away on scroll-down and returns on scroll-up;
+   when it returns it floats over this row, which is fine -- same page, one
+   instrument at a time. Opaque, not frosted: charts scroll underneath. */
+
+.chapters {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin-top: var(--space-7);
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+.chapters ul {
+  display: flex;
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.chapters ul::-webkit-scrollbar {
+  display: none;
+}
+
+.chapters a {
+  position: relative;
+  display: block;
+  padding: var(--space-4) 0;
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: var(--ink-muted);
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.chapters a:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+/* The same lime rule as the main nav's current page. */
+.chapters a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 3px;
+  background: var(--lime);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur) var(--ease);
+}
+
+.chapters a[aria-current="true"] {
+  color: var(--ink);
+}
+
+.chapters a[aria-current="true"]::after {
+  transform: scaleX(1);
+}
+
+/* --- Chapters -------------------------------------------------------------- */
+
+.chapter {
+  margin-top: var(--space-9);
+  /* On top of html's scroll-padding-top, which clears the site header: this
+     clears the sticky chapter row too. */
+  scroll-margin-top: 3.5rem;
+}
+
+.chapter-head h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-stretch: 118%;
+  font-size: var(--text-xl);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+}
+
+/* The chapter's one-sentence finding: computed from the data, so it is set as
+   the lead of the section, not as a caption. The figures it names carry the
+   lime wash -- the measurement mark -- behind them. */
+.finding {
+  margin-top: var(--space-4);
+  max-width: 46ch;
+  font-size: var(--text-lg);
+  line-height: 1.35;
+  text-wrap: balance;
+  color: var(--ink);
+}
+
+.finding strong {
+  font-weight: 600;
+  box-shadow: inset 0 -0.4em 0 var(--lime-wash);
+}
+
+.chapter-note {
+  margin-top: var(--space-3);
+  max-width: 68ch;
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+}
+
+.chapter-body {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-7);
+  margin-top: var(--space-7);
   align-items: start;
 }
 
-/* The two charted panels get the full width — a chart needs the horizontal
-   room far more than a name/number table does. */
-.panel.is-wide {
-  grid-column: 1 / -1;
+.span-4 { grid-column: span 4; }
+.span-5 { grid-column: span 5; }
+.span-6 { grid-column: span 6; }
+.span-7 { grid-column: span 7; }
+.span-8 { grid-column: span 8; }
+.span-12 { grid-column: 1 / -1; }
+
+/* Two panels sharing one grid column. */
+.stack {
+  display: grid;
+  gap: var(--space-7);
+  align-content: start;
+  min-width: 0;
 }
 
 .panel {
   min-width: 0; /* lets a wide table scroll instead of blowing out the grid */
 }
 
+/* The shared .section-head styles its h2; panels inside a chapter use h3. */
+.section-head h3 {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+
+.panel-caption {
+  margin-top: var(--space-3);
+  max-width: 68ch;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+/* --- Chart stages ---------------------------------------------------------- */
+
 .chart-stage {
+  position: relative;
   height: 280px;
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-3);
 }
 
-/* Long unbounded results (collaborations, per-year trends) scroll in place
-   rather than making the page endless. The header stays put while they do. */
-.table-wrap.is-scroll {
-  max-height: 340px;
-  overflow-y: auto;
+.chart-stage.is-tall {
+  height: 400px;
 }
 
-.table-wrap.is-scroll thead th {
+.chart-stage.is-short {
+  height: 220px;
+}
+
+/* Horizontal bars: the height follows the number of rows (set from the data
+   as --rows), so ten genres and fifteen genres both get the same bar weight. */
+.chart-stage.is-rows {
+  height: calc(var(--rows, 10) * 28px + 72px);
+}
+
+/* --- Segmented control -----------------------------------------------------
+   Two or three mutually exclusive choices that change what a chart shows.
+   Real buttons with aria-pressed, so it works with a keyboard and a screen
+   reader; the selected one is inverted (ink on paper), not lime, because
+   selection is not a measurement. */
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.seg-btn {
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  background: transparent;
+  border: none;
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.seg-btn:hover {
+  color: var(--ink);
+}
+
+.seg-btn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* --- "Show the numbers" ----------------------------------------------------
+   The table behind a chart, closed by default so the chart and its own data
+   are never both on screen at once. A native <details>: no script. */
+
+details.numbers {
+  margin-top: var(--space-4);
+  border-top: var(--hairline);
+}
+
+details.numbers > summary {
+  padding: var(--space-3) 0;
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+details.numbers > summary:hover {
+  color: var(--ink);
+}
+
+details.numbers[open] > summary {
+  color: var(--ink);
+}
+
+/* --- Facts list ------------------------------------------------------------ */
+
+.facts {
+  margin: 0;
+}
+
+.facts > div {
+  padding: var(--space-4) 0;
+  border-bottom: var(--hairline);
+}
+
+.facts dt {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.facts dd {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.facts dd.fact-note {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+/* --- Callouts: two movies with the figures that earned them a place -------- */
+
+.callouts {
+  display: grid;
+  gap: var(--space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.callout {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.callout-poster {
+  display: block;
+  width: 72px;
+  height: 108px;
+  object-fit: cover;
+  background: var(--sheet-2);
+  border: var(--hairline);
+  border-radius: var(--radius);
+}
+
+.callout-text > span {
+  display: block;
+}
+
+.callout-title {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.callout-what {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.callout-figures {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* --- Genre-mix heatmap -----------------------------------------------------
+   A real table, shaded by a custom property each cell carries (--v, 0 to 1,
+   the cell's share relative to the busiest cell). The printed percentage is
+   the value; the lime only helps the eye find the large ones. The ceiling is
+   lower on dark so the light text keeps its contrast on the strongest cell. */
+
+.heat {
+  --heat-max: 62%;
+}
+
+[data-theme="dark"] .heat {
+  --heat-max: 34%;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .heat {
+    --heat-max: 34%;
+  }
+}
+
+.heat th.num,
+.heat td.num {
+  text-align: center;
+}
+
+/* "1970s" is a decade, not a label: the shared header's uppercase would make it
+   "1970S". */
+.heat thead th.num {
+  text-transform: none;
+  letter-spacing: 0.04em;
+}
+
+.heat tbody th[scope="row"] {
   position: sticky;
-  top: 0;
+  left: 0;
   z-index: 1;
+  background: var(--paper);
+  white-space: nowrap;
+}
+
+.heat-cell {
+  min-width: 3.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--lime) calc(var(--v, 0) * var(--heat-max)), transparent);
+}
+
+/* --- Narrow screens -------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .dash-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {
-  .panel-grid {
+  .chapter-body {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  .span-4,
+  .span-5,
+  .span-6,
+  .span-7,
+  .span-8,
+  .span-12 {
+    grid-column: 1 / -1;
   }
 
   .chart-stage {
-    height: 220px;
+    height: 240px;
+  }
+
+  .chart-stage.is-tall {
+    height: 320px;
+  }
+
+  .chart-stage.is-short {
+    height: 200px;
+  }
+
+  .chart-stage.is-rows {
+    height: calc(var(--rows, 10) * 26px + 72px);
+  }
+
+  .finding {
+    font-size: var(--text-md);
+  }
+
+  .chapter-head h2 {
+    font-size: var(--text-lg);
+  }
+}
+
+@media (max-width: 520px) {
+  .dash-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chapters a,
+  .chapters a::after,
+  .seg-btn {
+    transition: none;
   }
 }

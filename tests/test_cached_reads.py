@@ -188,16 +188,9 @@ def test_the_page_still_renders_when_the_cache_is_down():
 
 
 def _dashboard_rows():
-    return {
-        "revenue_by_genre.sql": [{"genre_name": "Action", "movie_count": 3, "total_revenue": Decimal("1000")}],
-        "movies_by_decade.sql": [{"decade": 2020, "avg_rating": Decimal("7.5")}],
-        "top_studios_by_revenue.sql": [],
-        "films_by_production_country.sql": [{"country_name": "Japan", "film_count": 7, "avg_rating": Decimal("7.4")}],
-        "series_by_decade.sql": [],
-        "episode_rating_by_season.sql": [],
-        "longest_running_series.sql": [],
-        "top_networks_by_series.sql": [],
-    }
+    from tests.dashboard_fixtures import full_rows
+
+    return full_rows()
 
 
 def _russian_only(mapping):
@@ -220,12 +213,12 @@ def test_a_second_dashboard_request_runs_no_sql():
     with p1, p2, p3:
         client = _signed_in_client()
         first = client.get("/analytics/")
-        assert run_query.call_count == 8
+        assert run_query.call_count == 15
         second = client.get("/analytics/")
     assert first.status_code == second.status_code == 200
-    assert run_query.call_count == 8  # the hit ran nothing
-    assert first["Server-Timing"] == 'cache;desc="dashboard_rows=miss"'
-    assert second["Server-Timing"] == 'cache;desc="dashboard_rows=hit"'
+    assert run_query.call_count == 15  # the hit ran nothing
+    assert first["Server-Timing"] == 'cache;desc="analytics_dashboard=miss"'
+    assert second["Server-Timing"] == 'cache;desc="analytics_dashboard=hit"'
 
 
 def test_dashboard_translation_never_leaks_into_the_cached_rows():
@@ -242,8 +235,8 @@ def test_dashboard_translation_never_leaks_into_the_cached_rows():
     assert "боевик" in ru_first and "Япония" in ru_first
     assert "Action" in en and "боевик" not in en and "Япония" not in en
     assert "боевик" in ru_again
-    assert raw["revenue_by_genre.sql"][0]["genre_name"] == "Action"  # the cached copy stays English
-    assert run_query.call_count == 8  # one build served all three languages
+    assert raw["return_bands_by_genre.sql"][0]["genre_name"] == "Action"  # the cached copy stays English
+    assert run_query.call_count == 15  # one build served all three languages
 
 
 def test_dashboard_still_requires_sign_in():
@@ -262,7 +255,7 @@ def test_dashboard_renders_when_the_cache_is_down():
     with p1, p2, p3, patch.object(datacache, "cache", broken):
         response = _signed_in_client().get("/analytics/")
     assert response.status_code == 200
-    assert run_query.call_count == 8
+    assert run_query.call_count == 15
 
 
 # --- Genre choice lists and labels (Task 117) ---------------------------------------

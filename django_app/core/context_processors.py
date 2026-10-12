@@ -67,5 +67,25 @@ def js_strings(request):
             "compact B": _("B"),
             "compact M": _("M"),
             "compact K": _("K"),
+            # Analytics dashboard charts (Task 133). "{count}" and friends are
+            # placeholders analytics.js fills in, so a translation keeps them.
+            "Movies": _("Movies"),
+            "Shows": _("Shows"),
+            "Movies: {count}": _("Movies: {count}"),
+            "Shows: {count}": _("Shows: {count}"),
+            "Median": _("Median"),
+            "Median minutes": _("Median minutes"),
+            "IMDb rating": _("IMDb rating"),
+            "Budget": _("Budget"),
+            "Revenue": _("Revenue"),
+            "Break-even": _("Break-even"),
+            "5× budget": _("5× budget"),
+            "Under 1×": _("Under 1×"),
+            "5× or more": _("5× or more"),
+            "{decade}s": _("{decade}s"),
+            "Not in English": _("Not in English"),
+            "Season": _("Season"),
+            "Season {n}": _("Season {n}"),
+            "vs season 1": _("vs season 1"),
         }
     }

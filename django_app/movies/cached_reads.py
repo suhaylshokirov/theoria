@@ -83,9 +83,9 @@ def build_home_stats():
 def build_home_decades():
     """Films released and their average IMDb rating, per decade of release.
 
-    The same figures as the dashboard's movies_by_decade panel, kept here as an
-    ORM read so the home page doesn't pay for all eight dashboard queries on a
-    cold cache. Each bar's height is a share of the tallest decade, worked out
+    Kept as a small ORM read (the dashboard reads the warehouse through its own
+    SQL files) so the home page doesn't pay for all of the dashboard's queries on
+    a cold cache. Each bar's height is a share of the tallest decade, worked out
     here so the template only has to print it.
     """
     rows = list(

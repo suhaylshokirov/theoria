@@ -696,7 +696,7 @@ their own.
 
 ```
 03:12  nightly loads Neon ──▶ publishes data_version = 2026-10-07.1791376920
-03:13  warm_cache builds     home_shelves:s1:2026-10-07.1791376920:ru, dashboard_rows:s1:…, …
+03:13  warm_cache builds     home_shelves:s1:2026-10-07.1791376920:ru, analytics_dashboard:s1:…, …
 09:00  first visitor reads   home_shelves:s1:2026-10-07.1791376920:ru ──▶ hit, Neon never woken
 ```
 
@@ -747,7 +747,7 @@ latency is deliberately not claimed from a laptop):
 |---|---|---|---|
 | Home stats / mosaic | language-free | 8 queries for the page | 0 |
 | Home shelves | language | (in the 8) | 0 |
-| Analytics dashboard rows | language-free | 10 | 0 |
+| Analytics dashboard rows | language-free | 15 | 0 |
 | Genre choices on `/movies/`, `/tv/` | kind | 3–4 | 2 (the page and its count) |
 | Genre / country labels | language | 1–2 per translated page | 0 |
 | A show's episode list | show + language, rendered HTML | 11 | 9, and ~40% less render time |
@@ -872,12 +872,27 @@ in `settings.py` with a comment explaining why, rather than worked around with a
 surrogate key that doesn't exist in the table.
 
 The **analytics dashboard** (`analytics/views.py`) takes a different approach from the `movies`
-app: instead of expressing its ten queries through the ORM, it reads the `.sql` files in
+app: instead of expressing its fifteen queries through the ORM, it reads the `.sql` files in
 `warehouse/queries/` directly and executes them via a raw cursor. This avoids maintaining the same
 logic twice (once in `.sql`, once as ORM query-building) for queries — like the multi-CTE
-director/craft partnership join — that are naturally SQL-shaped. Every dashboard query carries an
-explicit `LIMIT` (§2.1's corpus-growth lesson: an unbounded query that was harmless at 112 films
-returned 1,304 rows into a fixed-height panel once the catalog reached 1,215).
+director/craft partnership join — that are naturally SQL-shaped. Every query is bounded, by a
+`LIMIT` or by a floor (§2.1's corpus-growth lesson: an unbounded query that was harmless at 112
+films returned 1,304 rows into a fixed-height panel once the catalog reached 1,215).
+
+Task 133 reshaped the page from eight flat panels into six chapters — ratings, money, decades,
+origins, people, TV shows — each opening with a one-sentence *finding* computed from the data.
+`analytics/insights.py` is the pure-Python layer between the cached rows and the template: it
+reshapes rows for the charts and works out the numbers behind each finding (the template owns the
+words, so each reads naturally in en/ru/uz); a finding is `None`, and the sentence is simply
+absent, when the data is too thin to state one. The measurement rules live in the `.sql` headers
+and are worth knowing before adding a panel: money figures use only movies with a budget of at
+least $1M and non-zero revenue (TMDB stores "unknown" as 0); decade charts drop any decade with
+fewer than 20 movies (the archive holds one 1930s movie); a season-by-season rating is measured
+against each show's own first season, because averaging raw season ratings is survivorship bias
+(only good shows reach season 15); and a "flop" is deliberately not computed, since box-office data
+cannot tell a flop from a streaming release. The cached dict changed shape, so its cache entry was
+renamed (`analytics_dashboard`) — a key outlives a deploy and would otherwise serve the old shape
+to the new view until the next data load.
 
 ### 6.1 Reading translated text (Task 94)
 

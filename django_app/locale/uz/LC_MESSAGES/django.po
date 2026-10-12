@@ -2207,3 +2207,305 @@ msgstr "fasllar"
 #, python-format
 msgid "Average IMDb rating %(value)s out of 10"
 msgstr "Oʻrtacha IMDb reytingi: 10 dan %(value)s"
+
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
+
+msgid "The archive, measured: ratings, money, decades and the people behind them."
+msgstr "Arxiv raqamlarda: reytinglar, pul, oʻn yilliklar va kadr ortidagi odamlar."
+
+msgid "Median movie rating"
+msgstr "Filmlarning median reytingi"
+
+msgid "Median return on budget"
+msgstr "Byudjetning median qaytimi"
+
+msgid "Not in English"
+msgstr "Ingliz tilida emas"
+
+msgid "Sections of this page"
+msgstr "Sahifa boʻlimlari"
+
+msgid "Ratings"
+msgstr "Reytinglar"
+
+msgid "Money"
+msgstr "Pul"
+
+msgid "Decades"
+msgstr "Oʻn yilliklar"
+
+msgid "Origins"
+msgstr "Kelib chiqishi"
+
+msgid "TV shows"
+msgstr "Seriallar"
+
+msgid "How movies and shows are rated"
+msgstr "Film va seriallar qanday baholangan"
+
+msgid "IMDb, by half point"
+msgstr "IMDb, yarim ball boʻyicha"
+
+msgid "Show ratings for"
+msgstr "Reytinglarni koʻrsatish:"
+
+msgid "Number of movies and shows at each IMDb rating, bar chart"
+msgstr "IMDb reytingi boʻyicha film va seriallar soni, ustunli diagramma"
+
+msgid "Each bar counts the movies or shows whose rating falls in that half-point band; the dashed line marks the median."
+msgstr "Har bir ustun reytingi shu yarim ballik oraliqqa tushgan film yoki seriallar sonini koʻrsatadi; punktir chiziq medianani bildiradi."
+
+msgid "Show the numbers"
+msgstr "Raqamlarni koʻrsatish"
+
+msgid "Reading the scores"
+msgstr "Baholarni qanday oʻqish"
+
+msgid "Median show rating"
+msgstr "Seriallarning median reytingi"
+
+msgid "IMDb and TMDB agree"
+msgstr "IMDb va TMDB mos keladi"
+
+msgid "How closely the two rating sources move together, from 0 (not at all) to 1 (identical), for movies with at least 50 TMDB votes."
+msgstr "Ikki reyting manbasi baholari qanchalik mos oʻzgaradi: 0 (umuman yoʻq) dan 1 (bir xil) gacha, TMDBda kamida 50 ta ovozi bor filmlar uchun."
+
+msgid "Budget and revenue"
+msgstr "Byudjet va daromad"
+
+msgid "log scale"
+msgstr "logarifmik shkala"
+
+msgid "Budget against revenue for each movie, scatter chart"
+msgstr "Har bir filmning byudjeti va daromadi, nuqtali diagramma"
+
+msgid "Each point is a movie. Above the lower dashed line it earned more than it cost; above the upper one, five times as much. Select a point to open the movie."
+msgstr "Har bir nuqta — bitta film. Pastki punktir chiziqdan yuqorida u sarflanganidan koʻproq topgan; yuqoridagisidan yuqorida — besh baravar koʻp. Filmni ochish uchun nuqtani tanlang."
+
+msgid "Return on budget by genre"
+msgstr "Janrlar boʻyicha byudjet qaytimi"
+
+msgid "30+ movies each"
+msgstr "kamida 30 ta film"
+
+msgid "Share of each genre's movies by how much they returned on their budget, stacked bar chart"
+msgstr "Har bir janr filmlarining byudjetni qaytarish darajasi boʻyicha ulushi, toʻplamli ustunli diagramma"
+
+msgid "Share of each genre's movies in each return band, ordered by median return."
+msgstr "Har bir janr filmlarining har bir qaytim oraligʻidagi ulushi; janrlar median qaytim boʻyicha tartiblangan."
+
+msgid "Median return"
+msgstr "Median qaytim"
+
+msgid "Studios with the most movies"
+msgstr "Eng koʻp filmga ega studiyalar"
+
+msgid "5+ movies"
+msgstr "kamida 5 ta film"
+
+msgid "Two extremes"
+msgstr "Ikki chekka"
+
+msgid "Biggest return"
+msgstr "Eng katta qaytim"
+
+msgid "Most expensive"
+msgstr "Eng qimmat"
+
+msgid "Each decade holds roughly the same number of movies by design, so these charts compare shares and typical values, never totals."
+msgstr "Har bir oʻn yillikda taxminan bir xil sondagi film bor — bu ataylab shunday, shu sababli bu yerda yigʻindilar emas, ulushlar va oddiy qiymatlar solishtiriladi."
+
+msgid "Typical running time"
+msgstr "Odatiy davomiylik"
+
+msgid "median, minutes"
+msgstr "median, daqiqa"
+
+msgid "Median running time by decade, line chart"
+msgstr "Oʻn yilliklar boʻyicha filmlarning median davomiyligi, chiziqli grafik"
+
+msgid "Median minutes"
+msgstr "Median, daqiqa"
+
+msgid "Movies not in English"
+msgstr "Ingliz tilida boʻlmagan filmlar"
+
+msgid "share of each decade"
+msgstr "har bir oʻn yillikdagi ulush"
+
+msgid "Share of movies not in English by decade, bar chart"
+msgstr "Oʻn yilliklar boʻyicha ingliz tilida boʻlmagan filmlar ulushi, ustunli diagramma"
+
+msgid "This reflects how the archive was assembled as much as how cinema changed."
+msgstr "Bu kino qanday oʻzgargani bilan bir qatorda arxiv qanday yigʻilganini ham aks ettiradi."
+
+msgid "Genre mix"
+msgstr "Janrlar tarkibi"
+
+msgid "share of each decade's movies"
+msgstr "oʻn yillik filmlari ulushi"
+
+msgid "This describes the archive, which leans heavily towards English-language movies, not cinema worldwide."
+msgstr "Bu butun dunyo kinosini emas, ingliz tilidagi filmlar ustun boʻlgan arxivni tasvirlaydi."
+
+msgid "Share"
+msgstr "Ulush"
+
+msgid "Original language"
+msgstr "Asl til"
+
+msgctxt "table column"
+msgid "Language"
+msgstr "Til"
+
+msgid "Other languages"
+msgstr "Boshqa tillar"
+
+msgid "Top-rated directors"
+msgstr "Eng yuqori baholangan rejissyorlar"
+
+msgid "4+ movies"
+msgstr "kamida 4 ta film"
+
+msgid "Recurring partnerships"
+msgstr "Doimiy ijodiy hamkorliklar"
+
+msgid "3+ movies together"
+msgstr "birgalikda kamida 3 ta film"
+
+msgid "Worked with"
+msgstr "Hamkori"
+
+msgid "Role"
+msgstr "Vazifasi"
+
+msgid "Rating by season, against season 1"
+msgstr "Fasllar reytingi, 1-fasl bilan solishtirganda"
+
+msgid "15+ shows per season"
+msgstr "har bir fasl uchun kamida 15 ta serial"
+
+msgid "Change in average episode rating from season 1, by season number, line chart"
+msgstr "Qismlar oʻrtacha reytingining 1-faslga nisbatan oʻzgarishi, fasl raqami boʻyicha, chiziqli grafik"
+
+msgid "Each show is compared with its own first season, so shows cancelled early don’t flatter the later seasons."
+msgstr "Har bir serial oʻzining birinchi fasli bilan solishtiriladi, shu sababli erta yopilgan seriallar keyingi fasllarni yaxshiroq qilib koʻrsatmaydi."
+
+msgid "Change"
+msgstr "Oʻzgarish"
+
+msgid "Rating by show status"
+msgstr "Serial holati boʻyicha reyting"
+
+msgid "median"
+msgstr "median"
+
+msgid "Median rating"
+msgstr "Median reyting"
+
+msgid "Networks with the most shows"
+msgstr "Eng koʻp serialga ega telekanallar"
+
+msgid "5+ rated shows"
+msgstr "kamida 5 ta baholangan serial"
+
+msgid "Shows are rated higher than movies: the typical show scores ★ <strong>%(show)s</strong> against ★ <strong>%(movie)s</strong> for a movie, %(gap)s points apart."
+msgstr "Seriallar filmlardan yuqoriroq baholanadi: odatiy serial ★ <strong>%(show)s</strong> oladi, film esa ★ <strong>%(movie)s</strong>, farq — %(gap)s ball."
+
+msgid "Movies are rated higher than shows: the typical movie scores ★ <strong>%(movie)s</strong> against ★ <strong>%(show)s</strong> for a show, %(gap)s points apart."
+msgstr "Filmlar seriallardan yuqoriroq baholanadi: odatiy film ★ <strong>%(movie)s</strong> oladi, serial esa ★ <strong>%(show)s</strong>, farq — %(gap)s ball."
+
+msgid "Movies and shows are rated about the same: ★ <strong>%(movie)s</strong> for the typical movie, ★ <strong>%(show)s</strong> for the typical show."
+msgstr "Filmlar va seriallar taxminan bir xil baholanadi: odatiy film uchun ★ <strong>%(movie)s</strong>, odatiy serial uchun ★ <strong>%(show)s</strong>."
+
+msgid "<strong>%(over)s%%</strong> of movies with a known budget returned five times it or more; only <strong>%(under)s%%</strong> earned less than they cost."
+msgstr "Byudjeti maʼlum filmlarning <strong>%(over)s%%</strong> qismi uni besh baravar yoki undan koʻp qaytargan; atigi <strong>%(under)s%%</strong> sarflanganidan kam topgan."
+
+msgid "The typical movie of the %(last)ss runs <strong>%(minutes)s minutes longer</strong> than one from the %(first)ss."
+msgstr "%(last)s-yillardagi odatiy film %(first)s-yillardagiga qaraganda <strong>%(minutes)s daqiqa uzunroq</strong>."
+
+msgid "The typical movie of the %(last)ss runs <strong>%(minutes)s minutes shorter</strong> than one from the %(first)ss."
+msgstr "%(last)s-yillardagi odatiy film %(first)s-yillardagiga qaraganda <strong>%(minutes)s daqiqa qisqaroq</strong>."
+
+msgid "The typical movie runs <strong>about the same length</strong> in the %(last)ss as in the %(first)ss."
+msgstr "Odatiy film %(last)s-yillarda ham, %(first)s-yillarda ham <strong>taxminan bir xil davomiylikda</strong>."
+
+msgid "%(d)ss"
+msgstr "%(d)s-yillar"
+
+msgid "<strong>%(english)s%%</strong> of the archive’s movies are in English, and %(country)s took part in <strong>%(pct)s%%</strong> of them."
+msgstr "Arxiv filmlarining <strong>%(english)s%%</strong> qismi ingliz tilida; “%(country)s” davlati filmlarning <strong>%(pct)s%%</strong> qismida ishtirok etgan."
+
+msgid "<strong>%(name)s</strong> is the highest-rated director with at least four movies here: ★ %(rating)s across %(count)s movies."
+msgstr "<strong>%(name)s</strong> — bu yerda kamida toʻrtta filmi bor rejissyorlar orasida eng yuqori baholangani: ★ %(rating)s (filmlar soni: %(count)s)."
+
+msgid "Shows hold their first-season rating <strong>all the way to season %(last)s</strong>."
+msgstr "Seriallar birinchi fasl reytingini <strong>%(last)s-faslgacha</strong> saqlab qoladi."
+
+msgid "Shows hold their first-season rating <strong>through season %(hold)s</strong>, then slip about <strong>%(size)s points</strong> across seasons %(first)s–%(last)s."
+msgstr "Seriallar birinchi fasl reytingini <strong>%(hold)s-faslgacha</strong> saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s ball</strong> pasayadi."
+
+msgid "Shows hold their first-season rating <strong>through season %(hold)s</strong>, then climb about <strong>%(size)s points</strong> across seasons %(first)s–%(last)s."
+msgstr "Seriallar birinchi fasl reytingini <strong>%(hold)s-faslgacha</strong> saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s ball</strong> oshadi."
+
+msgid "Composer"
+msgstr "Bastakor"
+
+msgid "Cinematographer"
+msgstr "Operator"
+
+msgid "Production designer"
+msgstr "Rassom-quruvchi"
+
+msgid "Screenwriter"
+msgstr "Ssenariynavis"
+
+msgid "Still running"
+msgstr "Davom etmoqda"
+
+msgid "Cancelled"
+msgstr "Yopilgan"
+
+msgid "Movies: {count}"
+msgstr "Filmlar: {count}"
+
+msgid "Shows: {count}"
+msgstr "Seriallar: {count}"
+
+msgid "Median"
+msgstr "Median"
+
+msgid "Break-even"
+msgstr "Zararsizlik chegarasi"
+
+msgid "5× budget"
+msgstr "5× byudjet"
+
+msgid "Under 1×"
+msgstr "1× dan kam"
+
+msgid "5× or more"
+msgstr "5× va undan koʻp"
+
+msgid "Season {n}"
+msgstr "{n}-fasl"
+
+msgid "vs season 1"
+msgstr "1-faslga nisbatan"
+
+msgid "Based on %(counter)s movie with a known budget of at least $1M and box-office revenue. Not adjusted for inflation; streaming releases and movies still in cinemas can read low."
+msgid_plural "Based on %(counter)s movies with a known budget of at least $1M and box-office revenue. Not adjusted for inflation; streaming releases and movies still in cinemas can read low."
+msgstr[0] "Byudjeti kamida $1 mln boʻlgan va kassa tushumi maʼlum boʻlgan %(counter)s ta filmga asoslangan. Inflyatsiyaga tuzatishsiz; striming relizlari va hali kinoteatrlarda namoyish etilayotgan filmlar past koʻrinishi mumkin."
+
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
+
+msgid "A movie counts in every genre it belongs to, so each decade's shares add up to more than 100 percent. The ten most common genres."
+msgstr "Film oʻzining har bir janrida hisoblanadi, shuning uchun oʻn yillik ulushlari yigʻindisi 100 foizdan oshadi. Eng koʻp uchraydigan oʻnta janr."
+
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
+
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
