@@ -42,7 +42,7 @@ window adds movies from the last 120 days, which a per-year ranking by votes can
 
 | Home | Analytics |
 |---|---|
-| ![Home — catalog totals over a poster wall of the collection](docs/screenshots/Homepage.png) | ![Analytics — total revenue by genre, charted and ranked](docs/screenshots/Analytics.png) |
+| ![Home — catalog totals over a poster wall of the collection](docs/screenshots/Homepage.png) | ![Analytics — what a movie's budget earned back: every movie as a point, and each genre's return bands](docs/screenshots/Analytics.png) |
 
 | Movie catalog | Movie detail |
 |---|---|

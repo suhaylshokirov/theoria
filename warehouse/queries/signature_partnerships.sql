@@ -5,7 +5,8 @@
 -- craft people credited on the same films and counts the repeats.
 --
 -- Restricted to >= 3 shared films so this shows working relationships rather
--- than coincidence.
+-- than coincidence. Grouped by person, not by name, so two different people who
+-- share a name are never merged. Slugs are dim_person's, for the links.
 
 WITH directing AS (
     SELECT person_id AS director_id, movie_id
@@ -19,7 +20,9 @@ craft AS (
                   'Editor', 'Production Design', 'Screenplay')
 )
 SELECT
+    d.slug                          AS director_slug,
     d.name                          AS director_name,
+    c.slug                          AS collaborator_slug,
     c.name                          AS collaborator_name,
     cr.job                          AS craft,
     COUNT(DISTINCT dir.movie_id)    AS films_together,
@@ -31,7 +34,7 @@ JOIN dim_person d ON d.person_id = dir.director_id
 JOIN dim_person c ON c.person_id = cr.person_id
 JOIN dim_movie dm ON dm.movie_id = dir.movie_id
 JOIN dim_date dd  ON dd.full_date = dm.release_date
-GROUP BY d.name, c.name, cr.job
+GROUP BY d.person_id, d.slug, d.name, c.person_id, c.slug, c.name, cr.job
 HAVING COUNT(DISTINCT dir.movie_id) >= 3
-ORDER BY films_together DESC, d.name
-LIMIT 40;
+ORDER BY films_together DESC, d.name, c.name
+LIMIT 10;

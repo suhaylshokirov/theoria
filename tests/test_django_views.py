@@ -3300,77 +3300,79 @@ def test_studio_detail_shows_initial_monogram_when_no_logo():
 
 
 def test_analytics_dashboard_returns_200_with_expected_context():
-    fake_rows = {
-        "revenue_by_genre.sql": [
-            {"genre_name": "Action", "movie_count": 3, "total_revenue": Decimal("1000")}
-        ],
-        "movies_by_decade.sql": [{"decade": 2020, "avg_rating": Decimal("7.5")}],
-        "top_studios_by_revenue.sql": [
-            {"studio_slug": "test-studio", "studio_name": "Test Studio",
-             "movie_count": 5, "total_revenue": Decimal("500"), "avg_rating": Decimal("7.1")}
-        ],
-        "films_by_production_country.sql": [
-            {"country_name": "Japan", "film_count": 7, "avg_rating": Decimal("7.4")}
-        ],
-        # Task 90: TV panels.
-        "series_by_decade.sql": [{"decade": 2010, "series_count": 40, "avg_rating": Decimal("7.8")}],
-        "episode_rating_by_season.sql": [
-            {"season_number": 1, "show_count": 300, "avg_rating": Decimal("7.6")}
-        ],
-        "longest_running_series.sql": [
-            {"series_slug": "test-show", "series_name": "Test Show", "years_on_air": 50,
-             "number_of_seasons": 52, "number_of_episodes": 1018, "avg_rating": Decimal("8.0")}
-        ],
-        "top_networks_by_series.sql": [
-            {"network_name": "Netflix", "series_count": 84, "avg_rating": Decimal("7.79")}
-        ],
-    }
+    from tests.dashboard_fixtures import full_rows
 
+    fake_rows = full_rows()
     with patch("analytics.cached_reads._run_query", side_effect=lambda fname: fake_rows[fname]):
         response = client.get("/analytics/")
 
     assert response.status_code == 200
-    for key in (
-        "revenue_by_genre",
-        "movies_by_decade",
-        "decade_labels",
-        "decade_avg_ratings",
-        "genre_labels",
-        "genre_revenue",
-        "top_studios_by_revenue",
-        "films_by_production_country",
-        "series_by_decade",
-        "episode_rating_by_season",
-        "longest_running_series",
-        "top_networks_by_series",
-        "season_labels",
-        "season_avg_ratings",
-    ):
+    for key in ("kpis", "quality", "money", "time", "world", "people", "tv"):
         assert key in response.context
 
-    assert response.context["decade_labels"] == [2020]
-    assert response.context["decade_avg_ratings"] == [7.5]
-    assert response.context["genre_labels"] == ["Action"]
-    assert response.context["genre_revenue"] == [1000.0]
-    assert response.context["top_studios_by_revenue"][0]["studio_slug"] == "test-studio"
-    assert response.context["films_by_production_country"][0]["country_name"] == "Japan"
-    assert response.context["season_labels"] == [1]
-    assert response.context["season_avg_ratings"] == [7.6]
+    assert response.context["kpis"]["movie_count"] == 1218
+    assert response.context["quality"]["finding"]["kind"] == "up"
+    assert response.context["money"]["best"]["slug"] == "big-hit"
+    assert response.context["money"]["priciest"]["slug"] == "epic"
+    assert response.context["world"]["countries"][0]["country_name"] == "Japan"
+    assert response.context["tv"]["finding"]["kind"] == "slips"
 
     body = response.content.decode()
-    assert "Top studios by revenue" in body
+    # Six chapters, each a real section the nav links to.
+    for chapter in ("ratings", "money", "decades", "origins", "people", "tv"):
+        assert f'id="{chapter}"' in body
+        assert f'href="#{chapter}"' in body
+    # The computed findings read as sentences, not placeholders.
+    assert "Shows are rated higher than movies" in body
+    assert "returned five times it or more" in body
+    # Links out to the pages the rows name.
     assert 'href="/studios/test-studio/"' in body
-    assert "Movies by production country" in body
-    assert "Studio output by decade" not in body
-    assert "Non-English cinema over time" not in body
-    assert "Shows by decade" in body
-    assert "Rating by season" in body
-    assert "Longest-running shows" in body
-    assert 'href="/tv/test-show/"' in body
-    assert "Top networks by series" in body
-    assert "Netflix" in body
+    assert 'href="/directors/test-director/"' in body
+    assert 'href="/people/test-composer/"' in body
+    assert 'href="/movies/big-hit/"' in body
+    # Every chart has its canvas and its data block.
+    for chart_id in ("rating", "scatter", "bands", "runtime", "nonenglish", "season"):
+        assert f'data-chart="{chart_id}"' in body
+    for data_id in ("rating-data", "scatter-data", "bands-data", "runtime-data",
+                    "nonenglish-data", "season-data"):
+        assert f'id="{data_id}"' in body
+    # The old panels are gone.
+    assert "Top studios by revenue" not in body
+    assert "Longest-running shows" not in body
+    assert "Shows by decade" not in body
 
 
+def test_analytics_dashboard_renders_on_an_empty_warehouse():
+    """A freshly created warehouse shows each chapter's empty state, not a 500."""
+    from tests.dashboard_fixtures import empty_rows
+
+    fake_rows = empty_rows()
+    with patch("analytics.cached_reads._run_query", side_effect=lambda fname: fake_rows[fname]):
+        response = client.get("/analytics/")
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "No movies loaded yet" in body
+    assert "No shows loaded yet" in body
+    assert 'data-chart="' not in body  # nothing to draw
+    assert response.context["kpis"] is None
+
+
+def test_analytics_dashboard_never_surfaces_internal_names():
+    from tests.dashboard_fixtures import full_rows
+
+    fake_rows = full_rows()
+    with patch("analytics.cached_reads._run_query", side_effect=lambda fname: fake_rows[fname]):
+        body = client.get("/analytics/").content.decode()
+    # Visible text only: strip scripts/styles and tags, then check the words.
+    import re
+    text = re.sub(r"<script.*?</script>|<style.*?</style>", "", body, flags=re.S)
+    text = re.sub(r"<[^>]+>", " ", text)
+    for internal in ("dim_", "fact_", "bridge_", ".sql", "movie_id", "series_id"):
+        assert internal not in text, internal
+
+
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 # tmdb_images template filter
 # ---------------------------------------------------------------------------

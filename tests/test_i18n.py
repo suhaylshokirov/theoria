@@ -318,7 +318,7 @@ def test_every_js_string_has_a_translation(lang):
 
     # Same word in another language is legitimate, but every other string
     # equal to its English key means a missing catalog entry.
-    same_as_english_ok = {"Video", "Email"}
+    same_as_english_ok = {"Video", "Email", "Median"}  # Uzbek borrows "median" as is
     with translation.override(lang):
         strings = js_strings(None)["js_strings"]
     untranslated = [
@@ -640,27 +640,63 @@ def test_localize_rows_maps_names_and_leaves_the_rest():
 
 
 def test_analytics_dashboard_translates_genre_and_country_names():
-    fake = {
-        "revenue_by_genre.sql": [
-            {"genre_name": "Action", "movie_count": 3, "total_revenue": Decimal("1000")}
-        ],
-        "movies_by_decade.sql": [],
-        "top_studios_by_revenue.sql": [],
-        "films_by_production_country.sql": [
-            {"country_name": "Japan", "film_count": 7, "avg_rating": Decimal("7.4")}
-        ],
-        "series_by_decade.sql": [], "episode_rating_by_season.sql": [],
-        "longest_running_series.sql": [], "top_networks_by_series.sql": [],
-    }
-    with patch("analytics.cached_reads._run_query", side_effect=lambda f: fake[f]), \
-            patch("analytics.views.genre_labels", return_value={"Action": "боевик"}), \
-            patch("analytics.views.country_labels", return_value={"Japan": "Япония"}):
+    from tests.dashboard_fixtures import full_rows
+
+    fake = full_rows()
+    with patch("analytics.cached_reads._run_query", side_effect=lambda f: fake[f]),             patch("analytics.views.genre_labels", return_value={"Action": "боевик"}),             patch("analytics.views.country_labels", return_value={"Japan": "Япония"}):
         response = _get("ru", "/analytics/")
     assert response.status_code == 200
     body = response.content.decode()
     assert "боевик" in body and "Япония" in body
-    # The chart labels come from the same translated rows.
-    assert response.context["genre_labels"] == ["боевик"]
+    # The chart labels and the heatmap come from the same translated rows.
+    assert response.context["money"]["bands"]["labels"] == ["боевик"]
+    assert response.context["time"]["heatmap"]["rows"][0]["name"] == "боевик"  # the biggest genre
+
+
+def test_analytics_dashboard_speaks_russian_and_uzbek():
+    """The compiled catalogs carry the new chapter headings and finding sentences."""
+    from tests.dashboard_fixtures import full_rows
+
+    fake = full_rows()
+    with patch("analytics.cached_reads._run_query", side_effect=lambda f: fake[f]):
+        ru = _get("ru", "/analytics/").content.decode()
+        uz = _get("uz", "/analytics/").content.decode()
+    for word in ("Рейтинги", "Деньги", "Десятилетия", "Происхождение", "Сериалы"):
+        assert word in ru
+    assert "Сериалы оцениваются выше фильмов" in ru
+    assert "Композитор" in ru  # a Python-side label (the craft of a partnership)
+    assert "Продолжается" in ru  # a show-status label
+    for word in ("Reytinglar", "Pul", "Oʻn yilliklar", "Kelib chiqishi"):
+        assert word in uz
+    assert "Seriallar filmlardan yuqoriroq baholanadi" in uz
+    # English survives only where it is a proper name.
+    assert "Show the numbers" not in ru and "Show the numbers" not in uz
+
+
+def test_analytics_chart_strings_are_translated_for_the_script():
+    from django.test import RequestFactory
+    from core.context_processors import js_strings
+
+    with translation.override("ru"):
+        strings = js_strings(RequestFactory().get("/"))["js_strings"]
+    assert strings["Median"] == "Медиана"
+    assert strings["Movies: {count}"] == "Фильмов: {count}"
+    assert strings["5× or more"] == "5× и больше"
+    assert strings["{decade}s"] == "{decade}-е"  # reused from an earlier task's msgid
+
+
+def test_movie_titles_by_slug_maps_slugs_in_one_query_and_skips_english():
+    with translation.override("ru"), patch.object(
+        MovieTranslation, "objects", new=MagicMock()
+    ) as mgr:
+        mgr.using.return_value.filter.return_value.exclude.return_value             .exclude.return_value.values_list.return_value = [("inception", "Начало")]
+        assert i18n.movie_titles_by_slug(["inception", "other", None]) == {"inception": "Начало"}
+    mgr.using.return_value.filter.assert_called_once()
+    with translation.override("en"), patch.object(
+        MovieTranslation, "objects", new=MagicMock()
+    ) as mgr:
+        assert i18n.movie_titles_by_slug(["inception"]) == {}
+    mgr.using.assert_not_called()
 
 
 # --- Filmography ------------------------------------------------------------
