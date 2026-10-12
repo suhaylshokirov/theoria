@@ -31,6 +31,7 @@ from movies.i18n import (
     localize_movies, localize_people, localize_series, search_aliases,
     series_name_order, title_order,
 )
+from movies.season_stats import season_rating_summary
 from movies.templatetags.tmdb_images import tmdb_image
 from movies.vocab import display_department, display_job
 
@@ -1103,6 +1104,7 @@ def series_detail(request, series_slug):
         rating_rank = int(ranks["above"]) + 1
         rated_total = int(ranks["total"])
 
+    seasons = SimpleLazyObject(lambda: _build_seasons(series_id))
     context = {
         "series": series,
         "genres": genres,
@@ -1122,7 +1124,10 @@ def series_detail(request, series_slug):
         # Lazy: the Season/Episode queries run only if the episodes fragment in
         # series_detail.html is a cache miss (Task 118) -- on a hit nothing
         # reads this, so the warehouse is never asked.
-        "seasons": SimpleLazyObject(lambda: _build_seasons(series_id)),
+        "seasons": seasons,
+        # Task 130's season analytics, derived in Python from the same rows --
+        # equally lazy, and inside the same cached fragment.
+        "season_stats": SimpleLazyObject(lambda: season_rating_summary(seasons)),
         "year_span": _series_year_span(series),
         "trailer": trailer,
         "collection_flags": collection_flags(

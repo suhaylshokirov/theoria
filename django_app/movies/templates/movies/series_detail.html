@@ -213,19 +213,67 @@
     {% comment %} Cached as rendered markup (Task 118): this section is ~80%
        of the page's render time and is identical for every reader, so it
        holds nothing per-user -- no CSRF token, no username, no collection
-       buttons. `seasons` is lazy: on a hit the Season/Episode queries never
-       run. The tag adds the language and data version to the key. {% endcomment %}
+       buttons. `seasons` and `season_stats` are lazy: on a hit the
+       Season/Episode queries never run. The tag adds the language and data
+       version to the key. {% endcomment %}
+    {% comment %} Task 130's rating analytics, top to bottom: the season
+       slicer, then either the whole-run overview ("All seasons": readout +
+       one row per season) or one season's readout + episode table, then the
+       area chart under whichever is showing — season trend for the overview,
+       episode-by-episode for a season. Every figure is computed in
+       movies/season_stats.py from the rows the table already shows. {% endcomment %}
     {% datacache "series-episodes" series.series_id %}
-    {% include "movies/_season_picker.html" with seasons=seasons only %}
-    {% translate "Season" as season_word %}
-    {% for block in seasons %}
-    <div class="season-panel{% if forloop.first %} is-active{% endif %}" data-season-panel="{{ block.season.season_number }}">
-        <h3 class="credit-department">{{ block.season.name|default:season_word }}</h3>
-        {% include "movies/_episode_table.html" with block=block only %}
+    {% with stats=season_stats %}
+    {% if stats.rows %}
+    {% include "movies/_season_picker.html" with rows=stats.rows has_overview=stats.has_overview only %}
+    {% if stats.has_overview %}
+    <div class="season-panel is-active" data-season-panel="all" id="episodes-all">
+        <h3 class="credit-department">{% translate "All seasons" %}</h3>
+        {% include "movies/_season_overview.html" with stats=stats only %}
     </div>
-    {% empty %}
-    <p class="empty">{% translate "No seasons recorded for this show." %}</p>
+    {% endif %}
+    {% translate "Season" as season_word %}
+    {% for row in stats.rows %}
+    <div class="season-panel{% if forloop.first and not stats.has_overview %} is-active{% endif %}" data-season-panel="{{ row.season.season_number }}" id="episodes-season-{{ row.season.season_number }}">
+        <h3 class="credit-department">{{ row.season.name|default:season_word }}</h3>
+        {% include "movies/_season_readout.html" with row=row only %}
+        {% include "movies/_episode_table.html" with block=row only %}
+    </div>
     {% endfor %}
+    {% if stats.chart.episodes %}
+    {% comment %} Hidden until static/js/series_ratings.js has drawn into it:
+       with no JS, or if the chart library fails to load, the tables above
+       already carry every number, so nothing is lost. {% endcomment %}
+    <figure class="season-chart" data-season-chart hidden
+            data-t-season="{% translate "Season" %}"
+            data-t-episode="{% translate "Episode" %}"
+            data-t-average="{% translate "Average" %}"
+            data-t-rating="{% translate "Rating" %}"
+            data-t-range="{% translate "Range" %}"
+            data-t-rated="{% translate "Rated episodes" %}"
+            data-t-votes="{% translate "Votes" %}"
+            data-t-few="{% translate "few ratings" %}"
+            data-t-aria-seasons="{% translate "Average episode rating by season, area chart" %}"
+            data-t-aria-episodes="{% translate "Episode ratings in this season, area chart" %}">
+        <figcaption class="season-chart__head">
+            <span class="season-chart__title" data-chart-view="all">{% translate "Average rating by season" %}</span>
+            <span class="season-chart__title" data-chart-view="season">{% translate "Rating by episode" %}</span>
+            <ul class="season-chart__key">
+                <li class="is-line"><span data-chart-view="all">{% translate "Season average" %}</span><span data-chart-view="season">{% translate "Episode rating" %}</span></li>
+                <li class="is-ref"><span data-chart-view="all">{% translate "Show-wide episode average" %}</span><span data-chart-view="season">{% translate "Season average" %}</span><span class="mono" data-ref-value></span></li>
+                {% if stats.has_few_ratings %}<li class="is-few" data-chart-view="all">{% translate "Fewer than 3 rated episodes" %}</li>{% endif %}
+            </ul>
+        </figcaption>
+        <div class="season-chart__stage">
+            <canvas id="season-rating-chart" role="img" aria-label="{% translate "Average episode rating by season, area chart" %}"></canvas>
+        </div>
+    </figure>
+    {{ stats.chart|json_script:"season-chart-data" }}
+    {% endif %}
+    {% else %}
+    <p class="empty">{% translate "No seasons recorded for this show." %}</p>
+    {% endif %}
+    {% endwith %}
     {% enddatacache %}
 </section>
 
@@ -262,4 +310,10 @@
         {% translate "crew" as crew_label %}{% include "movies/_pager_client.html" with label=crew_label only %}
     </div>
 </section>
+
+{% comment %} The season chart (Task 130). Both deferred, so they run in
+   order after parsing: Chart.js first (the same pinned build the analytics
+   dashboard loads), then the script that draws with it. {% endcomment %}
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script defer src="{% static 'js/series_ratings.js' %}"></script>
 {% endblock %}

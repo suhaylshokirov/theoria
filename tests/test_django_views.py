@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import django
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DJANGO_APP_DIR = PROJECT_ROOT / "django_app"
@@ -1148,6 +1149,82 @@ def test_series_detail_specials_sort_last_regardless_of_season_number():
 
     ordered = [s["season"] for s in response.context["seasons"]]
     assert ordered == [season1, season2, specials]
+
+
+def test_series_detail_multi_season_show_opens_on_the_all_seasons_overview():
+    """Task 130: two or more regular seasons -> the slicer leads with an
+    "All seasons" option (checked), whose panel holds the season table, and
+    the area chart's data ships under the tables."""
+    show = _series()
+    season1 = _season(1, show, 1, "Season 1")
+    season2 = _season(2, show, 2, "Season 2")
+    episodes = [
+        _episode(101, show, 1, 1, name="Pilot", imdb_rating=Decimal("8.0"), imdb_vote_count=100),
+        _episode(102, show, 1, 2, name="Trust Fall", imdb_rating=Decimal("9.0"), imdb_vote_count=200),
+        _episode(103, show, 1, 3, name="OutKast", imdb_rating=Decimal("7.0"), imdb_vote_count=50),
+        _episode(201, show, 2, 1, name="Return", imdb_rating=Decimal("8.6"), imdb_vote_count=80),
+    ]
+
+    with _series_detail_mocks(show, seasons=[season1, season2], episodes=episodes):
+        response = client.get("/tv/test-show/")
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert 'id="season-all" value="all" checked' in body
+    assert 'data-season-panel="all"' in body
+    assert 'class="season-table"' in body
+    # Each season row links to its own panel (a plain jump without JS).
+    assert 'href="#episodes-season-2" data-season-select="2"' in body
+    assert 'id="episodes-season-1"' in body
+    # The overview, not Season 1, is the panel shown first.
+    assert 'class="season-panel is-active" data-season-panel="all"' in body
+    assert 'class="season-panel" data-season-panel="1"' in body
+    # The chart is under the tables and its data is on the page.
+    assert body.index('class="season-table"') < body.index("data-season-chart")
+    assert 'id="season-chart-data"' in body
+    assert "js/series_ratings.js" in body
+    # The show-wide episode average: (8 + 9 + 7 + 8.6) / 4 = 8.15.
+    stats = response.context["season_stats"]
+    assert stats["show"]["avg"] == pytest.approx(8.15)
+    assert stats["has_overview"] is True
+
+
+def test_series_detail_single_season_show_skips_the_overview():
+    """A one-season show has no trend to draw: no "All seasons" option, its
+    one season is selected, and the chart opens on its episodes."""
+    show = _series()
+    season = _season(1, show, 1, "Season 1")
+    episodes = [
+        _episode(101, show, 1, 1, imdb_rating=Decimal("8.2"), imdb_vote_count=24348),
+        _episode(102, show, 1, 2, imdb_rating=Decimal("8.1"), imdb_vote_count=20375),
+    ]
+
+    with _series_detail_mocks(show, seasons=[season], episodes=episodes):
+        response = client.get("/tv/test-show/")
+
+    body = response.content.decode()
+    assert 'value="all"' not in body
+    assert 'data-season-panel="all"' not in body
+    assert 'class="season-panel is-active" data-season-panel="1"' in body
+    assert 'class="season-readout"' in body
+    assert "Season average" in body
+    assert 'id="season-chart-data"' in body
+
+
+def test_series_detail_without_any_rating_ships_no_chart():
+    """Nothing rated yet -> the tables still render, but no chart block and
+    no chart data: there is nothing to draw."""
+    show = _series()
+    season = _season(1, show, 1, "Season 1")
+    episodes = [_episode(101, show, 1, 1), _episode(102, show, 1, 2)]
+
+    with _series_detail_mocks(show, seasons=[season], episodes=episodes):
+        response = client.get("/tv/test-show/")
+
+    body = response.content.decode()
+    assert "data-season-chart" not in body
+    assert 'id="season-chart-data"' not in body
+    assert "Not rated yet" in body
 
 
 def _series_video(video_id, *, type="Trailer", official=True, name=None, key=None):

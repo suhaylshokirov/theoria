@@ -2335,6 +2335,267 @@ html.has-js .season-panel:not(.is-active) {
   display: none;
 }
 
+/* --- Season rating analytics (show page episodes, Task 130) -----------------
+   The Episodes section as a small instrument: a four-figure readout (the
+   whole run under "All seasons", one season otherwise), a season table, and
+   an area chart under the tables. The readout is the film page's .facts
+   record grid turned into one row -- hairline cells on the rule colour, the
+   same 16px plate -- so it reads as part of the record, not a dashboard
+   bolted on. Figures are mono at a reading size, not hero numbers: the
+   chart is where the eye goes for shape, the readout is for the exact value. */
+
+.season-readout {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: var(--space-4) 0 var(--space-6);
+  border: var(--hairline);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--rule);
+}
+
+.season-readout__cell {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  background: var(--paper);
+  min-width: 0;
+}
+
+.season-readout dd {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.season-readout dd a {
+  color: var(--lime-text);
+  font-weight: 600;
+}
+
+.season-readout__figure {
+  font-size: var(--text-xl);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.season-readout__unit {
+  margin-left: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-faint);
+}
+
+.season-readout__name {
+  display: block;
+  font-weight: 600;
+}
+
+.season-readout__sub {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+/* A readout's best/weakest season name is a link with its figure beside it,
+   not under it: "Season 4  8.9" is one reading. */
+.season-readout dd a + .season-readout__sub {
+  display: inline;
+  margin: 0 0 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.season-readout__none {
+  color: var(--ink-muted);
+}
+
+/* Quiet qualifiers beside a figure: "few ratings", "Not rated yet". Body
+   face even inside a mono .num cell -- they are words, not measurements. */
+.season-note {
+  margin-left: var(--space-2);
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.season-note.mono {
+  font-family: var(--font-mono);
+  margin-left: var(--space-1);
+}
+
+td.num > .season-note:only-child {
+  margin-left: 0;
+}
+
+/* A season still airing: its average is still moving. A status, not a
+   measurement, so an outline in ink rather than the lime. */
+.season-flag {
+  display: inline-block;
+  margin-left: var(--space-3);
+  padding: 0.0625rem var(--space-3);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  vertical-align: 0.1em;
+  white-space: nowrap;
+}
+
+.season-readout dd .season-flag {
+  vertical-align: 0.35em;
+}
+
+.season-table tbody th[scope="row"],
+.season-table td.mono {
+  white-space: nowrap;
+}
+
+.season-table tbody th[scope="row"] a {
+  color: var(--ink);
+}
+
+.season-table tbody th[scope="row"] a:hover {
+  color: var(--lime-text);
+}
+
+/* The average is the column the reader came for. */
+.season-avg {
+  font-weight: 500;
+  font-size: var(--text-base);
+  color: var(--ink);
+}
+
+.season-best {
+  font-weight: 500;
+}
+
+/* Long episode titles would otherwise wrap a narrow column into rows three
+   lines tall on a phone; a floor width lets .table-wrap scroll sideways. */
+.season-table td:has(.season-best) {
+  min-width: 13rem;
+}
+
+.season-table tr.is-special th[scope="row"] a,
+.season-table tr.is-special .season-avg {
+  color: var(--ink-muted);
+}
+
+.season-footnote {
+  margin-top: var(--space-3);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+/* The chart sits under whichever table is showing. Stays hidden (the
+   attribute, kept authoritative here) until series_ratings.js draws. */
+.season-chart {
+  margin: var(--space-7) 0 0;
+}
+
+.season-chart[hidden] {
+  display: none;
+}
+
+.season-chart__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+  margin-bottom: var(--space-5);
+}
+
+.season-chart__title {
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink);
+}
+
+.season-chart__key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.season-chart__key li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.season-chart__key [data-ref-value] {
+  color: var(--ink);
+}
+
+/* Each key mark drawn the way the chart draws it. */
+.season-chart__key li::before {
+  content: "";
+  flex: none;
+}
+
+.season-chart__key .is-line::before {
+  width: 16px;
+  height: 10px;
+  border-top: 2px solid var(--lime-mark);
+  background: var(--chart-wash);
+}
+
+.season-chart__key .is-ref::before {
+  width: 16px;
+  border-top: 1px dashed var(--ink-faint);
+}
+
+.season-chart__key .is-few::before {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--lime-mark);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.season-chart[data-view="all"] [data-chart-view="season"],
+.season-chart[data-view="season"] [data-chart-view="all"] {
+  display: none;
+}
+
+.season-chart__stage {
+  position: relative;
+  height: 300px;
+}
+
+@media (max-width: 900px) {
+  .season-readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .season-readout__cell {
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .season-chart__stage {
+    height: 240px;
+  }
+}
+
 /* --- Pagination ------------------------------------------------------------- */
 
 .pagination {

@@ -598,7 +598,14 @@
      that lacks it, but only once html.has-js is set, which is also what
      reveals .season-picker itself). No live-filter round trip: the whole
      point, per the task brief, is that switching seasons is a repaint, the
-     same posture initPagedSection() takes for cast/crew paging. */
+     same posture initPagedSection() takes for cast/crew paging.
+
+     Task 130: a season named in the "All seasons" overview (its table row,
+     or the best/weakest season in the readout) is a link to that season's
+     panel. With JS it selects the season through its radio instead -- the
+     same change event the chart (series_ratings.js) redraws on -- and
+     brings the picker back into view, so the reader lands on the top of the
+     season they chose rather than mid-page. */
 
   function initSeasonPicker() {
     var picker = document.querySelector("[data-season-picker]");
@@ -620,6 +627,20 @@
     picker.addEventListener("change", function (e) {
       if (e.target.name !== "season") return;
       show(e.target.value);
+    });
+
+    picker.parentNode.addEventListener("click", function (e) {
+      var link = e.target.closest("[data-season-select]");
+      if (!link) return;
+      var input = picker.querySelector(
+        'input[name=season][value="' + link.getAttribute("data-season-select") + '"]'
+      );
+      if (!input) return;
+      e.preventDefault();
+      input.checked = true;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      picker.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+      input.focus({ preventScroll: true });
     });
 
     var checked = picker.querySelector("input[name=season]:checked");

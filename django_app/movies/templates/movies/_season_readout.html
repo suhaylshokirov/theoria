@@ -1,0 +1,32 @@
+{% comment %} One season's four-figure readout (Task 130), above its episode
+   table: the season average, its best and weakest episode, and how many of
+   its episodes carry a rating. Same .season-readout strip the "All seasons"
+   view opens with (_season_overview.html), so the two read as one instrument.
+
+   Renders nothing for a season with no episodes catalogued — the episode
+   table's own "not catalogued yet" line already says so.
+
+   Params (pass with `only`):
+     row : one season_stats.rows entry (movies/season_stats.py).
+{% endcomment %}
+{% load i18n %}
+{% if row.episode_count %}
+<dl class="season-readout">
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Season average" %}</dt>
+        <dd>{% if row.avg is not None %}<span class="season-readout__figure mono">{{ row.avg|floatformat:"2u" }}</span><span class="season-readout__unit mono">/ 10</span>{% if row.few_ratings %}<span class="season-note">{% translate "few ratings" %}</span>{% endif %}{% else %}<span class="season-readout__none">{% translate "Not rated yet" %}</span>{% endif %}</dd>
+    </div>
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Best episode" %}</dt>
+        <dd>{% if row.best %}<span class="season-readout__name">{{ row.best.name|default:"—" }}</span><span class="season-readout__sub mono">{% blocktranslate trimmed with n=row.best.episode_number %}Episode {{ n }}{% endblocktranslate %} · {{ row.best.imdb_rating|floatformat:"1u" }}</span>{% else %}—{% endif %}</dd>
+    </div>
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Weakest episode" %}</dt>
+        <dd>{% if row.worst and row.rated_count > 1 %}<span class="season-readout__name">{{ row.worst.name|default:"—" }}</span><span class="season-readout__sub mono">{% blocktranslate trimmed with n=row.worst.episode_number %}Episode {{ n }}{% endblocktranslate %} · {{ row.worst.imdb_rating|floatformat:"1u" }}</span>{% else %}—{% endif %}</dd>
+    </div>
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Rated episodes" %}</dt>
+        <dd><span class="season-readout__figure mono">{{ row.rated_count }}</span><span class="season-readout__unit mono">/ {{ row.episode_count }}</span>{% if row.in_progress %}<span class="season-flag">{% translate "Airing" %}</span>{% endif %}</dd>
+    </div>
+</dl>
+{% endif %}

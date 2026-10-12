@@ -1,6 +1,19 @@
 # Season Rating Analytics — TV show pages (Task 130 plan)
 
-Status: **planned, not implemented.**
+Status: **implemented (Task 130).** Changes made during the build, after checking real shows:
+
+- **No range markers on the chart.** The lowest-to-highest whiskers stretched the y-axis until
+  the season trend went flat (Lost: averages 8.26–8.54 on a 6.5–10 axis). The axis now fits the
+  plotted values with half a point either side (capped at 0 and 10). Each season's spread is in
+  the table's Range column and the tooltip.
+- **Averages print two decimals,** single episodes one: at one decimal, several seasons tie and
+  "best season" looks arbitrary.
+- **The "All seasons" view needs 2+ regular seasons that have episodes,** not just 2+ seasons:
+  seasons are loaded before their episodes, and an overview of zeros said less than the old
+  "not catalogued yet" line.
+- **The reference-line value is printed in the chart key,** not on the canvas.
+- **The season readout shows rated coverage** ("17 / 17") rather than total votes; votes are in
+  the season table.
 
 ## Goal
 
