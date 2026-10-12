@@ -388,11 +388,14 @@
       // Centred over the bar but kept inside the box, which clips sideways
       // (home.css): over the first or last decade of a phone-width chart the
       // tip would otherwise lose its ends.
+      // Measured in screen px, positioned in the box's own px: they differ
+      // by the TV zoom (home.css), so divide it back out.
+      var z = scale();
       var br = bar.getBoundingClientRect(), cr = box.getBoundingClientRect();
       var half = tip.offsetWidth / 2;
-      var x = br.left - cr.left + br.width / 2;
-      tip.style.left = Math.min(Math.max(x, half + 4), cr.width - half - 4) + "px";
-      tip.style.top = br.top - cr.top + "px";
+      var x = (br.left - cr.left + br.width / 2) / z;
+      tip.style.left = Math.min(Math.max(x, half + 4), box.offsetWidth - half - 4) + "px";
+      tip.style.top = (br.top - cr.top) / z + "px";
       tip.style.opacity = 1;
     }
 
@@ -402,11 +405,22 @@
       tip.style.opacity = 0;
     }
 
-    // Drawn at the size it is shown, in real pixels, so the 12px labels stay
-    // 12px on a phone rather than shrinking with a fixed 1000-unit drawing.
-    // Returns the width it drew at.
+    // Screen px per CSS px: 1, except under the home page's TV zoom, where
+    // getBoundingClientRect() reports the zoomed size.
+    function scale() {
+      return box.offsetWidth ? box.getBoundingClientRect().width / box.offsetWidth : 1;
+    }
+
+    // The chart's width in its own CSS px.
+    function chartWidth() {
+      return Math.round(svg.getBoundingClientRect().width / scale());
+    }
+
+    // Drawn at the size it is shown, in CSS px, so the 12px labels stay 12px
+    // on a phone rather than shrinking with a fixed 1000-unit drawing (and
+    // grow with the page on a TV). Returns the width it drew at.
     function draw() {
-      var W = Math.round(svg.getBoundingClientRect().width) || 1000;
+      var W = chartWidth() || 1000;
       var narrow = W < 560;
       // Wide keeps the 1000 x 380 proportions; narrow stands taller, so the
       // bars still have height to compare by.
@@ -480,7 +494,7 @@
     // A width change (rotation, a resized window) redraws, without the draw-in.
     if ("ResizeObserver" in window) {
       new ResizeObserver(function () {
-        var w = Math.round(svg.getBoundingClientRect().width);
+        var w = chartWidth();
         if (w && Math.abs(w - drawnAt) > 1) {
           hideTip();
           drawnAt = draw();

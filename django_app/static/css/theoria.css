@@ -1001,7 +1001,7 @@ main.container {
   font-family: var(--font-display);
   font-weight: 900;
   font-stretch: 125%;
-  font-size: clamp(4rem, 19vw, 17rem);
+  font-size: clamp(4rem, calc(19 * var(--vw, 1vw)), 17rem);
   line-height: 0.8;
   letter-spacing: -0.04em;
   text-transform: uppercase;
