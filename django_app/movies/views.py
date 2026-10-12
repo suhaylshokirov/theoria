@@ -31,6 +31,7 @@ from movies.i18n import (
     localize_movies, localize_people, localize_series, search_aliases,
     series_name_order, title_order,
 )
+from movies.season_stats import season_rating_summary
 from movies.templatetags.tmdb_images import tmdb_image
 from movies.vocab import display_department, display_job
 
@@ -927,14 +928,20 @@ def _reconcile_languages(original_language, language_rows):
 
 
 def _build_seasons(series_id):
-    """Every season of a show as {season, episodes}, specials last."""
+    """Every regular season of a show as {season, episodes}, in order.
+
+    "Specials" (season_number 0) is left out (Task 131): extras and
+    behind-the-scenes, not part of the run a reader is deciding whether to
+    watch, so it gets no slicer option, no episode table and no place in the
+    rating chart. Filtered here in Python rather than in the query so the
+    one Season and one Episode query stay exactly as they were.
+    """
     seasons = sorted(
-        Season.objects.using("warehouse").filter(series_id=series_id),
-        # "Specials" (season_number 0) reads last, not first, matching the
-        # convention every streaming app already uses — TMDB's season stub
-        # numbers it 0 because that's its position in the API array, not
-        # because a reader wants to watch it before Season 1.
-        key=lambda s: (s.season_number == 0, s.season_number),
+        (
+            s for s in Season.objects.using("warehouse").filter(series_id=series_id)
+            if s.season_number != 0
+        ),
+        key=lambda s: (s.season_number is None, s.season_number or 0),
     )
 
     # One query for every episode on the show, joined to its IMDb rating via
@@ -1103,6 +1110,7 @@ def series_detail(request, series_slug):
         rating_rank = int(ranks["above"]) + 1
         rated_total = int(ranks["total"])
 
+    seasons = SimpleLazyObject(lambda: _build_seasons(series_id))
     context = {
         "series": series,
         "genres": genres,
@@ -1122,7 +1130,10 @@ def series_detail(request, series_slug):
         # Lazy: the Season/Episode queries run only if the episodes fragment in
         # series_detail.html is a cache miss (Task 118) -- on a hit nothing
         # reads this, so the warehouse is never asked.
-        "seasons": SimpleLazyObject(lambda: _build_seasons(series_id)),
+        "seasons": seasons,
+        # Task 130's season analytics, derived in Python from the same rows --
+        # equally lazy, and inside the same cached fragment.
+        "season_stats": SimpleLazyObject(lambda: season_rating_summary(seasons)),
         "year_span": _series_year_span(series),
         "trailer": trailer,
         "collection_flags": collection_flags(

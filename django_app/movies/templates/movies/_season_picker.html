@@ -11,17 +11,28 @@
    seasons live, so an overflow:hidden pill would make most of them
    unreachable.
 
+   Tasks 130–132: an "All seasons" option leads the row when two or more
+   seasons are rated, and is where the page opens: its panel holds the
+   show-wide KPI cards and the one-row-per-season table, and
+   static/js/series_ratings.js draws the season-by-season trend under it.
+   A one-season show has no such option and opens on its season.
+
    Params (pass with `only`):
-     seasons : the same list of {season, episodes} dicts series_detail()
-               builds for _episode_table.html — only `season` is read here.
+     seasons   : the same list of {season, episodes} dicts series_detail()
+                 builds for _episode_table.html — only `season` is read here.
+     has_trend : season_stats.has_trend (movies/season_stats.py).
 {% endcomment %}
 {% load i18n %}
 {% translate "Season" as season_word %}
 <fieldset class="season-picker" data-season-picker>
     <legend class="visually-hidden">{% translate "Choose a season" %}</legend>
+    {% if has_trend %}
+    <input type="radio" name="season" id="season-all" value="all" checked>
+    <label for="season-all">{% translate "All seasons" %}</label>
+    {% endif %}
     {% for block in seasons %}
     <input type="radio" name="season" id="season-{{ block.season.season_id }}"
-           value="{{ block.season.season_number }}" {% if forloop.first %}checked{% endif %}>
+           value="{{ block.season.season_number }}" {% if forloop.first and not has_trend %}checked{% endif %}>
     <label for="season-{{ block.season.season_id }}">{{ block.season.name|default:season_word }}</label>
     {% endfor %}
 </fieldset>

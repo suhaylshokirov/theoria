@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import django
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DJANGO_APP_DIR = PROJECT_ROOT / "django_app"
@@ -1135,19 +1136,100 @@ def test_series_detail_season_with_no_episodes_renders_not_catalogued_yet():
     assert "haven&#x27;t been catalogued yet" in body or "haven't been catalogued yet" in body
 
 
-def test_series_detail_specials_sort_last_regardless_of_season_number():
-    """season_number 0 ('Specials') is TMDB's array position, not a viewing
-    order — it must not lead the season picker or the stacked panels."""
+def test_series_detail_leaves_specials_out():
+    """Task 131: season 0 ("Specials") is extras, not part of the run -- no
+    slicer option, no episode table, nothing charted."""
     show = _series()
     specials = _season(1, show, 0, "Specials")
     season1 = _season(2, show, 1, "Season 1")
     season2 = _season(3, show, 2, "Season 2")
+    episodes = [_episode(901, show, 0, 1, name="Behind the Scenes", imdb_rating=Decimal("6.0"))]
 
-    with _series_detail_mocks(show, seasons=[specials, season1, season2]):
+    with _series_detail_mocks(show, seasons=[specials, season1, season2], episodes=episodes):
         response = client.get("/tv/test-show/")
 
     ordered = [s["season"] for s in response.context["seasons"]]
-    assert ordered == [season1, season2, specials]
+    assert ordered == [season1, season2]
+    body = response.content.decode()
+    assert "Specials" not in body
+    assert "Behind the Scenes" not in body
+
+
+def test_series_detail_multi_season_show_opens_on_all_seasons():
+    """Task 132: with 2+ rated seasons the page opens on "All seasons" -- the
+    show-wide KPI cards, a one-row-per-season table built like the episode
+    table, and the season trend's data under it. Each season keeps its own
+    KPI cards and its 10-row episode table."""
+    show = _series()
+    season1 = _season(1, show, 1, "Season 1")
+    season2 = _season(2, show, 2, "Season 2")
+    episodes = [
+        _episode(101, show, 1, 1, name="Pilot", imdb_rating=Decimal("8.0"), imdb_vote_count=100),
+        _episode(102, show, 1, 2, name="Trust Fall", imdb_rating=Decimal("9.0"), imdb_vote_count=200),
+        _episode(103, show, 1, 3, name="OutKast", imdb_rating=Decimal("7.0"), imdb_vote_count=50),
+        _episode(201, show, 2, 1, name="Return", imdb_rating=Decimal("8.6"), imdb_vote_count=80),
+    ]
+
+    with _series_detail_mocks(show, seasons=[season1, season2], episodes=episodes):
+        response = client.get("/tv/test-show/")
+
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert 'id="season-all" value="all" checked' in body
+    assert 'value="1" checked' not in body
+    assert 'class="season-panel is-active" data-season-panel="all"' in body
+    assert 'class="season-panel" data-season-panel="1"' in body
+    # One row per season, in the episode table's structure and pager.
+    assert body.count('class="season-row"') == 2
+    assert 'data-page-size="10" data-page-items=".season-row"' in body
+    assert 'data-page-size="10" data-page-items=".episode-row"' in body
+    assert 'href="#episodes-season-2" data-season-select="2"' in body
+    assert "8.00 / 10" in body  # Season 1's average in the rating badge
+    # KPI cards: show-wide in the overview, per season in each panel.
+    assert body.count('class="season-readout"') == 3
+    assert "Episode average" in body and "Best episode" in body
+    # The chart sits under the tables.
+    assert body.rindex('class="episode-row"') < body.index("data-season-chart")
+    assert 'id="season-chart-data"' in body
+    stats = response.context["season_stats"]
+    # The show-wide episode average: (8 + 9 + 7 + 8.6) / 4 = 8.15.
+    assert stats["show"]["avg"] == pytest.approx(8.15)
+    assert stats["has_trend"] is True
+
+
+def test_series_detail_single_season_show_has_no_all_seasons_option():
+    """A one-season show has no trend to draw: no "All seasons" option, and
+    the chart shows its episodes."""
+    show = _series()
+    season = _season(1, show, 1, "Season 1")
+    episodes = [
+        _episode(101, show, 1, 1, imdb_rating=Decimal("8.2"), imdb_vote_count=24348),
+        _episode(102, show, 1, 2, imdb_rating=Decimal("8.1"), imdb_vote_count=20375),
+    ]
+
+    with _series_detail_mocks(show, seasons=[season], episodes=episodes):
+        response = client.get("/tv/test-show/")
+
+    body = response.content.decode()
+    assert 'value="all"' not in body
+    assert 'class="season-panel is-active" data-season-panel="1"' in body
+    assert 'id="season-chart-data"' in body
+
+
+def test_series_detail_without_any_rating_ships_no_chart():
+    """Nothing rated yet -> the episode table still renders, but no chart
+    block and no chart data: there is nothing to draw."""
+    show = _series()
+    season = _season(1, show, 1, "Season 1")
+    episodes = [_episode(101, show, 1, 1), _episode(102, show, 1, 2)]
+
+    with _series_detail_mocks(show, seasons=[season], episodes=episodes):
+        response = client.get("/tv/test-show/")
+
+    body = response.content.decode()
+    assert 'class="episode-row"' in body
+    assert "data-season-chart" not in body
+    assert 'id="season-chart-data"' not in body
 
 
 def _series_video(video_id, *, type="Trailer", official=True, name=None, key=None):
