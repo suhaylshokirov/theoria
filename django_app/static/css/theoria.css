@@ -4548,9 +4548,16 @@ main,
   }
 }
 
-/* The smallest phones (320px) can't fit the wordmark, the chip and both icon
-   buttons on one row, so the chip sheds its icon and the controls close up. */
-@media (max-width: 359px) {
+/* Below ~400px (a 360px Android, a 375px iPhone) the Θ, the chip, search, the
+   language pill and two icon buttons overflow one row and the theme toggle
+   wraps onto a second line, so the chip sheds its icon and the controls
+   close up. */
+@media (max-width: 399px) {
+  .site-header .nav {
+    --nav-gap: var(--space-3);
+    padding-left: var(--space-5);
+  }
+
   html.has-js .signin-btn--header {
     padding-inline: var(--space-3);
     font-size: var(--text-xs);
@@ -4584,6 +4591,18 @@ main,
   html.has-js .signin-btn--header ~ .theme-toggle,
   html.has-js .account-menu--header ~ .theme-toggle {
     margin-left: calc(var(--space-2) - var(--space-4));
+  }
+}
+
+/* At 320px even that is ~10px too wide: the language pill drops its chevron
+   (the pill still opens on a tap, and the code alone names it). */
+@media (max-width: 359px) {
+  html.has-js .lang-menu__chevron {
+    display: none;
+  }
+
+  html.has-js .lang-menu__trigger {
+    padding-inline: var(--space-4);
   }
 }
 

@@ -493,8 +493,14 @@ html.has-js .reel__tabs {
 
 /* --- 4. Decades chart ---------------------------------------------------------- */
 
+/* overflow-x: clip, because once the chart is drawn the table is shrunk to a
+   1px screen-reader box, and a table never lays out narrower than its
+   content: on a 360px phone it pokes ~20px past the viewport, which mobile
+   browsers answer by widening the whole page. Clip, not hidden, so the
+   tooltip above a bar still escapes vertically. */
 .decades {
   position: relative;
+  overflow-x: clip;
   padding: clamp(18px, 3vw, 36px);
   border: var(--hairline);
   border-radius: 20px;
@@ -571,7 +577,12 @@ html.has-js .reel__tabs {
   transition: fill var(--dur) var(--ease);
 }
 
-.decades__chart .bar:hover { fill: color-mix(in srgb, var(--ink) 22%, transparent); }
+.decades__chart .bar:hover,
+.decades__chart .bar.is-active { fill: color-mix(in srgb, var(--ink) 22%, transparent); }
+
+/* A full-height column behind each bar, so a finger can tap a decade
+   without landing on a 30px-wide bar. */
+.decades__chart .hit { fill: transparent; }
 .decades__chart .bar.is-best { fill: var(--lime); }
 
 .decades__chart.is-animating .bar {
@@ -612,7 +623,15 @@ html.has-js .reel__tabs {
   font: 500 12px var(--font-mono);
 }
 
-.decades__chart .val { fill: var(--ink); }
+/* The rating figures ride the line, which crosses the bars; a halo in the
+   page colour keeps "7.34" legible where it lands on the lime one. */
+.decades__chart .val {
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
 
 .decades__tip {
   position: absolute;
@@ -630,11 +649,19 @@ html.has-js .reel__tabs {
 
 /* --- Small screens ---------------------------------------------------------------- */
 
+/* Horizontal swipes on the reel are cinema.js's to read (next / previous
+   film); vertical ones still scroll the page. */
+html.has-js .reel {
+  touch-action: pan-y;
+}
+
 @media (max-width: 900px) {
+  /* Every film in the queue stays on screen: a tab scrolled out of view is a
+     film the reader never learns is there. Titles ellipsise instead. */
   html.has-js .reel__tabs {
-    grid-template-columns: repeat(6, 150px);
-    overflow-x: auto;
-    scrollbar-width: none;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
   }
 
   .figures {
@@ -653,9 +680,182 @@ html.has-js .reel__tabs {
   }
 }
 
-@media (max-width: 520px) {
-  .reel { min-height: min(86vh, 760px); }
-  .reel__meta { font-size: var(--text-xs); }
+/* Phones. Rethought for a thumb and a narrow column rather than shrunk:
+   the reel's queue becomes a row of progress segments, the two poster grids
+   become swipeable shelves like the top-ten rail (twelve posters stacked two
+   abreast were ~2,200px of scrolling each), and every full-bleed strip lines
+   its first poster up with the page's text edge. */
+@media (max-width: 600px) {
+  .reel {
+    min-height: min(84svh, 720px);
+    padding-top: 104px;
+  }
+
+  /* Scales with the screen instead of sitting on a 2.6rem floor that a
+     long word ("REDEMPTION") or a Cyrillic title can't fit at 320px, and
+     sets a touch less wide so ten capitals fit a 320px column whole. A word
+     that still won't fit breaks rather than being clipped by its mask. */
+  .reel__title {
+    font-size: clamp(1.75rem, 10.5vw, 3.4rem);
+    font-stretch: 108%;
+    max-width: none;
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+
+  .reel__tagline {
+    margin-top: var(--space-4);
+    font-size: var(--text-base);
+  }
+
+  .reel__meta {
+    gap: var(--space-2) var(--space-5);
+    margin-top: var(--space-5);
+    font-size: var(--text-xs);
+  }
+
+  .reel__actions {
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+  }
+
+  /* Two thumb-sized buttons sharing the row, not two islands on the left. */
+  .reel__actions .cta {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .reel__copy {
+    padding-bottom: var(--space-6);
+  }
+
+  /* The queue as story segments: one bar per film, the showing one filling.
+     Titles drop out of view but stay in the button for screen readers; the
+     slide above already names the film. The padding makes each segment a
+     44px tap target although only its 3px bar is drawn. */
+  html.has-js .reel__tabs {
+    gap: var(--space-2);
+    padding-block: 0 var(--space-5);
+    border-top: 0;
+  }
+
+  .reel__tab {
+    gap: 0;
+    padding-block: 20px 21px;
+  }
+
+  .reel__bar {
+    height: 3px;
+  }
+
+  .reel__tab-title,
+  .reel__tab-year {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .figure {
+    padding-block: var(--space-6);
+  }
+
+  .home-head {
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .home-note {
+    font-size: var(--text-sm);
+  }
+
+  /* --- Strips: the top-ten rail and the two shelves -------------------- */
+
+  .rail,
+  .poster-grid.home-shelf {
+    padding-inline: var(--space-5);
+    scroll-padding-inline: var(--space-5);
+    overscroll-behavior-x: contain;
+  }
+
+  .rank__num {
+    font-size: clamp(4.75rem, 24vw, 6.5rem);
+  }
+
+  .rank__poster,
+  .rank__meta {
+    width: clamp(118px, 34vw, 150px);
+  }
+
+  .rank__meta {
+    margin-top: var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  /* The grid becomes a shelf: same cards, laid in a row that scrolls
+     sideways, with the next poster peeking in at the edge as the cue. */
+  .poster-grid.home-shelf {
+    display: flex;
+    gap: var(--space-4);
+    width: 100vw;
+    margin-inline: calc(50% - 50vw);
+    padding-bottom: var(--space-3);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .poster-grid.home-shelf::-webkit-scrollbar { display: none; }
+
+  .poster-grid.home-shelf > * {
+    flex: 0 0 clamp(128px, 38vw, 176px);
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .poster-grid.home-shelf > .empty {
+    flex: 1 1 auto;
+  }
+
+  /* --- Decades chart --------------------------------------------------- */
+
+  .decades {
+    padding: var(--space-5) var(--space-4);
+    border-radius: 14px;
+  }
+
+  .decades__legend {
+    gap: var(--space-2) var(--space-5);
+  }
+}
+
+/* Phone in landscape: the reel can't take 84% of a 390px-tall screen and
+   still show its copy, so it sizes to the copy and lets the backdrop fill
+   in behind. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .reel {
+    min-height: 0;
+    padding-top: 96px;
+  }
+
+  .reel__title {
+    font-size: clamp(2rem, 6vw, 3.2rem);
+  }
+}
+
+/* Touch screens. Nothing here can be hovered, so the hint that says to
+   hover goes, and the rail's arrow buttons give way to the swipe the rail
+   already answers to (keyboard and mouse users keep them). */
+@media (hover: none) and (pointer: coarse) {
+  .home-note--pointer,
+  .rail-controls {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
