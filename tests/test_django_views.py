@@ -1300,7 +1300,7 @@ def test_series_detail_no_video_blocks_when_show_has_no_videos():
     assert "data-glow-source" in poster_tag
 
 
-def test_series_detail_ranks_the_show_among_rated_shows():
+def test_series_detail_shows_the_rating_without_a_rank():
     show = _series()
 
     with _series_detail_mocks(show) as mocks:
@@ -1308,24 +1308,22 @@ def test_series_detail_ranks_the_show_among_rated_shows():
         rated.first.return_value = SeriesRating(
             series=show, source="imdb", rating=Decimal("9.1"), vote_count=10,
         )
-        rated.aggregate.return_value = {"total": 734, "above": 2}
         response = client.get("/tv/test-show/")
 
-    assert response.context["rating_rank"] == 3
-    assert response.context["rated_total"] == 734
+    # No catalogue-wide aggregate is run just to print a rank.
+    rated.aggregate.assert_not_called()
+    assert "rating_rank" not in response.context
     body = response.content.decode()
-    assert "Ranked #3 of 734 rated shows on Theoria" in body
+    assert "Ranked #" not in body
     assert 'stroke-dasharray="91 100"' in body
 
 
-def test_series_detail_has_no_rank_without_a_rating():
+def test_series_detail_has_no_score_without_a_rating():
     show = _series()
 
     with _series_detail_mocks(show):
         response = client.get("/tv/test-show/")
 
-    assert response.context["rating_rank"] is None
-    assert response.context["rated_total"] is None
     assert 'class="score"' not in response.content.decode()
 
 
@@ -3512,7 +3510,7 @@ def test_box_office_multiple_and_bar_widths():
     assert _box_office(None, None) is None
 
 
-def test_movie_detail_ranks_the_film_among_rated_films():
+def test_movie_detail_shows_the_rating_without_a_rank():
     movie = _movie()
 
     with _movie_detail_video_mocks(movie, []):
@@ -3521,13 +3519,13 @@ def test_movie_detail_ranks_the_film_among_rated_films():
             rated.first.return_value = MovieRating(
                 movie=movie, source="imdb", rating=Decimal("9.1"), vote_count=10,
             )
-            rated.aggregate.return_value = {"total": 1214, "above": 2}
             response = client.get(f"/movies/{movie.movie_id}/")
 
-    assert response.context["rating_rank"] == 3
-    assert response.context["rated_total"] == 1214
+    # No catalogue-wide aggregate is run just to print a rank.
+    rated.aggregate.assert_not_called()
+    assert "rating_rank" not in response.context
     body = response.content.decode()
-    assert "Ranked #3 of 1,214 rated films on Theoria" in body
+    assert "Ranked #" not in body
     # The score ring's arc is the rating x 10 on a pathLength of 100.
     assert 'stroke-dasharray="91 100"' in body
     # The fixture's budget 1,000 / revenue 5,000 earns the box-office card.

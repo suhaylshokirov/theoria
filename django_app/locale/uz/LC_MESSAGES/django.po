@@ -2088,14 +2088,6 @@ msgstr "Filmlar va seriallarni qidirish"
 msgid "IMDb rating"
 msgstr "IMDb reytingi"
 
-#, python-format
-msgid "Ranked #%(rank)s of %(total)s rated films on Theoria"
-msgstr "Theoria'dagi %(total)s ta baholangan film ichida %(rank)s-o'rin"
-
-#, python-format
-msgid "Ranked #%(rank)s of %(total)s rated shows on Theoria"
-msgstr "Theoria'dagi %(total)s ta baholangan serial ichida %(rank)s-o'rin"
-
 msgid "Box office"
 msgstr "Kassa tushumi"
 

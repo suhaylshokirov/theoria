@@ -279,7 +279,6 @@
 
 .score strong {
   display: block;
-  margin-bottom: var(--space-1);
   color: var(--ink);
   font-size: var(--text-base);
   font-weight: 600;
