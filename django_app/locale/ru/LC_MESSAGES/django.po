@@ -2244,9 +2244,6 @@ msgstr "Средний рейтинг IMDb: %(value)s из 10"
 
 # Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
 
-msgid "The archive, measured: ratings, money, decades and the people behind them."
-msgstr "Архив в цифрах: рейтинги, деньги, десятилетия и люди за кадром."
-
 msgid "Median movie rating"
 msgstr "Медианный рейтинг фильмов"
 
@@ -2539,6 +2536,9 @@ msgstr[3] "Основано на %(counter)s фильмах с известны�
 
 msgid "A movie counts in every genre it belongs to, so each decade's shares add up to more than 100 percent. The ten most common genres."
 msgstr "Фильм учитывается в каждом своём жанре, поэтому доли за десятилетие в сумме дают больше 100 процентов. Десять самых частых жанров."
+
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
 
 
 # Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
