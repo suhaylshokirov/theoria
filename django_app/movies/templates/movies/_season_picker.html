@@ -11,27 +11,28 @@
    seasons live, so an overflow:hidden pill would make most of them
    unreachable.
 
-   Task 130 put an "All seasons" option first, selected by default, whenever
-   the show has two or more regular seasons — the overview (season table +
-   season trend) the reader starts from before drilling into one season.
-   static/js/series_ratings.js listens to the same radios to redraw the chart.
+   Tasks 130–131: an "All seasons" option leads the row when two or more
+   seasons are rated. It drives only the rating chart under the table
+   (static/js/series_ratings.js draws the season-by-season trend); the table
+   keeps showing the season last picked. Season 1 stays the default, so the
+   page opens exactly as it did before the chart existed.
 
    Params (pass with `only`):
-     rows         : season_stats.rows (movies/season_stats.py) — only
-                    `season` is read here.
-     has_overview : season_stats.has_overview.
+     seasons   : the same list of {season, episodes} dicts series_detail()
+                 builds for _episode_table.html — only `season` is read here.
+     has_trend : season_stats.has_trend (movies/season_stats.py).
 {% endcomment %}
 {% load i18n %}
 {% translate "Season" as season_word %}
 <fieldset class="season-picker" data-season-picker>
     <legend class="visually-hidden">{% translate "Choose a season" %}</legend>
-    {% if has_overview %}
-    <input type="radio" name="season" id="season-all" value="all" checked>
+    {% if has_trend %}
+    <input type="radio" name="season" id="season-all" value="all">
     <label for="season-all">{% translate "All seasons" %}</label>
     {% endif %}
-    {% for row in rows %}
-    <input type="radio" name="season" id="season-{{ row.season.season_id }}"
-           value="{{ row.season.season_number }}" {% if forloop.first and not has_overview %}checked{% endif %}>
-    <label for="season-{{ row.season.season_id }}">{{ row.season.name|default:season_word }}</label>
+    {% for block in seasons %}
+    <input type="radio" name="season" id="season-{{ block.season.season_id }}"
+           value="{{ block.season.season_number }}" {% if forloop.first %}checked{% endif %}>
+    <label for="season-{{ block.season.season_id }}">{{ block.season.name|default:season_word }}</label>
     {% endfor %}
 </fieldset>

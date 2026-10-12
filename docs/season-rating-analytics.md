@@ -1,4 +1,34 @@
-# Season Rating Analytics — TV show pages (Task 130 plan)
+# Season Rating Analytics — TV show pages (Tasks 130–131)
+
+## Task 131 revision (current behaviour)
+
+Task 131 replaced most of the Task 130 layout below at the user's request. **What ships now:**
+
+- **The episode table is back to its original format:** one season at a time, with the same
+  columns as before. There is no all-seasons table and no summary strip.
+- **The slicer:** "All seasons" (shown when 2+ seasons are rated), then Season 1…N. **Season 1
+  is selected on load**, so the page opens as it always did. Picking "All seasons" changes
+  **only the chart**, to the season-by-season trend; the table stays on the season last picked.
+- **Specials (season 0) are gone** from the slicer, the tables and the chart
+  (`_build_seasons()` drops them).
+- **The area chart under the table:**
+  - **Line and fill:** a smooth (monotone) 2px lime line over a lime gradient that fades into
+    the page. No dots at rest.
+  - **Hover:** a hairline guide down the chart, with an HTML tooltip card styled from the
+    site's own tokens.
+  - **Markers:** best and lowest points get a small labelled marker.
+  - **Average:** a dashed line, with its value printed in the key.
+  - **Axis:** zoomed to the data, snapping to whole numbers when the span is wide.
+  - **Motion:** the line draws in left to right (none under reduced motion).
+- **Decided during the build:** the plan put the average's label on the canvas, but on a
+  steady show both ends of the line run along the average, so any in-plot label landed on a
+  point. The value lives in the key instead. X ticks stay plain numbers under a "Season" /
+  "Episode" axis title rather than "S1"/"E1", which don't abbreviate cleanly in Russian.
+
+The Task 130 record follows, kept for history.
+
+---
+
 
 Status: **implemented (Task 130).** Changes made during the build, after checking real shows:
 

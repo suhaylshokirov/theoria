@@ -2139,70 +2139,29 @@ msgstr "бюджета вернулось в прокате"
 msgid "All seasons"
 msgstr "Все сезоны"
 
-#: movies/templates/movies/_season_overview.html
-msgid "Episode average"
-msgstr "Средняя по сериям"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html
-msgid "Not rated yet"
-msgstr "Пока без оценок"
-
-#: movies/templates/movies/_season_overview.html
-msgid "Best season"
-msgstr "Лучший сезон"
-
-#: movies/templates/movies/_season_overview.html
-msgid "Weakest season"
-msgstr "Самый слабый сезон"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Rated episodes"
 msgstr "Серий с оценкой"
 
-#: movies/templates/movies/_season_overview.html
-msgid "Aired"
-msgstr "Годы показа"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Average"
 msgstr "Средняя"
 
-#: movies/templates/movies/_season_overview.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Range"
 msgstr "Разброс"
 
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html
-msgid "Best episode"
-msgstr "Лучшая серия"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Votes"
 msgstr "Голоса"
 
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html
-msgid "Airing"
-msgstr "Выходит"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "few ratings"
 msgstr "мало оценок"
 
-#: movies/templates/movies/_season_overview.html
-msgid "Specials are listed but not counted in the averages or the trend."
-msgstr "Спецвыпуски есть в таблице, но не входят в средние оценки и график."
-
-#: movies/templates/movies/_season_readout.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Season average"
 msgstr "Средняя за сезон"
-
-#: movies/templates/movies/_season_readout.html
-#, python-format
-msgid "Episode %(n)s"
-msgstr "Серия %(n)s"
-
-#: movies/templates/movies/_season_readout.html
-msgid "Weakest episode"
-msgstr "Самая слабая серия"
 
 #: movies/templates/movies/series_detail.html
 msgid "Episode"
@@ -2233,5 +2192,9 @@ msgid "Show-wide episode average"
 msgstr "Средняя по всем сериям"
 
 #: movies/templates/movies/series_detail.html
-msgid "Fewer than 3 rated episodes"
-msgstr "Меньше 3 серий с оценкой"
+msgid "Best"
+msgstr "Лучшая"
+
+#: movies/templates/movies/series_detail.html
+msgid "Lowest"
+msgstr "Худшая"

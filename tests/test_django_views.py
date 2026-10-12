@@ -1136,25 +1136,29 @@ def test_series_detail_season_with_no_episodes_renders_not_catalogued_yet():
     assert "haven&#x27;t been catalogued yet" in body or "haven't been catalogued yet" in body
 
 
-def test_series_detail_specials_sort_last_regardless_of_season_number():
-    """season_number 0 ('Specials') is TMDB's array position, not a viewing
-    order — it must not lead the season picker or the stacked panels."""
+def test_series_detail_leaves_specials_out():
+    """Task 131: season 0 ("Specials") is extras, not part of the run -- no
+    slicer option, no episode table, nothing charted."""
     show = _series()
     specials = _season(1, show, 0, "Specials")
     season1 = _season(2, show, 1, "Season 1")
     season2 = _season(3, show, 2, "Season 2")
+    episodes = [_episode(901, show, 0, 1, name="Behind the Scenes", imdb_rating=Decimal("6.0"))]
 
-    with _series_detail_mocks(show, seasons=[specials, season1, season2]):
+    with _series_detail_mocks(show, seasons=[specials, season1, season2], episodes=episodes):
         response = client.get("/tv/test-show/")
 
     ordered = [s["season"] for s in response.context["seasons"]]
-    assert ordered == [season1, season2, specials]
+    assert ordered == [season1, season2]
+    body = response.content.decode()
+    assert "Specials" not in body
+    assert "Behind the Scenes" not in body
 
 
-def test_series_detail_multi_season_show_opens_on_the_all_seasons_overview():
-    """Task 130: two or more regular seasons -> the slicer leads with an
-    "All seasons" option (checked), whose panel holds the season table, and
-    the area chart's data ships under the tables."""
+def test_series_detail_all_seasons_option_drives_only_the_chart():
+    """Task 131: with 2+ rated seasons the slicer leads with "All seasons",
+    but Season 1 is still the season shown first, there is no all-seasons
+    table, and the area chart's data sits under the episode tables."""
     show = _series()
     season1 = _season(1, show, 1, "Season 1")
     season2 = _season(2, show, 2, "Season 2")
@@ -1170,28 +1174,24 @@ def test_series_detail_multi_season_show_opens_on_the_all_seasons_overview():
 
     assert response.status_code == 200
     body = response.content.decode()
-    assert 'id="season-all" value="all" checked' in body
-    assert 'data-season-panel="all"' in body
-    assert 'class="season-table"' in body
-    # Each season row links to its own panel (a plain jump without JS).
-    assert 'href="#episodes-season-2" data-season-select="2"' in body
-    assert 'id="episodes-season-1"' in body
-    # The overview, not Season 1, is the panel shown first.
-    assert 'class="season-panel is-active" data-season-panel="all"' in body
-    assert 'class="season-panel" data-season-panel="1"' in body
+    assert 'id="season-all" value="all">' in body
+    assert 'value="1" checked' in body
+    assert 'class="season-panel is-active" data-season-panel="1"' in body
+    assert 'data-season-panel="all"' not in body
+    assert "season-table" not in body and "season-readout" not in body
     # The chart is under the tables and its data is on the page.
-    assert body.index('class="season-table"') < body.index("data-season-chart")
+    assert body.rindex('class="episode-row"') < body.index("data-season-chart")
     assert 'id="season-chart-data"' in body
     assert "js/series_ratings.js" in body
+    chart = response.context["season_stats"]["chart"]
     # The show-wide episode average: (8 + 9 + 7 + 8.6) / 4 = 8.15.
-    stats = response.context["season_stats"]
-    assert stats["show"]["avg"] == pytest.approx(8.15)
-    assert stats["has_overview"] is True
+    assert chart["show_avg"] == pytest.approx(8.15)
+    assert [s["number"] for s in chart["seasons"]] == [1, 2]
 
 
-def test_series_detail_single_season_show_skips_the_overview():
-    """A one-season show has no trend to draw: no "All seasons" option, its
-    one season is selected, and the chart opens on its episodes."""
+def test_series_detail_single_season_show_has_no_all_seasons_option():
+    """A one-season show has no trend to draw: no "All seasons" option, and
+    the chart shows its episodes."""
     show = _series()
     season = _season(1, show, 1, "Season 1")
     episodes = [
@@ -1204,16 +1204,13 @@ def test_series_detail_single_season_show_skips_the_overview():
 
     body = response.content.decode()
     assert 'value="all"' not in body
-    assert 'data-season-panel="all"' not in body
     assert 'class="season-panel is-active" data-season-panel="1"' in body
-    assert 'class="season-readout"' in body
-    assert "Season average" in body
     assert 'id="season-chart-data"' in body
 
 
 def test_series_detail_without_any_rating_ships_no_chart():
-    """Nothing rated yet -> the tables still render, but no chart block and
-    no chart data: there is nothing to draw."""
+    """Nothing rated yet -> the episode table still renders, but no chart
+    block and no chart data: there is nothing to draw."""
     show = _series()
     season = _season(1, show, 1, "Season 1")
     episodes = [_episode(101, show, 1, 1), _episode(102, show, 1, 2)]
@@ -1222,9 +1219,9 @@ def test_series_detail_without_any_rating_ships_no_chart():
         response = client.get("/tv/test-show/")
 
     body = response.content.decode()
+    assert 'class="episode-row"' in body
     assert "data-season-chart" not in body
     assert 'id="season-chart-data"' not in body
-    assert "Not rated yet" in body
 
 
 def _series_video(video_id, *, type="Trailer", official=True, name=None, key=None):

@@ -2106,70 +2106,29 @@ msgstr "byudjeti prokatda qaytarildi"
 msgid "All seasons"
 msgstr "Barcha fasllar"
 
-#: movies/templates/movies/_season_overview.html
-msgid "Episode average"
-msgstr "Epizodlar oʻrtachasi"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html
-msgid "Not rated yet"
-msgstr "Hali baholanmagan"
-
-#: movies/templates/movies/_season_overview.html
-msgid "Best season"
-msgstr "Eng yaxshi fasl"
-
-#: movies/templates/movies/_season_overview.html
-msgid "Weakest season"
-msgstr "Eng zaif fasl"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Rated episodes"
 msgstr "Baholangan epizodlar"
 
-#: movies/templates/movies/_season_overview.html
-msgid "Aired"
-msgstr "Efir yillari"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Average"
 msgstr "Oʻrtacha"
 
-#: movies/templates/movies/_season_overview.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Range"
 msgstr "Oraliq"
 
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html
-msgid "Best episode"
-msgstr "Eng yaxshi epizod"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Votes"
 msgstr "Ovozlar"
 
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html
-msgid "Airing"
-msgstr "Efirda"
-
-#: movies/templates/movies/_season_overview.html movies/templates/movies/_season_readout.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "few ratings"
 msgstr "baholar kam"
 
-#: movies/templates/movies/_season_overview.html
-msgid "Specials are listed but not counted in the averages or the trend."
-msgstr "Maxsus sonlar roʻyxatda bor, lekin oʻrtacha baholar va grafikka kiritilmagan."
-
-#: movies/templates/movies/_season_readout.html movies/templates/movies/series_detail.html
+#: movies/templates/movies/series_detail.html
 msgid "Season average"
 msgstr "Fasl oʻrtachasi"
-
-#: movies/templates/movies/_season_readout.html
-#, python-format
-msgid "Episode %(n)s"
-msgstr "%(n)s-epizod"
-
-#: movies/templates/movies/_season_readout.html
-msgid "Weakest episode"
-msgstr "Eng zaif epizod"
 
 #: movies/templates/movies/series_detail.html
 msgid "Episode"
@@ -2200,5 +2159,9 @@ msgid "Show-wide episode average"
 msgstr "Barcha epizodlar oʻrtachasi"
 
 #: movies/templates/movies/series_detail.html
-msgid "Fewer than 3 rated episodes"
-msgstr "3 tadan kam baholangan epizod"
+msgid "Best"
+msgstr "Eng yaxshi"
+
+#: movies/templates/movies/series_detail.html
+msgid "Lowest"
+msgstr "Eng past"
