@@ -161,12 +161,7 @@
                     </svg>
                     <span class="score__value mono">{{ series_rating.rating|floatformat:1 }}</span>
                 </div>
-                <p>
-                    <strong>{% translate "IMDb rating" %}</strong>
-                    {% if rating_rank and rated_total %}
-                    {% blocktranslate trimmed with rank=rating_rank total=rated_total %}Ranked #{{ rank }} of {{ total }} rated shows on Theoria{% endblocktranslate %}
-                    {% endif %}
-                </p>
+                <p><strong>{% translate "IMDb rating" %}</strong></p>
             </div>
         </aside>
         {% endif %}

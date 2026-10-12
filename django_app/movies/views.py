@@ -756,18 +756,6 @@ def movie_detail(request, movie_slug):
     )
     trailer = _pick_trailer(videos)
 
-    # "Ranked #N of M films" beside the score ring: one aggregate over
-    # fact_movie_rating, which holds one IMDb row per film. Films tied on the
-    # rating share a rank, so N counts only the films rated strictly higher.
-    rating_rank = rated_total = None
-    if movie_rating and movie_rating.rating is not None:
-        ranks = MovieRating.objects.using("warehouse").filter(source="imdb").aggregate(
-            total=Count("movie_id"),
-            above=Count("movie_id", filter=Q(rating__gt=movie_rating.rating)),
-        )
-        rating_rank = int(ranks["above"]) + 1
-        rated_total = int(ranks["total"])
-
     context = {
         "movie": movie,
         "genres": genres,
@@ -781,8 +769,6 @@ def movie_detail(request, movie_slug):
         "countries": countries,
         "languages": languages,
         "movie_rating": movie_rating,
-        "rating_rank": rating_rank,
-        "rated_total": rated_total,
         "box_office": _box_office(movie.budget, movie.revenue),
         "trailer": trailer,
         "collection_flags": collection_flags(
@@ -1098,18 +1084,6 @@ def series_detail(request, series_slug):
     )
     trailer = _pick_trailer(videos)
 
-    # "Ranked #N of M shows" beside the score ring, as on the film page: one
-    # aggregate over fact_series_rating's IMDb rows. Shows tied on the rating
-    # share a rank, so N counts only the shows rated strictly higher.
-    rating_rank = rated_total = None
-    if series_rating and series_rating.rating is not None:
-        ranks = SeriesRating.objects.using("warehouse").filter(source="imdb").aggregate(
-            total=Count("series_id"),
-            above=Count("series_id", filter=Q(rating__gt=series_rating.rating)),
-        )
-        rating_rank = int(ranks["above"]) + 1
-        rated_total = int(ranks["total"])
-
     seasons = SimpleLazyObject(lambda: _build_seasons(series_id))
     context = {
         "series": series,
@@ -1125,8 +1099,6 @@ def series_detail(request, series_slug):
         "countries": countries,
         "languages": languages,
         "series_rating": series_rating,
-        "rating_rank": rating_rank,
-        "rated_total": rated_total,
         # Lazy: the Season/Episode queries run only if the episodes fragment in
         # series_detail.html is a cache miss (Task 118) -- on a hit nothing
         # reads this, so the warehouse is never asked.
