@@ -85,6 +85,47 @@
          class, and the nav CSS's has-js-scoped rules simply never apply — the
          links fall back to the plain wrapping row they've always been. {% endcomment %}
       document.documentElement.classList.add("has-js");
+      {% comment %} The TV layout (home.css, "TV"). A TV and a desktop monitor
+         both report a 1920px page, so width alone can't tell them apart: a TV
+         is recognised by its browser's name, and any screen 3000px+ wide
+         (only a 4K panel reports one) counts as one too. ?tv=1 / ?tv=0 forces
+         it either way and is remembered, so the layout can be previewed on a
+         laptop. Runs before first paint, like the theme, so a TV never shows
+         the desktop layout first.
+
+         The zoom makes the screen read as a 1280px-wide page. --tv-vw / --tv-vh are
+         the screen's viewport units in pre-zoom px: a zoom multiplies vw and
+         vh along with everything else, so the page's full-bleed bands use
+         these instead (home.css, which hands them on as --vw / --vh only
+         where its zoom applies). Off a TV they are left unset. {% endcomment %}
+      (function () {
+        var el = document.documentElement;
+        var TV_WIDTH = 1280;
+        var forced = null;
+        try {
+          var q = /[?&]tv=([01])\b/.exec(location.search);
+          if (q) localStorage.setItem("theoria-tv", q[1]);
+          forced = localStorage.getItem("theoria-tv");
+        } catch (e) {}
+        var uaTV = /SmartTV|SMART-TV|Tizen|Web0S|webOS|NetCast|BRAVIA|HbbTV|CrKey|GoogleTV|Android TV|AndroidTV|\bAFT[A-Z]|Roku|VIDAA|PhilipsTV|Opera TV|TV Safari|AppleTV/.test(navigator.userAgent);
+        function fit() {
+          var w = window.innerWidth, h = window.innerHeight;
+          var on = forced === "1" || (forced !== "0" && (uaTV || w >= 3000));
+          el.classList.toggle("is-tv", on);
+          if (!on) {
+            el.style.removeProperty("--tv-zoom");
+            el.style.removeProperty("--tv-vw");
+            el.style.removeProperty("--tv-vh");
+            return;
+          }
+          var z = Math.max(1, Math.round((w / TV_WIDTH) * 100) / 100);
+          el.style.setProperty("--tv-zoom", z);
+          el.style.setProperty("--tv-vw", w / z / 100 + "px");
+          el.style.setProperty("--tv-vh", h / z / 100 + "px");
+        }
+        fit();
+        window.addEventListener("resize", fit);
+      })();
     </script>
     {% comment %} Every string theoria.js writes into the page, from
        core.context_processors.js_strings. The template is the only place the

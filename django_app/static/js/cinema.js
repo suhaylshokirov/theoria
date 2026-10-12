@@ -237,6 +237,25 @@
     // A backgrounded tab shouldn't keep advancing; pick up where it was.
     document.addEventListener("visibilitychange", schedule);
 
+    // Swipe sideways on a touch screen for the next or previous film. The
+    // reel is touch-action: pan-y (home.css), so a vertical drag still
+    // scrolls the page and only a clearly horizontal one counts.
+    var swipe = null;
+    reel.addEventListener("pointerdown", function (e) {
+      if (e.pointerType === "mouse" || images.length < 2) return;
+      swipe = { x: e.clientX, y: e.clientY };
+    });
+    reel.addEventListener("pointerup", function (e) {
+      if (!swipe) return;
+      var dx = e.clientX - swipe.x;
+      var dy = e.clientY - swipe.y;
+      swipe = null;
+      if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      var n = images.length;
+      show((current + (dx < 0 ? 1 : -1) + n) % n);
+    });
+    reel.addEventListener("pointercancel", function () { swipe = null; });
+
     show(0);
   }
 
@@ -349,63 +368,139 @@
 
     var decadeLabel = box.getAttribute("data-label-decade") || "{decade}s";
     var tipLabel = box.getAttribute("data-label-tip") || "{decade}s · {films} · {rating}";
-    var W = 1000, H = 380, m = { l: 48, r: 48, t: 28, b: 40 };
     var maxFilms = Math.ceil(Math.max.apply(null, rows.map(function (r) { return r.films; })) / 50) * 50 || 50;
     var ratings = rows.filter(function (r) { return r.rating != null; }).map(function (r) { return r.rating; });
     var rMin = Math.floor(Math.min.apply(null, ratings.concat([10])));
     var rMax = Math.ceil(Math.max.apply(null, ratings.concat([0])));
     if (rMax <= rMin) rMax = rMin + 1;
-    var bw = (W - m.l - m.r) / rows.length;
-    var yFilms = function (v) { return H - m.b - (v / maxFilms) * (H - m.t - m.b); };
-    var yRating = function (v) { return H - m.b - ((v - rMin) / (rMax - rMin)) * (H - m.t - m.b); };
     var step = maxFilms > 200 ? 100 : 50;
+    var active = null;
 
-    for (var t = 0; t <= maxFilms; t += step) {
-      svg.appendChild(svgEl("line", { "class": "grid", x1: m.l, x2: W - m.r, y1: yFilms(t), y2: yFilms(t) }));
-      svg.appendChild(svgEl("text", { x: m.l - 10, y: yFilms(t) + 4, "text-anchor": "end" }, t));
-    }
-    for (var r = rMin; r <= rMax; r++) {
-      svg.appendChild(svgEl("text", { x: W - m.r + 10, y: yRating(r) + 4 }, r.toFixed(1)));
-    }
-
-    var points = [];
-    rows.forEach(function (row, i) {
-      var x = m.l + i * bw + bw * 0.18, w = bw * 0.64;
-      var bar = svgEl("rect", {
-        "class": "bar" + (row.best ? " is-best" : ""),
-        x: x, y: yFilms(row.films), width: w, height: H - m.b - yFilms(row.films), rx: 6,
-        style: "--i:" + i,
+    function showTip(row, bar) {
+      if (active) active.classList.remove("is-active");
+      active = bar;
+      bar.classList.add("is-active");
+      tip.textContent = fill(tipLabel, {
+        decade: row.decade,
+        films: row.films,
+        rating: row.rating != null ? row.rating.toFixed(2) : "—",
       });
-      bar.addEventListener("pointerenter", function () {
-        tip.textContent = fill(tipLabel, {
-          decade: row.decade,
-          films: row.films,
-          rating: row.rating != null ? row.rating.toFixed(2) : "—",
+      // Centred over the bar but kept inside the box, which clips sideways
+      // (home.css): over the first or last decade of a phone-width chart the
+      // tip would otherwise lose its ends.
+      // Measured in screen px, positioned in the box's own px: they differ
+      // by the TV zoom (home.css), so divide it back out.
+      var z = scale();
+      var br = bar.getBoundingClientRect(), cr = box.getBoundingClientRect();
+      var half = tip.offsetWidth / 2;
+      var x = (br.left - cr.left + br.width / 2) / z;
+      tip.style.left = Math.min(Math.max(x, half + 4), box.offsetWidth - half - 4) + "px";
+      tip.style.top = (br.top - cr.top) / z + "px";
+      tip.style.opacity = 1;
+    }
+
+    function hideTip() {
+      if (active) active.classList.remove("is-active");
+      active = null;
+      tip.style.opacity = 0;
+    }
+
+    // Screen px per CSS px: 1, except under the home page's TV zoom, where
+    // getBoundingClientRect() reports the zoomed size.
+    function scale() {
+      return box.offsetWidth ? box.getBoundingClientRect().width / box.offsetWidth : 1;
+    }
+
+    // The chart's width in its own CSS px.
+    function chartWidth() {
+      return Math.round(svg.getBoundingClientRect().width / scale());
+    }
+
+    // Drawn at the size it is shown, in CSS px, so the 12px labels stay 12px
+    // on a phone rather than shrinking with a fixed 1000-unit drawing (and
+    // grow with the page on a TV). Returns the width it drew at.
+    function draw() {
+      var W = chartWidth() || 1000;
+      var narrow = W < 560;
+      // Wide keeps the 1000 x 380 proportions; narrow stands taller, so the
+      // bars still have height to compare by.
+      var H = narrow ? Math.round(Math.min(Math.max(W * 0.86, 240), 340)) : Math.round(W * 0.38);
+      var m = narrow ? { l: 36, r: 30, t: 26, b: 32 } : { l: 48, r: 48, t: 28, b: 40 };
+      var bw = (W - m.l - m.r) / rows.length;
+      var yFilms = function (v) { return H - m.b - (v / maxFilms) * (H - m.t - m.b); };
+      var yRating = function (v) { return H - m.b - ((v - rMin) / (rMax - rMin)) * (H - m.t - m.b); };
+
+      svg.textContent = "";
+      svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+
+      for (var t = 0; t <= maxFilms; t += step) {
+        svg.appendChild(svgEl("line", { "class": "grid", x1: m.l, x2: W - m.r, y1: yFilms(t), y2: yFilms(t) }));
+        svg.appendChild(svgEl("text", { x: m.l - (narrow ? 8 : 10), y: yFilms(t) + 4, "text-anchor": "end" }, t));
+      }
+      for (var r = rMin; r <= rMax; r++) {
+        svg.appendChild(svgEl("text", { x: W - m.r + (narrow ? 6 : 10), y: yRating(r) + 4 }, r.toFixed(1)));
+      }
+
+      var points = [];
+      rows.forEach(function (row, i) {
+        var x = m.l + i * bw + bw * 0.18, w = bw * 0.64;
+        var bar = svgEl("rect", {
+          "class": "bar" + (row.best ? " is-best" : ""),
+          x: x, y: yFilms(row.films), width: w, height: H - m.b - yFilms(row.films), rx: narrow ? 4 : 6,
+          style: "--i:" + i,
         });
-        var br = bar.getBoundingClientRect(), cr = box.getBoundingClientRect();
-        tip.style.left = br.left - cr.left + br.width / 2 + "px";
-        tip.style.top = br.top - cr.top + "px";
-        tip.style.opacity = 1;
+        // The whole column answers, not just the bar: a 30px bar is a poor
+        // target for a finger.
+        var hit = svgEl("rect", { "class": "hit", x: m.l + i * bw, y: m.t, width: bw, height: H - m.t - m.b });
+        [hit, bar].forEach(function (el) {
+          el.addEventListener("pointerenter", function () { showTip(row, bar); });
+          el.addEventListener("pointerleave", function (e) {
+            // A finger lifting is a pointerleave too; a tapped tip stays
+            // until the next tap elsewhere.
+            if (e.pointerType === "mouse" && !bar.contains(e.relatedTarget) && e.relatedTarget !== hit) hideTip();
+          });
+        });
+        svg.appendChild(hit);
+        svg.appendChild(bar);
+        // "1970s" in Uzbek is "1970-yillar", wider than a phone's column;
+        // the bare year says the same under a decades chart.
+        svg.appendChild(svgEl("text", { x: x + w / 2, y: H - m.b + (narrow ? 20 : 24), "text-anchor": "middle" },
+          narrow ? row.decade : fill(decadeLabel, { decade: row.decade })));
+        if (row.rating != null) points.push({ x: m.l + i * bw + bw / 2, y: yRating(row.rating), rating: row.rating });
       });
-      bar.addEventListener("pointerleave", function () { tip.style.opacity = 0; });
-      svg.appendChild(bar);
-      svg.appendChild(svgEl("text", { x: x + w / 2, y: H - m.b + 24, "text-anchor": "middle" },
-        fill(decadeLabel, { decade: row.decade })));
-      if (row.rating != null) points.push({ x: m.l + i * bw + bw / 2, y: yRating(row.rating), rating: row.rating });
-    });
 
-    if (points.length > 1) {
-      svg.appendChild(svgEl("path", {
-        "class": "line",
-        d: "M" + points.map(function (p) { return p.x + "," + p.y; }).join(" L"),
-      }));
+      if (points.length > 1) {
+        svg.appendChild(svgEl("path", {
+          "class": "line",
+          d: "M" + points.map(function (p) { return p.x + "," + p.y; }).join(" L"),
+        }));
+      }
+      points.forEach(function (p) {
+        svg.appendChild(svgEl("circle", { "class": "pt", cx: p.x, cy: p.y, r: narrow ? 4 : 5 }));
+        svg.appendChild(svgEl("text", { "class": "val", x: p.x, y: p.y - (narrow ? 11 : 14), "text-anchor": "middle" }, p.rating.toFixed(2)));
+      });
+      return W;
     }
-    points.forEach(function (p) {
-      svg.appendChild(svgEl("circle", { "class": "pt", cx: p.x, cy: p.y, r: 5 }));
-      svg.appendChild(svgEl("text", { "class": "val", x: p.x, y: p.y - 14, "text-anchor": "middle" }, p.rating.toFixed(2)));
+
+    // Shown first, so the chart has a width to be drawn at.
+    box.classList.add("is-drawn");
+    var drawnAt = draw();
+
+    // A tap anywhere off the chart puts a touch-opened tip away.
+    document.addEventListener("pointerdown", function (e) {
+      if (active && !svg.contains(e.target)) hideTip();
     });
 
-    box.classList.add("is-drawn");
+    // A width change (rotation, a resized window) redraws, without the draw-in.
+    if ("ResizeObserver" in window) {
+      new ResizeObserver(function () {
+        var w = chartWidth();
+        if (w && Math.abs(w - drawnAt) > 1) {
+          hideTip();
+          drawnAt = draw();
+        }
+      }).observe(box);
+    }
 
     // Draw-in once, as it arrives. A chart already on screen at load just
     // stays drawn, rather than vanishing to replay.

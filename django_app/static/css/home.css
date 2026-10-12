@@ -24,12 +24,17 @@
   padding-top: 0;
 }
 
-/* Breaks a band out of main's centred column to the full viewport width. */
+/* Breaks a band out of main's centred column to the full viewport width.
+   Viewport lengths on this page go through --vw / --vh rather than vw / vh:
+   on a TV the page is zoomed (see "TV" at the end of this file), and a zoom
+   multiplies a vw too, so a 100vw band would come out 1.6 screens wide.
+   They are set, in pre-zoom px, only while a TV zoom is in force; everywhere
+   else they fall back to plain vw / vh. */
 .reel,
 .wall,
 .rail {
-  width: 100vw;
-  margin-inline: calc(50% - 50vw);
+  width: calc(100 * var(--vw, 1vw));
+  margin-inline: calc(50% - 50 * var(--vw, 1vw));
 }
 
 /* --- 1. The reel -------------------------------------------------------------- */
@@ -41,7 +46,7 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: min(92vh, 900px);
+  min-height: min(calc(92 * var(--vh, 1vh)), 900px);
   padding-top: 120px;
 }
 
@@ -119,7 +124,7 @@
   font-family: var(--font-display);
   font-weight: 850;
   font-stretch: 118%;
-  font-size: clamp(2.6rem, 8.4vw, 7.4rem);
+  font-size: clamp(2.6rem, calc(8.4 * var(--vw, 1vw)), 7.4rem);
   line-height: 0.88;
   letter-spacing: -0.02em;
   text-transform: uppercase;
@@ -148,7 +153,7 @@
 .reel__tagline {
   margin-top: var(--space-5);
   max-width: 46ch;
-  font-size: clamp(1.05rem, 1.6vw, 1.3rem);
+  font-size: clamp(1.05rem, calc(1.6 * var(--vw, 1vw)), 1.3rem);
   color: var(--ink-muted);
   animation: reel-fade 0.9s var(--ease-out) 0.45s both;
 }
@@ -274,7 +279,7 @@ html.has-js .reel__tabs {
 
 .figure dd {
   margin: 0;
-  font-size: clamp(1.6rem, 2.8vw, 2.4rem);
+  font-size: clamp(1.6rem, calc(2.8 * var(--vw, 1vw)), 2.4rem);
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -290,7 +295,7 @@ html.has-js .reel__tabs {
 /* --- Section heads ------------------------------------------------------------- */
 
 .home-section {
-  margin-top: clamp(4rem, 10vw, 8rem);
+  margin-top: clamp(4rem, calc(10 * var(--vw, 1vw)), 8rem);
 }
 
 .home-head {
@@ -307,7 +312,7 @@ html.has-js .reel__tabs {
   font-family: var(--font-display);
   font-weight: 800;
   font-stretch: 108%;
-  font-size: clamp(2rem, 4.6vw, 3.6rem);
+  font-size: clamp(2rem, calc(4.6 * var(--vw, 1vw)), 3.6rem);
   line-height: 0.95;
   letter-spacing: -0.02em;
   text-wrap: balance;
@@ -376,7 +381,7 @@ html.has-js .reel__tabs {
 }
 
 .wall__tile {
-  width: clamp(120px, 13vw, 170px);
+  width: clamp(120px, calc(13 * var(--vw, 1vw)), 170px);
 }
 
 .wall__tile img,
@@ -427,7 +432,7 @@ html.has-js .reel__tabs {
   scrollbar-width: none;
   list-style: none;
   margin-block: 0;
-  padding: var(--space-3) max(var(--space-6), calc(50vw - var(--measure) / 2 + var(--space-6))) var(--space-7);
+  padding: var(--space-3) max(var(--space-6), calc(50 * var(--vw, 1vw) - var(--measure) / 2 + var(--space-6))) var(--space-7);
   cursor: grab;
 }
 
@@ -450,7 +455,7 @@ html.has-js .reel__tabs {
   font-family: var(--font-display);
   font-weight: 900;
   font-stretch: 62%;
-  font-size: clamp(7rem, 13vw, 11rem);
+  font-size: clamp(7rem, calc(13 * var(--vw, 1vw)), 11rem);
   line-height: 0.78;
   letter-spacing: -0.06em;
   color: transparent;
@@ -471,14 +476,14 @@ html.has-js .reel__tabs {
 .rank__card:hover { text-decoration: none; }
 
 .rank__poster {
-  width: clamp(140px, 15vw, 190px);
+  width: clamp(140px, calc(15 * var(--vw, 1vw)), 190px);
 }
 
 .rank__meta {
   display: flex;
   justify-content: space-between;
   gap: var(--space-4);
-  width: clamp(140px, 15vw, 190px);
+  width: clamp(140px, calc(15 * var(--vw, 1vw)), 190px);
   margin-top: var(--space-4);
   font-size: var(--text-sm);
   color: var(--ink-muted);
@@ -493,9 +498,15 @@ html.has-js .reel__tabs {
 
 /* --- 4. Decades chart ---------------------------------------------------------- */
 
+/* overflow-x: clip, because once the chart is drawn the table is shrunk to a
+   1px screen-reader box, and a table never lays out narrower than its
+   content: on a 360px phone it pokes ~20px past the viewport, which mobile
+   browsers answer by widening the whole page. Clip, not hidden, so the
+   tooltip above a bar still escapes vertically. */
 .decades {
   position: relative;
-  padding: clamp(18px, 3vw, 36px);
+  overflow-x: clip;
+  padding: clamp(18px, calc(3 * var(--vw, 1vw)), 36px);
   border: var(--hairline);
   border-radius: 20px;
   background: linear-gradient(180deg, color-mix(in srgb, var(--ink) 3%, transparent), transparent);
@@ -571,7 +582,12 @@ html.has-js .reel__tabs {
   transition: fill var(--dur) var(--ease);
 }
 
-.decades__chart .bar:hover { fill: color-mix(in srgb, var(--ink) 22%, transparent); }
+.decades__chart .bar:hover,
+.decades__chart .bar.is-active { fill: color-mix(in srgb, var(--ink) 22%, transparent); }
+
+/* A full-height column behind each bar, so a finger can tap a decade
+   without landing on a 30px-wide bar. */
+.decades__chart .hit { fill: transparent; }
 .decades__chart .bar.is-best { fill: var(--lime); }
 
 .decades__chart.is-animating .bar {
@@ -612,7 +628,15 @@ html.has-js .reel__tabs {
   font: 500 12px var(--font-mono);
 }
 
-.decades__chart .val { fill: var(--ink); }
+/* The rating figures ride the line, which crosses the bars; a halo in the
+   page colour keeps "7.34" legible where it lands on the lime one. */
+.decades__chart .val {
+  fill: var(--ink);
+  paint-order: stroke;
+  stroke: var(--paper);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
 
 .decades__tip {
   position: absolute;
@@ -630,11 +654,19 @@ html.has-js .reel__tabs {
 
 /* --- Small screens ---------------------------------------------------------------- */
 
+/* Horizontal swipes on the reel are cinema.js's to read (next / previous
+   film); vertical ones still scroll the page. */
+html.has-js .reel {
+  touch-action: pan-y;
+}
+
 @media (max-width: 900px) {
+  /* Every film in the queue stays on screen: a tab scrolled out of view is a
+     film the reader never learns is there. Titles ellipsise instead. */
   html.has-js .reel__tabs {
-    grid-template-columns: repeat(6, 150px);
-    overflow-x: auto;
-    scrollbar-width: none;
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
   }
 
   .figures {
@@ -653,9 +685,362 @@ html.has-js .reel__tabs {
   }
 }
 
-@media (max-width: 520px) {
-  .reel { min-height: min(86vh, 760px); }
-  .reel__meta { font-size: var(--text-xs); }
+/* Phones. Rethought for a thumb and a narrow column rather than shrunk:
+   the reel's queue becomes a row of progress segments, the two poster grids
+   become swipeable shelves like the top-ten rail (twelve posters stacked two
+   abreast were ~2,200px of scrolling each), and every full-bleed strip lines
+   its first poster up with the page's text edge. */
+@media (max-width: 600px) {
+  .reel {
+    min-height: min(84svh, 720px);
+    padding-top: 104px;
+  }
+
+  /* Scales with the screen instead of sitting on a 2.6rem floor that a
+     long word ("REDEMPTION") or a Cyrillic title can't fit at 320px, and
+     sets a touch less wide so ten capitals fit a 320px column whole. A word
+     that still won't fit breaks rather than being clipped by its mask. */
+  .reel__title {
+    font-size: clamp(1.75rem, 10.5vw, 3.4rem);
+    font-stretch: 108%;
+    max-width: none;
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+
+  .reel__tagline {
+    margin-top: var(--space-4);
+    font-size: var(--text-base);
+  }
+
+  .reel__meta {
+    gap: var(--space-2) var(--space-5);
+    margin-top: var(--space-5);
+    font-size: var(--text-xs);
+  }
+
+  .reel__actions {
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+  }
+
+  /* Two thumb-sized buttons sharing the row, not two islands on the left. */
+  .reel__actions .cta {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .reel__copy {
+    padding-bottom: var(--space-6);
+  }
+
+  /* The queue as story segments: one bar per film, the showing one filling.
+     Titles drop out of view but stay in the button for screen readers; the
+     slide above already names the film. The padding makes each segment a
+     44px tap target although only its 3px bar is drawn. */
+  html.has-js .reel__tabs {
+    gap: var(--space-2);
+    padding-block: 0 var(--space-5);
+    border-top: 0;
+  }
+
+  .reel__tab {
+    gap: 0;
+    padding-block: 20px 21px;
+  }
+
+  .reel__bar {
+    height: 3px;
+  }
+
+  .reel__tab-title,
+  .reel__tab-year {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .figure {
+    padding-block: var(--space-6);
+  }
+
+  .home-head {
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+
+  .home-note {
+    font-size: var(--text-sm);
+  }
+
+  /* --- Strips: the top-ten rail and the two shelves -------------------- */
+
+  .rail,
+  .poster-grid.home-shelf {
+    padding-inline: var(--space-5);
+    scroll-padding-inline: var(--space-5);
+    overscroll-behavior-x: contain;
+  }
+
+  .rank__num {
+    font-size: clamp(4.75rem, 24vw, 6.5rem);
+  }
+
+  .rank__poster,
+  .rank__meta {
+    width: clamp(118px, 34vw, 150px);
+  }
+
+  .rank__meta {
+    margin-top: var(--space-3);
+    font-size: var(--text-xs);
+  }
+
+  /* The grid becomes a shelf: same cards, laid in a row that scrolls
+     sideways, with the next poster peeking in at the edge as the cue. */
+  .poster-grid.home-shelf {
+    display: flex;
+    gap: var(--space-4);
+    width: 100vw;
+    margin-inline: calc(50% - 50vw);
+    padding-bottom: var(--space-3);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+
+  .poster-grid.home-shelf::-webkit-scrollbar { display: none; }
+
+  .poster-grid.home-shelf > * {
+    flex: 0 0 clamp(128px, 38vw, 176px);
+    min-width: 0;
+    scroll-snap-align: start;
+  }
+
+  .poster-grid.home-shelf > .empty {
+    flex: 1 1 auto;
+  }
+
+  /* --- Decades chart --------------------------------------------------- */
+
+  .decades {
+    padding: var(--space-5) var(--space-4);
+    border-radius: 14px;
+  }
+
+  .decades__legend {
+    gap: var(--space-2) var(--space-5);
+  }
+}
+
+/* Phone in landscape: the reel can't take 84% of a 390px-tall screen and
+   still show its copy, so it sizes to the copy and lets the backdrop fill
+   in behind. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .reel {
+    min-height: 0;
+    padding-top: 96px;
+  }
+
+  .reel__title {
+    font-size: clamp(2rem, 6vw, 3.2rem);
+  }
+}
+
+/* Touch screens. Nothing here can be hovered, so the hint that says to
+   hover goes, and the rail's arrow buttons give way to the swipe the rail
+   already answers to (keyboard and mouse users keep them). */
+@media (hover: none) and (pointer: coarse) {
+  .home-note--pointer,
+  .rail-controls {
+    display: none;
+  }
+}
+
+/* --- TV ---------------------------------------------------------------------------
+   The ten-foot page. base.html marks a TV browser (or any screen 3000px+
+   wide, which only a 4K panel reports) with html.is-tv and works out a zoom
+   that makes the screen read as a 1280px-wide page: 1.5x on a 1080p TV,
+   3x on a 4K one that reports its full 3840px. Body text lands at 24
+   physical px on a 1080p panel, readable from a sofa, and 1280 is wide
+   enough for the desktop header to keep its search field. A TV whose browser
+   already reports a halved 960px viewport is drawn at 2x by the device and
+   keeps a zoom of 1.
+
+   Media queries still see the real screen width, which is why they are not
+   used here: everything below is keyed on the class. Beyond the scale, the
+   page changes in three ways a remote needs:
+     - every edge keeps a safe margin, since many TVs still crop the outer
+       few percent of the picture;
+     - the two poster grids become single rows, the shape a remote's
+       left/right moves along;
+     - focus is the cursor, so it has to read from across the room: the
+       poster under focus lifts and takes a lime frame. */
+
+/* The page's viewport units take the screen's, in pre-zoom px, here and
+   only here: another page carries no zoom, so it keeps plain vw. */
+html.is-tv body.page-home {
+  --tv-gutter: 56px;
+  --vw: var(--tv-vw, 1vw);
+  --vh: var(--tv-vh, 1vh);
+  zoom: var(--tv-zoom, 1);
+}
+
+html.is-tv .page-home .container {
+  max-width: none;
+  padding-inline: var(--tv-gutter);
+}
+
+html.is-tv .page-home .site-header {
+  padding-top: var(--space-6);
+}
+
+html.is-tv .page-home .site-header .nav {
+  width: calc(100% - 2 * (var(--tv-gutter) - var(--space-6)));
+  max-width: none;
+}
+
+/* The header search folds to its magnifier, as it does on a laptop under
+   1240px (theoria.css). A TV's media queries still see the full screen, so
+   that rule never fires here, and the 200px field is what pushes the
+   longer Russian and Uzbek nav labels onto a second row. Typing with a
+   remote starts from a button anyway. */
+html.is-tv.has-js .page-home .search-btn {
+  display: inline-flex;
+}
+
+html.is-tv.has-js .page-home .header-search {
+  display: none;
+  order: 9;
+  flex: none;
+  width: 100%;
+  max-width: none;
+}
+
+html.is-tv.has-js .page-home .header-search.is-open {
+  display: block;
+}
+
+html.is-tv.has-js .page-home .header-search__list {
+  left: 0;
+  width: auto;
+}
+
+/* The reel is exactly one screen: the first thing a TV shows is a film. */
+html.is-tv .reel {
+  min-height: calc(100 * var(--vh, 1vh));
+  padding-top: 104px;
+}
+
+/* Capped by the screen's height as well as its width, so a three-line
+   title still leaves the queue on the first screen. */
+html.is-tv .reel__title {
+  max-width: 16ch;
+  font-size: min(7.4rem, calc(8.4 * var(--vw, 1vw)), calc(13 * var(--vh, 1vh)));
+}
+
+html.is-tv .reel__copy {
+  padding-bottom: var(--space-6);
+}
+
+html.is-tv .reel__tabs {
+  padding-bottom: var(--space-7);
+}
+
+html.is-tv .reel__tab-title {
+  font-size: var(--text-sm);
+}
+
+html.is-tv .reel__tab-year {
+  font-size: var(--text-2xs);
+}
+
+/* There is no pointer to hover with on most TVs. */
+html.is-tv .home-note--pointer {
+  display: none;
+}
+
+/* --- Rows ---------------------------------------------------------------- */
+
+html.is-tv .rail,
+html.is-tv .poster-grid.home-shelf {
+  padding-inline: var(--tv-gutter);
+  scroll-padding-inline: var(--tv-gutter);
+}
+
+html.is-tv .poster-grid.home-shelf {
+  display: flex;
+  gap: var(--space-6);
+  width: calc(100 * var(--vw, 1vw));
+  margin-inline: calc(50% - 50 * var(--vw, 1vw));
+  /* Room above and below for a focused poster to lift without being cut
+     off by the row's own scroll box. */
+  padding-block: var(--space-5) var(--space-6);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+html.is-tv .poster-grid.home-shelf::-webkit-scrollbar { display: none; }
+
+html.is-tv .poster-grid.home-shelf > * {
+  flex: 0 0 172px;
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+html.is-tv .poster-grid.home-shelf > .empty {
+  flex: 1 1 auto;
+}
+
+/* --- Focus ----------------------------------------------------------------
+   The poster carries the focus, not an outline around the whole card: it
+   scales up and takes the lime frame, the way hover lifts it on a desktop.
+   Everything else focusable gets a heavier version of the site's ring. */
+
+html.is-tv .page-home :where(a, button, summary, [tabindex]):focus-visible {
+  outline-width: 3px;
+  outline-offset: 4px;
+}
+
+html.is-tv .wall__tile:focus-visible,
+html.is-tv .rank__card:focus-visible,
+html.is-tv .home-shelf .poster-card a:focus-visible {
+  outline: none;
+}
+
+html.is-tv .wall__tile:focus-visible,
+html.is-tv .rank__card:focus-visible .rank__poster,
+html.is-tv .home-shelf .poster-card a:focus-visible .poster {
+  transform: scale(1.07);
+  border-color: var(--lime-mark);
+  box-shadow: 0 0 0 3px var(--lime-mark), 0 28px 56px -20px rgb(0 0 0 / 0.85);
+}
+
+/* Rows lift a poster from its bottom edge, so it grows up into the free
+   space instead of down over its own title. */
+html.is-tv .rank__poster,
+html.is-tv .home-shelf .poster-card .poster {
+  transform-origin: 50% 100%;
+}
+
+html.is-tv .home-shelf .poster-card .poster {
+  transition: transform var(--dur-slow) var(--ease-out), box-shadow var(--dur-slow) var(--ease-out);
+}
+
+html.is-tv .rank:focus-within .rank__num {
+  -webkit-text-stroke-color: var(--lime);
+}
+
+html.is-tv .rank__card:focus-visible .rank__title,
+html.is-tv .home-shelf .poster-card a:focus-visible .card-title {
+  color: var(--lime-text);
 }
 
 @media (prefers-reduced-motion: reduce) {

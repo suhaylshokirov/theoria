@@ -109,7 +109,7 @@
             <p class="eyebrow">{% translate "The catalogue" %}</p>
             <h2 class="home-title" id="h-wall">{% translate "Every title." %} <em>{% translate "Every performance." %}</em></h2>
         </div>
-        <p class="home-note">{% translate "Hover a poster to stop the wall and tilt it toward the light." %}</p>
+        <p class="home-note home-note--pointer">{% translate "Hover a poster to stop the wall and tilt it toward the light." %}</p>
     </header>
     <div class="wall">
         {% for row in mosaic_rows %}
@@ -177,7 +177,7 @@
             <h2 class="home-title" id="h-new">{% translate "See what's new" %}</h2>
         </div>
     </header>
-    <div class="poster-grid">
+    <div class="poster-grid home-shelf">
         {% for movie in newest %}
         {% include "movies/_movie_card.html" with movie=movie only %}
         {% empty %}
@@ -199,7 +199,7 @@
             <h2 class="home-title" id="h-aired">{% translate "Recently aired" %}</h2>
         </div>
     </header>
-    <div class="poster-grid">
+    <div class="poster-grid home-shelf">
         {% for series in recently_aired %}
         {% include "movies/_series_card.html" with series=series only %}
         {% empty %}
