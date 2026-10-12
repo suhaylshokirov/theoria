@@ -2165,3 +2165,45 @@ msgstr "Eng yaxshi"
 #: movies/templates/movies/series_detail.html
 msgid "Lowest"
 msgstr "Eng past"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Episode average"
+msgstr "Epizodlar oʻrtachasi"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Not rated yet"
+msgstr "Hali baholanmagan"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Best season"
+msgstr "Eng yaxshi fasl"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Weakest season"
+msgstr "Eng zaif fasl"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Best episode"
+msgstr "Eng yaxshi epizod"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Weakest episode"
+msgstr "Eng zaif epizod"
+
+#: movies/templates/movies/_season_kpis.html
+#, python-format
+msgid "Episode %(n)s"
+msgstr "%(n)s-epizod"
+
+#: movies/templates/movies/_season_table.html
+msgid "Aired"
+msgstr "Efir sanalari"
+
+#: movies/templates/movies/_season_table.html
+msgid "seasons"
+msgstr "fasllar"
+
+#: movies/templates/movies/_season_table.html
+#, python-format
+msgid "Average IMDb rating %(value)s out of 10"
+msgstr "Oʻrtacha IMDb reytingi: 10 dan %(value)s"

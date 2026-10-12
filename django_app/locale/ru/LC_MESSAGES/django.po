@@ -2198,3 +2198,45 @@ msgstr "Лучшая"
 #: movies/templates/movies/series_detail.html
 msgid "Lowest"
 msgstr "Худшая"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Episode average"
+msgstr "Средняя по сериям"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Not rated yet"
+msgstr "Пока без оценок"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Best season"
+msgstr "Лучший сезон"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Weakest season"
+msgstr "Самый слабый сезон"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Best episode"
+msgstr "Лучшая серия"
+
+#: movies/templates/movies/_season_kpis.html
+msgid "Weakest episode"
+msgstr "Самая слабая серия"
+
+#: movies/templates/movies/_season_kpis.html
+#, python-format
+msgid "Episode %(n)s"
+msgstr "Серия %(n)s"
+
+#: movies/templates/movies/_season_table.html
+msgid "Aired"
+msgstr "Даты показа"
+
+#: movies/templates/movies/_season_table.html
+msgid "seasons"
+msgstr "сезоны"
+
+#: movies/templates/movies/_season_table.html
+#, python-format
+msgid "Average IMDb rating %(value)s out of 10"
+msgstr "Средний рейтинг IMDb: %(value)s из 10"

@@ -1,8 +1,24 @@
-# Season Rating Analytics — TV show pages (Tasks 130–131)
+# Season Rating Analytics — TV show pages (Tasks 130–132)
 
-## Task 131 revision (current behaviour)
+## Task 132 revision (current behaviour)
 
-Task 131 replaced most of the Task 130 layout below at the user's request. **What ships now:**
+Task 132 made "All seasons" a full view again, on top of Task 131's chart. **What ships now:**
+
+- **Slicer:** "All seasons" (shown when 2+ seasons are rated, and **selected on load**), then
+  Season 1…N. It drives the **KPI cards, the table and the chart together**. One-season shows
+  open on their season.
+- **KPI cards (Task 130's design, restored):**
+  - *All seasons:* episode average, best season, weakest season, rated episodes.
+  - *Season:* season average, best episode, weakest episode, rated episodes.
+- **All-seasons table:** one row per season, built as the episode table's twin (#, Season,
+  Aired, Episodes, Rating), with the same IMDb badge showing the season's two-decimal average
+  and total votes. Season names link to that season.
+- **Paging:** every table shows 10 rows per page, and switching seasons resets to page 1.
+- **Specials:** still removed. **Chart:** Task 131's design, unchanged.
+
+## Task 131 revision (superseded in part by Task 132)
+
+Task 131 replaced most of the Task 130 layout below at the user's request. **What it shipped:**
 
 - **The episode table is back to its original format:** one season at a time, with the same
   columns as before. There is no all-seasons table and no summary strip.

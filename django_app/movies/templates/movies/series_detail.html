@@ -216,19 +216,29 @@
        buttons. `seasons` and `season_stats` are lazy: on a hit the
        Season/Episode queries never run. The tag adds the language and data
        version to the key. {% endcomment %}
-    {% comment %} Tasks 130–131: the season's episode table, then an area
-       chart of its ratings under it. The picker's "All seasons" option
-       switches only the chart, to the season-by-season trend; the table
-       stays on the season last picked. Chart data comes from
-       movies/season_stats.py, computed from the rows the tables show. {% endcomment %}
+    {% comment %} Tasks 130–132, top to bottom: the season slicer, the KPI
+       cards, the table (10 rows a page), then the area chart. "All seasons"
+       (the default for a show with 2+ rated seasons) shows the show-wide
+       cards, one row per season and the season trend; a season shows its
+       own cards, its episodes and its episode-by-episode curve. Every figure
+       comes from movies/season_stats.py, computed from the rows the tables
+       show. {% endcomment %}
     {% datacache "series-episodes" series.series_id %}
     {% with stats=season_stats %}
     {% include "movies/_season_picker.html" with seasons=seasons has_trend=stats.has_trend only %}
+    {% if stats.has_trend %}
+    <div class="season-panel is-active" data-season-panel="all" id="episodes-all">
+        <h3 class="credit-department">{% translate "All seasons" %}</h3>
+        {% include "movies/_season_kpis.html" with show=stats.show only %}
+        {% include "movies/_season_table.html" with rows=stats.rows only %}
+    </div>
+    {% endif %}
     {% translate "Season" as season_word %}
-    {% for block in seasons %}
-    <div class="season-panel{% if forloop.first %} is-active{% endif %}" data-season-panel="{{ block.season.season_number }}">
-        <h3 class="credit-department">{{ block.season.name|default:season_word }}</h3>
-        {% include "movies/_episode_table.html" with block=block only %}
+    {% for row in stats.rows %}
+    <div class="season-panel{% if forloop.first and not stats.has_trend %} is-active{% endif %}" data-season-panel="{{ row.season.season_number }}" id="episodes-season-{{ row.season.season_number }}">
+        <h3 class="credit-department">{{ row.season.name|default:season_word }}</h3>
+        {% include "movies/_season_kpis.html" with row=row only %}
+        {% include "movies/_episode_table.html" with block=row only %}
     </div>
     {% empty %}
     <p class="empty">{% translate "No seasons recorded for this show." %}</p>

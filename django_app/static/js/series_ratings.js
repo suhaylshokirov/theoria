@@ -1,12 +1,11 @@
-// Season rating chart on a show page (Tasks 130-131).
+// Season rating chart on a show page (Tasks 130-132).
 //
 // One area chart under the Episodes section's table, following the season
-// picker: a season draws its episodes one by one against the season
-// average; "All seasons" draws each season's average episode rating against
-// the show-wide one. The picker's "All seasons" option drives only this
-// chart -- the table above keeps the season last picked (theoria.js). Every
-// number comes from the #season-chart-data block movies/season_stats.py
-// builds; this file only draws it.
+// picker like the table does: a season draws its episodes one by one
+// against the season average; "All seasons" draws each season's average
+// episode rating against the show-wide one. Every number comes from the
+// #season-chart-data block movies/season_stats.py builds; this file only
+// draws it.
 //
 // Drawn in the site's own instrument language rather than a stock chart
 // look: one lime line (the measurement mark) over a lime gradient that fades

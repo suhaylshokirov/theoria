@@ -2335,9 +2335,121 @@ html.has-js .season-panel:not(.is-active) {
   display: none;
 }
 
-/* --- Season rating chart (show page episodes, Tasks 130–131) ---------------
-   An area chart under the episode table: one season's episodes, or — from
-   the picker's "All seasons" option — each season's average. It reads as
+/* --- Season KPI cards and the all-seasons table (show page, Tasks 130, 132) --
+   Four cards above an Episodes table — the whole run under "All seasons",
+   one season otherwise. They are the film page's .facts record grid turned
+   into one row: hairline cells on the rule colour, the same 16px plate, so
+   they read as part of the record, not a dashboard bolted on. Figures are
+   mono at a reading size, not hero numbers: the chart below is where the
+   eye goes for shape, the cards are for the exact value. */
+
+.season-readout {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: var(--space-4) 0 var(--space-6);
+  border: var(--hairline);
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--rule);
+}
+
+.season-readout__cell {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  background: var(--paper);
+  min-width: 0;
+}
+
+.season-readout dd {
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.season-readout dd a {
+  color: var(--lime-text);
+  font-weight: 600;
+}
+
+.season-readout__figure {
+  font-size: var(--text-xl);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.season-readout__unit {
+  margin-left: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--ink-faint);
+}
+
+.season-readout__name {
+  display: block;
+  font-weight: 600;
+}
+
+.season-readout__sub {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+/* A best/weakest season card is a link with its figure beside it, not
+   under it: "Season 4  8.9" is one reading. */
+.season-readout dd a + .season-readout__sub {
+  display: inline;
+  margin: 0 0 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.season-readout__none {
+  color: var(--ink-muted);
+}
+
+/* A quiet qualifier beside a figure ("few ratings"). Body face: it is a
+   word, not a measurement. */
+.season-note {
+  margin-left: var(--space-3);
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+/* The all-seasons table is the episode table's twin; only the season name
+   is a link (to that season's panel), set in ink like an episode title. */
+.season-link {
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.season-link:hover {
+  color: var(--lime-text);
+}
+
+.season-table td.mono {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .season-readout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .season-readout__cell {
+    padding: var(--space-4) var(--space-5);
+  }
+}
+
+/* --- Season rating chart (show page episodes, Tasks 130–132) ---------------
+   An area chart under the table: one season's episodes, or — under the
+   picker's "All seasons" option — each season's average. It reads as
    part of the catalog sheet, not a dashboard widget: a hairline rule opens
    it like any other section block, the heading is the same condensed label
    the season heading above uses, and the only colour is the lime that marks

@@ -1,0 +1,51 @@
+{% comment %} The "All seasons" table (Task 132): one row per season, built as
+   the same component as a season's episode table (_episode_table.html) —
+   same table chrome, same column rhythm (number, name, air date, a count,
+   rating), the same IMDb rating badge, the same 10-row client pager — so
+   switching the slicer between "All seasons" and a season changes the rows,
+   not the look.
+
+   The rating is the season's average over its rated episodes (two decimals:
+   a mean carries the extra digit) with the season's total votes; a season
+   resting on fewer than three ratings says so. The badge here is a span, not
+   an outbound link: a season has no IMDb page of its own.
+
+   A season's name links to its panel: a plain in-page jump without JS; with
+   JS, initSeasonPicker() (theoria.js) selects that season in the slicer.
+
+   Params (pass with `only`):
+     rows : season_stats.rows (movies/season_stats.py).
+{% endcomment %}
+{% load i18n %}
+{% translate "Season" as season_word %}
+<div data-paged data-page-size="10" data-page-items=".season-row">
+    <div class="table-wrap">
+        <table class="season-table">
+            <thead>
+                <tr>
+                    <th class="num">#</th>
+                    <th>{% translate "Season" %}</th>
+                    <th>{% translate "Aired" %}</th>
+                    <th class="num">{% translate "Episodes" %}</th>
+                    <th>{% translate "Rating" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr class="season-row">
+                    <td class="num mono">{{ row.number|default:"—" }}</td>
+                    <td><a class="season-link" href="#episodes-season-{{ row.number }}" data-season-select="{{ row.number }}">{{ row.season.name|default:season_word }}</a></td>
+                    <td class="mono">{% if row.first_air %}{{ row.first_air|date:"j M Y" }}{% if row.last_air != row.first_air %} – {{ row.last_air|date:"j M Y" }}{% endif %}{% else %}—{% endif %}</td>
+                    <td class="num mono">{{ row.episode_count|default:"—" }}</td>
+                    <td>{% if row.avg is not None %}<span class="rating-badge" aria-label="{% blocktranslate trimmed with value=row.avg|floatformat:"2u" %}Average IMDb rating {{ value }} out of 10{% endblocktranslate %}">
+                        <span class="rating-badge-mark" aria-hidden="true">IMDb</span>
+                        <span class="rating-badge-figure" aria-hidden="true">{{ row.avg|floatformat:"2u" }} / 10</span>
+                        {% if row.votes %}<span class="rating-badge-votes" aria-hidden="true">({% blocktranslate trimmed with formatted=row.votes|floatformat:"0g" count counter=row.votes %}{{ formatted }} vote{% plural %}{{ formatted }} votes{% endblocktranslate %})</span>{% endif %}
+                    </span>{% if row.few_ratings %}<span class="season-note">{% translate "few ratings" %}</span>{% endif %}{% else %}—{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% translate "seasons" as seasons_label %}{% include "movies/_pager_client.html" with label=seasons_label only %}
+</div>

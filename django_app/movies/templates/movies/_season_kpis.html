@@ -1,0 +1,62 @@
+{% comment %} The four KPI cards above an Episodes table (Tasks 130, 132): the
+   film page's .facts record grid turned into one row of hairline cells, so
+   the figures read as part of the record rather than a dashboard bolted on.
+   Follows the season slicer — pass `show` for the "All seasons" view, or
+   `row` for one season.
+
+   Every number comes from movies/season_stats.py, which owns the rules: an
+   average is the mean of rated episodes only (unrated ones are left out,
+   never counted as 0), and a season resting on fewer than three ratings is
+   never named best or weakest while seasons with a real sample exist.
+   Averages print two decimals, single episodes IMDb's one: a mean carries
+   the extra digit, and at one decimal a steady show's seasons all tie.
+
+   A best/weakest season name links to that season's panel: a plain in-page
+   jump without JS; with JS, initSeasonPicker() (theoria.js) selects it.
+
+   Params (pass with `only`), one of:
+     show : season_stats.show — the whole run
+     row  : one season_stats.rows entry — renders nothing when the season
+            has no episodes catalogued (its table says so already)
+{% endcomment %}
+{% load i18n %}
+{% translate "Season" as season_word %}
+{% if show %}
+<dl class="season-readout">
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Episode average" %}</dt>
+        <dd>{% if show.avg is not None %}<span class="season-readout__figure mono">{{ show.avg|floatformat:"2u" }}</span><span class="season-readout__unit mono">/ 10</span>{% else %}<span class="season-readout__none">{% translate "Not rated yet" %}</span>{% endif %}</dd>
+    </div>
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Best season" %}</dt>
+        <dd>{% if show.best_season %}<a href="#episodes-season-{{ show.best_season.number }}" data-season-select="{{ show.best_season.number }}">{{ show.best_season.season.name|default:season_word }}</a><span class="season-readout__sub mono">{{ show.best_season.avg|floatformat:"2u" }}</span>{% else %}—{% endif %}</dd>
+    </div>
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Weakest season" %}</dt>
+        <dd>{% if show.worst_season %}<a href="#episodes-season-{{ show.worst_season.number }}" data-season-select="{{ show.worst_season.number }}">{{ show.worst_season.season.name|default:season_word }}</a><span class="season-readout__sub mono">{{ show.worst_season.avg|floatformat:"2u" }}</span>{% else %}—{% endif %}</dd>
+    </div>
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Rated episodes" %}</dt>
+        <dd><span class="season-readout__figure mono">{{ show.rated_count }}</span><span class="season-readout__unit mono">/ {{ show.episode_count }}</span></dd>
+    </div>
+</dl>
+{% elif row.episode_count %}
+<dl class="season-readout">
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Season average" %}</dt>
+        <dd>{% if row.avg is not None %}<span class="season-readout__figure mono">{{ row.avg|floatformat:"2u" }}</span><span class="season-readout__unit mono">/ 10</span>{% if row.few_ratings %}<span class="season-note">{% translate "few ratings" %}</span>{% endif %}{% else %}<span class="season-readout__none">{% translate "Not rated yet" %}</span>{% endif %}</dd>
+    </div>
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Best episode" %}</dt>
+        <dd>{% if row.best %}<span class="season-readout__name">{{ row.best.name|default:"—" }}</span><span class="season-readout__sub mono">{% blocktranslate trimmed with n=row.best.episode_number %}Episode {{ n }}{% endblocktranslate %} · {{ row.best.imdb_rating|floatformat:"1u" }}</span>{% else %}—{% endif %}</dd>
+    </div>
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Weakest episode" %}</dt>
+        <dd>{% if row.worst and row.rated_count > 1 %}<span class="season-readout__name">{{ row.worst.name|default:"—" }}</span><span class="season-readout__sub mono">{% blocktranslate trimmed with n=row.worst.episode_number %}Episode {{ n }}{% endblocktranslate %} · {{ row.worst.imdb_rating|floatformat:"1u" }}</span>{% else %}—{% endif %}</dd>
+    </div>
+    <div class="season-readout__cell">
+        <dt class="label">{% translate "Rated episodes" %}</dt>
+        <dd><span class="season-readout__figure mono">{{ row.rated_count }}</span><span class="season-readout__unit mono">/ {{ row.episode_count }}</span></dd>
+    </div>
+</dl>
+{% endif %}

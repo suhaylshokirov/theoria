@@ -1155,10 +1155,11 @@ def test_series_detail_leaves_specials_out():
     assert "Behind the Scenes" not in body
 
 
-def test_series_detail_all_seasons_option_drives_only_the_chart():
-    """Task 131: with 2+ rated seasons the slicer leads with "All seasons",
-    but Season 1 is still the season shown first, there is no all-seasons
-    table, and the area chart's data sits under the episode tables."""
+def test_series_detail_multi_season_show_opens_on_all_seasons():
+    """Task 132: with 2+ rated seasons the page opens on "All seasons" -- the
+    show-wide KPI cards, a one-row-per-season table built like the episode
+    table, and the season trend's data under it. Each season keeps its own
+    KPI cards and its 10-row episode table."""
     show = _series()
     season1 = _season(1, show, 1, "Season 1")
     season2 = _season(2, show, 2, "Season 2")
@@ -1174,19 +1175,26 @@ def test_series_detail_all_seasons_option_drives_only_the_chart():
 
     assert response.status_code == 200
     body = response.content.decode()
-    assert 'id="season-all" value="all">' in body
-    assert 'value="1" checked' in body
-    assert 'class="season-panel is-active" data-season-panel="1"' in body
-    assert 'data-season-panel="all"' not in body
-    assert "season-table" not in body and "season-readout" not in body
-    # The chart is under the tables and its data is on the page.
+    assert 'id="season-all" value="all" checked' in body
+    assert 'value="1" checked' not in body
+    assert 'class="season-panel is-active" data-season-panel="all"' in body
+    assert 'class="season-panel" data-season-panel="1"' in body
+    # One row per season, in the episode table's structure and pager.
+    assert body.count('class="season-row"') == 2
+    assert 'data-page-size="10" data-page-items=".season-row"' in body
+    assert 'data-page-size="10" data-page-items=".episode-row"' in body
+    assert 'href="#episodes-season-2" data-season-select="2"' in body
+    assert "8.00 / 10" in body  # Season 1's average in the rating badge
+    # KPI cards: show-wide in the overview, per season in each panel.
+    assert body.count('class="season-readout"') == 3
+    assert "Episode average" in body and "Best episode" in body
+    # The chart sits under the tables.
     assert body.rindex('class="episode-row"') < body.index("data-season-chart")
     assert 'id="season-chart-data"' in body
-    assert "js/series_ratings.js" in body
-    chart = response.context["season_stats"]["chart"]
+    stats = response.context["season_stats"]
     # The show-wide episode average: (8 + 9 + 7 + 8.6) / 4 = 8.15.
-    assert chart["show_avg"] == pytest.approx(8.15)
-    assert [s["number"] for s in chart["seasons"]] == [1, 2]
+    assert stats["show"]["avg"] == pytest.approx(8.15)
+    assert stats["has_trend"] is True
 
 
 def test_series_detail_single_season_show_has_no_all_seasons_option():

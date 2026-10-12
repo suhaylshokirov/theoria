@@ -359,6 +359,14 @@
       }
     }
 
+    // A season picker switching which table is on show (initSeasonPicker)
+    // sends the table it reveals back to its first page.
+    root.addEventListener("pager:reset", function () {
+      if (current === 1) return;
+      current = 1;
+      render();
+    });
+
     prev.addEventListener("click", function () {
       go(-1);
     });
@@ -600,9 +608,14 @@
      point, per the task brief, is that switching seasons is a repaint, the
      same posture initPagedSection() takes for cast/crew paging.
 
-     Task 131: the "All seasons" option belongs to the rating chart
-     (series_ratings.js listens to the same radios). Picking it leaves the
-     table on the season last shown -- there is no all-seasons table. */
+     Task 132: "All seasons" is a panel like any season -- the show-wide KPI
+     cards and one row per season -- and the rating chart under the tables
+     (series_ratings.js) listens to the same radios. Switching sends the
+     revealed table back to page 1. A season named in the overview (its
+     table row, or the best/weakest season card) is a link to that season's
+     panel; with JS it selects the season through its radio instead and
+     brings the picker back into view, so the reader lands at the top of the
+     season they chose rather than mid-page. */
 
   function initSeasonPicker() {
     var picker = document.querySelector("[data-season-picker]");
@@ -613,18 +626,34 @@
     if (!panels.length) return;
 
     function show(value) {
-      if (value === "all") return;
       panels.forEach(function (panel) {
-        panel.classList.toggle(
-          "is-active",
-          panel.getAttribute("data-season-panel") === value
-        );
+        var on = panel.getAttribute("data-season-panel") === value;
+        panel.classList.toggle("is-active", on);
+        if (on) {
+          panel.querySelectorAll("[data-paged]").forEach(function (paged) {
+            paged.dispatchEvent(new CustomEvent("pager:reset"));
+          });
+        }
       });
     }
 
     picker.addEventListener("change", function (e) {
       if (e.target.name !== "season") return;
       show(e.target.value);
+    });
+
+    picker.parentNode.addEventListener("click", function (e) {
+      var link = e.target.closest("[data-season-select]");
+      if (!link) return;
+      var input = picker.querySelector(
+        'input[name=season][value="' + link.getAttribute("data-season-select") + '"]'
+      );
+      if (!input) return;
+      e.preventDefault();
+      input.checked = true;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      picker.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+      input.focus({ preventScroll: true });
     });
 
     var checked = picker.querySelector("input[name=season]:checked");
