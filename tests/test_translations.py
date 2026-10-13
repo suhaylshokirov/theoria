@@ -361,6 +361,31 @@ def test_extract_person_rows_skips_a_language_with_an_empty_biography():
     assert [(r["lang"], r["biography"]) for r in rows] == [("ru", "Актёр")]
 
 
+def test_extract_person_rows_keeps_the_russian_name_and_drops_the_uzbek_one():
+    rows = _extract_person_rows(_person_with_translations(
+        31,
+        _entry("ru", "RU", name="Леонардо ДиКаприо", biography="Актёр"),
+        _entry("uz", "UZ", name="Leonardo DiKaprio", biography="Aktyor"),
+    ))
+    by_lang = {r["lang"]: r for r in rows}
+    assert by_lang["ru"]["name"] == "Леонардо ДиКаприо"
+    assert by_lang["uz"]["name"] is None and by_lang["uz"]["biography"] == "Aktyor"
+
+
+def test_extract_person_rows_keeps_a_russian_name_with_no_biography():
+    rows = _extract_person_rows(_person_with_translations(
+        31, _entry("ru", "RU", name="Том Харди", biography="")
+    ))
+    assert [(r["lang"], r["name"], r["biography"]) for r in rows] == [("ru", "Том Харди", None)]
+
+
+def test_extract_person_rows_omits_a_language_with_no_name_and_no_biography():
+    rows = _extract_person_rows(_person_with_translations(
+        31, _entry("uz", "UZ", name="Tom Hardy", biography="")
+    ))
+    assert rows == []
+
+
 def test_transform_people_translations_reads_every_partition_later_wins():
     payloads = {
         "bronze/person_details/ingestion_date=2026-09-01/31.json":
@@ -394,7 +419,7 @@ def test_transform_people_translations_pre_task_93_people_yield_zero_rows_and_on
 
     df = _parquet_from_last_put(mock_s3)
     assert len(df) == 0
-    assert set(df.columns) == {"person_id", "lang", "biography"}
+    assert set(df.columns) == {"person_id", "lang", "name", "biography"}
     assert len([r for r in caplog.records if "no `translations` key" in r.message]) == 1
 
 
@@ -512,6 +537,75 @@ def test_load_person_translation_is_replace_scoped_to_people_present(monkeypatch
 
     assert count == 1 and [r["rejection_reason"] for r in rejects] == ["unknown person_id"]
     assert session.execute.call_args_list[0][0][1] == {"parent_ids": [31]}
+
+
+def test_load_person_translation_writes_the_russian_name_and_keeps_a_nameless_biography(monkeypatch):
+    _known(monkeypatch, ints={31, 7})
+    session = MagicMock()
+    df = pd.DataFrame({
+        "person_id": pd.array([31, 7], dtype="Int64"),
+        "lang": ["ru", "ru"],
+        "name": ["Том Харди", None],
+        "biography": [None, "Актёр"],
+    })
+
+    count, rejects = load_person_translation(session, df, DATE)
+
+    assert count == 2 and rejects == []
+    inserted = session.execute.call_args_list[1][0][1]
+    assert [(r["person_id"], r["name"], r["biography"]) for r in inserted] == [
+        (31, "Том Харди", None), (7, None, "Актёр"),
+    ]
+
+
+def test_load_person_translation_rejects_a_row_with_neither_name_nor_biography(monkeypatch):
+    _known(monkeypatch, ints={31})
+    df = pd.DataFrame({"person_id": pd.array([31], dtype="Int64"), "lang": ["ru"],
+                       "name": [None], "biography": [None]})
+    count, rejects = load_person_translation(MagicMock(), df, DATE)
+    assert count == 0 and [r["rejection_reason"] for r in rejects] == ["no translated text"]
+
+
+# --- Backfill (Task 134) ----------------------------------------------------
+
+
+def test_stale_person_ids_are_those_whose_newest_file_predates_the_cutover():
+    from etl.bronze import backfill_person_translations as backfill
+
+    listing = {
+        "bronze/person_details/ingestion_date=2026-08-01/1.json": None,   # old only -> stale
+        "bronze/person_details/ingestion_date=2026-08-01/2.json": None,   # old ...
+        "bronze/person_details/ingestion_date=2026-10-01/2.json": None,   # ... then re-fetched -> done
+        "bronze/person_details/ingestion_date=2026-09-25/3.json": None,   # on the cutover -> done
+        "bronze/person_details/ingestion_date=2026-09-24/4.json": None,   # day Task 93 landed -> stale
+        "bronze/person_details/notes.txt": None,                          # not a detail file
+    }
+    mock_s3 = _make_s3_mock_with_files(listing)
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        assert backfill.stale_person_ids("theoria-datalake") == {1, 4}
+
+
+def test_backfill_refetches_most_popular_first_and_ignores_skip_existing():
+    from etl.bronze import backfill_person_translations as backfill
+
+    with patch.object(backfill, "stale_person_ids", return_value={1, 2, 3}), \
+            patch.object(backfill, "_by_popularity", return_value=[3, 1, 2]), \
+            patch.object(backfill, "ingest_people", return_value=([3, 1], [])) as ingest:
+        done = backfill.backfill_person_translations(max_new=2, ingestion_date=DATE)
+
+    assert done == ([3, 1], [])
+    args, kwargs = ingest.call_args
+    assert args[0] == [3, 1, 2]
+    assert kwargs["max_new"] == 2 and kwargs["skip_existing"] is False
+
+
+def test_backfill_dry_run_fetches_nothing():
+    from etl.bronze import backfill_person_translations as backfill
+
+    with patch.object(backfill, "stale_person_ids", return_value={1, 2}), \
+            patch.object(backfill, "ingest_people") as ingest:
+        assert backfill.backfill_person_translations(dry_run=True) == ([], [])
+    ingest.assert_not_called()
 
 
 def test_load_genre_translation_is_an_upsert_that_never_touches_uz(monkeypatch):

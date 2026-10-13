@@ -3,11 +3,12 @@
 Two kinds of translated text reach a page, and they take different routes:
 
 * Per-entity prose (a film's title/overview/tagline, a show's name/overview/
-  tagline, a person's biography) is annotated onto the queryset by
+  tagline, a person's name and biography) is annotated onto the queryset by
   `localize_movies()` / `localize_series()` / `localize_people()`, so a sort
-  can run against the translated column in SQL. A title *search* does not
-  depend on the reader's language: it always looks through English and
-  Russian (`SEARCH_LANGS`), see `filter_by_title()`.
+  can run against the translated column in SQL. A title or person-name
+  *search* does not depend on the reader's language: it always looks through
+  English and Russian (`SEARCH_LANGS`), see `filter_by_title()` and
+  `filter_by_person_name()`.
 * The two fixed vocabularies (genre names, country names) are small enough to
   load whole: `genre_labels()` / `country_labels()` return {English name:
   translated name}, applied wherever a name is rendered — including the
@@ -20,8 +21,10 @@ back to the English column, and the model's `display_*` properties fall back
 to it when nothing was annotated at all.
 """
 
-from django.db.models import Exists, F, OuterRef, Q, Subquery
-from django.db.models.functions import Coalesce
+from django.db.models import (
+    Exists, F, FilteredRelation, OuterRef, Q, Subquery, TextField, Value,
+)
+from django.db.models.functions import Coalesce, NullIf
 from django.utils.translation import get_language
 
 from core.datacache import cached
@@ -33,7 +36,7 @@ from movies.models import (
 
 DEFAULT_LANG = "en"
 
-# Languages whose titles are searched on *every* request, whatever language the
+# Languages whose titles and person names are searched on *every* request, whatever language the
 # reader has picked. English is always searched (it is the column on the title
 # itself) and Russian is added: a reader on the English site can type "Начало"
 # and one on the Russian site can type "Inception". Uzbek has no translated
@@ -109,14 +112,123 @@ def localize_series(queryset):
     )
 
 
-def localize_people(queryset):
-    """Annotate `biography_i18n` and the raw `biography_tr` (see above)."""
+def localize_person_names(queryset):
+    """Annotate just `name_i18n` (translated, else English) and the raw
+    `name_tr` — what a people *list* needs, without the biography subquery.
+
+    A reader's own spelling is only ever Russian today: TMDB sends a Uzbek name
+    for almost nobody and the pipeline keeps none (NAME_LANGUAGES), so a Uzbek
+    request finds no translated rows and Coalesce hands back the English name.
+    """
     lang = current_lang()
     if lang == DEFAULT_LANG:
         return queryset
+    # A filtered LEFT JOIN, not the correlated subquery the other helpers use:
+    # the people index is ~255k rows and `?sort=name` orders all of them by this
+    # value, where a per-row subquery measured ~800 ms against ~100 ms for the
+    # join. PK (person_id, lang) with `lang` pinned keeps it one row per person.
+    # NULLIF: TMDB's "" must not beat the English name (see _column()).
     return queryset.annotate(
+        _name_translation=FilteredRelation(
+            "translations", condition=Q(translations__lang=lang)
+        ),
+    ).annotate(
+        name_tr=NullIf("_name_translation__name", Value(""), output_field=TextField()),
+    ).annotate(name_i18n=Coalesce("name_tr", "name"))
+
+
+def localize_people(queryset):
+    """Annotate `name_i18n`, `biography_i18n` and the raw `name_tr`,
+    `biography_tr` (see above)."""
+    lang = current_lang()
+    if lang == DEFAULT_LANG:
+        return queryset
+    return localize_person_names(queryset).annotate(
         biography_tr=_column(PersonTranslation, "person_id", "biography", lang),
     ).annotate(biography_i18n=Coalesce("biography_tr", "biography"))
+
+
+def person_names_by_id(person_ids):
+    """{person_id: name in the reader's language}; {} for English.
+
+    People with no translated name are simply absent, so the caller keeps the
+    English one. The shared lookup behind attach_person_names().
+    """
+    lang = current_lang()
+    person_ids = {pid for pid in person_ids if pid is not None}
+    if lang == DEFAULT_LANG or not person_ids:
+        return {}
+    return dict(
+        PersonTranslation.objects.using("warehouse")
+        .filter(person_id__in=person_ids, lang=lang)
+        .exclude(name__isnull=True)
+        .exclude(name="")
+        .values_list("person_id", "name")
+    )
+
+
+def attach_person_names(people):
+    """Set `name_i18n` on already-loaded Person objects (in place).
+
+    For people who arrive through a join — a film's or show's credits read them
+    off `credit.person` — where there is no person queryset to annotate. One
+    query for the whole page, however many credits it has. Several instances of
+    one person (a crew member with three credits) are all updated.
+    """
+    people = list(people)
+    names = person_names_by_id(p.person_id for p in people)
+    for person in people:
+        if person.person_id in names:
+            person.name_i18n = names[person.person_id]
+
+
+def person_names_by_slug(slugs):
+    """{slug: translated name} for the given person slugs; {} for English.
+
+    The slug-keyed twin of movie_titles_by_slug(), for the analytics rows,
+    which arrive as plain dicts. Slugs with no translation are absent.
+    """
+    lang = current_lang()
+    slugs = {slug for slug in slugs if slug}
+    if lang == DEFAULT_LANG or not slugs:
+        return {}
+    return dict(
+        PersonTranslation.objects.using("warehouse")
+        .filter(person__slug__in=slugs, lang=lang)
+        .exclude(name__isnull=True)
+        .exclude(name="")
+        .values_list("person__slug", "name")
+    )
+
+
+def person_name_order(sort_key, english_order):
+    """`english_order` for English; the translated-name ordering otherwise —
+    the people-list twin of title_order(). Only the "name" sort has a
+    translated column; popularity is a number."""
+    if sort_key == "name" and is_translated_request():
+        return F("name_i18n").asc()
+    return english_order
+
+
+def filter_by_person_name(queryset, term):
+    """Narrow a person queryset to names containing `term` — the English name
+    or one in any search language (Russian always, plus the reader's own),
+    whichever language the page is in, as filter_by_title() does for films.
+    Against person_translation, so the queryset needn't have been through
+    localize_person_names().
+
+    `IN (uncorrelated subquery)`, not the EXISTS filter_by_title() uses: with
+    ~255k people the planner runs a correlated EXISTS under an OR once per
+    row, which measured ~4x slower (~400 ms against ~90 ms) than evaluating a
+    small translated-name set once and hashing it."""
+    return queryset.filter(
+        Q(name__icontains=term)
+        | Q(
+            person_id__in=PersonTranslation.objects.using("warehouse")
+            .filter(lang__in=_search_langs(), name__icontains=term)
+            .values("person_id")
+        )
+    )
 
 
 def attach_movie_titles(movies):

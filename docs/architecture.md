@@ -463,7 +463,7 @@ road: no UI consumer ever arrived, so it was dropped from the warehouse on 2026-
 ### 3.11 Translations: one row per (entity, language)
 
 `movie_translation(movie_id, lang, title, overview, tagline)`, `person_translation(person_id,
-lang, biography)`, `genre_translation(genre_id, lang, genre_name)` and
+lang, name, biography)` (`name` added in Task 134; DDL `31`), `genre_translation(genre_id, lang, genre_name)` and
 `country_translation(country_code, lang, name)` (Task 93; DDL `27`/`28`), plus
 `series_translation(series_id, lang, name, overview, tagline)` for TV (Task 109; DDL `29`). Seasons
 and episodes are deliberately untranslated — their names and overviews stay English. None is `dim_`, `fact_`
@@ -923,8 +923,28 @@ the queries it did before. Models expose `display_title` / `display_overview` /
 `display_biography` / `display_name`, which fall back to the English column when nothing was
 annotated — a path that forgets to localize shows English, never a blank. Where Uzbek (or an
 untranslated Russian film) shows English prose, the paragraph carries `lang="en"` and one quiet
-line under it says so in the reader's language. Person *names* are not translated (TMDB has none),
-so person search and sort are unchanged.
+line under it says so in the reader's language.
+
+**Person names (Task 134).** TMDB does carry the Cyrillic spelling of a person's name — in the same
+`translations` entry as the Russian biography (`data.name`) — which Task 93's survey missed. It is
+kept for Russian only (`NAME_LANGUAGES`, as for film titles). `localize_people()` annotates
+`name_i18n`; credits that arrive through a join (cast cards, crew, "Directed by") get theirs from
+`attach_person_names()` in one extra query; the analytics rows are keyed by slug and renamed by
+`person_names_by_slug()`. `Person.display_name` falls back to English, so a person TMDB has no
+Russian name for simply keeps their Latin one. Slugs and URLs never change. Two choices were made
+on measurement against the 255k-person index: the *list* annotation is a filtered LEFT JOIN, not
+the per-row subquery the film side uses (`?sort=name` in Russian: ~800 ms → ~100 ms), and name
+search is `person_id IN (uncorrelated subquery)`, not a correlated EXISTS under an OR (~400 ms →
+~75 ms, the same as English-only search). Search matches the English or Russian spelling in any
+language, as film titles do.
+
+**Coverage and backfill.** Only people with a Bronze `person_details` file can have a Russian name,
+and every file written before Task 93 (2026-09-24) has no `translations` block. Bronze is immutable,
+so those people are re-fetched into a newer partition by `python -m
+etl.bronze.backfill_person_translations`, which finds them from the S3 listing alone (newest
+partition < cutover) and fetches most-popular first, `--max-new` per run; the next nightly load
+turns the new files into rows. People never enriched at all (no photo, so no detail file) keep
+their English name.
 
 ### 6.2 Choosing the language (Task 107, supersedes Task 92's URL prefixes)
 

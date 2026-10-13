@@ -26,9 +26,10 @@ from movies.models import (
     SeriesGenre, SeriesLanguage, SeriesNetwork, SeriesRating, SeriesVideo,
 )
 from movies.i18n import (
-    attach_movie_titles, attach_series_titles, country_labels, filter_by_series_name,
-    filter_by_title, genre_labels, is_translated_request, localize_genres,
-    localize_movies, localize_people, localize_series, search_aliases,
+    attach_movie_titles, attach_person_names, attach_series_titles, country_labels,
+    filter_by_person_name, filter_by_series_name, filter_by_title, genre_labels,
+    is_translated_request, localize_genres, localize_movies, localize_people,
+    localize_person_names, localize_series, person_name_order, search_aliases,
     series_name_order, title_order,
 )
 from movies.season_stats import season_rating_summary
@@ -555,8 +556,11 @@ def _person_list(request, people, list_title, scope):
     if known_for not in DEPARTMENT_ORDER:
         known_for = ""
 
+    # Names are searched in English and Russian whatever the page's language
+    # (filter_by_title's rule), and shown / sorted in the reader's own.
+    people = localize_person_names(people)
     if q:
-        people = people.filter(name__icontains=q)
+        people = filter_by_person_name(people, q)
     if gender:
         people = people.filter(gender=int(gender))
     if known_for:
@@ -569,7 +573,9 @@ def _person_list(request, people, list_title, scope):
     # person_id last: thousands of people share a popularity (and some a
     # name), and Postgres may return ties in any order — without a unique
     # final key a person can land on two pages while another lands on none.
-    people = people.order_by(pinned_first, PERSON_SORTS[sort], "person_id")
+    people = people.order_by(
+        pinned_first, person_name_order(sort, PERSON_SORTS[sort]), "person_id"
+    )
 
     page_obj = Paginator(people, PEOPLE_PER_PAGE).get_page(request.GET.get("page"))
 
@@ -663,6 +669,9 @@ def movie_detail(request, movie_slug):
         .select_related("person")
         .order_by(F("ordering").asc(nulls_last=True), "job")
     )
+    # Cast cards, crew rows and the "Directed by" line all read these Person
+    # objects off the credit join; one query gives them their Russian names.
+    attach_person_names(c.person for c in credits)
 
     # Cast is already one row per person — fact_credit's job is the literal
     # "Actor" for every Acting row, so there's nothing to merge here. Its
@@ -693,7 +702,7 @@ def movie_detail(request, movie_slug):
             # `name` is only what the heading displays.
             "key": name,
             "name": display_department(name),
-            "people": sorted(rows, key=lambda m: m["person"].name),
+            "people": sorted(rows, key=lambda m: m["person"].display_name),
             "count": len(rows),
         }
         for name, rows in sorted(
@@ -995,6 +1004,9 @@ def series_detail(request, series_slug):
         .select_related("person")
         .order_by(F("ordering").asc(nulls_last=True), "job")
     )
+    # Cast cards, crew rows and the "Directed by" line all read these Person
+    # objects off the credit join; one query gives them their Russian names.
+    attach_person_names(c.person for c in credits)
 
     # Unlike movie_detail's cast (fact_credit has no character_name in its
     # PK), fact_series_credit keys on character_name too, so the same person
@@ -1021,7 +1033,7 @@ def series_detail(request, series_slug):
             # `name` is only what the heading displays.
             "key": name,
             "name": display_department(name),
-            "people": sorted(rows, key=lambda m: m["person"].name),
+            "people": sorted(rows, key=lambda m: m["person"].display_name),
             "count": len(rows),
         }
         for name, rows in sorted(

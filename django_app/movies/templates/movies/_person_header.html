@@ -18,7 +18,7 @@
 <header class="person-head">
     <div class="person-plate">
         {% if person.profile_path %}
-        <img class="headshot" src="{{ person.profile_path|tmdb_image:'w185' }}" alt="{{ person.name }}" decoding="async">
+        <img class="headshot" src="{{ person.profile_path|tmdb_image:'w185' }}" alt="{{ person.display_name }}" decoding="async">
         {% else %}
         <div class="placeholder placeholder-person" aria-hidden="true">
             <svg class="person-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8z"/></svg>
@@ -27,7 +27,7 @@
     </div>
 
     <div class="person-record">
-        <h1 class="sheet-title">{{ person.name }}</h1>
+        <h1 class="sheet-title">{{ person.display_name }}</h1>
 
         <div class="stats">
             <div class="stat">

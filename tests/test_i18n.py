@@ -24,7 +24,8 @@ from django.utils import translation
 from django.utils.translation import gettext, ngettext
 
 from movies.models import (
-    Genre, Movie, MovieRating, MovieTranslation, Person, Series, SeriesTranslation,
+    Genre, Movie, MovieRating, MovieTranslation, Person, PersonTranslation, Series,
+    SeriesTranslation,
 )
 
 LOCALE_DIR = Path(__file__).resolve().parent.parent / "django_app" / "locale"
@@ -425,7 +426,107 @@ def test_localize_people_annotates_the_biography():
     assert "person_translation" in sql and "COALESCE" in sql and "ru" in params
 
 
+def test_localize_people_annotates_the_name_too():
+    with translation.override("ru"):
+        sql, _ = _sql(i18n.localize_people(Person.objects.using("warehouse")))
+    assert 'AS "name_i18n"' in sql and 'AS "biography_i18n"' in sql
+
+
+def test_localize_person_names_skips_the_biography_subquery():
+    """A people list needs the name only — and gets it by a join, not a
+    per-row subquery (the index is ~255k rows)."""
+    with translation.override("ru"):
+        sql, params = _sql(i18n.localize_person_names(Person.objects.using("warehouse")))
+    assert 'AS "name_i18n"' in sql and 'AS "name_tr"' in sql
+    assert "LEFT OUTER JOIN" in sql and "(SELECT" not in sql
+    assert 'AS "biography_i18n"' not in sql and 'AS "biography_tr"' not in sql
+    assert "ru" in params
+    with translation.override("en"):
+        queryset = MagicMock()
+        assert i18n.localize_person_names(queryset) is queryset
+    queryset.annotate.assert_not_called()
+
+
+def test_person_name_is_never_null_when_a_translation_is_blank():
+    """TMDB sends "" for a missing field; Coalesce must fall through to English."""
+    with translation.override("ru"):
+        sql, _ = _sql(i18n.localize_person_names(Person.objects.using("warehouse")))
+    assert "NULLIF" in sql and "COALESCE" in sql
+
+
+def test_display_name_falls_back_to_english_when_nothing_was_annotated():
+    person = Person(person_id=1, name="Tom Hardy", slug="tom-hardy")
+    assert person.display_name == "Tom Hardy"
+    person.name_i18n = "Том Харди"
+    assert person.display_name == "Том Харди"
+    person.name_i18n = None          # a translated request, no Russian name
+    assert person.display_name == "Tom Hardy"
+
+
+def test_attach_person_names_sets_every_instance_in_one_query():
+    # Two instances of one person: a crew member with two credits on a film.
+    a1, a2 = Person(person_id=1, name="Tom Hardy"), Person(person_id=1, name="Tom Hardy")
+    b = Person(person_id=2, name="Unknown Extra")
+    with translation.override("ru"), patch.object(
+        PersonTranslation, "objects", new=MagicMock()
+    ) as mgr:
+        mgr.using.return_value.filter.return_value.exclude.return_value \
+            .exclude.return_value.values_list.return_value = [(1, "Том Харди")]
+        i18n.attach_person_names([a1, a2, b])
+    assert a1.display_name == a2.display_name == "Том Харди"
+    assert b.display_name == "Unknown Extra"
+    mgr.using.return_value.filter.assert_called_once()
+
+
+def test_attach_person_names_does_nothing_in_english():
+    person = Person(person_id=1, name="Tom Hardy")
+    with translation.override("en"), patch.object(
+        PersonTranslation, "objects", new=MagicMock()
+    ) as mgr:
+        i18n.attach_person_names([person])
+    mgr.using.assert_not_called()
+    assert person.display_name == "Tom Hardy"
+
+
+def test_person_names_by_slug_maps_slugs_and_skips_english():
+    with translation.override("ru"), patch.object(
+        PersonTranslation, "objects", new=MagicMock()
+    ) as mgr:
+        mgr.using.return_value.filter.return_value.exclude.return_value \
+            .exclude.return_value.values_list.return_value = [("tom-hardy", "Том Харди")]
+        assert i18n.person_names_by_slug(["tom-hardy", "nobody", None]) == {"tom-hardy": "Том Харди"}
+    with translation.override("en"), patch.object(
+        PersonTranslation, "objects", new=MagicMock()
+    ) as mgr:
+        assert i18n.person_names_by_slug(["tom-hardy"]) == {}
+    mgr.using.assert_not_called()
+
+
 # --- Sorting and searching --------------------------------------------------
+
+
+def test_person_name_sort_reads_the_translated_column_only_when_translated():
+    english = object()
+    with translation.override("en"):
+        assert i18n.person_name_order("name", english) is english
+    with translation.override("ru"):
+        assert i18n.person_name_order("name", english) is not english
+        assert i18n.person_name_order("popularity", english) is english
+
+
+def test_person_search_matches_english_or_russian_name_whatever_the_language():
+    for lang in ("en", "ru", "uz"):
+        with translation.override(lang):
+            # Compiled on the warehouse connection, as the view does: the
+            # inner IN-subquery is bound to it, and _sql() would use `default`.
+            queryset = i18n.filter_by_person_name(Person.objects.using("warehouse"), "Харди")
+            sql, params = queryset.query.get_compiler("warehouse").as_sql()
+        # An uncorrelated IN (not EXISTS): ~4x faster over 255k people.
+        assert "person_translation" in sql and " IN (SELECT" in sql, lang
+        assert "EXISTS" not in sql, lang
+        assert "ru" in params, lang
+        assert " OR " in sql and sql.count("LIKE") == 2, lang
+        assert "name_i18n" not in sql, lang
 
 
 def test_title_sort_reads_the_translated_column_only_when_translated():

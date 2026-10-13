@@ -67,8 +67,8 @@ def select_translations(
     """Pick one ``{field: text}`` dict per shipped language from a TMDB payload.
 
     `fields` names the keys to lift out of each entry's ``data`` object
-    (``("title", "overview", "tagline")`` for a film, ``("biography",)`` for a
-    person). Text is stripped and an empty string becomes None — TMDB returns
+    (``("title", "overview", "tagline")`` for a film, ``("name", "biography")``
+    for a person). Text is stripped and an empty string becomes None — TMDB returns
     ``""`` for a field it has no text for, never null. A language whose every
     requested field is empty is omitted entirely, so no all-null row is written.
 

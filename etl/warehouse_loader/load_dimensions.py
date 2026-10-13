@@ -519,7 +519,7 @@ def load_person_translation(
     """Replace every person_translation row for the people in this Silver partition."""
     return _load_translations(
         session, df, ingestion_date, table="person_translation", parent_col="person_id",
-        parent_table="dim_person", text_cols=["biography"], replace=True,
+        parent_table="dim_person", text_cols=["name", "biography"], replace=True,
     )
 
 

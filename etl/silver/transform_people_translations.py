@@ -1,9 +1,12 @@
-"""Silver transform: Russian and Uzbek biographies.
+"""Silver transform: Russian names and Russian/Uzbek biographies.
 
 `GET /person/{id}?append_to_response=translations` (Task 93) carries a
 `translations` block beside the biography fields `transform_people_details`
-already reads. Same `etl.translations` picker as the film side, one field
-(`biography`) instead of three.
+already reads. Same `etl.translations` picker as the film side, with two fields
+(`name`, `biography`) instead of three. `name` is kept for Russian only
+(`etl.translations.NAME_LANGUAGES`, as for film titles): TMDB carries the
+Cyrillic spelling of a person's name ("Леонардо ДиКаприо") in the same entry as
+the Russian biography, and Task 134 reads it.
 
 **Reads every `bronze/person_details/` partition, not just one date** — for the
 same reason `transform_people_details` does: `ingest_people()` writes a person
@@ -14,9 +17,10 @@ partition so the loader still reads one dated file.
 **Backfill is not possible from Bronze.** Everyone enriched before Task 93 has a
 `person_details` file with no `translations` key. Such a payload yields zero rows
 plus one aggregate warning, never an exception; an all-empty result still writes
-a well-formed Parquet. Those people gain a Russian biography only if re-fetched
-with `python -m etl.bronze.ingest_people --no-skip-existing`, a deliberate run
-rather than something the nightly does.
+a well-formed Parquet. Those people gain a Russian name and biography only if
+re-fetched: `python -m etl.bronze.backfill_person_translations` finds them from the
+S3 listing alone and re-fetches a capped batch, a deliberate run rather than
+something the nightly does.
 
 S3 source:  bronze/person_details/ingestion_date=*/<person_id>.json
 S3 output:  silver/person_translations/ingestion_date=YYYY-MM-DD/person_translations.parquet
@@ -24,7 +28,8 @@ S3 output:  silver/person_translations/ingestion_date=YYYY-MM-DD/person_translat
 person_translations columns:
     person_id  Int64
     lang       string  — bare ISO-639-1 code, one of etl.translations.TRANSLATION_LANGUAGES
-    biography  string  — never null: a language with no biography is not written
+    name       string  — null for any language outside NAME_LANGUAGES, and where TMDB has none
+    biography  string  — null where TMDB has none; a language with neither is not written
 
 Dedup key: (person_id, lang), a later partition winning. Rows with a null
 person_id are dropped with a warning, never silently.
@@ -52,7 +57,7 @@ from etl.translations import select_translations
 
 logger = logging.getLogger(__name__)
 
-_FIELDS = ("biography",)
+_FIELDS = ("name", "biography")
 _COLUMNS = ["person_id", "lang", *_FIELDS]
 
 
@@ -139,8 +144,8 @@ def transform_people_translations(
     if missing_key:
         logger.warning(
             "%d of %d Bronze person payload(s) had no `translations` key — enriched "
-            "before Task 93; they gain a Russian biography only via "
-            "`ingest_people --no-skip-existing`.",
+            "before Task 93; they gain a Russian name and biography only via "
+            "`python -m etl.bronze.backfill_person_translations`.",
             missing_key, len(keys),
         )
 

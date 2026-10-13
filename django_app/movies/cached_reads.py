@@ -18,7 +18,9 @@ from django.db.models import Avg, Count, F, IntegerField, Max, Q
 from django.db.models.functions import Cast, ExtractYear
 
 from core.datacache import cached
-from movies.i18n import current_lang, genre_labels, localize_movies, localize_series
+from movies.i18n import (
+    current_lang, genre_labels, localize_movies, localize_series, person_names_by_id,
+)
 from movies.models import Credit, Genre, Movie, MovieMetrics, MovieRating, Person, Series
 
 
@@ -209,14 +211,18 @@ def _featured_films(top_rated):
     ):
         genres.setdefault(movie_id, []).append(labels.get(name, name))
 
-    directors = {}
-    for movie_id, name in (
+    credits = list(
         Credit.objects.using("warehouse")
         .filter(movie_id__in=ids, job="Director")
         .order_by(F("ordering").asc(nulls_last=True), "person_id")
-        .values_list("movie_id", "person__name")
-    ):
-        directors.setdefault(movie_id, name)
+        .values_list("movie_id", "person_id", "person__name")
+    )
+    # The shelves are cached per language, so the director is the Russian
+    # spelling in the Russian copy (Task 134).
+    names = person_names_by_id(pid for _, pid, _ in credits)
+    directors = {}
+    for movie_id, person_id, name in credits:
+        directors.setdefault(movie_id, names.get(person_id, name))
 
     for movie in featured:
         movie.reel_genres = genres.get(movie.movie_id, [])[:2]

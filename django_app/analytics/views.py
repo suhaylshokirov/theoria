@@ -15,7 +15,9 @@ from django.shortcuts import render
 
 from analytics import insights
 from analytics.cached_reads import dashboard_rows
-from movies.i18n import country_labels, genre_labels, localize_rows, movie_titles_by_slug
+from movies.i18n import (
+    country_labels, genre_labels, localize_rows, movie_titles_by_slug, person_names_by_slug,
+)
 
 
 @login_required
@@ -30,6 +32,18 @@ def dashboard(request):
     for filename in ("return_bands_by_genre.sql", "genre_share_by_decade.sql"):
         localize_rows(rows[filename], "genre_name", genres)
     localize_rows(rows["films_by_production_country.sql"], "country_name", country_labels())
+
+    # People are keyed by slug in the rows, so one lookup renames the director
+    # table, the partnership table and the headline finding alike (Task 134).
+    directors, partners = rows["top_rated_directors.sql"], rows["signature_partnerships.sql"]
+    people = person_names_by_slug(
+        [r["director_slug"] for r in directors + partners]
+        + [r["collaborator_slug"] for r in partners]
+    )
+    for row in directors + partners:
+        row["director_name"] = people.get(row["director_slug"], row["director_name"])
+    for row in partners:
+        row["collaborator_name"] = people.get(row["collaborator_slug"], row["collaborator_name"])
 
     context = insights.build(rows)
 

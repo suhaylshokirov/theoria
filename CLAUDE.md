@@ -235,13 +235,15 @@ write-only; Silver still produces `silver/person_aliases/`.
 
 **Translations (5, Tasks 93–94, 109):** `movie_translation(movie_id FK, lang, title, overview, tagline)`,
 `series_translation(series_id FK, lang, name, overview, tagline)` (Task 109; seasons/episodes stay English),
-`person_translation(person_id FK, lang, biography)`, `genre_translation(genre_id FK, lang, genre_name)`,
+`person_translation(person_id FK, lang, name, biography)` (Task 134; DDL `31`), `genre_translation(genre_id FK, lang, genre_name)`,
 `country_translation(country_code FK, lang, name)` — PK `(entity id, lang)`, `lang` = bare ISO code
 (`ru`, `uz`). Not `dim_`/`fact_`/`bridge_`: each attaches repeating text to one dimension, no measure,
 nothing to bridge (same posture as the dropped `person_alias`). Row-per-language so a 4th language costs
 no schema change. Replace-loaded by parent id (films, people) or upserted (genres, countries). Russian is
 real TMDB data; Uzbek prose does not exist, so Uzbek reads English for overview/tagline/biography behind
-a quiet marker. The site reads them through `django_app/movies/i18n.py` (`docs/architecture.md` §6.1);
+a quiet marker. Russian person *names* come from the same TMDB entry as the biography (Task 134); only
+people re-fetched since 2026-09-24 have one — `python -m etl.bronze.backfill_person_translations` re-fetches
+the rest. The site reads them through `django_app/movies/i18n.py` (`docs/architecture.md` §6.1);
 `dim_genre`/`dim_country` names and all URL slugs stay English.
 
 **Operational (1):** `etl_watermarks(loader_name PK, last_ingestion_date, updated_at)`

@@ -163,6 +163,13 @@ class Person(models.Model):
         return self.name
 
     @property
+    def display_name(self):
+        """The name in the reader's language (Task 134): `name_i18n` when a
+        queryset was annotated or attach_person_names() ran, else English.
+        The slug, and so every URL, always stays the English one."""
+        return getattr(self, "name_i18n", None) or self.name
+
+    @property
     def display_biography(self):
         return getattr(self, "biography_i18n", None) or self.biography
 
@@ -427,6 +434,7 @@ class PersonTranslation(models.Model):
         primary_key=True, related_name="translations",
     )
     lang = models.CharField(max_length=5)
+    name = models.TextField(null=True)
     biography = models.TextField(null=True)
     ingestion_date = models.DateField()
 

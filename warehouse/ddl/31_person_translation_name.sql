@@ -1,0 +1,21 @@
+-- Task 134: Russian versions of people.
+--
+--   person_translation (person_id, lang) -> name, biography   (name is new)
+--
+-- TMDB carries the Cyrillic spelling of a person's name in the same
+-- `translations` entry as the Russian biography (data.name — "Леонардо
+-- ДиКаприо" for 6193). Task 93's note that "person names are not translated"
+-- was wrong; re-measured 2026-10-13 on four well-known people, all four had it.
+--
+-- Nullable like every other text column here: a person with a Russian
+-- biography but no Russian name keeps the row, and the site falls back to the
+-- English name column. Only `ru` is ever written (etl.translations.NAME_LANGUAGES).
+--
+-- The column stays empty until the people are re-fetched (a payload written
+-- before Task 93 has no translations block): python -m
+-- etl.bronze.backfill_person_translations, then the next nightly load.
+--
+-- Also folded into 01_dimensions.sql for fresh bootstraps. Safe to re-run.
+-- Apply to Neon and the local replica BEFORE deploying code that reads it.
+
+ALTER TABLE person_translation ADD COLUMN IF NOT EXISTS name TEXT;

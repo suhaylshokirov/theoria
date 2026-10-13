@@ -385,6 +385,7 @@ CREATE TABLE IF NOT EXISTS series_translation (
 CREATE TABLE IF NOT EXISTS person_translation (
     person_id      INTEGER      NOT NULL,
     lang           VARCHAR(5)   NOT NULL,
+    name           TEXT,
     biography      TEXT,
     ingestion_date DATE         NOT NULL,
     CONSTRAINT pk_person_translation PRIMARY KEY (person_id, lang),

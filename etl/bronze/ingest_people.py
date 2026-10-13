@@ -27,7 +27,10 @@ extra call. The block is trimmed to the shipped languages before writing
 (``etl.translations``): Silver re-reads every person_details file each night, so
 the ~70 KB of unused languages per person would otherwise cost ~5 GB a night. Because of the skip above, people already enriched before Task 93
 have no `translations` block and are not re-fetched; backfilling them is a
-deliberate `--no-skip-existing` run, not something the nightly does.
+deliberate run of `etl.bronze.backfill_person_translations` (Task 134, which
+finds them from the S3 listing and calls back into this function with
+`skip_existing=False`), not something the nightly does. The same block now also
+carries the Russian *name*.
 
 **New here (companies had no cap): `max_new`.** `dim_person` holds ~35,782
 people with a photo — far more than one nightly job's ~90-minute budget can

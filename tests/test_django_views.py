@@ -1364,7 +1364,11 @@ def test_person_list_returns_200_with_search():
         response = client.get("/people/", {"q": "test"})
 
     assert response.status_code == 200
-    qs.filter.assert_called_once_with(name__icontains="test")
+    # The English name OR a Russian one (an EXISTS against person_translation).
+    qs.filter.assert_called_once()
+    (condition,), kwargs = qs.filter.call_args
+    assert not kwargs
+    assert ("name__icontains", "test") in condition.children
     assert list(response.context["page_obj"]) == [person]
     assert response.context["scope"] == "all"
 

@@ -123,7 +123,7 @@
                 <div class="fact">
                     <dt class="label">{% translate "Directed by" %}</dt>
                     <dd>
-                        {% for director in directors %}<a href="{% url 'movies:person_detail' director.slug %}">{{ director.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+                        {% for director in directors %}<a href="{% url 'movies:person_detail' director.slug %}">{{ director.display_name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
                     </dd>
                 </div>
                 {% endif %}
@@ -235,7 +235,7 @@
                             <svg class="person-icon" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8z"/></svg>
                         </span>
                         {% endif %}
-                        <span class="credit-name">{{ m.person.name }}</span>
+                        <span class="credit-name">{{ m.person.display_name }}</span>
                     </a>
                     <span class="credit-jobs">{{ m.job_display }}</span>
                 </li>

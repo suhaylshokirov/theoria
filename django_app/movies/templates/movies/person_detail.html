@@ -2,8 +2,8 @@
 {% load i18n %}
 {% load tmdb_images %}
 
-{% block title %}Theoria — {{ person.name }}{% endblock %}
-{% block description %}{% blocktranslate trimmed count n=film_count asvar films_phrase %}{{ n }} movie{% plural %}{{ n }} movies{% endblocktranslate %}{% if show_count %}{% blocktranslate trimmed count n=show_count asvar shows_phrase %}{{ n }} show{% plural %}{{ n }} shows{% endblocktranslate %}{% blocktranslate trimmed with name=person.name films=films_phrase shows=shows_phrase %}{{ name }}: {{ films }} and {{ shows }} in the Theoria catalog.{% endblocktranslate %}{% else %}{% blocktranslate trimmed with name=person.name films=films_phrase %}{{ name }}: {{ films }} in the Theoria catalog.{% endblocktranslate %}{% endif %}{% endblock %}
+{% block title %}Theoria — {{ person.display_name }}{% endblock %}
+{% block description %}{% blocktranslate trimmed count n=film_count asvar films_phrase %}{{ n }} movie{% plural %}{{ n }} movies{% endblocktranslate %}{% if show_count %}{% blocktranslate trimmed count n=show_count asvar shows_phrase %}{{ n }} show{% plural %}{{ n }} shows{% endblocktranslate %}{% blocktranslate trimmed with name=person.display_name films=films_phrase shows=shows_phrase %}{{ name }}: {{ films }} and {{ shows }} in the Theoria catalog.{% endblocktranslate %}{% else %}{% blocktranslate trimmed with name=person.display_name films=films_phrase %}{{ name }}: {{ films }} in the Theoria catalog.{% endblocktranslate %}{% endif %}{% endblock %}
 
 {% block content %}
 {% include "movies/_person_header.html" with person=person film_count=film_count show_count=show_count title_count=title_count avg_rating=avg_rating activity=activity credit_count=credit_count only %}
@@ -57,7 +57,7 @@
            no JS — see _person_filmography_results.html's docstring. {% endcomment %}
         <form method="get" action="" data-live-filter data-live-targets="#person-filmography-grid">
             <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search this filmography" %}" aria-label="{% if show_count %}{% blocktranslate trimmed with name=person.name %}Search {{ name }}'s movies and shows by title{% endblocktranslate %}{% else %}{% blocktranslate trimmed with name=person.name %}Search {{ name }}'s movies by title{% endblocktranslate %}{% endif %}">
+                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search this filmography" %}" aria-label="{% if show_count %}{% blocktranslate trimmed with name=person.display_name %}Search {{ name }}'s movies and shows by title{% endblocktranslate %}{% else %}{% blocktranslate trimmed with name=person.display_name %}Search {{ name }}'s movies by title{% endblocktranslate %}{% endif %}">
             </div>
             <fieldset class="segmented">
                 <legend class="visually-hidden">{% translate "Order by" %}</legend>
