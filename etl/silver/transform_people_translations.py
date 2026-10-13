@@ -18,9 +18,9 @@ partition so the loader still reads one dated file.
 `person_details` file with no `translations` key. Such a payload yields zero rows
 plus one aggregate warning, never an exception; an all-empty result still writes
 a well-formed Parquet. Those people gain a Russian name and biography only if
-re-fetched: `python -m etl.bronze.backfill_person_translations` finds them from the
-S3 listing alone and re-fetches a capped batch, a deliberate run rather than
-something the nightly does.
+re-fetched: `etl.bronze.backfill_person_translations` finds them from the S3
+listing alone and re-fetches a capped batch, which the nightly runs before this
+transform (also runnable by hand).
 
 S3 source:  bronze/person_details/ingestion_date=*/<person_id>.json
 S3 output:  silver/person_translations/ingestion_date=YYYY-MM-DD/person_translations.parquet
@@ -145,7 +145,7 @@ def transform_people_translations(
         logger.warning(
             "%d of %d Bronze person payload(s) had no `translations` key — enriched "
             "before Task 93; they gain a Russian name and biography only via "
-            "`python -m etl.bronze.backfill_person_translations`.",
+            "`etl.bronze.backfill_person_translations` (run nightly, capped).",
             missing_key, len(keys),
         )
 

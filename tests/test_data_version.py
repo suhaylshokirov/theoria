@@ -190,3 +190,45 @@ def test_failing_warehouse_checks_do_not_block_the_publish():
     with patch.object(config, "require_etl"):
         parent = _run(run_refresh, runner)
     parent.publish_data_version.assert_called_once_with(DATE)
+
+
+# --- person-translation backfill in the nightly (Task 134) ---------------------------------
+
+
+def _refresh_names(parent):
+    return [c[0] for c in parent.mock_calls if "." not in c[0]]
+
+
+def test_refresh_runs_a_capped_person_backfill_before_the_people_silver():
+    with patch.object(config, "require_etl"):
+        parent = _run(run_refresh, lambda _p: run_refresh.run_refresh(ingestion_date=DATE))
+    names = _refresh_names(parent)
+    assert (
+        names.index("ingest_people")
+        < names.index("backfill_person_translations")
+        < names.index("transform_people_translations")
+    )
+    parent.backfill_person_translations.assert_called_once_with(
+        ingestion_date=DATE, max_new=config.PERSON_TRANSLATION_BACKFILL_MAX_NEW
+    )
+
+
+def test_a_failing_person_backfill_does_not_stop_the_refresh():
+    def runner(parent):
+        parent.backfill_person_translations.side_effect = RuntimeError("TMDB is down")
+        run_refresh.run_refresh(ingestion_date=DATE)
+
+    with patch.object(config, "require_etl"):
+        parent = _run(run_refresh, runner)
+    # The load and the publish still happened.
+    parent.load_dimensions.assert_called_once()
+    parent.publish_data_version.assert_called_once_with(DATE)
+
+
+def test_a_zero_cap_turns_the_person_backfill_off():
+    with patch.object(config, "require_etl"), patch.object(
+        config, "PERSON_TRANSLATION_BACKFILL_MAX_NEW", 0
+    ):
+        parent = _run(run_refresh, lambda _p: run_refresh.run_refresh(ingestion_date=DATE))
+    parent.backfill_person_translations.assert_not_called()
+    parent.publish_data_version.assert_called_once_with(DATE)

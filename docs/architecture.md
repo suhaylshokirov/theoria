@@ -942,9 +942,11 @@ language, as film titles do.
 and every file written before Task 93 (2026-09-24) has no `translations` block. Bronze is immutable,
 so those people are re-fetched into a newer partition by `python -m
 etl.bronze.backfill_person_translations`, which finds them from the S3 listing alone (newest
-partition < cutover) and fetches most-popular first, `--max-new` per run; the next nightly load
-turns the new files into rows. People never enriched at all (no photo, so no detail file) keep
-their English name.
+partition < cutover) and fetches most-popular first. `run_refresh` calls it after `ingest_people()`
+with `PERSON_TRANSLATION_BACKFILL_MAX_NEW` (6000; 0 disables), so the ~89k backlog (measured
+2026-10-13) fills in about 15 nights — each batch is in the same night's Silver and load — and the stage then degrades to a
+listing. A failure there is logged and does not stop the refresh. People never enriched at all (no
+photo, so no detail file) keep their English name.
 
 ### 6.2 Choosing the language (Task 107, supersedes Task 92's URL prefixes)
 

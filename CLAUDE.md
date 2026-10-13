@@ -242,8 +242,8 @@ nothing to bridge (same posture as the dropped `person_alias`). Row-per-language
 no schema change. Replace-loaded by parent id (films, people) or upserted (genres, countries). Russian is
 real TMDB data; Uzbek prose does not exist, so Uzbek reads English for overview/tagline/biography behind
 a quiet marker. Russian person *names* come from the same TMDB entry as the biography (Task 134); only
-people re-fetched since 2026-09-24 have one — `python -m etl.bronze.backfill_person_translations` re-fetches
-the rest. The site reads them through `django_app/movies/i18n.py` (`docs/architecture.md` §6.1);
+people re-fetched since 2026-09-24 have one — the nightly re-fetches a capped batch of the rest
+(`PERSON_TRANSLATION_BACKFILL_MAX_NEW`, `etl/bronze/backfill_person_translations.py`). The site reads them through `django_app/movies/i18n.py` (`docs/architecture.md` §6.1);
 `dim_genre`/`dim_country` names and all URL slugs stay English.
 
 **Operational (1):** `etl_watermarks(loader_name PK, last_ingestion_date, updated_at)`

@@ -25,6 +25,12 @@ no new dependency and no schema change. `--max-new` bounds a run the same way
 `ingest_people()` bounds the nightly. The next nightly load turns the new Bronze
 files into rows (`transform_people_translations` → `load_person_translation`).
 
+**Runs nightly.** `scripts/run_refresh.py` calls this after `ingest_people()`
+with `config.PERSON_TRANSLATION_BACKFILL_MAX_NEW` (6000; 0 disables), so the
+~89k backlog (measured 2026-10-13) fills in about 15 nights with no manual step, and the call becomes a
+cheap S3 listing once nobody is left. The same batch is in the same night's
+Silver and load, so a re-fetched person's Russian name is live that morning.
+
 Usage:
     python -m etl.bronze.backfill_person_translations --dry-run
     python -m etl.bronze.backfill_person_translations --max-new 5000

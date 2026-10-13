@@ -48,6 +48,7 @@ import time
 import config
 from data_quality.silver_checks import run_silver_checks
 from data_quality.warehouse_checks import run_warehouse_checks
+from etl.bronze.backfill_person_translations import backfill_person_translations
 from etl.bronze.ingest_companies import ingest_companies
 from etl.bronze.ingest_countries import ingest_countries
 from etl.bronze.ingest_genres import ingest_genres
@@ -155,6 +156,26 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
         succeeded, ingestion_date, config.S3_BUCKET, series_ids=series_ok
     )
     ingest_people(person_ids, ingestion_date=ingestion_date)
+
+    # Task 134: catch up the people enriched before translations were stored
+    # (no Russian name or biography). A capped, most-popular-first batch per
+    # night, so the backlog fills over ~2 weeks and then this is a no-op. It is
+    # a best-effort enrichment: a failure here is logged loudly but must not
+    # stop the film/show refresh and the warehouse load below from running.
+    if config.PERSON_TRANSLATION_BACKFILL_MAX_NEW > 0:
+        try:
+            backfilled, backfill_failed = backfill_person_translations(
+                ingestion_date=ingestion_date,
+                max_new=config.PERSON_TRANSLATION_BACKFILL_MAX_NEW,
+            )
+            logger.info(
+                "Person-translation backfill: %d re-fetched, %d failed",
+                len(backfilled), len(backfill_failed),
+            )
+        except Exception:
+            logger.exception(
+                "Person-translation backfill failed; continuing with the refresh"
+            )
 
     transform_movies(ingestion_date=ingestion_date)
     # TV Silver runs before transform_people so its series_people hand-off

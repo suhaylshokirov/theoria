@@ -166,6 +166,15 @@ TV_DISCOVER_MIN_VOTES = int(_optional("TV_DISCOVER_MIN_VOTES", "300"))
 TV_SEASONS_MAX_NEW = int(_optional("TV_SEASONS_MAX_NEW", "300"))
 TV_SEASONS_INCLUDE_SPECIALS = _optional("TV_SEASONS_INCLUDE_SPECIALS", "False").lower() in ("1", "true", "yes")
 
+# Person-translation backfill (etl/bronze/backfill_person_translations.py,
+# Task 134). Every person enriched before 2026-09-24 has no translations block,
+# so no Russian name or biography; the nightly re-fetches this many of them per
+# run, most popular first, until none are left (then it is a no-op listing).
+# The backlog measured 88,882 people on 2026-10-13. 6000 calls ~ 23 min at TMDB's
+# ~4.35 req/s, so it fills in ~15 nights and the nightly (40-75 min against a
+# 150 min timeout) keeps ~50 min of headroom. 0 turns the nightly batch off.
+PERSON_TRANSLATION_BACKFILL_MAX_NEW = int(_optional("PERSON_TRANSLATION_BACKFILL_MAX_NEW", "6000"))
+
 # --- IMDb datasets -----------------------------------------------------------
 # Public bulk exports, refreshed daily by IMDb — no auth, no key, no quota.
 # https://datasets.imdbws.com/title.ratings.tsv.gz (tconst/averageRating/numVotes).

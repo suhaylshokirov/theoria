@@ -34,6 +34,8 @@ jobs:
     # TV_SEASONS_MAX_NEW*~5 season calls while the episode backlog fills over
     # the first nights, then it settles. 150 is headroom, not the expected
     # runtime; TV_SEASONS_MAX_NEW is the knob if a run ever approaches it.
+    # Task 134 adds up to PERSON_TRANSLATION_BACKFILL_MAX_NEW (6000) person calls
+    # per night (~23 min) until the translation backlog is gone, then ~0.
     timeout-minutes: 150
 
     env:
