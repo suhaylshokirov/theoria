@@ -11,7 +11,7 @@ pytest.importorskip("playwright", reason="pip install -r requirements-ui.txt")
 pytest.importorskip("pytest_playwright")
 
 from . import geometry as g  # noqa: E402
-from .conftest import PAGES, REEL_DURATION_MS, RESULTS_DIR, load, new_context  # noqa: E402
+from .conftest import AUTH_PAGES, PAGES, REEL_DURATION_MS, RESULTS_DIR, load, new_context, session_cookie  # noqa: E402
 
 PAGE_PARAMS = [pytest.param(p, id=pid) for pid, p in PAGES.items()]
 MOTION_VIEWPORTS = {"phone", "laptop", "tv"}
@@ -34,6 +34,9 @@ def path(request):
 
 @pytest.fixture(scope="module")
 def loaded(browser, base, viewport, path):
+    pid = next(k for k, v in PAGES.items() if v == path)
+    if pid in AUTH_PAGES and not session_cookie():
+        pytest.skip("behind login: set UI_SESSION=sessionid=<key> to run")
     """The page under test, loaded once per viewport and shared by every
     read-only check below. Checks must leave it as they found it."""
     ctx = new_context(browser, viewport)
@@ -192,6 +195,44 @@ def test_reel_advances(open_page, motion_viewport, motion):
         assert advanced, f"reel stayed on slide {s0['current']} for {REEL_DURATION_MS + 3000}ms"
     else:
         assert not advanced, "reel advanced under prefers-reduced-motion"
+
+
+# --- h. TV focus ------------------------------------------------------------
+
+TV_VIEWPORTS = {"tv", "tv-1080", "tv-4k"}
+
+TV_FOCUS = """() => {
+  const e = document.activeElement, cs = getComputedStyle(e);
+  const ring = cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 2;
+  const img = e.closest('.poster-card') && e.querySelector('.poster,.headshot,.logo,.placeholder');
+  const lift = !!img && getComputedStyle(img).boxShadow !== 'none';
+  // A text field shows focus by lighting its frame (.field / header search).
+  const field = e.matches('input, select') && !!e.closest('.field, .header-search__field');
+  // The home page's own tiles (wall) lift and frame themselves.
+  const own = getComputedStyle(e).boxShadow !== 'none' || getComputedStyle(e).transform !== 'none';
+  return {tv: document.documentElement.classList.contains('is-tv'), ok: ring || lift || field || own,
+          el: e.tagName + '.' + String(e.className).slice(0, 30)};
+}"""
+
+
+def test_tv_focus_is_visible(open_page, viewport_id, path):
+    if viewport_id not in TV_VIEWPORTS:
+        pytest.skip("TV viewports only")
+    pid = next(k for k, v in PAGES.items() if v == path)
+    if pid in AUTH_PAGES and not session_cookie():
+        pytest.skip("behind login: set UI_SESSION=sessionid=<key> to run")
+    page = open_page(path)
+    bad = []
+    for i in range(30):
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(80)
+        d = page.evaluate(TV_FOCUS)
+        assert d["tv"], "html.is-tv is not set"
+        # Skipped: the skip link, the wrap past the last control (BODY) and
+        # the Film guide, which is off-limits to this task.
+        if not d["ok"] and not any(k in d["el"] for k in ("skip-link", "BODY", "ai-assistant")):
+            bad.append(f"tab {i + 1}: {d['el']}")
+    assert not bad, "focus not visible on:\n  " + "\n  ".join(bad)
 
 
 # --- screenshots ------------------------------------------------------------

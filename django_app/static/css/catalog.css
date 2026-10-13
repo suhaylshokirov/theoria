@@ -1,0 +1,120 @@
+/* Catalog pages: /browse/, /movies/, /tv/, /cartoons/.
+   They share one shape (sheet header, a toolbar of search + sort + maybe
+   genre, a poster grid, a pager), so one stylesheet adapts all four. Every
+   rule is scoped by body.page-catalog so it can't reach another page. The
+   shared cards, grid and controls are theoria.css's; this only retunes them
+   where these four pages' toolbar and pager need it. */
+
+/* --- Small screens ---------------------------------------------------------
+   The sheet header leaves a --space-9 gap before the toolbar, which on a phone
+   is a fifth of the first screen spent on nothing. Tighten it so the search
+   field is visible without scrolling, and let each control take the full row
+   so a thumb has a wide target. */
+@media (max-width: 720px) {
+  .page-catalog .sheet-head + .sheet-section {
+    margin-top: var(--space-6);
+  }
+
+  .page-catalog .toolbar,
+  .page-catalog .toolbar form {
+    width: 100%;
+  }
+
+  .page-catalog .toolbar form > .field,
+  .page-catalog .toolbar form > .segmented {
+    flex: 1 1 100%;
+  }
+
+  /* Four segments (Newest, Rated, Revenue, A-Z) share the row equally rather
+     than hugging their labels, so none is a sliver. */
+  .page-catalog .segmented label {
+    flex: 1 1 auto;
+    text-align: center;
+    padding-inline: var(--space-3);
+  }
+}
+
+/* A phone must never be able to push the page sideways: narrow Uzbek and
+   Russian labels at 360px are the tightest case. */
+@media (max-width: 399px) {
+  .page-catalog .segmented label {
+    letter-spacing: 0.06em;
+    padding-inline: var(--space-2);
+  }
+}
+
+@media (pointer: coarse) {
+  .page-catalog .segmented label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
+
+  .page-catalog .pagination a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
+/* --- TV ----------------------------------------------------------------------
+   The toolbar is the remote's way into the page, so it is sized as targets
+   rather than as a laptop toolbar: taller pills, bigger labels, and a lime
+   frame on the focused segment. Only html.is-tv keys this; a TV's media
+   queries still see the whole screen. */
+html.is-tv .page-catalog .sheet-head + .sheet-section {
+  margin-top: var(--space-7);
+}
+
+html.is-tv .page-catalog .toolbar {
+  gap: var(--space-4);
+  margin-bottom: var(--space-7);
+}
+
+html.is-tv .page-catalog .toolbar form {
+  gap: var(--space-4);
+}
+
+html.is-tv .page-catalog .field input[type="search"],
+html.is-tv .page-catalog .field select,
+html.is-tv .page-catalog .field > button {
+  min-height: 52px;
+  font-size: var(--text-md);
+}
+
+html.is-tv .page-catalog .segmented label {
+  display: flex;
+  align-items: center;
+  min-height: 50px;
+  padding-inline: var(--space-5);
+  font-size: var(--text-xs);
+}
+
+/* Remote users never have a hover, so an apply button hidden behind has-js
+   stays hidden (the radios auto-submit); nothing to add there. The pager is
+   the other way down the catalog, so it gets target-sized links. */
+html.is-tv .page-catalog .pagination {
+  gap: var(--space-5);
+}
+
+html.is-tv .page-catalog .pagination a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 52px;
+  padding-inline: var(--space-6);
+  font-size: var(--text-sm);
+}
+
+html.is-tv .page-catalog .empty {
+  font-size: var(--text-md);
+  padding: var(--space-8) var(--space-6);
+}
+
+/* The genre dropdown is a .menu-trigger once JS swaps the <select> out; it
+   would otherwise be shorter than the search field and segmented strip beside
+   it. */
+html.is-tv .page-catalog .toolbar .menu-trigger {
+  min-height: 52px;
+  font-size: var(--text-md);
+}

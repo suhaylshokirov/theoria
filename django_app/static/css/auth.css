@@ -563,3 +563,96 @@
     --cell: 2.05rem;
   }
 }
+
+/* --- Touch ------------------------------------------------------------------
+   Under 16px iOS Safari zooms the page when a field takes focus, and it stays
+   zoomed after the keyboard goes away. The shared input rule sits below that
+   on a phone, so the floor is set here, on the sign-in forms only. The resend
+   button and the "Sign up / Sign in" links under the card are small text
+   targets, so they get a 44px hit area without changing how they look. */
+@media (pointer: coarse) {
+  .auth-form input:not(.code-input) {
+    font-size: max(16px, 1em);
+  }
+
+  .auth-resend button,
+  .auth-card .sheet-foot a,
+  .auth-card p a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  /* The on-screen keyboard takes half the viewport; a hero sized to 80vh
+     would push the card behind it, so the card is only as tall as it is. */
+  .auth-hero {
+    min-height: 0;
+  }
+}
+
+/* A phone on its side has ~390px of height and a keyboard that fills most of
+   it. Drop the poster band entirely: the form is the only thing that matters. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .auth-gallery {
+    display: none;
+  }
+
+  .auth-card {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  /* The title is sized for a tall card; on 390px of height it would be a
+     third of the screen. */
+  .auth-card .sheet-title {
+    font-size: var(--text-xl);
+  }
+}
+
+/* --- TV ----------------------------------------------------------------------
+   Same layout as desktop, sized for a sofa. Under the shell's zoom, 80vh is
+   multiplied by the zoom, so the hero would be taller than the screen; --vh is
+   the pre-zoom unit. The card and the poster band are capped to the same
+   number so they stay a pair. */
+html.is-tv .auth-hero {
+  min-height: min(calc(80 * var(--vh, 1vh)), 680px);
+}
+
+html.is-tv .auth-gallery {
+  max-height: min(calc(80 * var(--vh, 1vh)), 680px);
+}
+
+html.is-tv .auth-card {
+  max-width: 40rem;
+}
+
+html.is-tv .auth-form .field,
+html.is-tv .auth-card .btn-block,
+html.is-tv .auth-card button[type="submit"] {
+  min-height: 3.5rem;
+}
+
+/* Fields already turn their frame lime on :focus-within; on a TV that
+   hairline is not visible from across the room, so it also gets a halo. */
+html.is-tv .auth-form .field:focus-within {
+  box-shadow: 0 0 0 3px var(--lime-mark);
+}
+
+html.is-tv .code-cell {
+  height: 3.75rem;
+}
+
+html.is-tv .auth-resend button,
+html.is-tv .auth-card p a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
+  padding-inline: var(--space-3);
+}
+
+/* The poster band is decoration and not focusable, so on a small TV
+   (hamburger layout, stacked) it would only add scroll for a remote user. */
+@media (max-width: 900px) {
+  html.is-tv .auth-gallery {
+    display: none;
+  }
+}

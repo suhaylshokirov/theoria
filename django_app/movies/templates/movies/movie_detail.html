@@ -49,7 +49,7 @@
             </div>
 
             <div class="film-hero__copy film-stagger">
-                <h1 class="film-title">{{ movie.display_title }}</h1>
+                <h1 class="film-title{% if movie.display_title|length > 40 %} film-title--xlong{% elif movie.display_title|length > 22 %} film-title--long{% endif %}">{{ movie.display_title }}</h1>
                 {% if movie.original_title and movie.original_title != movie.display_title %}
                 <p class="specimen-original-title mono">{% blocktranslate trimmed with title=movie.original_title %}originally “{{ title }}”{% endblocktranslate %}</p>
                 {% endif %}

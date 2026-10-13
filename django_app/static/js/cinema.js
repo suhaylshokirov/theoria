@@ -389,7 +389,7 @@
       // (home.css): over the first or last decade of a phone-width chart the
       // tip would otherwise lose its ends.
       // Measured in screen px, positioned in the box's own px: they differ
-      // by the TV zoom (home.css), so divide it back out.
+      // by the TV zoom (theoria.css, "TV shell"), so divide it back out.
       var z = scale();
       var br = bar.getBoundingClientRect(), cr = box.getBoundingClientRect();
       var half = tip.offsetWidth / 2;

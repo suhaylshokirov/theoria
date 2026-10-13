@@ -1,4 +1,4 @@
-{% comment %} One season's episode list (Task 88). A plain <table> — reuses
+{% comment %} One season's episode list (Task 88). A plain <table class="episode-table"> — reuses
    theoria.css's bare table/thead/tbody rules rather than inventing chrome for
    a component that only ever holds five columns of scalar facts, the same
    restraint _rating_badge.html's own "renders nothing, not a dash" rule
@@ -18,7 +18,7 @@
 {% if block.episodes %}
 <div data-paged data-page-size="10" data-page-items=".episode-row">
     <div class="table-wrap">
-        <table>
+        <table class="episode-table">
             <thead>
                 <tr>
                     <th class="num">#</th>

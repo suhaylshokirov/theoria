@@ -874,63 +874,16 @@ html.has-js .reel {
    keeps a zoom of 1.
 
    Media queries still see the real screen width, which is why they are not
-   used here: everything below is keyed on the class. Beyond the scale, the
-   page changes in three ways a remote needs:
+   used here: everything below is keyed on the class. The shell every page
+   shares (the zoom, the safe margins, the header, the heavier focus ring) is
+   in theoria.css, "TV shell"; this file keeps what only the home page has.
+   Beyond the scale, the page changes in three ways a remote needs:
      - every edge keeps a safe margin, since many TVs still crop the outer
        few percent of the picture;
      - the two poster grids become single rows, the shape a remote's
        left/right moves along;
      - focus is the cursor, so it has to read from across the room: the
        poster under focus lifts and takes a lime frame. */
-
-/* The page's viewport units take the screen's, in pre-zoom px, here and
-   only here: another page carries no zoom, so it keeps plain vw. */
-html.is-tv body.page-home {
-  --tv-gutter: 56px;
-  --vw: var(--tv-vw, 1vw);
-  --vh: var(--tv-vh, 1vh);
-  zoom: var(--tv-zoom, 1);
-}
-
-html.is-tv .page-home .container {
-  max-width: none;
-  padding-inline: var(--tv-gutter);
-}
-
-html.is-tv .page-home .site-header {
-  padding-top: var(--space-6);
-}
-
-html.is-tv .page-home .site-header .nav {
-  width: calc(100% - 2 * (var(--tv-gutter) - var(--space-6)));
-  max-width: none;
-}
-
-/* The header search folds to its magnifier, as it does on a laptop under
-   1240px (theoria.css). A TV's media queries still see the full screen, so
-   that rule never fires here, and the 200px field is what pushes the
-   longer Russian and Uzbek nav labels onto a second row. Typing with a
-   remote starts from a button anyway. */
-html.is-tv.has-js .page-home .search-btn {
-  display: inline-flex;
-}
-
-html.is-tv.has-js .page-home .header-search {
-  display: none;
-  order: 9;
-  flex: none;
-  width: 100%;
-  max-width: none;
-}
-
-html.is-tv.has-js .page-home .header-search.is-open {
-  display: block;
-}
-
-html.is-tv.has-js .page-home .header-search__list {
-  left: 0;
-  width: auto;
-}
 
 /* The reel is exactly one screen: the first thing a TV shows is a film. */
 html.is-tv .reel {
@@ -1003,11 +956,6 @@ html.is-tv .poster-grid.home-shelf > .empty {
    The poster carries the focus, not an outline around the whole card: it
    scales up and takes the lime frame, the way hover lifts it on a desktop.
    Everything else focusable gets a heavier version of the site's ring. */
-
-html.is-tv .page-home :where(a, button, summary, [tabindex]):focus-visible {
-  outline-width: 3px;
-  outline-offset: 4px;
-}
 
 html.is-tv .wall__tile:focus-visible,
 html.is-tv .rank__card:focus-visible,

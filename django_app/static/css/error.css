@@ -1,0 +1,37 @@
+/* 404 page. theoria.css owns the base look; these are the TV and phone
+   adjustments, loaded after it. */
+
+.page-error .error-page {
+  /* Vertically centred in what is left under the header, so a short page
+     does not strand the message at the top of a tall screen. */
+  min-height: 50vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-block: var(--space-8);
+}
+
+/* Under the TV zoom, vh is multiplied by the zoom, so it uses --vh. */
+html.is-tv .page-error .error-page {
+  min-height: calc(50 * var(--vh, 1vh));
+  max-width: 44rem;
+}
+
+/* The one control on this page is the way out, so it is big and framed. */
+html.is-tv .page-error .error-page .btn {
+  min-height: 3.5rem;
+  padding-inline: var(--space-7);
+}
+
+@media (pointer: coarse) {
+  .page-error .error-page .btn {
+    min-height: 48px;
+  }
+}
+
+@media (max-width: 440px) {
+  .page-error .error-page .btn {
+    width: 100%;
+  }
+}

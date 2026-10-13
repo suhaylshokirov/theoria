@@ -4,8 +4,10 @@ Run against a live server:  pytest tests/ui --base-url http://127.0.0.1:8000
 Nothing here imports Django: the suite only talks to a running site over HTTP.
 """
 
+import os
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -19,8 +21,14 @@ VIEWPORTS = {
     "tablet": dict(width=820, height=1180, dsf=2, mobile=False, touch=True),
     "laptop": dict(width=1366, height=768, dsf=1, mobile=False, touch=False),
     "desktop": dict(width=1920, height=1080, dsf=1, mobile=False, touch=False),
-    # How many 1080p TV browsers report their CSS viewport (1920x1080 at 2x).
-    "tv": dict(width=960, height=540, dsf=2, mobile=False, touch=False),
+    # How many 1080p TV browsers report their CSS viewport (960x540 at 2x).
+    # tv=True forces html.is-tv the way ?tv=1 does (a laptop's UA is not a
+    # TV's); the 4K one needs no forcing, a 3000px+ screen counts as a TV.
+    "tv": dict(width=960, height=540, dsf=2, mobile=False, touch=False, tv=True),
+    # The other 1080p shape: a 1920x1080 viewport from a TV's own UA (zoom 1.5).
+    "tv-1080": dict(width=1920, height=1080, dsf=1, mobile=False, touch=False, tv=True),
+    # A 4K panel reporting its full 3840px (auto TV, zoom 3).
+    "tv-4k": dict(width=3840, height=2160, dsf=1, mobile=False, touch=False),
     "wide": dict(width=2560, height=1440, dsf=1, mobile=False, touch=False),
 }
 
@@ -38,7 +46,27 @@ PAGES = {
     # production uses for a missing page; production doesn't route it at all,
     # so it is a real 404 there. Either way the page under test is the same.
     "not-found": "/__404__/",
+    # Detail pages and analytics sit behind login. They run only when
+    # UI_SESSION="sessionid=<key>" names a valid session cookie of the site
+    # under test (see AUTH_PAGES); otherwise they are skipped. The slugs are
+    # real rows of the local replica: a film, a show with several seasons,
+    # an actor and a studio.
+    "movie-detail": "/movies/inception/",
+    "tv-detail": "/tv/breaking-bad/",
+    "person-detail": "/people/leonardo-dicaprio/",
+    "studio-detail": "/studios/warner-bros-pictures/",
+    "analytics": "/analytics/",
 }
+AUTH_PAGES = {"movie-detail", "tv-detail", "person-detail", "studio-detail", "analytics"}
+
+
+def session_cookie():
+    """(name, value) from UI_SESSION, or None."""
+    raw = os.environ.get("UI_SESSION", "")
+    if "=" not in raw:
+        return None
+    name, _, value = raw.partition("=")
+    return name.strip(), value.strip()
 
 REEL_DURATION_MS = 8000
 
@@ -102,16 +130,24 @@ def settle(page, timeout_ms=8000):
 
 
 def new_context(browser, viewport, reduced_motion="no-preference"):
-    return browser.new_context(
+    ctx = browser.new_context(
         viewport={"width": viewport["width"], "height": viewport["height"]},
         device_scale_factor=viewport["dsf"],
         is_mobile=viewport["mobile"],
         has_touch=viewport["touch"],
         reduced_motion=reduced_motion,
     )
+    if viewport.get("tv"):
+        # What ?tv=1 does, but before the very first load of every page.
+        ctx.add_init_script("try { localStorage.setItem('theoria-tv', '1'); } catch (e) {}")
+    return ctx
 
 
 def load(ctx, url):
+    cookie = session_cookie()
+    if cookie:
+        parts = urlsplit(url)
+        ctx.add_cookies([{"name": cookie[0], "value": cookie[1], "url": f"{parts.scheme}://{parts.netloc}"}])
     page = ctx.new_page()
     page.goto(url, wait_until="load")
     settle(page)

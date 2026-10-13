@@ -4924,6 +4924,296 @@ main,
   }
 }
 
+/* Studio logos are wide plates: on a phone one per row is a full screen of
+   blank plate each, so they pair up. */
+@media (max-width: 599px) {
+  .poster-grid.is-wide {
+    grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+/* On the desktop the wordmark bleeds off both edges on purpose; on a phone or tablet a
+   clipped final letter just reads as a bug, so it is sized to fit whole. */
+@media (max-width: 900px) {
+  .footer-mark {
+    font-size: calc(16.2 * var(--vw, 1vw));
+  }
+}
+
+/* A 320px phone has 272px inside the gutters: the 148px minimum would make
+   that one enormous poster per row instead of two. Not under TV, whose media
+   queries see a 960px+ screen anyway. */
+@media (max-width: 359px) {
+  .poster-grid {
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: var(--space-4);
+  }
+
+  .poster-grid.is-tight {
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: var(--space-3);
+  }
+
+  .poster-grid.is-wide {
+    grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+/* --- Touch targets ------------------------------------------------------------
+   The header's icon buttons are 34px circles and a 360px phone has no room
+   for six 44px ones in a row, so their hit area grows past the drawn shape
+   instead: an invisible plate that reaches into the gaps between neighbours
+   (never past the midpoint, so two plates never compete for one tap). The
+   controls that sit alone on a line simply get taller. */
+@media (pointer: coarse) {
+  .site-header :where(.theme-toggle, .nav-toggle, .search-btn, .lang-menu__trigger,
+                      .account-trigger, .signin-btn--header) {
+    position: relative;
+  }
+
+  .site-header :where(.theme-toggle, .nav-toggle, .search-btn, .lang-menu__trigger,
+                      .account-trigger, .signin-btn--header)::after {
+    content: "";
+    position: absolute;
+    inset: -5px -3px;
+  }
+
+  /* The bare Θ is 17px wide once the name drops out on a phone. */
+  .site-header .brand {
+    position: relative;
+  }
+
+  .site-header .brand::after {
+    content: "";
+    position: absolute;
+    inset: -12px -10px;
+  }
+
+  .lang-switch__opt,
+  .pagination a,
+  .pagination.is-client .page-btn,
+  html.has-js .nav-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  html.has-js .nav-links a {
+    display: flex;
+  }
+
+  .pagination a,
+  .pagination.is-client .page-btn {
+    justify-content: center;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+  }
+
+  .menu-trigger:not(.account-trigger),
+  .field input[type="text"],
+  .field input[type="search"],
+  .field select {
+    min-height: 44px;
+  }
+}
+
+/* --- TV shell ---------------------------------------------------------------
+   The ten-foot page, for every page (the home page's reel, wall and rails
+   stay in home.css). base.html marks a TV browser, or any screen 3000px+
+   wide, with html.is-tv and works out --tv-zoom so that the screen reads as a
+   1280px-wide page: 1.5x on a 1080p TV, 3x on a 4K one, 1x on a TV that
+   already reports a halved 960px viewport. Media queries still see the real
+   screen, which is why nothing in this section is a width query: a 4K TV has
+   to come out looking exactly like the 1080p one, and its 3840px would
+   otherwise be treated as a very wide desktop.
+
+   Four rules for any page CSS written against this:
+     - Full-bleed or screen-relative lengths use var(--vw, 1vw) and
+       var(--vh, 1vh). Under a zoom a plain vw is multiplied too, so 100vw
+       comes out 1.5 screens wide.
+     - Edges use var(--tv-gutter) (set below, in pre-zoom px): many TVs crop
+       the outer few percent of the picture.
+     - Focus is the cursor. Anything focusable already gets the heavier ring
+       below; a card-like element should lift and take the lime frame the way
+       .poster-card does (see "Focus" below) rather than rely on the ring.
+     - Nothing may need a hover. Hover-only affordances get a :focus-visible
+       twin, or are shown outright under html.is-tv. */
+
+html.is-tv body {
+  --tv-gutter: 56px;
+  --vw: var(--tv-vw, 1vw);
+  --vh: var(--tv-vh, 1vh);
+  zoom: var(--tv-zoom, 1);
+}
+
+/* scroll-padding belongs to the root, which is not zoomed, so the header's
+   clearance has to be scaled by hand or an anchor lands under the bar. */
+html.is-tv {
+  scroll-padding-top: calc((60px + var(--space-5)) * var(--tv-zoom, 1));
+}
+
+html.is-tv .container {
+  max-width: none;
+  padding-inline: var(--tv-gutter);
+}
+
+/* Reading sizes for a sofa. The small tokens are 11-13px, which at 1.5x is
+   still under 20 physical px on a 1080p panel; the home page sets its own
+   sizes and keeps the tokens it was tuned with. */
+html.is-tv body:not(.page-home) {
+  --text-3xs: 0.8125rem;
+  --text-2xs: 0.875rem;
+  --text-xs: 0.9375rem;
+  --text-sm: 1rem;
+  --text-md: 1.1875rem;
+}
+
+html.is-tv .site-header {
+  padding-top: var(--space-6);
+}
+
+html.is-tv .site-header .nav {
+  width: calc(100% - 2 * (var(--tv-gutter) - var(--space-6)));
+  max-width: none;
+}
+
+/* The header search folds to its magnifier, as it does on a laptop under
+   1240px. A TV's media queries still see the full screen, so that rule never
+   fires here, and the 200px field is what pushes the longer Russian and
+   Uzbek nav labels onto a second row. Typing with a remote starts from a
+   button anyway. */
+html.is-tv.has-js .search-btn {
+  display: inline-flex;
+}
+
+html.is-tv.has-js .header-search {
+  display: none;
+  order: 9;
+  flex: none;
+  width: 100%;
+  max-width: none;
+}
+
+html.is-tv.has-js .header-search.is-open {
+  display: block;
+}
+
+html.is-tv.has-js .header-search__list {
+  left: 0;
+  width: auto;
+}
+
+/* Screen-relative caps on floating lists: 60vh would be 60% of the screen
+   times the zoom. */
+html.is-tv .header-search__list {
+  max-height: min(calc(60 * var(--vh, 1vh)), 460px);
+}
+
+html.is-tv .menu-panel {
+  max-height: min(calc(60 * var(--vh, 1vh)), 20rem);
+}
+
+html.is-tv body:not(.page-home) .site-footer {
+  font-size: var(--text-sm);
+}
+
+/* One step bigger posters, so a row of them still reads from the sofa: six
+   across a 1280px page rather than seven. */
+html.is-tv .poster-grid {
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--space-6);
+}
+
+html.is-tv .poster-grid.is-tight {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-5);
+}
+
+html.is-tv .poster-grid.is-wide {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+
+/* --- Focus ----------------------------------------------------------------
+   A poster, headshot or logo under focus lifts and takes the lime frame, the
+   treatment the home page's rows use, instead of a thin outline round the
+   whole card (which would also frame the title). Everything else focusable
+   gets a heavier version of the site's ring. */
+
+html.is-tv :where(a, button, input, select, summary, [tabindex]):focus-visible {
+  outline-width: 3px;
+  outline-offset: 4px;
+}
+
+/* A toolbar field draws its focus on the wrapper — a 1px lime border that
+   vanishes from across a room — so on a TV the wrapper takes a full frame
+   and the control inside drops its own ring. */
+html.is-tv .field:focus-within {
+  box-shadow: 0 0 0 3px var(--lime-mark);
+}
+
+html.is-tv .field :is(input, select):focus-visible {
+  outline: none;
+}
+
+/* The segmented strip clips its children (overflow: hidden), so the ring
+   above would be cut off. The focused segment fills instead, which reads from
+   across a room and survives the clip; the checked one keeps its lime and
+   takes an ink frame, since lime on lime would vanish. */
+html.is-tv .segmented input:focus-visible + label {
+  outline: 3px solid var(--lime-mark);
+  outline-offset: -3px;
+  background: var(--sheet);
+  color: var(--lime-text);
+}
+
+html.is-tv .segmented input:checked:focus-visible + label {
+  background: var(--lime);
+  color: var(--ink-on-lime);
+  outline-color: var(--ink-on-lime);
+}
+
+html.is-tv .poster-card a:focus-visible {
+  outline: none;
+}
+
+html.is-tv .poster-card .poster,
+html.is-tv .poster-card .headshot,
+html.is-tv .poster-card .logo,
+html.is-tv .poster-card .placeholder {
+  transition: transform var(--dur-slow) var(--ease-out),
+              box-shadow var(--dur-slow) var(--ease-out),
+              border-color var(--dur) var(--ease);
+}
+
+html.is-tv .poster-card .poster,
+html.is-tv .poster-card .headshot,
+html.is-tv .poster-card .logo,
+html.is-tv .poster-card .placeholder {
+  /* Grows up into the gap above rather than down over its own title. */
+  transform-origin: 50% 100%;
+}
+
+html.is-tv .poster-card a:focus-visible .poster,
+html.is-tv .poster-card a:focus-visible .headshot,
+html.is-tv .poster-card a:focus-visible .logo,
+html.is-tv .poster-card a:focus-visible .placeholder {
+  transform: scale(1.06);
+  border-color: var(--lime-mark);
+  box-shadow: 0 0 0 3px var(--lime-mark), 0 28px 56px -20px rgb(0 0 0 / 0.85);
+}
+
+/* A lifted frame must not be cut off by the grid's neighbours: the title
+   below it stays put, the image grows over the gap. */
+html.is-tv .poster-card a:focus-visible .card-title {
+  color: var(--lime-text);
+}
+
 /* --- Quality floor ---------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {

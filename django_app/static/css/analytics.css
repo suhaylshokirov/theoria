@@ -457,6 +457,169 @@ details.numbers[open] > summary {
   }
 }
 
+/* The focus ring on the segmented control and the chapter row would be clipped
+   by their overflow (the pill clips its corners; a scrolling row clips both
+   axes), so both draw it inside the box instead. */
+.seg-btn:focus-visible,
+.chapters a:focus-visible {
+  outline-offset: -3px;
+}
+
+/* --- Small screens ----------------------------------------------------------
+   The chapter row is the page's tab bar. It already scrolls sideways; here it
+   gets what that needs to be usable under a thumb: snap points so a flick lands
+   on a tab, a soft fade at the edges that tells you there are more, a 44px
+   target, and (analytics.js) the current tab scrolled to the middle. */
+
+@media (max-width: 720px) {
+  .chapters {
+    margin-inline: calc(-1 * var(--space-5));
+  }
+
+  .chapters ul {
+    gap: var(--space-5);
+    padding-inline: var(--space-5);
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: var(--space-5);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--space-5), #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 var(--space-5), #000 calc(100% - 28px), transparent 100%);
+  }
+
+  .chapters li {
+    flex: none;
+    scroll-snap-align: start;
+  }
+
+  .dash-kpis {
+    margin-top: var(--space-6);
+  }
+
+  /* Header controls wrap instead of squeezing the title. */
+  .section-head {
+    flex-wrap: wrap;
+    row-gap: var(--space-3);
+  }
+
+  .panel-caption,
+  .chapter-note {
+    font-size: var(--text-sm);
+  }
+}
+
+@media (pointer: coarse) {
+  .chapters a {
+    padding-block: 14px;
+  }
+
+  .seg-btn {
+    min-height: 44px;
+    padding-inline: var(--space-5);
+    font-size: var(--text-xs);
+  }
+
+  details.numbers > summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    font-size: var(--text-xs);
+  }
+
+  .panel td a,
+  .panel th a {
+    display: inline-block;
+    padding-block: 10px;
+  }
+
+  .callout-title {
+    padding-block: 4px;
+  }
+}
+
+/* Landscape phones: short viewport, so a chart should not eat a whole screen. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .chart-stage,
+  .chart-stage.is-tall {
+    height: 220px;
+  }
+}
+
+/* --- TV ---------------------------------------------------------------------
+   The page is already zoomed by the TV shell, so sizes here are the 1280px-wide
+   design's. Two things need doing for a remote: every control must show where
+   focus is (lime frame, like the posters), and the chapter row -- the only
+   navigation inside the page -- must be big enough to read from the sofa. The
+   charts get their tick text enlarged in analytics.js. */
+
+html.is-tv .dash-kpis {
+  gap: var(--space-7);
+}
+
+html.is-tv .chapters ul {
+  gap: var(--space-7);
+}
+
+html.is-tv .chapters a {
+  padding-block: var(--space-5);
+  font-size: var(--text-xs);
+}
+
+html.is-tv .chapters a:focus-visible {
+  color: var(--lime-text);
+  outline-color: var(--lime-mark);
+}
+
+html.is-tv .seg-btn {
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-xs);
+}
+
+html.is-tv .seg-btn:focus-visible {
+  outline-color: var(--lime-mark);
+}
+
+html.is-tv details.numbers > summary {
+  padding-block: var(--space-4);
+  font-size: var(--text-xs);
+}
+
+html.is-tv details.numbers > summary:focus-visible {
+  color: var(--lime-text);
+  outline-color: var(--lime-mark);
+}
+
+html.is-tv .chart-stage {
+  height: 340px;
+}
+
+html.is-tv .chart-stage.is-tall {
+  height: 460px;
+}
+
+html.is-tv .chart-stage.is-short {
+  height: 260px;
+}
+
+html.is-tv .chart-stage.is-rows {
+  height: calc(var(--rows, 10) * 32px + 80px);
+}
+
+/* Links in the tables are what a remote lands on; the shared ring is thin on a
+   dark row, so they take the lime colour as well. */
+html.is-tv .panel td a:focus-visible,
+html.is-tv .panel th a:focus-visible,
+html.is-tv .callout-title:focus-visible {
+  color: var(--lime-text);
+  outline-color: var(--lime-mark);
+}
+
+/* A 960px TV viewport takes the one-column layout, and the TV chart heights
+   above would otherwise outrank the narrow-screen ones. */
+@media (max-width: 900px) {
+  html.is-tv .chart-stage.is-tall {
+    height: 380px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chapters a,
   .chapters a::after,

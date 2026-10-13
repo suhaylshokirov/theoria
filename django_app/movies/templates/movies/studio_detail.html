@@ -1,5 +1,11 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
+
+{% block body_class %}page-studios{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/people.css' %}">
+{% endblock %}
 
 {% block title %}Theoria — {{ company.name }}{% endblock %}
 {% block description %}{% blocktranslate trimmed count n=film_count with name=company.name %}{{ name }}: {{ n }} movie in the Theoria catalog.{% plural %}{{ name }}: {{ n }} movies in the Theoria catalog.{% endblocktranslate %}{% endblock %}

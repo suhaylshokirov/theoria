@@ -110,7 +110,7 @@ const toggle = document.querySelector('.site-header .nav-toggle');
 const nav = document.querySelector('#nav-links');
 const links = [...nav.querySelectorAll('a')].map((a) => ({
   label: label(a), text: a.textContent.trim(), visible: vis(a), rect: rect(a),
-  signin: a.classList.contains('signin-btn')}));
+  signin: a.classList.contains('signin-btn') || !!a.closest('.account-menu')}));
 return {
   toggleVisible: vis(toggle),
   expanded: toggle && toggle.getAttribute('aria-expanded'),

@@ -1,7 +1,11 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}Theoria — {% translate "Cartoons" %}{% endblock %}
+
+{% block body_class %}page-catalog page-cartoons{% endblock %}
+
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catalog.css' %}">{% endblock %}
 
 {% block content %}
 {% translate "Cartoons" as sheet_title %}{% translate "Animated movies and shows made for younger viewers. Search by name or reorder by what was measured." as sheet_sub %}

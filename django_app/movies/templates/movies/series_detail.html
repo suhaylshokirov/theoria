@@ -3,12 +3,13 @@
 
 {% block title %}Theoria — {{ series.display_title }}{% endblock %}
 
-{% block body_class %}page-film{% endblock %}
+{% block body_class %}page-film page-series{% endblock %}
 
 {% comment %} Same YouTube preconnect handshake as movie_detail.html — only a
    show page with a trailer loads a still. {% endcomment %}
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'css/film.css' %}">
+<link rel="stylesheet" href="{% static 'css/series.css' %}">
 {% if trailer %}<link rel="preconnect" href="https://img.youtube.com">{% endif %}
 {% endblock %}
 
@@ -265,7 +266,7 @@
             </ul>
         </figcaption>
         <div class="season-chart__stage" data-chart-stage>
-            <canvas id="season-rating-chart" role="img" aria-label="{% translate "Episode ratings in this season, area chart" %}"></canvas>
+            <canvas id="season-rating-chart" role="img" tabindex="0" aria-label="{% translate "Episode ratings in this season, area chart" %}"></canvas>
             <div class="season-chart__tip" data-chart-tip aria-hidden="true"></div>
         </div>
     </figure>

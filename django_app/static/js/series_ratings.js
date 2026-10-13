@@ -46,6 +46,9 @@
   })();
 
   var FONT_BODY = '"Instrument Sans", system-ui, sans-serif';
+  // Axis type in canvas px. The canvas is zoomed with the page on a TV, so a
+  // 3-metre reading needs a larger size than the 11px a desktop is happy with.
+  var AXIS_PX = document.documentElement.classList.contains("is-tv") ? 14 : 11;
   var FONT_MONO = '"Spline Sans Mono", ui-monospace, monospace';
 
   function readJSON(id) {
@@ -352,6 +355,29 @@
     return keys[0];
   }
 
+  // Screen px per CSS px: 1, except under the TV zoom (cinema.js scale()).
+  function zoomOf(el) {
+    return el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1;
+  }
+
+  // Fit the chart to its stage in layout px (offsetWidth is unzoomed) and draw
+  // the bitmap at devicePixelRatio x zoom so it stays sharp when scaled up.
+  function sizeToStage() {
+    if (!chart || !stage.offsetWidth) return;
+    var w = stage.offsetWidth;
+    var h = stage.offsetHeight;
+    var ratio = (window.devicePixelRatio || 1) * zoomOf(stage);
+    if (chart.width === w && chart.height === h && chart.options.devicePixelRatio === ratio) return;
+    chart.options.devicePixelRatio = ratio;
+    chart.resize(w, h);
+  }
+  var sizeRaf = 0;
+  function queueSize() {
+    if (!sizeRaf) sizeRaf = requestAnimationFrame(function () { sizeRaf = 0; sizeToStage(); });
+  }
+  window.addEventListener("resize", queueSize);
+  if ("ResizeObserver" in window) new ResizeObserver(queueSize).observe(stage);
+
   var chart = null;
   var frame = null;
 
@@ -382,6 +408,7 @@
   function draw() {
     if (chart) {
       chart.destroy();
+      focusIndex = -1;
       chart = null;
     }
     tipEl.classList.remove("is-on");
@@ -436,9 +463,16 @@
       },
       plugins: [overlay],
       options: {
-        responsive: true,
+        // Chart.js's responsive mode measures its container with the zoomed
+        // getBoundingClientRect(), so at TV zoom the chart grows 9x too wide;
+        // sizeToStage() sizes it from layout px instead.
+        responsive: false,
         maintainAspectRatio: false,
+        devicePixelRatio: (window.devicePixelRatio || 1) * zoomOf(stage),
         animation: false,
+        // Chart.js's own pointer mapping mixes zoomed and unzoomed px under the
+        // TV zoom and picks the wrong point; the pointer handlers below do it.
+        events: [],
         interaction: { mode: "index", intersect: false },
         layout: { padding: { top: 22, right: 4, bottom: 0, left: 0 } },
         plugins: {
@@ -458,12 +492,12 @@
               display: true,
               text: view.axis,
               color: INK_FAINT,
-              font: { family: FONT_BODY, size: 11 },
+              font: { family: FONT_BODY, size: AXIS_PX },
               padding: { top: 6 },
             },
             ticks: {
               color: INK_FAINT,
-              font: { family: FONT_MONO, size: 11 },
+              font: { family: FONT_MONO, size: AXIS_PX },
               autoSkip: true,
               autoSkipPadding: 14,
               maxRotation: 0,
@@ -477,7 +511,7 @@
             border: { display: false },
             ticks: {
               color: INK_FAINT,
-              font: { family: FONT_MONO, size: 11 },
+              font: { family: FONT_MONO, size: AXIS_PX },
               stepSize: view.bounds.step,
               maxTicksLimit: 6,
               padding: 10,
@@ -487,11 +521,75 @@
         },
       },
     });
+    sizeToStage();
     reveal();
   }
 
-  canvas.addEventListener("mouseleave", function () {
+  // Pointer: the nearest point to the pointer's x, found from the fraction of
+  // the canvas it is over, so it holds whatever zoom the page is under.
+  function pointFromEvent(e) {
+    if (!chart) return;
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
+    var x = ((e.clientX - rect.left) / rect.width) * chart.width;
+    var points = chart.getDatasetMeta(0).data;
+    var best = -1, gap = Infinity;
+    for (var k = 0; k < points.length; k++) {
+      var d = Math.abs(points[k].x - x);
+      if (d < gap) { gap = d; best = k; }
+    }
+    if (best >= 0 && best !== focusIndex) showPoint(best);
+  }
+  function clearPoint() {
+    focusIndex = -1;
     tipEl.classList.remove("is-on");
+    if (chart) {
+      chart.setActiveElements([]);
+      chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+      chart.update("none");
+    }
+  }
+  canvas.addEventListener("pointermove", pointFromEvent);
+  canvas.addEventListener("pointerdown", pointFromEvent);
+  canvas.addEventListener("pointerleave", function (e) {
+    if (document.activeElement !== canvas) clearPoint();
+  });
+
+  // Remote and keyboard: with no pointer there is no hover, so the canvas takes
+  // focus and the arrow keys step the same card through the points. Home and
+  // End jump to the ends; leaving the canvas puts the card away.
+  var focusIndex = -1;
+  function showPoint(i) {
+    if (!chart) return;
+    var n = chart.data.labels.length;
+    if (!n) return;
+    focusIndex = Math.max(0, Math.min(n - 1, i));
+    var meta = chart.getDatasetMeta(0).data[focusIndex];
+    if (!meta) return;
+    var at = [{ datasetIndex: 0, index: focusIndex }];
+    chart.setActiveElements(at);
+    chart.tooltip.setActiveElements(at, { x: meta.x, y: meta.y });
+    chart.update("none");
+  }
+  canvas.addEventListener("keydown", function (e) {
+    var n = chart ? chart.data.labels.length : 0;
+    var next = null;
+    if (e.key === "ArrowRight") next = focusIndex + 1;
+    else if (e.key === "ArrowLeft") next = focusIndex < 0 ? 0 : focusIndex - 1;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = n - 1;
+    if (next === null) return;
+    e.preventDefault();
+    showPoint(next);
+  });
+  canvas.addEventListener("blur", function () {
+    focusIndex = -1;
+    tipEl.classList.remove("is-on");
+    if (chart) {
+      chart.setActiveElements([]);
+      chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+      chart.update("none");
+    }
   });
 
   if (picker) {

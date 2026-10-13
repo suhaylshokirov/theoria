@@ -45,6 +45,20 @@
   var FONT_BODY = '"Instrument Sans", system-ui, sans-serif';
   var FONT_MONO = '"Spline Sans Mono", ui-monospace, monospace';
 
+  // On a TV the page is zoomed (html.is-tv, body zoom), and canvas text is
+  // drawn in the canvas's own CSS px, so it zooms with the page but starts
+  // from a phone-sized 11px. A little extra keeps tick labels legible from a
+  // sofa without a separate chart design.
+  function fs(px) {
+    return document.documentElement.classList.contains("is-tv") ? Math.round(px * 1.3) : px;
+  }
+
+  // Screen px per CSS px for an element: 1, except under the TV shell's zoom,
+  // where getBoundingClientRect() reports the zoomed size (cinema.js scale()).
+  function zoomOf(el) {
+    return el.offsetWidth ? el.getBoundingClientRect().width / el.offsetWidth : 1;
+  }
+
   function readJSON(id) {
     var el = document.getElementById(id);
     if (!el) return null;
@@ -136,15 +150,15 @@
       bodyColor: INK,
       borderColor: RULE,
       borderWidth: 1,
-      titleFont: { family: FONT_BODY, weight: "600", size: 12 },
-      bodyFont: { family: FONT_MONO, size: 12 },
+      titleFont: { family: FONT_BODY, weight: "600", size: fs(12) },
+      bodyFont: { family: FONT_MONO, size: fs(12) },
       padding: 10,
       displayColors: false,
     };
   }
 
   function tickFont() {
-    return { color: INK_FAINT, font: { family: FONT_MONO, size: 11 } };
+    return { color: INK_FAINT, font: { family: FONT_MONO, size: fs(11) } };
   }
 
   function axisTitle(text) {
@@ -152,7 +166,7 @@
       display: true,
       text: text,
       color: INK_FAINT,
-      font: { family: FONT_MONO, size: 11 },
+      font: { family: FONT_MONO, size: fs(11) },
     };
   }
 
@@ -176,8 +190,14 @@
 
   function baseOptions() {
     return {
-      responsive: true,
+      // Chart.js's own responsive mode measures its container with
+      // getBoundingClientRect(), which under the TV zoom is the zoomed width:
+      // it sizes the canvas to that, the canvas then renders zoomed again, and
+      // at 4K (zoom 3) a chart ends up 9x too wide and scrolls the page
+      // sideways. So sizing is done by sizeToStage() from layout px instead.
+      responsive: false,
       maintainAspectRatio: false,
+      devicePixelRatio: (window.devicePixelRatio || 1),
       animation: reduce ? false : { duration: 600 },
       plugins: { legend: { display: false } }, // single series: the heading names it
     };
@@ -232,7 +252,7 @@
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = INK;
-      ctx.font = "600 11px " + FONT_MONO;
+      ctx.font = "600 " + fs(11) + "px " + FONT_MONO;
       var label = t("Median") + " " + dot(opts.value, 1);
       var width = ctx.measureText(label).width;
       // Keep the label inside the plot: flip it to the left of the rule near
@@ -327,7 +347,7 @@
       position: "bottom",
       labels: {
         color: INK_FAINT,
-        font: { family: FONT_MONO, size: 11 },
+        font: { family: FONT_MONO, size: fs(11) },
         boxWidth: 28,
         boxHeight: 1,
         // The points need no legend entry; only the two reference lines do.
@@ -387,7 +407,7 @@
             borderWidth: 1,
             pointRadius: 3.5,
             pointHoverRadius: 6,
-            pointHitRadius: 6,
+            pointHitRadius: window.matchMedia && window.matchMedia("(pointer: coarse)").matches ? 14 : 6,
             order: 1,
           },
           {
@@ -438,7 +458,7 @@
       align: "start",
       labels: {
         color: INK_FAINT,
-        font: { family: FONT_MONO, size: 11 },
+        font: { family: FONT_MONO, size: fs(11) },
         boxWidth: 12,
         boxHeight: 12,
       },
@@ -631,10 +651,60 @@
     }
     var builder = BUILDERS[entry.name];
     if (builder) entry.chart = builder(entry.canvas);
+    sizeToStage(entry);
   }
+
+  // Fit the chart to its .chart-stage in layout px (offsetWidth is unzoomed),
+  // and render the bitmap at devicePixelRatio x zoom so it stays sharp when
+  // the TV shell scales it up.
+  function sizeToStage(entry) {
+    var chart = entry.chart;
+    var stage = entry.canvas.parentElement;
+    if (!chart || !stage || !stage.offsetWidth) return;
+    var w = stage.offsetWidth;
+    var h = stage.offsetHeight;
+    var ratio = (window.devicePixelRatio || 1) * zoomOf(stage);
+    if (chart.width === w && chart.height === h && chart.options.devicePixelRatio === ratio) return;
+    chart.options.devicePixelRatio = ratio;
+    chart.resize(w, h);
+  }
+
+  function watchStages() {
+    var raf = 0;
+    function all() {
+      raf = 0;
+      entries.forEach(sizeToStage);
+    }
+    function queue() {
+      if (!raf) raf = requestAnimationFrame(all);
+    }
+    window.addEventListener("resize", queue);
+    if ("ResizeObserver" in window) {
+      var ro = new ResizeObserver(queue);
+      entries.forEach(function (e) { ro.observe(e.canvas.parentElement); });
+    }
+  }
+
+  // Pointer positions under the TV zoom. Chart.js turns a mouse event into
+  // canvas coordinates from the zoomed getBoundingClientRect() but its own
+  // chart area is in unzoomed layout px, so hover and click land 1.5x (or 3x)
+  // too far right and down. Divide them back before the chart looks them up.
+  // A replayed event is the same object, already corrected.
+  var zoomFix = {
+    id: "zoomFix",
+    beforeEvent: function (chart, args) {
+      if (args.replay || args.event.x == null) return;
+      var z = zoomOf(chart.canvas);
+      if (Math.abs(z - 1) < 0.01) return;
+      args.event.x /= z;
+      args.event.y /= z;
+      args.inChartArea = chart.isPointInArea(args.event);
+    },
+  };
 
   function initCharts() {
     if (typeof Chart === "undefined") return;
+    Chart.register(zoomFix);
     readPalette();
     var canvases = document.querySelectorAll("canvas[data-chart]");
     var observer = null;
@@ -655,6 +725,7 @@
       if (observer) observer.observe(canvas);
       else build(entry);
     });
+    watchStages();
   }
 
   // Chart.js bakes colours into the instance, so a live theme switch has to

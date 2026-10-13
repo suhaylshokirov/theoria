@@ -1,7 +1,11 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}Theoria — {% translate "Browse" %}{% endblock %}
+
+{% block body_class %}page-catalog page-browse{% endblock %}
+
+{% block extra_head %}<link rel="stylesheet" href="{% static 'css/catalog.css' %}">{% endblock %}
 
 {% block content %}
 {% translate "Browse" as sheet_title %}{% translate "Every movie and TV show in one place. Search by name or change the order." as sheet_sub %}

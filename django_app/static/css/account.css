@@ -763,3 +763,101 @@
     transform: none;
   }
 }
+
+/* --- Touch --------------------------------------------------------------------
+   The jump chips and the two hero buttons are the only small targets left on
+   a phone; the cards, pager and remove/reorder circles are already 44px. */
+@media (pointer: coarse) {
+  .account-jump {
+    min-height: 44px;
+  }
+
+  .account-rename,
+  .account-signout {
+    min-height: 48px;
+  }
+}
+
+/* Phone on its side: the stacked hero would eat the whole 390px of height
+   before the first poster, so the disc sits beside the name again. */
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 1023px) {
+  .account-hero {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 220px);
+    grid-template-areas: "plate id side";
+    gap: var(--space-5);
+  }
+
+  .account-plate {
+    width: 64px;
+    height: 64px;
+  }
+
+  .account-plate__initial {
+    font-size: 2rem;
+  }
+
+  .account-hero__side {
+    max-width: none;
+  }
+}
+
+/* --- TV ------------------------------------------------------------------------
+   A remote has no hover, so everything hover reveals is simply shown, and
+   every control gets the lime frame the shared poster cards use. The poster
+   itself is lifted by theoria.css when its link takes focus; the overlay
+   frame has to ride the same scale or the remove button would drift off the
+   corner it belongs to. */
+html.is-tv .account-card__remove {
+  opacity: 1;
+  width: 3.25rem;
+  height: 3.25rem;
+}
+
+html.is-tv .account-card__remove svg {
+  width: 20px;
+  height: 20px;
+}
+
+html.is-tv .account-card__moves button {
+  width: 3.25rem;
+  height: 3.25rem;
+}
+
+html.is-tv .account-card__frame {
+  transform-origin: 50% 100%;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+html.is-tv .account-card:has(.poster-card a:focus-visible) .account-card__frame {
+  transform: scale(1.06);
+}
+
+html.is-tv .account-pager__btn {
+  min-width: 3.25rem;
+  height: 3.25rem;
+  font-size: var(--text-sm);
+}
+
+html.is-tv .account-pager__btn.is-arrow {
+  width: 3.25rem;
+}
+
+html.is-tv .account-jump,
+html.is-tv .account-rename,
+html.is-tv .account-signout {
+  min-height: 3.25rem;
+}
+
+/* Hero buttons, chips, the open-rank slot: the heavier shell ring is drawn
+   outside the border, so these only need to be told not to clip it. */
+html.is-tv .account-slot__link:focus-visible,
+html.is-tv .account-pager__btn:focus-visible,
+html.is-tv .account-card__remove:focus-visible,
+html.is-tv .account-card__moves button:focus-visible {
+  border-color: var(--lime-mark);
+  box-shadow: 0 0 0 3px var(--lime-mark);
+}
+
+html.is-tv .account-slot__link:focus-visible {
+  background: var(--lime-wash);
+}

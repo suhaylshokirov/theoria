@@ -18,9 +18,11 @@
   isolation: isolate;
   display: flex;
   align-items: flex-end;
-  width: 100vw;
-  min-height: min(78vh, 760px);
-  margin-inline: calc(50% - 50vw);
+  /* var(--vw) / var(--vh) are the TV shell's pre-zoom screen units; a plain
+     100vw would be multiplied by the zoom and push the page sideways. */
+  width: calc(100 * var(--vw, 1vw));
+  min-height: min(calc(78 * var(--vh, 1vh)), 760px);
+  margin-inline: calc(50% - 50 * var(--vw, 1vw));
   padding-top: 120px;
   overflow: hidden;
 }
@@ -134,6 +136,17 @@
   letter-spacing: -0.02em;
   text-transform: uppercase;
   text-wrap: balance;
+}
+
+/* A long title would otherwise run to six lines at the full display size and
+   push the hero past the screen; it steps down by length. */
+.film-title--long {
+  font-size: clamp(2rem, 4.6vw, 3.8rem);
+}
+
+.film-title--xlong {
+  font-size: clamp(1.7rem, 3.4vw, 2.7rem);
+  line-height: 1;
 }
 
 .film-tagline {
@@ -377,4 +390,203 @@
   .facts {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* --- Small screens ---------------------------------------------------------------- */
+
+/* On a narrow screen the plate would otherwise stack a 150px poster, its
+   caption and three pills above the title: two screens of hero before a word
+   of the film. Here the poster and the caption sit side by side and the pills
+   take a row of their own beneath, so the title is in the first screen. */
+@media (max-width: 900px) {
+  .film-hero {
+    min-height: 0;
+    padding-top: 104px;
+  }
+
+  .film-hero__plate {
+    grid-template-columns: 124px minmax(0, 1fr);
+    column-gap: var(--space-5);
+    row-gap: var(--space-4);
+    align-items: end;
+  }
+
+  .film-hero__plate .film-poster {
+    grid-row: 1 / span 2;
+    width: 124px;
+  }
+
+  .film-hero__plate .film-plate-meta {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+  }
+
+  .film-hero__plate .collection-actions {
+    grid-column: 1 / -1;
+  }
+
+  .film-hero__grid {
+    padding-bottom: var(--space-7);
+  }
+}
+
+@media (max-width: 440px) {
+  .film-title,
+  .film-title--long,
+  .film-title--xlong {
+    font-size: clamp(1.6rem, 11vw, 2.6rem);
+    overflow-wrap: anywhere;
+  }
+
+  .film-title--long {
+    font-size: clamp(1.6rem, 8vw, 2.2rem);
+  }
+
+  .film-title--xlong {
+    font-size: clamp(1.4rem, 6.4vw, 1.8rem);
+  }
+
+  /* Three pills do not fit one line at 360px; two and one is tidier than a
+     squeezed three. */
+  .film-hero__plate .collection-action {
+    padding-inline: var(--space-4);
+  }
+}
+
+.film-title,
+.film-tagline {
+  overflow-wrap: anywhere;
+}
+
+/* Fingers: the pills, the crew links and the pager buttons reach 44px. */
+@media (pointer: coarse) {
+  .film-hero__plate .collection-action {
+    min-height: 2.75rem;
+  }
+
+  .page-film .credit-person {
+    min-height: 2.75rem;
+  }
+
+  .page-film .page-btn {
+    min-height: 2.75rem;
+  }
+}
+
+/* Long crew job lists wrap under the name instead of squeezing it. */
+@media (max-width: 520px) {
+  .page-film .credit-row {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+
+  .page-film .credit-jobs {
+    padding-left: calc(2.25rem + var(--space-3));
+  }
+}
+
+/* --- TV --------------------------------------------------------------------------- */
+
+/* The hero fills one screen: the header clears the top, and the content sits
+   on the bottom edge inside the TV's overscan margin. */
+/* A TV screen is short: on a 960x540 panel a 300px-wide poster is taller
+   than the screen and pushes the title below the fold. The column is wider
+   than the poster (the three pills need it) but the poster itself is capped by screen height. */
+html.is-tv .film-title--long {
+  font-size: clamp(2rem, calc(4.6 * var(--vw, 1vw)), 3.8rem);
+}
+
+html.is-tv .film-title--xlong {
+  font-size: clamp(1.7rem, calc(3.4 * var(--vw, 1vw)), 2.7rem);
+}
+
+html.is-tv .film-hero__plate .film-poster {
+  width: min(100%, 300px, calc(32 * var(--vh, 1vh)));
+}
+
+html.is-tv .film-hero {
+  padding-top: 120px;
+}
+
+html.is-tv .film-hero__grid {
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  padding-bottom: var(--space-8);
+}
+
+html.is-tv .film-body {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+}
+
+/* The pills are the remote's first stops, so they are big targets. */
+html.is-tv .film-hero__plate .collection-action {
+  min-height: 3rem;
+  font-size: var(--text-xs);
+}
+
+html.is-tv .collection-action:focus-visible {
+  outline-color: var(--lime-mark);
+  box-shadow: 0 0 0 3px var(--lime-mark), 0 18px 36px -16px rgb(0 0 0 / 0.85);
+  transform: translateY(-2px);
+}
+
+html.is-tv .score__ring {
+  width: 130px;
+  height: 130px;
+}
+
+html.is-tv .video-play-icon {
+  width: 84px;
+  height: 84px;
+}
+
+html.is-tv .video-play-icon svg {
+  width: 38px;
+  height: 38px;
+}
+
+/* The trailer is the one big target on the page: focusing it frames the
+   whole picture and lifts the disc, as a poster does. */
+html.is-tv .video-play:focus-visible {
+  outline: 3px solid var(--lime-mark);
+  outline-offset: -3px;
+}
+
+html.is-tv .video-frame:has(.video-play:focus-visible) {
+  border-color: var(--lime-mark);
+  box-shadow: 0 0 0 3px var(--lime-mark), 0 28px 56px -20px rgb(0 0 0 / 0.85);
+}
+
+html.is-tv .credit-avatar {
+  width: 3rem;
+  height: 3rem;
+}
+
+html.is-tv .credit-person {
+  min-height: 3.25rem;
+}
+
+html.is-tv .credit-name {
+  font-size: var(--text-md);
+}
+
+html.is-tv .credit-row:has(.credit-person:focus-visible) {
+  background: var(--sheet-2);
+}
+
+html.is-tv .credit-person:focus-visible {
+  outline: none;
+}
+
+html.is-tv .credit-person:focus-visible .credit-name {
+  color: var(--lime-text);
+}
+
+html.is-tv .credit-person:focus-visible .credit-avatar {
+  border-color: var(--lime-mark);
+}
+
+html.is-tv .page-film .page-btn {
+  min-height: 3rem;
+  font-size: var(--text-sm);
 }

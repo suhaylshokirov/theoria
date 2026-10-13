@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load static i18n %}
 
 {% comment %} Django serves this automatically for any unmatched URL (or a
    view raising Http404) once DEBUG is off — no handler404 needed, since
@@ -7,6 +7,12 @@
    sparse: a line saying the page isn't there, and one way back. {% endcomment %}
 
 {% block title %}{% translate "Page not found — Theoria" %}{% endblock %}
+
+{% block body_class %}page-error{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/error.css' %}">
+{% endblock %}
 
 {% block content %}
 <section class="error-page">

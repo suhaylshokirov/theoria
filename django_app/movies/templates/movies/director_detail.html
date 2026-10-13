@@ -1,5 +1,11 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
+
+{% block body_class %}page-people{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/people.css' %}">
+{% endblock %}
 
 {% block title %}Theoria — {{ director.name }}{% endblock %}
 

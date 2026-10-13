@@ -1,6 +1,12 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 {% load tmdb_images %}
+
+{% block body_class %}page-people{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/people.css' %}">
+{% endblock %}
 
 {% block title %}Theoria — {{ person.display_name }}{% endblock %}
 {% block description %}{% blocktranslate trimmed count n=film_count asvar films_phrase %}{{ n }} movie{% plural %}{{ n }} movies{% endblocktranslate %}{% if show_count %}{% blocktranslate trimmed count n=show_count asvar shows_phrase %}{{ n }} show{% plural %}{{ n }} shows{% endblocktranslate %}{% blocktranslate trimmed with name=person.display_name films=films_phrase shows=shows_phrase %}{{ name }}: {{ films }} and {{ shows }} in the Theoria catalog.{% endblocktranslate %}{% else %}{% blocktranslate trimmed with name=person.display_name films=films_phrase %}{{ name }}: {{ films }} in the Theoria catalog.{% endblocktranslate %}{% endif %}{% endblock %}

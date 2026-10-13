@@ -1,0 +1,152 @@
+/* Theoria — People and Studios (lists and record pages).
+   Loads after theoria.css and only adjusts what the foundation leaves wrong
+   on these pages: the record headers, the stat row, the bio toggle and the
+   scope switch. Scoped by .page-people / .page-studios so nothing leaks. */
+
+/* The stat row wraps on narrow screens, and the shared 3rem gap applies to
+   rows as well as columns, so a wrapped row left a canyon between stats.
+   Rows stay close, columns keep their air. */
+.page-people .stats,
+.page-studios .stats {
+  column-gap: var(--space-7);
+  row-gap: var(--space-2);
+}
+
+/* A studio's revenue is a ten-digit figure; it must be allowed to shrink in
+   its own cell rather than push the row wider than the screen. */
+.page-studios .stat,
+.page-people .stat {
+  min-width: 0;
+}
+
+.page-studios .stat .stat-value {
+  overflow-wrap: anywhere;
+}
+
+/* --- Phones ---------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .page-people .sheet-head + .sheet-section,
+  .page-studios .sheet-head + .sheet-section,
+  .page-people .stats + .sheet-section,
+  .page-studios .stats + .sheet-section,
+  .page-people .sheet-section + .sheet-section,
+  .page-studios .sheet-section + .sheet-section {
+    margin-top: var(--space-7);
+  }
+
+  /* The headshot stays beside the name, so the stats sit under the title in
+     the narrower column. Two to a row reads cleanly at 360. */
+  .page-people .person-record .stats,
+  .page-studios .studio-record .stats {
+    margin-top: var(--space-4);
+    column-gap: var(--space-6);
+  }
+
+  .page-people .person-record .stat,
+  .page-studios .studio-record .stat {
+    padding-top: var(--space-3);
+  }
+
+  .page-people .person-record .stat .stat-value {
+    font-size: var(--text-md);
+  }
+
+  /* The logo plate fills the column on a phone: a wordmark is unreadable at
+     a thumbnail, and the title below keeps its full width. */
+  .page-studios .studio-plate {
+    max-width: 240px;
+  }
+
+  .page-people .record-row,
+  .page-studios .record-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+
+  .page-studios .record-row dd {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 440px) {
+  /* Narrow phones: headshot and stats share too little width, so the stats
+     take the whole row under the pair. */
+  .page-people .person-head {
+    grid-template-columns: 88px 1fr;
+    gap: var(--space-4);
+  }
+
+  .page-people .person-record .sheet-title,
+  .page-studios .studio-record .sheet-title {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* --- Touch ----------------------------------------------------------------- */
+
+@media (pointer: coarse) {
+  .page-people .bio-toggle {
+    min-height: 44px;
+  }
+
+  /* The scope switch is a row of text links; a fingertip needs a 44px band. */
+  .page-people .scope {
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .page-people .scope a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding-inline: var(--space-3);
+  }
+}
+
+/* --- TV -------------------------------------------------------------------- */
+
+/* A bigger headshot / logo plate so the record reads from the sofa, and a
+   comfortable measure for the biography instead of a 1800px-wide line. */
+html.is-tv .page-people .person-head {
+  grid-template-columns: 184px 1fr;
+  gap: var(--space-8);
+}
+
+html.is-tv .page-studios .studio-head {
+  grid-template-columns: minmax(0, 300px) 1fr;
+}
+
+html.is-tv .page-people .bio-body,
+html.is-tv .page-studios .specimen-synopsis {
+  max-width: 70ch;
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+html.is-tv .page-people .stats,
+html.is-tv .page-studios .stats {
+  column-gap: var(--space-7);
+}
+
+/* Focusable controls that are not cards: a 44px-plus lime-framed target. */
+html.is-tv .page-people .bio-toggle {
+  font-size: var(--text-2xs);
+  padding: var(--space-4) var(--space-6);
+}
+
+html.is-tv .page-people .scope a {
+  font-size: var(--text-xs);
+  padding: var(--space-2) var(--space-3);
+}
+
+html.is-tv .page-people .scope a:focus-visible {
+  color: var(--lime-text);
+  border-bottom-color: var(--lime-mark);
+}
+
+/* The 960x540 TV gets the phone-ish hamburger layout; keep the stacked
+   record header comfortable there. */
+html.is-tv .page-studios .record-row dd {
+  overflow-wrap: anywhere;
+}

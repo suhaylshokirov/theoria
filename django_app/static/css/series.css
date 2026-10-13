@@ -1,0 +1,174 @@
+/* ===========================================================================
+   Show page, below the hero (Task 135). Loads after theoria.css and film.css;
+   everything is scoped by .page-series so it cannot touch another page. The
+   section rules it adjusts live in theoria.css: "Season picker", "Season KPI
+   cards and the all-seasons table", "Season rating chart".
+   =========================================================================== */
+
+/* --- Small screens ---------------------------------------------------------- */
+
+/* The all-seasons table has five columns and nowrap dates, which is wider than
+   a phone. Left alone it scrolls sideways inside its wrapper and the rating,
+   the one column that matters, is the part off-screen. So on a phone it gives
+   up what it can spare: the "#" column repeats the season's own name, the air
+   dates (every season's own panel lists its episodes' dates) and the vote
+   count (the badge keeps its figure) step aside. The wrapper still scrolls as
+   a last resort. */
+@media (max-width: 560px) {
+  .page-series .season-table th:first-child,
+  .page-series .season-table td:first-child,
+  .page-series .season-table th:nth-child(3),
+  .page-series .season-table td:nth-child(3) {
+    display: none;
+  }
+
+  /* The episode table's twin: the title is what a reader scans for, so it
+     keeps the width. Air date and runtime are in the tablet layout. */
+  .page-series .episode-table th:nth-child(n+3):nth-child(-n+4),
+  .page-series .episode-table td:nth-child(n+3):nth-child(-n+4) {
+    display: none;
+  }
+
+  .page-series .rating-badge-figure {
+    white-space: nowrap;
+  }
+
+  .page-series .episode-table .rating-badge-votes {
+    display: none;
+  }
+
+  .page-series .episode-table th,
+  .page-series .episode-table td,
+  .page-series .season-table th,
+  .page-series .season-table td {
+    padding-inline: var(--space-3);
+  }
+
+  .page-series .season-table .rating-badge-votes,
+  .page-series .season-table .season-note {
+    display: none;
+  }
+
+  .page-series .season-readout__cell {
+    padding: var(--space-4);
+  }
+
+  .page-series .season-readout__figure {
+    font-size: var(--text-lg);
+  }
+
+  /* The key is a legend, not a headline: tighter, so four entries take two
+     rows rather than four. */
+  .page-series .season-chart__key {
+    gap: var(--space-2) var(--space-4);
+  }
+
+  .page-series .season-chart__stage {
+    height: 240px;
+  }
+}
+
+/* A season is a chip of its own: on a touch screen it is a tap target of at
+   least 44px, and the row of them is a scroll-free wrap, never a clipped strip. */
+@media (pointer: coarse) {
+  .page-series .season-picker label {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .page-series .season-link {
+    display: inline-block;
+    padding-block: var(--space-3);
+  }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .page-series .season-chart__stage {
+    height: 200px;
+  }
+}
+
+/* --- TV --------------------------------------------------------------------- */
+
+/* The picker is a radio group: from a sofa the remote's arrows move between
+   seasons and the chip shows where you are. The ring on a chip that is also the
+   selected one needs to read against lime, so it sits outside the pill with a
+   gap, and the focused chip lifts a little like a focused poster does. */
+html.is-tv .page-series .season-picker {
+  gap: var(--space-3);
+}
+
+html.is-tv .page-series .season-picker label {
+  font-size: var(--text-2xs);
+  padding: var(--space-4) var(--space-6);
+  transition: transform var(--dur-slow) var(--ease-out),
+              box-shadow var(--dur-slow) var(--ease-out),
+              background var(--dur-fast) var(--ease);
+}
+
+html.is-tv .page-series .season-picker input:focus-visible + label {
+  outline: none;
+  transform: translateY(-3px) scale(1.06);
+  box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--lime-mark),
+              0 18px 36px -16px rgb(0 0 0 / 0.85);
+}
+
+html.is-tv .page-series .season-link {
+  padding: var(--space-3) var(--space-4);
+  margin-inline: calc(-1 * var(--space-4));
+  border-radius: 8px;
+}
+
+html.is-tv .page-series .season-link:focus-visible {
+  color: var(--lime-text);
+  background: var(--sheet);
+  outline: 3px solid var(--lime-mark);
+  outline-offset: 0;
+}
+
+/* Rows are not controls, but the season link in them is, so a focused row
+   gets the same quiet lift as hover. */
+html.is-tv .page-series tbody tr:focus-within {
+  background: var(--sheet);
+}
+
+html.is-tv .page-series .season-readout__cell {
+  padding: var(--space-6) var(--space-7);
+}
+
+html.is-tv .page-series .season-readout dd {
+  font-size: var(--text-md);
+}
+
+html.is-tv .page-series tbody td {
+  padding-block: var(--space-4);
+}
+
+html.is-tv .page-series .season-chart__stage {
+  height: 360px;
+}
+
+/* The chart has no pointer on a TV, so the canvas itself takes focus (the
+   script steps its tooltip through the points with the arrow keys) and
+   shows a frame when it has it. */
+.page-series .season-chart__stage canvas:focus {
+  outline: none;
+}
+
+html.is-tv .page-series .season-chart__stage:has(canvas:focus-visible) {
+  outline: 3px solid var(--lime-mark);
+  outline-offset: 6px;
+  border-radius: 8px;
+}
+
+.page-series .season-chart__stage:has(canvas:focus-visible) {
+  outline: 2px solid var(--lime-mark);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+html.is-tv .page-series .season-chart__tip {
+  min-width: 14rem;
+  max-width: 20rem;
+}
