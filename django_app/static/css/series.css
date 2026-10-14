@@ -5,6 +5,15 @@
    cards and the all-seasons table", "Season rating chart".
    =========================================================================== */
 
+/* --- Section order ---------------------------------------------------------- */
+
+/* Episodes is the first section under the hero and trailer, so it takes the
+   gap film.css gives the cast section on a movie page; the sections after it
+   get theirs from theoria.css's .sheet-section + .sheet-section. */
+.page-series #episodes {
+  margin-top: var(--space-9);
+}
+
 /* --- Small screens ---------------------------------------------------------- */
 
 /* The all-seasons table has five columns and nowrap dates, which is wider than

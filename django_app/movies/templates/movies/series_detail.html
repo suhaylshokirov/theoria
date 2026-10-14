@@ -177,26 +177,6 @@
 </figure>
 {% endif %}
 
-<section class="sheet-section film-cast" id="cast">
-    <div class="section-head">
-        <h2>{% translate "Cast" %}</h2>
-        <span class="section-note">{% blocktranslate trimmed with cast=cast_count count counter=credit_count %}{{ cast }} cast · {{ counter }} credit{% plural %}{{ cast }} cast · {{ counter }} credits{% endblocktranslate %}</span>
-    </div>
-    {% comment %} Same client-side pager as movie_detail.html's cast section —
-       measured mean ~690 credits/show against film's ~200, well within what
-       a browser already holds for the busiest films. {% endcomment %}
-    <div data-paged data-page-size="18" data-page-items=".poster-card">
-        <div class="poster-grid is-tight">
-            {% for credit in cast %}
-            {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
-            {% empty %}
-            <p class="empty">{% translate "No cast recorded for this show." %}</p>
-            {% endfor %}
-        </div>
-        {% translate "cast" as cast_label %}{% include "movies/_pager_client.html" with label=cast_label only %}
-    </div>
-</section>
-
 <section class="sheet-section" id="episodes">
     <div class="section-head">
         <h2>{% translate "Episodes" %}</h2>
@@ -274,6 +254,26 @@
     {% endif %}
     {% endwith %}
     {% enddatacache %}
+</section>
+
+<section class="sheet-section film-cast" id="cast">
+    <div class="section-head">
+        <h2>{% translate "Cast" %}</h2>
+        <span class="section-note">{% blocktranslate trimmed with cast=cast_count count counter=credit_count %}{{ cast }} cast · {{ counter }} credit{% plural %}{{ cast }} cast · {{ counter }} credits{% endblocktranslate %}</span>
+    </div>
+    {% comment %} Same client-side pager as movie_detail.html's cast section —
+       measured mean ~690 credits/show against film's ~200, well within what
+       a browser already holds for the busiest films. {% endcomment %}
+    <div data-paged data-page-size="18" data-page-items=".poster-card">
+        <div class="poster-grid is-tight">
+            {% for credit in cast %}
+            {% include "movies/_person_card.html" with person=credit.person detail_url_name="movies:person_detail" card_sub=credit.character_name only %}
+            {% empty %}
+            <p class="empty">{% translate "No cast recorded for this show." %}</p>
+            {% endfor %}
+        </div>
+        {% translate "cast" as cast_label %}{% include "movies/_pager_client.html" with label=cast_label only %}
+    </div>
 </section>
 
 <section class="sheet-section" id="crew">
