@@ -1,0 +1,25 @@
+{% load static i18n l10n %}<!doctype html>
+{% get_current_language as LANGUAGE_CODE %}
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width={{ width|unlocalize }}">
+    <meta name="robots" content="noindex, nofollow">
+    <title>{{ heading }} · @{{ owner_name }} — Theoria</title>
+    {% comment %} The share artwork alone, at its exact pixel size, with no site
+       chrome: what the share sheet captures (Task 139) and what design review
+       and Playwright open. The faces are the site's own; the capture waits on
+       document.fonts.ready before drawing. Archivo, Instrument Sans and
+       Spline Sans Mono carry no Cyrillic, so Roboto Flex follows them in every
+       stack: its width axis covers both of Archivo's jobs (expanded display,
+       condensed labels), so a Russian card keeps the same two voices. {% endcomment %}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" crossorigin="anonymous"
+          href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Instrument+Sans:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500&family=Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000&display=block">
+    <link rel="stylesheet" href="{% static 'css/share-card.css' %}">
+</head>
+<body class="share-card-page" data-theme="{{ theme }}">
+{% include "core/share/_card.html" %}
+</body>
+</html>

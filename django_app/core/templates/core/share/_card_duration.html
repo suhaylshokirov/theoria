@@ -1,0 +1,4 @@
+{% load i18n %}{% comment %} A running time on the share card, digits full size and the
+   units small and tight against them ("16h 53m"), so the number reads first.
+   Hours are left out under an hour ("7m", not "0h 7m").
+   Params (pass with `only`): h, m. {% endcomment %}{% if h %}<span class="sc-dur">{{ h|stringformat:"d" }}<span class="sc-unit">{% translate "h" context "hours, short" %}</span></span> {% endif %}<span class="sc-dur">{{ m|stringformat:"d" }}<span class="sc-unit">{% translate "m" context "minutes, short" %}</span></span>

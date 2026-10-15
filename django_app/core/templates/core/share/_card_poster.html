@@ -1,0 +1,19 @@
+{% comment %} One print on the share card: the poster, or a title plate when the
+   title has none. The .sc-print box carries the 2:3 frame and its size; the
+   image just fills it (TMDB's w500 is 500px wide, which would otherwise set
+   the layout). crossorigin: TMDB's image host allows it, and without it the
+   poster would taint the canvas the share sheet captures into. Not lazy:
+   the capture draws whatever has loaded, and every print is in view.
+   Params (pass with `only`): f, a frame from core.views._card_frame;
+   number, optional, burned into the print's lower edge. {% endcomment %}
+<span class="sc-print">
+    {% if f.poster %}
+    <img class="sc-poster" src="{{ f.poster }}" alt="{{ f.title }}" crossorigin="anonymous" decoding="async">
+    {% else %}
+    <span class="sc-poster sc-plate">
+        <span class="sc-plate__title">{{ f.title }}</span>
+        <span class="sc-plate__year sc-mono">{% if f.is_show %}{{ f.year_span|default:"" }}{% elif f.year %}{{ f.year|stringformat:"d" }}{% endif %}</span>
+    </span>
+    {% endif %}
+    {% if number %}<span class="sc-print__no sc-mono" aria-hidden="true">{{ number|stringformat:"02d" }}</span>{% endif %}
+</span>

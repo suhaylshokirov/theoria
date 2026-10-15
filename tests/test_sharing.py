@@ -461,3 +461,100 @@ def test_empty_after_titles_leave_the_catalogue(owner):
         response = Client().get(f"/s/{collection.share_token}/")
     assert response.status_code == 200
     assert "Nothing in this list right now." in response.content.decode()
+
+
+# --- the artwork (Task 138) ----------------------------------------------------
+
+def _card(token, client=None, **params):
+    query = "&".join(f"{k}={v}" for k, v in params.items())
+    return (client or Client()).get(f"/s/{token}/card/" + (f"?{query}" if query else ""))
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_card_renders_every_format_and_theme_without_login(owner):
+    collection = _shared_top(owner)
+    sizes = {"story": ("1080px", "1920px"), "wide": ("1600px", "900px")}
+    for fmt, (width, height) in sizes.items():
+        for theme in ("ink", "paper"):
+            with _hydrate_with(_top_rows()):
+                response = _card(collection.share_token, format=fmt, theme=theme)
+            assert response.status_code == 200
+            html = response.content.decode()
+            # Pixel sizes are never localized (a "1,080px" would void them).
+            assert f"--sc-w: {width}; --sc-h: {height}" in html
+            assert f'data-format="{fmt}" data-theme="{theme}"' in html
+            assert _EMAIL not in html and "example.com" not in html
+            assert "@share_owner" in html
+            assert '<meta name="robots" content="noindex, nofollow">' in html
+            assert "noindex" in response["X-Robots-Tag"]
+            assert response["Referrer-Policy"] == "same-origin"
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_card_falls_back_to_story_ink_and_prints_the_link(owner):
+    collection = _shared_top(owner)
+    with _hydrate_with(_top_rows()):
+        html = _card(collection.share_token, format="poster", theme="neon").content.decode()
+    assert 'data-format="story" data-theme="ink"' in html
+    assert f"testserver/s/{collection.share_token}<" in html      # no scheme, no slash
+    assert "Five I&#x27;d stake my taste on." in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_card_ranks_top_and_draws_plates_for_missing_posters(owner):
+    collection = _shared_top(owner)
+    rows = _top_rows()
+    rows[0].content.poster_path = "/godfather.jpg"
+    with _hydrate_with(rows):
+        html = _card(collection.share_token).content.decode()
+    assert "/w500/godfather.jpg" in html
+    assert 'crossorigin="anonymous"' in html
+    assert html.count("sc-plate__title") == 2          # Movie 2 and Show 3
+    for rank in ("01", "02", "03"):
+        assert f'sc-rank__no" aria-hidden="true">{rank}<' in html
+    # 175 + 154 minutes, units set small against the digits
+    assert '5<span class="sc-unit">h</span></span> <span class="sc-dur">29<span class="sc-unit">m</span>' in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_liked_card_fills_the_contact_sheet(owner):
+    _collection(owner, Collection.LIKED, ids=range(1, 14))
+    collection = sharing.enable_share(owner, "liked")
+    many = [_row(_movie(i, 1990 + i, 100, 7.0), "movie", i) for i in range(1, 14)]
+    with _hydrate_with(many):
+        html = _card(collection.share_token, format="story").content.decode()
+    # 13 titles on a 12-frame sheet: 11 prints, the 12th frame says "+2".
+    assert html.count('class="sc-frame"') == 11
+    assert ">+2<" in html
+    cache.clear()                   # the list is cached by updated_at
+    with _hydrate_with(many[:5]):
+        html = _card(collection.share_token, format="wide").content.decode()
+    # 5 titles on a 4-wide sheet: the second row is finished with blank frames.
+    assert html.count('class="sc-frame"') == 5
+    assert html.count("sc-frame is-blank") == 3
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_card_fragment_for_the_share_sheet(owner):
+    collection = _shared_top(owner)
+    with _hydrate_with(_top_rows()):
+        html = Client().get(
+            f"/s/{collection.share_token}/card/", HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+        ).content.decode()
+    assert html.lstrip().startswith("<article") or "<html" not in html
+    assert 'class="sc"' in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_card_unknown_is_404_revoked_is_410_and_renders_in_russian(owner):
+    collection = _shared_top(owner)
+    token = collection.share_token
+    client = Client()
+    client.cookies["django_language"] = "ru"
+    with _hydrate_with(_top_rows()):
+        html = _card(token, client).content.decode()
+    assert '<html lang="ru">' in html
+    assert "Топ" in html
+    assert Client().get("/s/doesnotexist/card/").status_code == 404
+    sharing.disable_share(owner, "top")
+    assert _card(token).status_code == 410

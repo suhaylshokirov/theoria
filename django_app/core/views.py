@@ -6,7 +6,8 @@ from django.conf import settings
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
-from django.utils.translation import gettext, gettext_lazy as _
+from django.utils import timezone
+from django.utils.translation import gettext, gettext_lazy as _, pgettext
 from django.templatetags.static import static
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -14,6 +15,7 @@ from django.views.decorators.http import require_POST
 from accounts import ratelimit
 from core import sharing
 from core.models import Collection, CollectionItem
+from movies.templatetags.tmdb_images import tmdb_image
 from core.services import (
     account_rows,
     move_collection_item,
@@ -283,6 +285,25 @@ def _share_page_links(request, page_obj):
     }
 
 
+def _private_headers(response):
+    """The link is unlisted: keep it out of search indexes and out of the
+    Referer header any outbound link would send the token in."""
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    response["Referrer-Policy"] = "same-origin"
+    return response
+
+
+def _shared_or_gone(request, token):
+    """(shared collection, None), or (None, the 410 page) for a link its owner
+    stopped; raises 404 for a token that never existed (or whose owner is gone)."""
+    shared = sharing.shared_collection(token)
+    if shared is None:
+        if sharing.is_revoked(token):
+            return None, _private_headers(render(request, "core/share/gone.html", status=410))
+        raise Http404("No such shared collection.")
+    return shared, None
+
+
 def shared_page(request, token):
     """The public, read-only page behind a share link: 404 for a token that
     never existed (or whose owner is gone), 410 for one its owner switched off.
@@ -290,14 +311,9 @@ def shared_page(request, token):
     Language is the *viewer's* cookie, as everywhere. Nothing on this page
     reads the owner's email; the owner appears as a handle and a join date.
     """
-    shared = sharing.shared_collection(token)
-    if shared is None:
-        if sharing.is_revoked(token):
-            response = render(request, "core/share/gone.html", status=410)
-            response["X-Robots-Tag"] = "noindex, nofollow"
-            response["Referrer-Policy"] = "same-origin"
-            return response
-        raise Http404("No such shared collection.")
+    shared, gone = _shared_or_gone(request, token)
+    if gone:
+        return gone
 
     collection = shared.collection
     slug, label, fixed_line = _share_kind_copy()[collection.kind]
@@ -338,12 +354,120 @@ def shared_page(request, token):
         "og_image": request.build_absolute_uri(static("img/og-default.png")),
         **_share_page_links(request, page_obj),
     }
-    response = render(request, "core/share/page.html", context)
-    # The link is unlisted: keep it out of search indexes and out of the
-    # Referer header any outbound link would send the token in.
-    response["X-Robots-Tag"] = "noindex, nofollow"
-    response["Referrer-Policy"] = "same-origin"
-    return response
+    return _private_headers(render(request, "core/share/page.html", context))
+
+
+# The artwork (Task 138): a fixed-size card the share sheet captures to PNG.
+# (width, height) in CSS px, which the capture writes 1:1 as image pixels.
+CARD_FORMATS = {"story": (1080, 1920), "wide": (1600, 900)}
+CARD_THEMES = ("ink", "paper")
+# How many titles each card has room for. Liked is a contact sheet four
+# frames wide (three rows on a Story, two on a Wide); Top is always its first
+# five; Watch later's reel shows what fits before it runs off the edge.
+CARD_SLOTS = {
+    (Collection.TOP, "story"): 5,
+    (Collection.TOP, "wide"): 5,
+    (Collection.LIKED, "story"): 12,
+    (Collection.LIKED, "wide"): 8,
+    (Collection.WATCH_LATER, "story"): 3,
+    (Collection.WATCH_LATER, "wide"): 7,
+}
+CARD_SHEET_COLUMNS = 4
+
+
+def _card_copy():
+    """Stored kind -> (heading, the fixed line). The card is posted by its
+    owner, so the line speaks in the first person, unlike the public page."""
+    return {
+        Collection.TOP: (gettext("Top"), pgettext("share card", "My canon, best first.")),
+        Collection.LIKED: (gettext("Liked"), pgettext("share card", "Everything I liked, on one sheet.")),
+        Collection.WATCH_LATER: (gettext("Watch later"), pgettext("share card", "Saved for free evenings.")),
+    }
+
+
+def _card_frame(row, number):
+    """One title as the card draws it: plain values, so the template never
+    reaches back into a model."""
+    title = row.content
+    is_show = row.content_type == CollectionItem.SERIES
+    date = title.first_air_date if is_show else title.release_date
+    runtime = 0 if is_show else (title.runtime or 0)
+    rating = float(title.imdb_rating) if title.imdb_rating is not None else None
+    return {
+        "number": number,
+        "title": row.title,
+        "is_show": is_show,
+        "year": date.year if date else None,
+        "year_span": getattr(title, "year_span", None) if is_show else None,
+        "runtime_hours": runtime // 60,
+        "runtime_rest": runtime % 60,
+        "rating": rating,
+        "rating_pct": round(rating * 10) if rating is not None else 0,
+        "poster": tmdb_image(title.poster_path, "w500"),
+    }
+
+
+def shared_card(request, token):
+    """The share artwork at its exact pixel size, for the share sheet to
+    capture and for design review: `?format=story|wide&theme=ink|paper`.
+
+    A request marked `X-Requested-With` gets the bare card (the sheet drops
+    it into its stage); anything else gets it on a page of its own with no
+    site chrome. Language is the requester's -- the owner's, at export.
+    """
+    shared, gone = _shared_or_gone(request, token)
+    if gone:
+        return gone
+    fmt = request.GET.get("format")
+    fmt = fmt if fmt in CARD_FORMATS else "story"
+    theme = request.GET.get("theme")
+    theme = theme if theme in CARD_THEMES else "ink"
+
+    collection = shared.collection
+    kind = collection.kind
+    heading, fixed_line = _card_copy()[kind]
+    slots = CARD_SLOTS[(kind, fmt)]
+    items = shared.items
+    frames = [_card_frame(row, i) for i, row in enumerate(items[:slots], start=1)]
+    more = max(len(items) - slots, 0)
+    sheet_rows = 0
+    blank_frames = []
+    if kind == Collection.LIKED:
+        if more:
+            # The sheet's last frame says "+N more" instead of a poster.
+            frames = frames[:-1]
+            more += 1
+        filled = len(frames) + (1 if more else 0)
+        sheet_rows = -(-filled // CARD_SHEET_COLUMNS)
+        # Unexposed frames finish the last row, numbered on as a sheet is.
+        blank_frames = list(range(filled + 1, sheet_rows * CARD_SHEET_COLUMNS + 1))
+
+    width, height = CARD_FORMATS[fmt]
+    owner = shared.owner
+    context = {
+        "kind": kind,
+        "format": fmt,
+        "theme": theme,
+        "width": width,
+        "height": height,
+        "heading": heading,
+        "fixed_line": fixed_line,
+        "note": collection.share_note,
+        "owner_name": owner.username,
+        "owner_since": owner.date_joined,
+        "stats": shared.stats,
+        "frames": frames,
+        "more": more,
+        "sheet_rows": sheet_rows,
+        "blank_frames": blank_frames,
+        "catalogued": timezone.localdate(),
+        # Printed without the scheme: it is read off an image and typed.
+        "printed_url": f"{request.get_host()}{sharing.share_path(collection.share_token)}".rstrip("/"),
+    }
+    template = "core/share/card.html"
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        template = "core/share/_card.html"
+    return _private_headers(render(request, template, context))
 
 
 def set_language_cookie(response, code):
