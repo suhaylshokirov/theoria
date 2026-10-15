@@ -42,11 +42,12 @@ PAGES = {
     "people": "/people/",
     "studios": "/studios/",
     "login": "/accounts/login/",
+    "analytics": "/analytics/",
     # The site's own 404 page. A DEBUG server routes this URL to the same view
     # production uses for a missing page; production doesn't route it at all,
     # so it is a real 404 there. Either way the page under test is the same.
     "not-found": "/__404__/",
-    # Detail pages and analytics sit behind login. They run only when
+    # Detail pages sit behind login. They run only when
     # UI_SESSION="sessionid=<key>" names a valid session cookie of the site
     # under test (see AUTH_PAGES); otherwise they are skipped. The slugs are
     # real rows of the local replica: a film, a show with several seasons,
@@ -55,9 +56,8 @@ PAGES = {
     "tv-detail": "/tv/breaking-bad/",
     "person-detail": "/people/leonardo-dicaprio/",
     "studio-detail": "/studios/warner-bros-pictures/",
-    "analytics": "/analytics/",
 }
-AUTH_PAGES = {"movie-detail", "tv-detail", "person-detail", "studio-detail", "analytics"}
+AUTH_PAGES = {"movie-detail", "tv-detail", "person-detail", "studio-detail"}
 
 
 def session_cookie():

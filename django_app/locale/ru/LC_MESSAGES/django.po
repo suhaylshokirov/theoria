@@ -188,10 +188,6 @@ msgstr "Войдите, чтобы открыть страницу сериал�
 msgid "Sign in to open a person's record."
 msgstr "Войдите, чтобы открыть страницу человека."
 
-#: accounts/views.py:162
-msgid "Sign in to see the analytics."
-msgstr "Войдите, чтобы увидеть аналитику."
-
 #: accounts/views.py:176
 msgid "We'll email you a code."
 msgstr "Мы пришлём код на почту."

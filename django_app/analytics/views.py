@@ -10,7 +10,6 @@ The reshaping and the one-sentence findings live in analytics/insights.py;
 this view only fetches, translates names, and renders (Task 133).
 """
 
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
 from analytics import insights
@@ -20,7 +19,6 @@ from movies.i18n import (
 )
 
 
-@login_required
 def dashboard(request):
     # The raw result sets come from the cache (or, on a miss, the warehouse).
     # The .sql files stay English (project rule: analytics SQL lives in .sql

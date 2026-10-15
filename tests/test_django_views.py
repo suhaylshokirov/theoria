@@ -3412,8 +3412,8 @@ def test_custom_404_page_renders_message_and_home_link():
 
 
 # ---------------------------------------------------------------------------
-# Sign-in gating — detail pages and analytics require an authenticated
-# session; list/index pages stay open to anonymous browsing. login_required
+# Sign-in gating — detail pages require an authenticated session;
+# list/index pages and analytics stay open to anonymous browsing. login_required
 # redirects before the view body runs, so these need no queryset mocks — an
 # anonymous request never reaches the database.
 # ---------------------------------------------------------------------------
@@ -3428,7 +3428,6 @@ def test_gated_detail_pages_redirect_anonymous_to_login():
         ("movies:actor_detail", {"actor_slug": "any-slug"}),
         ("movies:director_detail", {"director_slug": "any-slug"}),
         ("movies:studio_detail", {"company_slug": "any-slug"}),
-        ("analytics:dashboard", {}),
     ]
     for url_name, kwargs in gated:
         url = reverse(url_name, kwargs=kwargs)

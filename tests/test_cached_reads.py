@@ -239,10 +239,13 @@ def test_dashboard_translation_never_leaks_into_the_cached_rows():
     assert run_query.call_count == 15  # one build served all three languages
 
 
-def test_dashboard_still_requires_sign_in():
-    response = Client().get("/analytics/")
-    assert response.status_code == 302
-    assert "/analytics/" in response["Location"]  # bounced to sign-in with ?next=
+def test_dashboard_is_open_to_signed_out_readers():
+    fake = _dashboard_rows()
+    run_query = MagicMock(side_effect=lambda f: fake[f])
+    p1, p2, p3 = _dashboard_patches(run_query)
+    with p1, p2, p3:
+        response = Client().get("/analytics/")
+    assert response.status_code == 200
 
 
 def test_dashboard_renders_when_the_cache_is_down():

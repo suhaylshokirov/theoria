@@ -159,7 +159,6 @@ _GATE_SUB_LINES = (
     ("/movies/", _("Sign in to open a film's record.")),
     ("/tv/", _("Sign in to open a show's record.")),
     ("/people/", _("Sign in to open a person's record.")),
-    ("/analytics/", _("Sign in to see the analytics.")),
 )
 
 
