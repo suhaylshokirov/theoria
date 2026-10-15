@@ -11,6 +11,11 @@ urlpatterns = [
         name="toggle_collection",
     ),
     path(
+        "collections/<str:kind>/share/",
+        views.share_collection,
+        name="share_collection",
+    ),
+    path(
         "collections/<str:kind>/<int:item_id>/remove/",
         views.remove_item,
         name="remove_item",

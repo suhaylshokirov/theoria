@@ -33,7 +33,15 @@ class Collection(models.Model):
     kind = models.CharField(max_length=20, choices=KINDS)
     name = models.CharField(max_length=80)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Moves whenever the collection's row *or its items* change (see
+    # core.services) -- the share page's cache keys rely on that.
     updated_at = models.DateTimeField(auto_now=True)
+    # Public unlisted link, see core/sharing.py. NULL = never shared; a token
+    # with `shared_at` NULL = shared once and since revoked (the link answers
+    # 410). Unique ignores NULLs, so only live and revoked tokens collide.
+    share_token = models.CharField(max_length=16, null=True, blank=True, unique=True)
+    shared_at = models.DateTimeField(null=True, blank=True)
+    share_note = models.CharField(max_length=140, blank=True)
 
     class Meta:
         constraints = [

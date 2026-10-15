@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from django.db import transaction
 from django.db.models import Max, Q
+from django.utils import timezone
 
 from core.models import Collection, CollectionItem, TitleFeedback
 
@@ -43,6 +44,16 @@ def _content_exists(content_type, content_id):
     return model.objects.using("warehouse").filter(pk=content_id).exists()
 
 
+def _touch(collection):
+    """Move `Collection.updated_at` after an item-level change.
+
+    `auto_now` only fires when the Collection row itself is saved, and adding,
+    removing or reordering an item saves a CollectionItem -- so without this
+    the timestamp a shared page's cache key trusts would never move.
+    """
+    Collection.objects.filter(pk=collection.pk).update(updated_at=timezone.now())
+
+
 def toggle_collection_item(user, kind, content_type, content_id):
     if content_type not in {CollectionItem.MOVIE, CollectionItem.SERIES}:
         raise ValueError("Unknown content type.")
@@ -57,6 +68,7 @@ def toggle_collection_item(user, kind, content_type, content_id):
         ).first()
         if existing:
             existing.delete()
+            _touch(collection)
             return False
         position = collection.items.aggregate(max_position=Max("position"))["max_position"]
         CollectionItem.objects.create(
@@ -65,12 +77,16 @@ def toggle_collection_item(user, kind, content_type, content_id):
             content_id=content_id,
             position=(position + 1 if position is not None else 0),
         )
+        _touch(collection)
         return True
 
 
 def remove_collection_item(user, kind, item_id):
     collection = _collection(user, kind)
-    return collection.items.filter(pk=item_id).delete()[0] > 0
+    removed = collection.items.filter(pk=item_id).delete()[0] > 0
+    if removed:
+        _touch(collection)
+    return removed
 
 
 def move_collection_item(user, kind, item_id, direction):
@@ -92,6 +108,7 @@ def move_collection_item(user, kind, item_id, direction):
         item.position, sibling.position = sibling.position, item.position
         item.save(update_fields=["position"])
         sibling.save(update_fields=["position"])
+        _touch(collection)
 
 
 def account_rows(user):
@@ -113,9 +130,17 @@ def account_rows(user):
     by_kind = {kind: [] for kind, _ in Collection.KINDS}
     for item in rows:
         by_kind[item.collection.kind].append(item)
-    for kind in (Collection.LIKED, Collection.WATCH_LATER):
-        by_kind[kind].sort(key=lambda r: (r.added_at, r.id), reverse=True)
+    for kind, kind_rows in by_kind.items():
+        by_kind[kind] = order_rows(kind, kind_rows)
     return by_kind
+
+
+def order_rows(kind, rows):
+    """Display order for one collection: Top keeps rank order (position, as
+    the items arrived); Liked and Watch later are newest first."""
+    if kind in (Collection.LIKED, Collection.WATCH_LATER):
+        return sorted(rows, key=lambda r: (r.added_at, r.id), reverse=True)
+    return rows
 
 
 def _hydrate(items):

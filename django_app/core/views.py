@@ -3,12 +3,14 @@ from __future__ import annotations
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.conf import settings
-from django.http import HttpResponseBadRequest, JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 from django.utils.translation import gettext, gettext_lazy as _
 from django.views.decorators.http import require_POST
 
+from accounts import ratelimit
+from core import sharing
 from core.models import Collection, CollectionItem
 from core.services import (
     account_rows,
@@ -193,6 +195,55 @@ def move_item(request, kind, item_id, direction):
         move_collection_item(request.user, kind, item_id, direction)
     except (ValueError, CollectionItem.DoesNotExist):
         return HttpResponseBadRequest(gettext("That collection item could not be moved."))
+    return _redirect_back(request, "profile")
+
+
+SHARE_RATE_LIMIT = 30
+SHARE_RATE_WINDOW_SECONDS = 10 * 60
+
+
+def _share_payload(request, collection):
+    """The link and note the share sheet shows; url is None while unshared."""
+    live = collection.share_token and collection.shared_at
+    return {
+        "url": request.build_absolute_uri(sharing.share_path(collection.share_token)) if live else None,
+        "note": collection.share_note,
+    }
+
+
+@login_required
+@require_POST
+def share_collection(request, kind):
+    """Enable, rotate or disable the public link for one of the user's
+    collections. A JSON caller gets {url, note} back; a plain form POST is
+    redirected to where it came from (/me/ by default)."""
+    wants_json = request.headers.get("Accept") == "application/json"
+    if ratelimit.is_rate_limited(
+        request, scope="share", limit=SHARE_RATE_LIMIT, window_seconds=SHARE_RATE_WINDOW_SECONDS
+    ):
+        message = gettext("Too many share changes — please try again in a few minutes.")
+        if wants_json:
+            return JsonResponse({"error": message}, status=429)
+        return HttpResponse(message, status=429, content_type="text/plain; charset=utf-8")
+
+    action = request.POST.get("action")
+    # An absent note field means "leave the note", an empty one clears it.
+    note = request.POST.get("note")
+    try:
+        if action == "enable":
+            collection = sharing.enable_share(request.user, kind, note)
+        elif action == "rotate":
+            collection = sharing.rotate_share(request.user, kind, note)
+        elif action == "disable":
+            collection = sharing.disable_share(request.user, kind)
+        else:
+            raise sharing.ShareError(gettext("Unknown share action."))
+    except sharing.ShareError as exc:
+        if wants_json:
+            return JsonResponse({"error": str(exc)}, status=400)
+        return HttpResponseBadRequest(str(exc))
+    if wants_json:
+        return JsonResponse(_share_payload(request, collection))
     return _redirect_back(request, "profile")
 
 

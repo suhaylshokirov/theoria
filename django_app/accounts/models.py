@@ -25,7 +25,7 @@ from django.utils.translation import gettext_lazy as _
 RESERVED_USERNAMES = frozenset({
     "me", "admin", "accounts", "account", "login", "signup", "logout", "static",
     "movies", "tv", "people", "actors", "directors", "studios", "analytics",
-    "browse", "cartoons",
+    "browse", "cartoons", "s",
 })
 
 validate_username_characters = RegexValidator(
