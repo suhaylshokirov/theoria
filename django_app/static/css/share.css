@@ -1,0 +1,330 @@
+/* Theoria — a shared collection ("/s/<token>/"). A reader's list, opened by
+   link: owner plate, the list's name with its fixed line and the owner's
+   note, a band of real measurements, then the same poster grid /me/ uses.
+
+   Loaded after account.css, whose plate, grid, card frame and pager it
+   reuses unchanged; this file only ADDS what this page alone needs. Every
+   colour is a theme token. Lime keeps its one job — it marks a measurement
+   (the caliper tick, a decade's bar, a Top rank), never a word on its own. */
+
+/* --- Owner strip ------------------------------------------------------------ */
+
+/* Shown only to the list's owner: a hairline bar that says this page is what
+   everyone else sees, and the way back to the controls. */
+.share-owner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--sheet);
+  border: var(--hairline);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+}
+
+.share-owner__text {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.share-owner__manage {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.share-owner__manage:hover {
+  color: var(--lime-text);
+}
+
+/* --- Hero -------------------------------------------------------------------- */
+
+.share-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 640px);
+  justify-content: start;
+  align-items: end;
+  gap: var(--space-7);
+  padding-top: var(--space-7);
+}
+
+/* account.css pins the plate to a named area of its own hero grid. */
+.share-hero .account-plate {
+  grid-area: auto;
+}
+
+.share-owner + .share-hero {
+  padding-top: var(--space-8);
+}
+
+.share-hero__id {
+  /* The heading sizes itself against this column's width (cqi, below). */
+  container-type: inline-size;
+  min-width: 0;
+}
+
+/* The caliper tick, drawn long, as on /me/. */
+.share-hero__bar {
+  display: block;
+  width: 88px;
+  height: 5px;
+  background: var(--lime);
+}
+
+.share-hero__title {
+  margin-top: var(--space-5);
+  font-size: clamp(2rem, calc(100cqi / (var(--name-length, 8) * 0.86)), 4.5rem);
+  line-height: 0.9;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.share-hero__by {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-5);
+  color: var(--ink-muted);
+  font-size: 1.0625rem;
+}
+
+.share-hero__handle {
+  color: var(--ink);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.share-hero__count {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+.share-hero__count .mono {
+  color: var(--ink);
+}
+
+.share-hero__dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--rule-strong);
+}
+
+.share-hero__line {
+  margin-top: var(--space-5);
+  color: var(--ink-muted);
+  font-size: var(--text-base, 1rem);
+}
+
+/* The owner's own words, set apart from the fixed line by size and weight —
+   a quotation, so it carries quotation marks rather than a coloured edge. */
+.share-hero__note {
+  max-width: 34em;
+  margin: var(--space-5) 0 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: var(--text-lg);
+  line-height: 1.3;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+  quotes: "“" "”" "«" "»";
+}
+
+.share-hero__note::before { content: open-quote; }
+.share-hero__note::after { content: close-quote; }
+
+/* --- Measurements -------------------------------------------------------------- */
+
+.share-stats {
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--rule-strong);
+}
+
+.share-stats .stats {
+  gap: var(--space-5) var(--space-9);
+}
+
+.share-stats .stat {
+  padding-top: 0;
+  min-width: 0;
+}
+
+.share-stats .stat-value {
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+}
+
+/* Liked: how the list spreads over the decades. Each bar is measured against
+   the busiest decade, and its count is printed — the figure is the relief
+   channel, the lime fill is only the mark. */
+.share-decades {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 34rem;
+  margin: var(--space-7) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-decade {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) 2.5rem;
+  align-items: center;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.share-decade__label {
+  color: var(--ink-muted);
+}
+
+.share-decade__track {
+  display: block;
+  height: 8px;
+  background: var(--sheet-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.share-decade__fill {
+  display: block;
+  height: 100%;
+  background: var(--lime);
+}
+
+.share-decade__count {
+  text-align: right;
+  color: var(--ink);
+}
+
+/* --- List ---------------------------------------------------------------------- */
+
+.share-list {
+  margin-top: var(--space-8);
+}
+
+.share-list .account-grid {
+  margin-top: 0;
+}
+
+.share-empty {
+  margin: 0;
+  padding: var(--space-8) 0;
+  color: var(--ink-muted);
+}
+
+/* --- Invitation ---------------------------------------------------------------- */
+
+/* For a signed-out reader only, after the list: a hairline and a sentence —
+   the page is the point, this is just the way in. */
+.share-cta {
+  margin-top: var(--space-9);
+  padding-top: var(--space-6);
+  border-top: var(--hairline);
+}
+
+.share-cta__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-lg);
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.share-cta__copy {
+  max-width: 34em;
+  margin: var(--space-3) 0 0;
+  color: var(--ink-muted);
+}
+
+.share-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  margin-top: var(--space-5);
+}
+
+.share-cta__login {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.share-cta__login:hover {
+  color: var(--lime-text);
+}
+
+/* --- Phones -------------------------------------------------------------------- */
+
+@media (max-width: 767px) {
+  .share-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+
+  .share-hero__by {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+  }
+
+  .share-hero__dot {
+    display: none;
+  }
+
+  .share-stats .stats {
+    gap: var(--space-5) var(--space-7);
+  }
+
+  .share-list,
+  .share-stats {
+    margin-top: var(--space-7);
+  }
+
+  .share-decade {
+    grid-template-columns: 3.75rem minmax(0, 1fr) 2rem;
+  }
+}
+
+/* A phone on its side: keep the plate beside the name, as /me/ does. */
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 1023px) {
+  .share-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .share-hero__by {
+    flex-direction: row;
+  }
+
+  .share-hero__dot {
+    display: block;
+  }
+}
+
+@media (pointer: coarse) {
+  .share-cta .btn {
+    min-height: 48px;
+  }
+}
+
+html.is-tv .share-cta .btn,
+html.is-tv .share-owner__manage,
+html.is-tv .share-cta__login {
+  min-height: 3.25rem;
+}

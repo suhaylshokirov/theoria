@@ -18,7 +18,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
 
-from core import account_urls
+from core import account_urls, share_urls
 from core import views as core_views
 
 # Every page has one URL in every language; the language is a cookie (see
@@ -33,6 +33,8 @@ urlpatterns = [
     path('i18n/', include('django.conf.urls.i18n')),
     path('assistant/', include('assistant.urls')),
     path('account/', include(account_urls)),
+    # Public, unlisted collection links (core.sharing). /s/ is a reserved username.
+    path('s/', include(share_urls)),
     path('analytics/', include('analytics.urls')),
     path('accounts/', include('accounts.urls')),
     # /me/, not /accounts/me/: the reader page reads as a site-level route

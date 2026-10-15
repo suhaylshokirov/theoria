@@ -172,6 +172,7 @@ def test_shared_collection_hydrates_in_display_order(owner):
 
     def fake_hydrate(items):
         for item in items:
+            item.content = _movie(item.content_id, 1990 + item.content_id, 100, 8.0)
             item.title = str(item.content_id)
         return items
 
@@ -263,3 +264,195 @@ def test_endpoint_is_rate_limited(owner):
         assert _post(client, "top", action="enable").status_code == 200
         assert _post(client, "top", action="enable").status_code == 200
         assert _post(client, "top", action="enable").status_code == 429
+
+
+# --- share_stats ----------------------------------------------------------
+
+def _movie(movie_id, year, runtime, rating):
+    from datetime import date
+
+    from movies.models import Movie
+
+    movie = Movie(movie_id=movie_id, title=f"Movie {movie_id}", slug=f"movie-{movie_id}",
+                  release_date=date(year, 6, 1), runtime=runtime)
+    movie.imdb_rating = rating
+    return movie
+
+
+def _series(series_id, year, episodes, rating):
+    from datetime import date
+
+    from movies.models import Series
+
+    show = Series(series_id=series_id, name=f"Show {series_id}", slug=f"show-{series_id}",
+                  first_air_date=date(year, 1, 1), number_of_episodes=episodes)
+    show.imdb_rating = rating
+    show.year_span = str(year)
+    return show
+
+
+def _row(content, content_type, pk, added=0):
+    from datetime import datetime, timedelta, timezone as tz
+
+    item = CollectionItem(
+        content_type=content_type,
+        content_id=pk,
+        position=pk,
+        added_at=datetime(2026, 1, 1, tzinfo=tz.utc) + timedelta(days=added),
+    )
+    item.id = pk
+    item.content = content
+    item.title = getattr(content, "title", None) or content.name
+    return item
+
+
+def test_share_stats_measures_the_list():
+    rows = [
+        _row(_movie(1, 1972, 175, 9.2), "movie", 1),
+        _row(_movie(2, 1994, 154, 8.9), "movie", 2),
+        _row(_movie(3, 1999, 90, None), "movie", 3),
+        _row(_series(4, 2008, 62, 9.5), "series", 4),
+    ]
+    stats = sharing.share_stats(Collection.TOP, rows)
+    assert (stats["movies"], stats["shows"], stats["total"]) == (3, 1, 4)
+    assert stats["avg_imdb"] == 9.2           # (9.2 + 8.9 + 9.5) / 3, one unrated
+    assert stats["rated"] == 3
+    assert (stats["year_min"], stats["year_max"]) == (1972, 2008)
+    assert stats["runtime_minutes"] == 175 + 154 + 90   # a show adds episodes, not minutes
+    assert (stats["runtime_hours"], stats["runtime_rest"]) == (6, 59)
+    assert stats["episodes"] == 62
+    assert stats["genre"] is None             # only computed for Liked
+    assert stats["decades"] == [
+        {"decade": 1970, "count": 1, "pct": 50},
+        {"decade": 1990, "count": 2, "pct": 100},
+        {"decade": 2000, "count": 1, "pct": 50},
+    ]
+
+
+def test_share_stats_of_nothing_is_empty_not_an_error():
+    stats = sharing.share_stats(Collection.LIKED, [])
+    assert stats["total"] == 0
+    assert stats["avg_imdb"] is None
+    assert stats["year_min"] is None
+    assert stats["genre"] is None
+    assert stats["decades"] == []
+
+
+# --- the public page ---------------------------------------------------------
+
+def _hydrate_with(rows):
+    def fake(items):
+        return list(rows)
+    return patch("core.sharing._hydrate", side_effect=fake)
+
+
+def _shared_top(owner, note="Five I'd stake my taste on."):
+    collection = _collection(owner, Collection.TOP, ids=(1, 2, 3))
+    sharing.enable_share(owner, "top", note)
+    return Collection.objects.get(pk=collection.pk)
+
+
+def _top_rows():
+    return [
+        _row(_movie(1, 1972, 175, 9.2), "movie", 1),
+        _row(_movie(2, 1994, 154, 8.9), "movie", 2),
+        _row(_series(3, 2008, 62, 9.5), "series", 3),
+    ]
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_public_page_needs_no_login_and_hides_the_owners_email(owner):
+    collection = _shared_top(owner)
+    with _hydrate_with(_top_rows()):
+        response = Client().get(f"/s/{collection.share_token}/")
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert _EMAIL not in html
+    assert "example.com" not in html
+    assert "share_owner" in html                      # the handle is shown
+    assert "Five I&#x27;d stake my taste on." in html or "Five I'd stake my taste on." in html
+    assert '<meta name="robots" content="noindex, nofollow">' in html
+    assert 'property="og:title" content="Top · @share_owner"' in html
+    assert "og-default.png" in html
+    assert response["Referrer-Policy"] == "same-origin"
+    assert "noindex" in response["X-Robots-Tag"]
+    # Signed out: the invitation shows, the owner strip does not.
+    assert "Make your own list on Theoria" in html
+    assert "This is your public link" not in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_public_page_ranks_a_top_list_and_measures_it(owner):
+    collection = _shared_top(owner)
+    with _hydrate_with(_top_rows()):
+        html = Client().get(f"/s/{collection.share_token}/").content.decode()
+    for rank in ("01", "02", "03"):
+        assert f'account-card__rank" aria-hidden="true">{rank}<' in html
+    assert "9.2" in html                      # average IMDb of 9.2, 8.9, 9.5
+    assert "1972–2008" in html
+    assert "5 h 29 m" in html                 # 175 + 154 minutes
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_owner_sees_the_manage_strip_not_the_invitation(owner):
+    collection = _shared_top(owner)
+    client = Client()
+    client.force_login(owner)
+    with _hydrate_with(_top_rows()):
+        response = client.get(f"/s/{collection.share_token}/")
+    html = response.content.decode()
+    assert "This is your public link" in html
+    assert 'href="/me/#top"' in html
+    assert "Make your own list on Theoria" not in html
+    assert _EMAIL not in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_unknown_token_is_404_revoked_is_410(owner):
+    collection = _shared_top(owner)
+    token = collection.share_token
+    assert Client().get("/s/doesnotexist/").status_code == 404
+    sharing.disable_share(owner, "top")
+    response = Client().get(f"/s/{token}/")
+    assert response.status_code == 410
+    assert "noindex" in response["X-Robots-Tag"]
+    assert _EMAIL not in response.content.decode()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_public_page_renders_in_russian_from_the_viewers_cookie(owner):
+    collection = _shared_top(owner)
+    client = Client()
+    client.cookies["django_language"] = "ru"
+    with _hydrate_with(_top_rows()):
+        response = client.get(f"/s/{collection.share_token}/")
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert '<html lang="ru">' in html
+    assert "Топ" in html                      # the kind's heading, translated
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_public_page_follows_the_collection_after_an_edit(owner):
+    """The cache is keyed by updated_at, so a change shows at once."""
+    collection = _shared_top(owner)
+    token = collection.share_token
+    first = [_row(_movie(1, 1972, 175, 9.2), "movie", 1)]
+    second = first + [_row(_movie(2, 1994, 154, 8.9), "movie", 2)]
+    with _hydrate_with(first):
+        html = Client().get(f"/s/{token}/").content.decode()
+    assert "Movie 2" not in html
+    with patch("core.services._content_exists", return_value=True):
+        toggle_collection_item(owner, "top", "movie", 99)
+    with _hydrate_with(second):
+        html = Client().get(f"/s/{token}/").content.decode()
+    assert "Movie 2" in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_empty_after_titles_leave_the_catalogue(owner):
+    collection = _shared_top(owner)
+    with _hydrate_with([]):
+        response = Client().get(f"/s/{collection.share_token}/")
+    assert response.status_code == 200
+    assert "Nothing in this list right now." in response.content.decode()

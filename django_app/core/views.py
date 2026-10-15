@@ -3,10 +3,12 @@ from __future__ import annotations
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.conf import settings
-from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 from django.utils.translation import gettext, gettext_lazy as _
+from django.templatetags.static import static
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from accounts import ratelimit
@@ -245,6 +247,102 @@ def share_collection(request, kind):
     if wants_json:
         return JsonResponse(_share_payload(request, collection))
     return _redirect_back(request, "profile")
+
+
+# Four rows of the widest grid (the same 5 columns /me/ uses).
+SHARE_ITEMS_PER_PAGE = 20
+
+
+def _share_kind_copy():
+    """Stored kind -> (the /me/ anchor to manage it, heading, the fixed line
+    under it), in the reader's language. The owner's note goes after it."""
+    return {
+        Collection.TOP: (
+            "top", gettext("Top"), gettext("Picked by hand and ranked in order."),
+        ),
+        Collection.LIKED: (
+            "liked", gettext("Liked"), gettext("Everything they liked, newest first."),
+        ),
+        Collection.WATCH_LATER: (
+            "later", gettext("Watch later"), gettext("Saved for a free evening."),
+        ),
+    }
+
+
+def _share_page_links(request, page_obj):
+    def url(number):
+        return request.path if number == 1 else f"{request.path}?page={number}"
+
+    return {
+        "prev_url": url(page_obj.previous_page_number()) if page_obj.has_previous() else None,
+        "next_url": url(page_obj.next_page_number()) if page_obj.has_next() else None,
+        "page_links": [
+            {"number": n, "url": url(n), "current": n == page_obj.number} if n else {"number": None}
+            for n in _page_window(page_obj.number, page_obj.paginator.num_pages)
+        ],
+    }
+
+
+def shared_page(request, token):
+    """The public, read-only page behind a share link: 404 for a token that
+    never existed (or whose owner is gone), 410 for one its owner switched off.
+
+    Language is the *viewer's* cookie, as everywhere. Nothing on this page
+    reads the owner's email; the owner appears as a handle and a join date.
+    """
+    shared = sharing.shared_collection(token)
+    if shared is None:
+        if sharing.is_revoked(token):
+            response = render(request, "core/share/gone.html", status=410)
+            response["X-Robots-Tag"] = "noindex, nofollow"
+            response["Referrer-Policy"] = "same-origin"
+            return response
+        raise Http404("No such shared collection.")
+
+    collection = shared.collection
+    slug, label, fixed_line = _share_kind_copy()[collection.kind]
+    page_obj = Paginator(shared.items, SHARE_ITEMS_PER_PAGE).get_page(request.GET.get("page"))
+    stats = shared.stats
+
+    is_owner = request.user.is_authenticated and request.user.pk == collection.user_id
+    owner = shared.owner
+    if stats["movies"] and stats["shows"]:
+        summary = "mixed"
+    else:
+        summary = "shows" if stats["shows"] else "movies"
+
+    page_url = request.build_absolute_uri(request.path)
+    if collection.share_note:
+        og_description = collection.share_note
+    else:
+        og_description = fixed_line
+    context = {
+        "kind": collection.kind,
+        "slug": slug,
+        "label": label,
+        "fixed_line": fixed_line,
+        "note": collection.share_note,
+        "owner_name": owner.username,
+        "owner_since": owner.date_joined,
+        "stats": stats,
+        "summary": summary,
+        "ranked": collection.kind == Collection.TOP,
+        "page_obj": page_obj,
+        "count": page_obj.paginator.count,
+        "is_owner": is_owner,
+        "manage_url": f"{reverse('profile')}#{slug}",
+        "og_title": f"{label} · @{owner.username}",
+        "og_description": og_description,
+        "og_url": page_url,
+        "og_image": request.build_absolute_uri(static("img/og-default.png")),
+        **_share_page_links(request, page_obj),
+    }
+    response = render(request, "core/share/page.html", context)
+    # The link is unlisted: keep it out of search indexes and out of the
+    # Referer header any outbound link would send the token in.
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    response["Referrer-Policy"] = "same-origin"
+    return response
 
 
 def set_language_cookie(response, code):

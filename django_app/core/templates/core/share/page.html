@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% load static i18n %}
+
+{% comment %} A collection shared by link (core.sharing, /s/<token>/): read-only,
+   in the viewer's language, no account needed. Context comes from
+   core.views.shared_page. Nothing here renders the owner's email -- the owner
+   is a handle and a join date. Cards are the shared poster cards; the grid,
+   plate and rank overlay are account.css's, this page's own parts are
+   share.css. {% endcomment %}
+
+{% block title %}{{ og_title }} — Theoria{% endblock %}
+{% block description %}{{ og_description }}{% endblock %}
+{% block body_class %}page-share{% endblock %}
+
+{% block extra_head %}
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Theoria">
+<meta property="og:title" content="{{ og_title }}">
+<meta property="og:description" content="{{ og_description }}">
+<meta property="og:url" content="{{ og_url }}">
+<meta property="og:image" content="{{ og_image }}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ og_title }}">
+<meta name="twitter:description" content="{{ og_description }}">
+<meta name="twitter:image" content="{{ og_image }}">
+<link rel="stylesheet" href="{% static 'css/account.css' %}">
+<link rel="stylesheet" href="{% static 'css/share.css' %}">
+{% endblock %}
+
+{% block content %}
+{% if is_owner %}
+<aside class="share-owner" aria-label="{% translate "Your public link" %}">
+    <p class="share-owner__text">{% translate "This is your public link." %}</p>
+    <a class="share-owner__manage" href="{{ manage_url }}">{% translate "Manage" %}</a>
+</aside>
+{% endif %}
+
+<header class="share-hero" aria-labelledby="share-title">
+    <div class="account-plate" aria-hidden="true">
+        <span class="account-plate__initial">{{ owner_name|slice:":1"|upper }}</span>
+    </div>
+
+    <div class="share-hero__id">
+        <span class="share-hero__bar" aria-hidden="true"></span>
+        {% comment %} --name-length sizes the heading to fit its column, as the
+           name does on /me: a short word gets the full size, a long
+           translated one shrinks onto one line instead of breaking. {% endcomment %}
+        <h1 class="display share-hero__title" id="share-title" style="--name-length: {{ label|length }}">{{ label }}<span class="visually-hidden"> — @{{ owner_name }}</span></h1>
+        <p class="share-hero__by">
+            <span class="share-hero__handle mono">@{{ owner_name }}</span>
+            <span class="share-hero__dot" aria-hidden="true"></span>
+            <span>{% blocktranslate trimmed with joined=owner_since|date:"M Y" %}Member since {{ joined }}{% endblocktranslate %}</span>
+            <span class="share-hero__dot" aria-hidden="true"></span>
+            <span class="share-hero__count">
+                {% if stats.movies %}<span><span class="mono">{{ stats.movies|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=stats.movies %}movie{% plural %}movies{% endblocktranslate %}</span>{% endif %}
+                {% if stats.shows %}<span><span class="mono">{{ stats.shows|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=stats.shows %}TV show{% plural %}TV shows{% endblocktranslate %}</span>{% endif %}
+                {% if not stats.total %}<span>{% translate "Nothing yet" %}</span>{% endif %}
+            </span>
+        </p>
+        <p class="share-hero__line">{{ fixed_line }}</p>
+        {% if note %}
+        <blockquote class="share-hero__note">{{ note }}</blockquote>
+        {% endif %}
+    </div>
+</header>
+
+{% if stats.total %}
+<section class="share-stats" aria-label="{% translate "At a glance" %}">
+    <div class="stats">
+        {% if kind == "watch_later" %}
+            {% if stats.runtime_minutes %}
+            <div class="stat">
+                <span class="stat-value">{% blocktranslate trimmed with h=stats.runtime_hours|stringformat:"d" m=stats.runtime_rest|stringformat:"d" %}{{ h }} h {{ m }} m{% endblocktranslate %}</span>
+                <span class="stat-label">{% translate "Of movies still to watch" %}</span>
+            </div>
+            {% endif %}
+            {% if stats.shows %}
+            <div class="stat">
+                <span class="stat-value">{{ stats.shows|stringformat:"d" }}</span>
+                <span class="stat-label">{% if stats.episodes %}{% blocktranslate trimmed with n=stats.episodes|stringformat:"d" %}TV shows · {{ n }} episodes{% endblocktranslate %}{% else %}{% translate "TV shows" %}{% endif %}</span>
+            </div>
+            {% endif %}
+        {% elif kind == "liked" %}
+            {% if stats.genre %}
+            <div class="stat">
+                <span class="stat-value">{{ stats.genre.name }}</span>
+                <span class="stat-label">{% blocktranslate trimmed with pct=stats.genre.pct|stringformat:"d" %}{{ pct }}% of the list{% endblocktranslate %}</span>
+            </div>
+            {% endif %}
+            {% if stats.avg_imdb %}
+            <div class="stat">
+                <span class="stat-value">{{ stats.avg_imdb|floatformat:"1u" }}</span>
+                <span class="stat-label">{% translate "Average IMDb rating" %}</span>
+            </div>
+            {% endif %}
+        {% else %}
+            {% if stats.avg_imdb %}
+            <div class="stat">
+                <span class="stat-value">{{ stats.avg_imdb|floatformat:"1u" }}</span>
+                <span class="stat-label">{% translate "Average IMDb rating" %}</span>
+            </div>
+            {% endif %}
+            {% if stats.runtime_minutes %}
+            <div class="stat">
+                <span class="stat-value">{% blocktranslate trimmed with h=stats.runtime_hours|stringformat:"d" m=stats.runtime_rest|stringformat:"d" %}{{ h }} h {{ m }} m{% endblocktranslate %}</span>
+                <span class="stat-label">{% translate "Total runtime" %}</span>
+            </div>
+            {% endif %}
+        {% endif %}
+        {% if stats.year_min %}
+        <div class="stat">
+            <span class="stat-value">{% if stats.year_min == stats.year_max %}{{ stats.year_min|stringformat:"d" }}{% else %}{{ stats.year_min|stringformat:"d" }}–{{ stats.year_max|stringformat:"d" }}{% endif %}</span>
+            <span class="stat-label">{% translate "Release years" %}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if kind == "liked" and stats.decades|length > 1 %}
+    <ol class="share-decades" aria-label="{% translate "By decade" %}">
+        {% for d in stats.decades %}
+        <li class="share-decade">
+            <span class="share-decade__label mono">{{ d.decade|stringformat:"d" }}s</span>
+            <span class="share-decade__track" aria-hidden="true"><span class="share-decade__fill" style="width: {{ d.pct|stringformat:"d" }}%"></span></span>
+            <span class="share-decade__count mono">{{ d.count|stringformat:"d" }}</span>
+        </li>
+        {% endfor %}
+    </ol>
+    {% endif %}
+</section>
+{% endif %}
+
+<section class="share-list" aria-label="{{ label }}">
+    {% if count %}
+    <ol class="account-grid">
+        {% for item in page_obj %}
+        {% with rank=page_obj.start_index|add:forloop.counter0 %}
+        <li class="account-card{% if ranked %} is-ranked{% endif %}">
+            {% if ranked %}<span class="visually-hidden">{% blocktranslate trimmed with rank=rank %}Rank {{ rank }}:{% endblocktranslate %}</span>{% endif %}
+
+            {% if item.content_type == "movie" %}
+            {% include "movies/_movie_card.html" with movie=item.content only %}
+            {% else %}
+            {% include "movies/_series_card.html" with series=item.content only %}
+            {% endif %}
+
+            <div class="account-card__frame">
+                <span class="account-card__type label">{% if item.content_type == "movie" %}{% translate "Movie" %}{% else %}{% translate "TV show" %}{% endif %}</span>
+                {% if ranked %}<span class="account-card__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>{% endif %}
+            </div>
+        </li>
+        {% endwith %}
+        {% endfor %}
+    </ol>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="account-pager" aria-label="{% translate "Pages" %}">
+        <p class="account-pager__count mono">{% blocktranslate trimmed with start=page_obj.start_index end=page_obj.end_index total=count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktranslate %}</p>
+        <div class="account-pager__pages">
+            {% if prev_url %}
+            <a class="account-pager__btn is-arrow" href="{{ prev_url }}" rel="prev" aria-label="{% translate "Previous page" %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            </a>
+            {% endif %}
+            {% for link in page_links %}
+            {% if link.number %}
+            <a class="account-pager__btn mono" href="{{ link.url }}"{% if link.current %} aria-current="page"{% endif %}>{{ link.number }}</a>
+            {% else %}
+            <span class="account-pager__gap" aria-hidden="true">…</span>
+            {% endif %}
+            {% endfor %}
+            {% if next_url %}
+            <a class="account-pager__btn is-arrow" href="{{ next_url }}" rel="next" aria-label="{% translate "Next page" %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+            </a>
+            {% endif %}
+        </div>
+    </nav>
+    {% endif %}
+    {% else %}
+    <p class="share-empty">{% translate "Nothing in this list right now." %}</p>
+    {% endif %}
+</section>
+
+{% if not request.user.is_authenticated %}
+<aside class="share-cta" aria-labelledby="share-cta-title">
+    <h2 class="share-cta__title" id="share-cta-title">{% translate "Make your own list on Theoria" %}</h2>
+    <p class="share-cta__copy">{% translate "Like, save and rank movies and TV shows, and share the list with a link." %}</p>
+    <div class="share-cta__actions">
+        <a class="btn" href="{% url 'accounts:signup' %}">{% translate "Create an account" %}</a>
+        <a class="share-cta__login" href="{% url 'accounts:login' %}">{% translate "Sign in" %}</a>
+    </div>
+</aside>
+{% endif %}
+{% endblock %}
+
+{% block footer_meta %}{% translate "Shared collection" %}{% endblock %}

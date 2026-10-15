@@ -18,10 +18,12 @@ import string
 from dataclasses import dataclass
 
 from django.db import IntegrityError, transaction
+from django.urls import reverse
 from django.utils import timezone
-from django.utils.translation import gettext
+from django.utils.translation import get_language, gettext
 
-from core.models import Collection
+from core.datacache import cached
+from core.models import Collection, CollectionItem
 from core.services import _hydrate, order_rows
 
 TOKEN_LENGTH = 10
@@ -41,6 +43,7 @@ class SharedCollection:
     collection: Collection
     owner: object
     items: list
+    stats: dict
 
 
 def new_token() -> str:
@@ -48,7 +51,7 @@ def new_token() -> str:
 
 
 def share_path(token: str) -> str:
-    return f"/s/{token}/"
+    return reverse("share:page", kwargs={"token": token})
 
 
 def clean_note(note) -> str:
@@ -141,17 +144,35 @@ def _live(token):
 
 
 def shared_collection(token) -> SharedCollection | None:
-    """The collection behind a live token with its titles hydrated and in
-    display order, or None -- unknown, revoked, or the owner's account is
-    inactive. Items whose title left the warehouse are dropped, as on /me."""
+    """The collection behind a live token with its titles hydrated, in
+    display order, and measured -- or None: unknown, revoked, or the owner's
+    account is inactive. Items whose title left the warehouse are dropped, as
+    on /me.
+
+    The hydrated list and its stats are read through the cache, keyed by the
+    token, the collection's `updated_at` (which every item change and every
+    note edit moves, see services._touch) and the reader's language. The
+    collection row itself is read fresh each time: that is what carries
+    `updated_at`, and it is how a revoked link stops working at once rather
+    than when an entry expires.
+    """
     collection = _live(token)
     if collection is None:
         return None
-    rows = _hydrate(list(collection.items.all()))
+
+    def build():
+        # Queried by id, not through `collection.items`: that would stamp every
+        # item with the Collection (and its owner) and pickle them into the entry.
+        rows = _hydrate(list(CollectionItem.objects.filter(collection_id=collection.pk)))
+        rows = order_rows(collection.kind, rows)
+        return rows, share_stats(collection.kind, rows)
+
+    items, stats = cached(
+        "share_collection", build, token, collection.updated_at.isoformat(),
+        lang=get_language(),
+    )
     return SharedCollection(
-        collection=collection,
-        owner=collection.user,
-        items=order_rows(collection.kind, rows),
+        collection=collection, owner=collection.user, items=items, stats=stats
     )
 
 
@@ -162,3 +183,88 @@ def is_revoked(token) -> bool:
     return Collection.objects.filter(
         share_token=token, shared_at__isnull=True, user__is_active=True
     ).exists()
+
+
+def share_stats(kind, rows) -> dict:
+    """Real measurements of a hydrated collection, as plain data.
+
+    `rows` are `_hydrate()`d items (movies carry `release_date`, `runtime` and
+    an `imdb_rating` annotation; shows `first_air_date`, `number_of_episodes`
+    and `imdb_rating`), so almost everything is arithmetic over what /me
+    already read. The one extra warehouse read is the genre mix, and only for
+    Liked, the one collection whose page leads with it: one query per content
+    type.
+
+    Keys: movies, shows, total; avg_imdb (None when nothing is rated) and
+    rated; year_min / year_max (None when no dates); runtime_minutes, split
+    as runtime_hours + runtime_rest (movies only: a show's length is its
+    episodes, counted separately in `episodes`);
+    genre ({"name", "pct"} or None); decades (oldest first, each with a count
+    and `pct` of the busiest decade, ready to draw as a bar).
+    """
+    movies = [r.content for r in rows if r.content_type == CollectionItem.MOVIE]
+    shows = [r.content for r in rows if r.content_type == CollectionItem.SERIES]
+
+    ratings = [float(t.imdb_rating) for t in movies + shows if t.imdb_rating is not None]
+    years = [t.release_date.year for t in movies if t.release_date] + [
+        t.first_air_date.year for t in shows if t.first_air_date
+    ]
+    decades: dict[int, int] = {}
+    for year in years:
+        decades[year // 10 * 10] = decades.get(year // 10 * 10, 0) + 1
+    busiest = max(decades.values(), default=1)
+    runtime = sum(m.runtime or 0 for m in movies)
+
+    stats = {
+        "movies": len(movies),
+        "shows": len(shows),
+        "total": len(rows),
+        "avg_imdb": round(sum(ratings) / len(ratings), 1) if ratings else None,
+        "rated": len(ratings),
+        "year_min": min(years) if years else None,
+        "year_max": max(years) if years else None,
+        "runtime_minutes": runtime,
+        "runtime_hours": runtime // 60,
+        "runtime_rest": runtime % 60,
+        "episodes": sum(s.number_of_episodes or 0 for s in shows),
+        "genre": _top_genre(movies, shows) if kind == Collection.LIKED else None,
+        "decades": [
+            {"decade": d, "count": n, "pct": round(100 * n / busiest)}
+            for d, n in sorted(decades.items())
+        ],
+    }
+    return stats
+
+
+def _top_genre(movies, shows):
+    """The genre most of the list shares: {"name", "pct"} where pct is the
+    share of the whole list (movies and shows together) carrying it."""
+    from movies.i18n import genre_labels
+    from movies.models import MovieMetrics, SeriesGenre
+
+    total = len(movies) + len(shows)
+    if not total:
+        return None
+    counts: dict[str, int] = {}
+    if movies:
+        pairs = (
+            MovieMetrics.objects.using("warehouse")
+            .filter(movie_id__in=[m.movie_id for m in movies])
+            .values_list("movie_id", "genre__genre_name")
+            .distinct()
+        )
+        for _, name in pairs:
+            counts[name] = counts.get(name, 0) + 1
+    if shows:
+        pairs = (
+            SeriesGenre.objects.using("warehouse")
+            .filter(series_id__in=[s.series_id for s in shows])
+            .values_list("series_id", "genre__genre_name")
+            .distinct()
+        )
+        for _, name in pairs:
+            counts[name] = counts.get(name, 0) + 1
+    if not counts:
+        return None
+    name, count = min(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return {"name": genre_labels().get(name, name), "pct": round(100 * count / total)}

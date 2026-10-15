@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load static i18n %}
+
+{% comment %} The answer for a share link its owner switched off (HTTP 410,
+   see core.views.shared_page). Same shape as the 404 page: one line, one way
+   back. {% endcomment %}
+
+{% block title %}{% translate "This link is no longer shared — Theoria" %}{% endblock %}
+{% block body_class %}page-error{% endblock %}
+
+{% block extra_head %}
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="{% static 'css/error.css' %}">
+{% endblock %}
+
+{% block content %}
+<section class="error-page">
+    <p class="error-code">410</p>
+    <h1 class="error-title">{% translate "This list is no longer shared." %}</h1>
+    <p class="error-lead">
+        {% translate "Its owner turned the link off. Ask them for a new one if you still want to see it." %}
+    </p>
+    <a class="btn" href="{% url 'movies:home' %}">{% translate "Back to homepage" %}</a>
+</section>
+{% endblock %}
