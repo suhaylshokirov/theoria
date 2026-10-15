@@ -6,7 +6,9 @@
    core.views.shared_page. Nothing here renders the owner's email -- the owner
    is a handle and a join date. Cards are the shared poster cards; the grid,
    plate and rank overlay are account.css's, this page's own parts are
-   share.css. {% endcomment %}
+   share.css. A reader who isn't signed in sees the cards without links:
+   movie and show pages are behind sign-in, and a friend opening a shared
+   list shouldn't be walked into a login wall by clicking a poster. {% endcomment %}
 
 {% block title %}{{ og_title }} — Theoria{% endblock %}
 {% block description %}{{ og_description }}{% endblock %}
@@ -141,9 +143,9 @@
             {% if ranked %}<span class="visually-hidden">{% blocktranslate trimmed with rank=rank %}Rank {{ rank }}:{% endblocktranslate %}</span>{% endif %}
 
             {% if item.content_type == "movie" %}
-            {% include "movies/_movie_card.html" with movie=item.content only %}
+            {% include "movies/_movie_card.html" with movie=item.content plain=cards_plain only %}
             {% else %}
-            {% include "movies/_series_card.html" with series=item.content only %}
+            {% include "movies/_series_card.html" with series=item.content plain=cards_plain only %}
             {% endif %}
 
             <div class="account-card__frame">

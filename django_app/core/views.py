@@ -330,6 +330,7 @@ def shared_page(request, token):
         "page_obj": page_obj,
         "count": page_obj.paginator.count,
         "is_owner": is_owner,
+        "cards_plain": not request.user.is_authenticated,
         "manage_url": f"{reverse('profile')}#{slug}",
         "og_title": f"{label} · @{owner.username}",
         "og_description": og_description,

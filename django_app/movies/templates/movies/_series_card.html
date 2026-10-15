@@ -6,10 +6,12 @@
      card_sub : optional sub-line replacing the year/season-count line — the
                 person page's filmography grid uses it for the job/role held
                 on the show (Task 89), same as _movie_card.html's param of
-                the same name. {% endcomment %}
+                the same name.
+     plain    : optional; when true the card is drawn without its link, as
+                in _movie_card.html. {% endcomment %}
 {% load i18n tmdb_images %}
 <div class="poster-card is-film">
-    <a href="{% url 'movies:series_detail' series.slug %}">
+    {% if plain %}<div class="card-static">{% else %}<a href="{% url 'movies:series_detail' series.slug %}">{% endif %}
         {% if series.poster_path %}
         <img class="poster" src="{{ series.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=series.display_title %}{{ title }} poster{% endblocktranslate %}" loading="lazy" decoding="async">
         {% else %}
@@ -26,5 +28,5 @@
             {% endif %}
             {% include "movies/_rating_badge.html" with rating=series.imdb_rating only %}
         </div>
-    </a>
+    {% if plain %}</div>{% else %}</a>{% endif %}
 </div>

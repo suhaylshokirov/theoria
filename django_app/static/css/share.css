@@ -207,6 +207,13 @@
   color: var(--ink);
 }
 
+/* A signed-out reader's cards carry no link (see _movie_card.html's `plain`),
+   so they take the block layout and ink the link would have given them. */
+.poster-card .card-static {
+  display: block;
+  color: var(--ink);
+}
+
 /* --- List ---------------------------------------------------------------------- */
 
 .share-list {

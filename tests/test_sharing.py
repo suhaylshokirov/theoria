@@ -379,6 +379,10 @@ def test_public_page_needs_no_login_and_hides_the_owners_email(owner):
     # Signed out: the invitation shows, the owner strip does not.
     assert "Make your own list on Theoria" in html
     assert "This is your public link" not in html
+    # A friend who isn't signed in can read the whole list without being sent
+    # to the sign-in wall: the cards carry no links into the gated pages.
+    assert "/movies/movie-1/" not in html
+    assert "card-static" in html
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
@@ -405,6 +409,7 @@ def test_owner_sees_the_manage_strip_not_the_invitation(owner):
     assert 'href="/me/#top"' in html
     assert "Make your own list on Theoria" not in html
     assert _EMAIL not in html
+    assert 'href="/movies/movie-1/"' in html           # signed in: cards link through
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
