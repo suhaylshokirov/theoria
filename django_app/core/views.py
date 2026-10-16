@@ -22,6 +22,7 @@ from movies.templatetags.tmdb_images import tmdb_image
 from core.services import (
     account_rows,
     move_collection_item,
+    place_collection_item,
     remove_collection_item,
     toggle_collection_item,
 )
@@ -112,6 +113,17 @@ def _account_sections(request):
             first_rank = page_obj.start_index() if count else 1  # an empty page's start_index() is 0
             rank_slots = list(range(first_rank + on_page, first_rank + ACCOUNT_ITEMS_PER_PAGE))
 
+        # Top's drag-to-reorder can drop a card on the pager's arrows, which
+        # places it beside the nearest title over the page edge: before the
+        # previous page's last, or after the next page's first.
+        prev_anchor = next_anchor = None
+        if ranked:
+            rows = page_obj.paginator.object_list
+            if page_obj.has_previous():
+                prev_anchor = rows[page_obj.start_index() - 2].id
+            if page_obj.has_next():
+                next_anchor = rows[page_obj.end_index()].id
+
         sections.append({
             "kind": kind,
             "slug": slug,
@@ -121,6 +133,8 @@ def _account_sections(request):
             "count": count,
             "fill": fill,
             "rank_slots": rank_slots,
+            "prev_anchor": prev_anchor,
+            "next_anchor": next_anchor,
             "self_url": page_url(page_obj.number),
             # What the share sheet opens with: the live link (None while the
             # collection is private) and the owner's note for its page.
@@ -207,7 +221,26 @@ def move_item(request, kind, item_id, direction):
         move_collection_item(request.user, kind, item_id, direction)
     except (ValueError, CollectionItem.DoesNotExist):
         return HttpResponseBadRequest(gettext("That collection item could not be moved."))
+    # Same handshake as remove_item: theoria.js re-fetches the section itself.
+    if request.headers.get("Accept") == "application/json":
+        return JsonResponse({"moved": True})
     return _redirect_back(request, "profile")
+
+
+@login_required
+@require_POST
+def place_item(request, kind, item_id):
+    """A dragged Top card, dropped beside another (POST before=<id> or
+    after=<id>). Script-only -- the arrows are the no-JS way to reorder --
+    so it answers JSON and nothing else."""
+    try:
+        anchors = {
+            key: int(request.POST[key]) for key in ("before", "after") if request.POST.get(key)
+        }
+        place_collection_item(request.user, kind, item_id, **anchors)
+    except (ValueError, TypeError, CollectionItem.DoesNotExist):
+        return HttpResponseBadRequest(gettext("That collection item could not be moved."))
+    return JsonResponse({"moved": True})
 
 
 SHARE_RATE_LIMIT = 30

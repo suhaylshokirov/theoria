@@ -474,48 +474,219 @@
   color: var(--lime);
 }
 
-/* Top's reorder arrows — outline circles under the card, always visible:
-   reordering a ranked list isn't a hover affordance, it's part of reading
-   one. */
+/* Top's reorder rail, under the card and always visible: reordering a
+   ranked list isn't a hover affordance, it's part of reading one. One
+   hairline strip per card -- a step left (a rank higher) and right at the
+   ends, the drag grip filling the middle -- so it reads as a single "this
+   has a place in the order" control rather than two loose buttons. */
 .account-card__moves {
   display: flex;
-  gap: var(--space-3);
+  align-items: stretch;
+  height: 36px;
   margin-top: var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  transition: border-color var(--dur-fast) var(--ease);
 }
 
 .account-card__moves form {
+  display: flex;
   margin: 0;
 }
 
-.account-card__moves button {
+.account-card__move {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
   padding: 0;
-  background: var(--paper);
+  background: transparent;
   color: var(--ink);
-  border: 1px solid var(--rule-strong);
-  border-radius: 50%;
+  border: 0;
+  border-radius: var(--radius-pill);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 
-.account-card__moves svg {
+.account-card__move svg {
   width: 16px;
   height: 16px;
 }
 
-.account-card__moves button:hover:not(:disabled) {
+.account-card__move:hover:not(:disabled) {
   background: var(--lime-wash);
-  border-color: var(--lime-mark);
   color: var(--lime-deep);
 }
 
-.account-card__moves button:disabled {
-  background: var(--paper);
-  border-color: var(--rule);
-  opacity: 0.35;
+.account-card__move:disabled {
+  color: var(--rule-strong);
   cursor: default;
+}
+
+/* The grip: six dots laid out the way the shelf moves, wide not tall.
+   touch-action: none so a finger on it drags the card instead of
+   scrolling the shelf -- everywhere else on the shelf still scrolls. */
+.account-card__grip {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-inline: 1px solid var(--rule);
+  color: var(--ink-muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+}
+
+.account-card__grip svg {
+  width: 20px;
+  height: 10px;
+}
+
+/* No script, no drag: the grip keeps its room so the arrows stay at the
+   rail's ends, but shows nothing to grab. */
+html:not(.has-js) .account-card__grip svg {
+  visibility: hidden;
+}
+
+html:not(.has-js) .account-card__grip {
+  cursor: default;
+}
+
+.account-card:hover .account-card__moves {
+  border-color: var(--ink-faint);
+}
+
+.account-card__grip:hover {
+  color: var(--ink);
+}
+
+/* --- Dragging (theoria.js, Top only) ----------------------------------------
+   The card the reader picked up leaves a dashed hole in the row -- the same
+   dashed 2:3 frame as an empty rank slot, because that is what it is now --
+   and a lifted copy follows the pointer. The hole moves through the row as
+   the copy passes each neighbour's midpoint; the neighbours slide aside. */
+.account-card.is-hole > * {
+  visibility: hidden;
+}
+
+.account-card.is-hole::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  aspect-ratio: 2 / 3;
+  border: 1px dashed var(--lime-mark);
+  border-radius: var(--radius);
+  background: var(--lime-wash);
+}
+
+.account-card.is-lifted {
+  position: fixed;
+  z-index: 60;
+  margin: 0;
+  list-style: none;
+  pointer-events: none;
+  transform-origin: var(--grab-x, 50%) var(--grab-y, 30%);
+  transition: transform var(--dur) var(--ease-bloom), opacity var(--dur) var(--ease);
+}
+
+/* Held over a pager arrow, the card shrinks into the pointer so the
+   target under it -- and the rank it prints -- stays in view. */
+.account-card.is-lifted.is-up.is-over-target {
+  transform: translate(20px, 24px) scale(0.22);
+  opacity: 0.9;
+}
+
+.account-card.is-lifted.is-up {
+  transform: scale(1.04) rotate(-1.25deg);
+}
+
+/* Lifted, the whole card comes off the sheet on its own paper -- a ring of
+   it past the edges, so its caption never reads through onto the cards it
+   is carried over. */
+.account-card.is-lifted {
+  background: var(--paper);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 var(--space-3) var(--paper),
+              0 2px 4px rgba(0, 0, 0, 0.12),
+              0 32px 56px -16px rgba(0, 0, 0, 0.5);
+}
+
+.account-card.is-lifted .account-card__moves {
+  border-color: var(--lime-mark);
+}
+
+.account-card.is-lifted .account-card__grip {
+  color: var(--lime-text);
+  cursor: grabbing;
+}
+
+/* The lifted card lands: back to flat, at the hole's spot. */
+.account-card.is-lifted.is-landing {
+  transition: left var(--dur) var(--ease), top var(--dur) var(--ease),
+              transform var(--dur) var(--ease);
+}
+
+/* Once the shelf is redrawn, the moved card's rank figure settles in from
+   a size up -- the one beat that says "it went here", which matters most
+   when the move crossed a page edge and the shelf turned under it. */
+.account-card.is-just-moved .account-card__rank {
+  transform-origin: 100% 100%;
+  animation: account-rank-settle var(--dur-slow) var(--ease-bloom);
+}
+
+@keyframes account-rank-settle {
+  from { transform: scale(1.22); }
+  to { transform: none; }
+}
+
+html.is-dragging,
+html.is-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* The row's own cards don't react to the pointer while one is being
+   carried over them: no hover lift, no remove button popping up. */
+.account-grid.is-reordering .account-card {
+  pointer-events: none;
+}
+
+/* Snapping off while carrying: a snapping scroller re-snaps to the card it
+   last snapped to whenever the row reorders, which here is the hole -- so
+   every step of the drag would scroll the shelf after it, and on. */
+.account-grid.is-reordering {
+  scroll-snap-type: none;
+}
+
+.account-grid.is-reordering .account-card__remove {
+  opacity: 0;
+}
+
+/* Over the page edge: while a card is lifted, the pager's arrows become
+   drop targets and print the rank the card would take there. */
+.account-pager__btn.is-arrow.is-drop-target {
+  width: auto;
+  min-width: 0;
+  gap: var(--space-2);
+  padding-inline: var(--space-4);
+  border-style: dashed;
+  border-color: var(--lime-mark);
+  color: var(--lime-text);
+}
+
+.account-pager__btn.is-arrow.is-drop-target.is-drop-over {
+  background: var(--lime);
+  border-style: solid;
+  border-color: var(--lime);
+  color: var(--ink-on-lime);
+}
+
+.account-pager__drop {
+  font-size: var(--text-xs);
+  font-weight: 600;
 }
 
 /* --- Empty panel ----------------------------------------------------------- */
@@ -878,6 +1049,11 @@
   .account-card:has(.poster-card a:hover, .poster-card a:focus-visible) .account-card__frame {
     transform: none;
   }
+
+  /* A lifted card still lifts -- the shadow says so -- but doesn't tilt. */
+  .account-card.is-lifted.is-up {
+    transform: none;
+  }
 }
 
 /* --- Touch --------------------------------------------------------------------
@@ -901,9 +1077,12 @@
     width: 40px;
   }
 
-  .account-card__remove,
-  .account-card__moves button {
+  .account-card__remove {
     width: 40px;
+    height: 40px;
+  }
+
+  .account-card__moves {
     height: 40px;
   }
 
@@ -913,7 +1092,7 @@
   .account-share,
   .account-pager__btn,
   .account-card__remove,
-  .account-card__moves button {
+  .account-card__move {
     position: relative;
   }
 
@@ -923,7 +1102,7 @@
   .account-share::after,
   .account-pager__btn::after,
   .account-card__remove::after,
-  .account-card__moves button::after {
+  .account-card__move::after {
     content: "";
     position: absolute;
     inset: -2px;
@@ -978,9 +1157,12 @@ html.is-tv .account-card__remove svg {
   height: 20px;
 }
 
-html.is-tv .account-card__moves button {
-  width: 3.25rem;
+html.is-tv .account-card__moves {
   height: 3.25rem;
+}
+
+html.is-tv .account-card__move {
+  width: 3.25rem;
 }
 
 html.is-tv .account-card__frame {
@@ -1013,7 +1195,7 @@ html.is-tv .account-signout {
 html.is-tv .account-slot__link:focus-visible,
 html.is-tv .account-pager__btn:focus-visible,
 html.is-tv .account-card__remove:focus-visible,
-html.is-tv .account-card__moves button:focus-visible {
+html.is-tv .account-card__move:focus-visible {
   border-color: var(--lime-mark);
   box-shadow: 0 0 0 3px var(--lime-mark);
 }

@@ -70,6 +70,10 @@
 {% include "core/_collection_section.html" with section=section request=request csrf_token=csrf_token only %}
 {% endfor %}
 
+{% comment %} Says where a reordered Top card landed. Out here, not in the
+   section, because the section is swapped whole after every move. {% endcomment %}
+<p class="visually-hidden" role="status" data-account-status></p>
+
 {% include "core/share/_sheet.html" with username=request.user.username csrf_token=csrf_token only %}
 {% endblock %}
 

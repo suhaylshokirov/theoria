@@ -1834,7 +1834,12 @@
     // along with everything else. One that isn't rendered (the pager's page
     // numbers are hidden on a phone) or isn't there (the arrow went disabled
     // on the last page) is skipped; the heading is the last resort.
-    function load(slug, href, focusSelectors) {
+    //
+    // opts (optional): quiet -- don't dim the shelf (a reorder has already
+    // drawn the new order); noFocus -- leave focus alone (a pointer drag);
+    // done(fresh) -- called with the swapped-in section, or null on failure.
+    function load(slug, href, focusSelectors, opts) {
+      opts = opts || {};
       var section = document.getElementById(slug);
       if (!section) return;
       var address = addressFor(slug, href);
@@ -1842,7 +1847,7 @@
       request.searchParams.set("_section", slug);
 
       var grid = section.querySelector("[data-account-grid]");
-      if (grid) grid.setAttribute("aria-busy", "true");
+      if (grid && !opts.quiet) grid.setAttribute("aria-busy", "true");
 
       if (controllers[slug]) controllers[slug].abort();
       var controller = window.AbortController ? new AbortController() : null;
@@ -1875,19 +1880,23 @@
             fresh.scrollIntoView({ block: "start" });
           }
 
-          var focusTarget = null;
-          for (var i = 0; focusSelectors && i < focusSelectors.length && !focusTarget; i++) {
-            var candidate = fresh.querySelector(focusSelectors[i]);
-            if (candidate && candidate.getClientRects().length) focusTarget = candidate;
+          if (!opts.noFocus) {
+            var focusTarget = null;
+            for (var i = 0; focusSelectors && i < focusSelectors.length && !focusTarget; i++) {
+              var candidate = fresh.querySelector(focusSelectors[i]);
+              if (candidate && candidate.getClientRects().length) focusTarget = candidate;
+            }
+            if (!focusTarget && heading) {
+              heading.setAttribute("tabindex", "-1");
+              focusTarget = heading;
+            }
+            if (focusTarget) focusTarget.focus({ preventScroll: true });
           }
-          if (!focusTarget && heading) {
-            heading.setAttribute("tabindex", "-1");
-            focusTarget = heading;
-          }
-          if (focusTarget) focusTarget.focus({ preventScroll: true });
+          if (opts.done) opts.done(fresh);
         })
         .catch(function (err) {
           if (err && err.name === "AbortError") return;
+          if (opts.done) opts.done(null);
           location.href = address.pathname + address.search + "#" + slug;
         });
     }
@@ -1941,6 +1950,451 @@
           if (card) card.hidden = false;
           form.submit();
         });
+    });
+
+    /* --- Top: reordering ---------------------------------------------------
+       Two ways in, one way out. The rail's arrows (plain forms, which work
+       with JS off) step a card one rank; the grip between them -- or, with a
+       mouse, the poster itself -- lifts the card to carry it anywhere along
+       the row, or onto the pager's arrows to drop it over the page edge.
+       Either way the change is posted, then the section is re-fetched like
+       any other, and a move that crosses a page edge follows the card there. */
+    var status = document.querySelector("[data-account-status]");
+    var reordering = false; // a drop is saving; the next lift waits for it
+
+    function announce(title, rank) {
+      if (!status) return;
+      status.textContent = "";
+      status.textContent = t("Moved {title} to rank {rank}", { title: title, rank: rank });
+    }
+
+    function pageNumber(slug) {
+      var value = parseInt(new URL(location.href).searchParams.get(slug + "_page"), 10);
+      return value > 1 ? value : 1;
+    }
+
+    function pageHref(slug, number) {
+      var next = new URL(location.href);
+      if (number > 1) next.searchParams.set(slug + "_page", number);
+      else next.searchParams.delete(slug + "_page");
+      return next.href;
+    }
+
+    function postForm(url, body) {
+      return fetch(url, {
+        method: "POST",
+        body: body,
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      }).then(function (response) {
+        var type = response.headers.get("Content-Type") || "";
+        if (!response.ok || type.indexOf("application/json") === -1) throw new Error("move failed");
+      });
+    }
+
+    // After a move: re-fetch the page the card is now on and let its rank
+    // figure settle, so the eye finds where it went.
+    function settle(slug, page, itemId, focusSelectors, pointer) {
+      load(slug, pageHref(slug, page), focusSelectors, {
+        quiet: true,
+        noFocus: pointer,
+        done: function (fresh) {
+          reordering = false;
+          var card = fresh && fresh.querySelector('[data-item-id="' + itemId + '"]');
+          if (card && !reduce) card.classList.add("is-just-moved");
+        },
+      });
+    }
+
+    function shelfCards(grid) {
+      return Array.prototype.filter.call(grid.children, function (li) {
+        return li.hasAttribute("data-item-id");
+      });
+    }
+
+    document.addEventListener("submit", function (event) {
+      var form = event.target;
+      if (!form.matches("form[data-account-move]")) return;
+      var card = form.closest("[data-item-id]");
+      var grid = card && card.parentElement;
+      var slug = slugOf(form);
+      if (!grid || !slug || reordering) return;
+      event.preventDefault();
+      reordering = true;
+
+      var up = form.getAttribute("data-account-move") === "up";
+      var cards = shelfCards(grid);
+      var page = pageNumber(slug);
+      if (up && card === cards[0] && grid.hasAttribute("data-prev-anchor")) page -= 1;
+      if (!up && card === cards[cards.length - 1] && grid.hasAttribute("data-next-anchor")) page += 1;
+      var itemId = card.getAttribute("data-item-id");
+      var rank = parseInt(card.getAttribute("data-rank"), 10) + (up ? -1 : 1);
+
+      postForm(form.getAttribute("action"), new FormData(form))
+        .then(function () {
+          announce(card.getAttribute("data-title"), rank);
+          var mine = '[data-item-id="' + itemId + '"] ';
+          settle(slug, page, itemId, [
+            mine + '[data-account-move="' + (up ? "up" : "down") + '"] button:not(:disabled)',
+            mine + ".account-card__move:not(:disabled)",
+          ], false);
+        })
+        .catch(function () {
+          reordering = false;
+          form.submit();
+        });
+    });
+
+    // Carrying a card. Slots are the row's columns, measured once at lift
+    // in the shelf's own scroll coordinates: they never move while a card
+    // is carried, only which card sits in which, so the hole's place comes
+    // from the nearest slot rather than from neighbours mid-slide.
+    var drag = null;
+    var LIFT_AFTER = 4; // px of travel before a press becomes a drag
+
+    function pad(n) {
+      return n < 10 ? "0" + n : String(n);
+    }
+
+    function gridLeft(grid) {
+      return grid.getBoundingClientRect().left - grid.scrollLeft;
+    }
+
+    function renumber() {
+      shelfCards(drag.grid).forEach(function (li, i) {
+        var figure = li.querySelector(".account-card__rank");
+        if (figure) figure.textContent = pad(drag.firstRank + i);
+        if (li === drag.card) drag.rank = drag.firstRank + i;
+      });
+      var lifted = drag.ghost.querySelector(".account-card__rank");
+      if (lifted) lifted.textContent = pad(drag.rank);
+    }
+
+    // Puts the hole at `index` by moving its neighbours around it -- the
+    // hole itself is never detached, or the browser would drop the pointer
+    // capture on the press that is carrying it -- and slides each moved
+    // neighbour from where it was drawn to its new slot.
+    function moveHole(index) {
+      var cards = shelfCards(drag.grid);
+      var from = cards.indexOf(drag.card);
+      if (index === from) return;
+      var before = cards.map(function (li) { return li.getBoundingClientRect().left; });
+      if (index > from) {
+        cards.slice(from + 1, index + 1).forEach(function (li) {
+          drag.grid.insertBefore(li, drag.card);
+        });
+      } else {
+        drag.card.after.apply(drag.card, cards.slice(index, from));
+      }
+      if (!reduce) {
+        cards.forEach(function (li, i) {
+          if (li === drag.card) return;
+          li.style.transition = "none";
+          li.style.transform = "";
+          var dx = before[i] - li.getBoundingClientRect().left;
+          if (!dx) return;
+          li.style.transform = "translateX(" + dx + "px)";
+          li.getBoundingClientRect(); // commit the start position
+          li.style.transition = "transform var(--dur) var(--ease)";
+          li.style.transform = "";
+        });
+      }
+      renumber();
+    }
+
+    function setOver(target) {
+      drag.targets.forEach(function (tgt) {
+        tgt.el.classList.toggle("is-drop-over", tgt === target);
+      });
+      drag.over = target;
+      drag.ghost.classList.toggle("is-over-target", !!target);
+      var lifted = drag.ghost.querySelector(".account-card__rank");
+      if (lifted) lifted.textContent = pad(target ? target.rank : drag.rank);
+    }
+
+    function track() {
+      var ghostLeft = drag.x - drag.offsetX;
+      drag.ghost.style.left = ghostLeft + "px";
+      drag.ghost.style.top = drag.y - drag.offsetY + "px";
+
+      var over = null;
+      drag.targets.forEach(function (tgt) {
+        var r = tgt.el.getBoundingClientRect();
+        if (drag.x >= r.left - 8 && drag.x <= r.right + 8 && drag.y >= r.top - 8 && drag.y <= r.bottom + 8) over = tgt;
+      });
+      setOver(over);
+      if (over) return;
+
+      var center = ghostLeft + drag.width / 2 - gridLeft(drag.grid);
+      var nearest = 0;
+      drag.slots.forEach(function (slot, i) {
+        if (Math.abs(slot - center) < Math.abs(drag.slots[nearest] - center)) nearest = i;
+      });
+      moveHole(nearest);
+    }
+
+    // A phone's shelf is wider than the screen: hold a card near either
+    // end and the shelf scrolls under it.
+    function autoScroll() {
+      if (!drag) return;
+      var grid = drag.grid;
+      if (grid.scrollWidth > grid.clientWidth) {
+        var r = grid.getBoundingClientRect();
+        var edge = Math.min(64, r.width / 5);
+        var step = 0;
+        if (drag.x < r.left + edge) step = -Math.ceil((r.left + edge - drag.x) / 4);
+        else if (drag.x > r.right - edge) step = Math.ceil((drag.x - (r.right - edge)) / 4);
+        if (step) {
+          grid.scrollLeft += step;
+          track();
+        }
+      }
+      drag.frame = requestAnimationFrame(autoScroll);
+    }
+
+    function pagerTargets(section, grid, cards) {
+      var targets = [];
+      var first = parseInt(cards[0].getAttribute("data-rank"), 10);
+      var last = parseInt(cards[cards.length - 1].getAttribute("data-rank"), 10);
+      [["prev", "data-prev-anchor", "before", first - 1], ["next", "data-next-anchor", "after", last + 1]].forEach(function (spec) {
+        var anchor = grid.getAttribute(spec[1]);
+        var el = section.querySelector('.account-pager a[data-account-dir="' + spec[0] + '"]');
+        if (!anchor || !el) return;
+        var figure = document.createElement("span");
+        figure.className = "account-pager__drop mono";
+        figure.textContent = pad(spec[3]);
+        if (spec[0] === "prev") el.appendChild(figure);
+        else el.insertBefore(figure, el.firstChild);
+        el.classList.add("is-drop-target");
+        targets.push({ el: el, figure: figure, key: spec[2], anchor: anchor, rank: spec[3], dir: spec[0] === "prev" ? -1 : 1 });
+      });
+      return targets;
+    }
+
+    function lift() {
+      var card = drag.card;
+      var grid = drag.grid;
+      var cards = shelfCards(grid);
+      var rect = card.getBoundingClientRect();
+      var left = gridLeft(grid);
+
+      drag.lifted = true;
+      drag.width = rect.width;
+      drag.offsetX = drag.startX - rect.left;
+      drag.offsetY = drag.startY - rect.top;
+      drag.from = cards.indexOf(card);
+      drag.firstRank = parseInt(cards[0].getAttribute("data-rank"), 10);
+      drag.rank = parseInt(card.getAttribute("data-rank"), 10);
+      drag.slots = cards.map(function (li) {
+        var r = li.getBoundingClientRect();
+        return r.left - left + r.width / 2;
+      });
+
+      var ghost = card.cloneNode(true);
+      ghost.removeAttribute("data-item-id");
+      ghost.setAttribute("aria-hidden", "true");
+      ghost.setAttribute("inert", "");
+      ghost.classList.add("is-lifted");
+      ghost.style.width = rect.width + "px";
+      ghost.style.left = rect.left + "px";
+      ghost.style.top = rect.top + "px";
+      ghost.style.setProperty("--grab-x", drag.offsetX + "px");
+      ghost.style.setProperty("--grab-y", drag.offsetY + "px");
+      drag.section.appendChild(ghost);
+      drag.ghost = ghost;
+      ghost.getBoundingClientRect(); // start flat, then tilt up off the row
+      ghost.classList.add("is-up");
+      if (window.getSelection) window.getSelection().removeAllRanges();
+
+      card.classList.add("is-hole");
+      grid.classList.add("is-reordering");
+      document.documentElement.classList.add("is-dragging");
+      drag.targets = pagerTargets(drag.section, grid, cards);
+      drag.frame = requestAnimationFrame(autoScroll);
+    }
+
+    function clearDrag() {
+      cancelAnimationFrame(drag.frame);
+      drag.targets.forEach(function (tgt) {
+        tgt.el.classList.remove("is-drop-target", "is-drop-over");
+        tgt.figure.remove();
+      });
+      shelfCards(drag.grid).forEach(function (li) {
+        li.style.transition = "";
+        li.style.transform = "";
+      });
+      drag.card.classList.remove("is-hole");
+      drag.grid.classList.remove("is-reordering");
+      document.documentElement.classList.remove("is-dragging");
+      drag.ghost.remove();
+    }
+
+    // The lifted card settles into the hole, then everything is put back.
+    function land(then) {
+      var current = drag;
+      var ghost = current.ghost;
+      var finish = function () {
+        drag = current;
+        clearDrag();
+        drag = null;
+        if (then) then();
+      };
+      if (reduce || current.over) {
+        finish();
+        return;
+      }
+      var r = current.card.getBoundingClientRect();
+      ghost.classList.remove("is-up");
+      ghost.classList.add("is-landing");
+      ghost.style.left = r.left + "px";
+      ghost.style.top = r.top + "px";
+      var done = false;
+      var once = function () {
+        if (done) return;
+        done = true;
+        finish();
+      };
+      ghost.addEventListener("transitionend", once);
+      setTimeout(once, 320);
+    }
+
+    function drop(cancelled) {
+      var d = drag;
+      var title = d.card.getAttribute("data-title");
+      var url = d.card.getAttribute("data-place-url");
+      var itemId = d.card.getAttribute("data-item-id");
+      var csrf = d.card.querySelector("[name='csrfmiddlewaretoken']");
+      var body = new FormData();
+      if (csrf) body.append("csrfmiddlewaretoken", csrf.value);
+
+      var page = pageNumber(d.slug);
+      var rank = d.rank;
+      if (cancelled) {
+        if (!d.over) moveHole(d.from);
+        land(null);
+        return;
+      }
+      if (d.over) {
+        body.append(d.over.key, d.over.anchor);
+        page += d.over.dir;
+        rank = d.over.rank;
+        d.card.hidden = true;
+      } else {
+        var cards = shelfCards(d.grid);
+        var at = cards.indexOf(d.card);
+        if (at === d.from) {
+          land(null);
+          return;
+        }
+        if (at < cards.length - 1) body.append("before", cards[at + 1].getAttribute("data-item-id"));
+        else body.append("after", cards[at - 1].getAttribute("data-item-id"));
+      }
+
+      reordering = true;
+      var slug = d.slug;
+      land(null);
+      postForm(url, body)
+        .then(function () {
+          announce(title, rank);
+          settle(slug, page, itemId, null, true);
+        })
+        .catch(function () {
+          // Nothing was saved: draw the shelf as the server has it.
+          settle(slug, pageNumber(slug), null, null, true);
+        });
+    }
+
+    // A mouse drag that started on the poster ends in a click on its link;
+    // that click is the drop, not a visit.
+    function swallowClick() {
+      var swallow = function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      };
+      window.addEventListener("click", swallow, true);
+      setTimeout(function () {
+        window.removeEventListener("click", swallow, true);
+      }, 0);
+    }
+
+    function onMove(event) {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      drag.x = event.clientX;
+      drag.y = event.clientY;
+      if (!drag.lifted) {
+        if (Math.abs(drag.x - drag.startX) < LIFT_AFTER && Math.abs(drag.y - drag.startY) < LIFT_AFTER) return;
+        lift();
+      }
+      event.preventDefault();
+      track();
+    }
+
+    function onEnd(event) {
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+      if (!drag.lifted) {
+        drag = null;
+        return;
+      }
+      swallowClick();
+      drop(event.type === "pointercancel");
+    }
+
+    document.addEventListener("pointerdown", function (event) {
+      if (drag || reordering || event.button !== 0) return;
+      var grip = event.target.closest && event.target.closest("[data-account-grip]");
+      var poster = !grip && event.pointerType === "mouse" &&
+        event.target.closest && event.target.closest(".account-card.is-ranked .poster-card");
+      var handle = grip || poster;
+      if (!handle) return;
+      var card = handle.closest("[data-item-id]");
+      var grid = card && card.parentElement;
+      if (!grid || !grid.hasAttribute("data-account-reorder")) return;
+      var section = grid.closest("[data-account-section]");
+
+      drag = {
+        card: card,
+        grid: grid,
+        section: section,
+        slug: section.getAttribute("data-account-section"),
+        pointerId: event.pointerId,
+        fromPoster: !!poster,
+        startX: event.clientX,
+        startY: event.clientY,
+        x: event.clientX,
+        y: event.clientY,
+        lifted: false,
+        targets: [],
+        over: null,
+      };
+      if (grip) event.preventDefault(); // no text selection, no scroll start
+      try {
+        handle.setPointerCapture(event.pointerId);
+      } catch (e) {}
+      window.addEventListener("pointermove", onMove, { passive: false });
+      window.addEventListener("pointerup", onEnd);
+      window.addEventListener("pointercancel", onEnd);
+    });
+
+    // Escape puts a carried card back where it was picked up.
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "Escape" || !drag || !drag.lifted) return;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+      // The button is still down: the release that follows is no click.
+      window.addEventListener("pointerup", swallowClick, { once: true });
+      drop(true);
+    });
+
+    // A poster is a link and an image: without this the browser starts its
+    // own drag of the URL the moment the mouse moves.
+    document.addEventListener("dragstart", function (event) {
+      if (event.target.closest && event.target.closest("[data-account-reorder] .account-card")) {
+        event.preventDefault();
+      }
     });
   }
 

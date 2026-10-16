@@ -15,7 +15,7 @@
    Shelf head: title left, Share and (when there is more than one page) the
    pager right, on one ruled row. A shelf that fits on one page gets no
    pager at all; `is-paged` is what gives the section its two-column head. {% endcomment %}
-{% load i18n %}
+{% load i18n l10n %}
 {% with slug=section.slug label=section.label page_obj=section.page_obj %}
 <section class="account-section{% if section.count and page_obj.has_other_pages %} is-paged{% endif %}" id="{{ slug }}" aria-labelledby="account-section-{{ slug }}-title" data-account-section="{{ slug }}">
     <div class="account-section__head">
@@ -83,10 +83,10 @@
     {% endif %}
 
     {% if section.count or section.rank_slots %}
-    <ol class="account-grid" data-account-grid>
+    <ol class="account-grid" data-account-grid{% if section.ranked and section.count > 1 %} data-account-reorder{% if section.prev_anchor %} data-prev-anchor="{{ section.prev_anchor|unlocalize }}"{% endif %}{% if section.next_anchor %} data-next-anchor="{{ section.next_anchor|unlocalize }}"{% endif %}{% endif %}>
         {% for item in page_obj %}
         {% with rank=page_obj.start_index|add:forloop.counter0 title=item.title %}
-        <li class="account-card{% if section.ranked %} is-ranked{% endif %}">
+        <li class="account-card{% if section.ranked %} is-ranked{% endif %}"{% if section.ranked %} data-item-id="{{ item.id|unlocalize }}" data-rank="{{ rank|unlocalize }}" data-title="{{ title }}" data-place-url="{% url 'account:place_item' section.kind item.id %}"{% endif %}>
             {% if section.ranked %}<span class="visually-hidden">{% blocktranslate trimmed with rank=rank %}Rank {{ rank }}:{% endblocktranslate %}</span>{% endif %}
 
             {% if item.content_type == "movie" %}
@@ -114,19 +114,42 @@
                 {% endif %}
             </div>
 
-            {% if section.ranked %}
+            {% comment %} Top's reorder rail. The shelf runs left to right in
+               rank order, so the arrows point that way: left is a rank
+               higher. The grip between them is the drag handle (theoria.js;
+               a mouse can also lift the poster itself). The arrows stay as
+               the one-tap and keyboard way to do the same thing, and are the
+               whole control without JS. {% endcomment %}
+            {% if section.ranked and section.count > 1 %}
+            {% with higher=rank|add:"-1" lower=rank|add:"1" %}
             <div class="account-card__moves">
-                <form method="post" action="{% url 'account:move_item' section.kind item.id 'up' %}">
+                <form method="post" action="{% url 'account:move_item' section.kind item.id 'up' %}" data-account-move="up">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ section.self_url }}">
-                    <button type="submit" aria-label="{% blocktranslate trimmed with title=title %}Move {{ title }} up{% endblocktranslate %}"{% if rank == 1 %} disabled{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
+                    {% if rank == 1 %}
+                    <button type="submit" class="account-card__move" aria-label="{% blocktranslate trimmed with title=title %}{{ title }} is ranked first{% endblocktranslate %}" disabled>
+                    {% else %}
+                    <button type="submit" class="account-card__move" aria-label="{% blocktranslate trimmed with title=title rank=higher %}Move {{ title }} to rank {{ rank }}{% endblocktranslate %}">
+                    {% endif %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
                 </form>
-                <form method="post" action="{% url 'account:move_item' section.kind item.id 'down' %}">
+                <span class="account-card__grip" data-account-grip aria-hidden="true">
+                    <svg viewBox="0 0 20 10" fill="currentColor"><circle cx="4" cy="2.5" r="1.5"/><circle cx="10" cy="2.5" r="1.5"/><circle cx="16" cy="2.5" r="1.5"/><circle cx="4" cy="7.5" r="1.5"/><circle cx="10" cy="7.5" r="1.5"/><circle cx="16" cy="7.5" r="1.5"/></svg>
+                </span>
+                <form method="post" action="{% url 'account:move_item' section.kind item.id 'down' %}" data-account-move="down">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ section.self_url }}">
-                    <button type="submit" aria-label="{% blocktranslate trimmed with title=title %}Move {{ title }} down{% endblocktranslate %}"{% if rank == section.count %} disabled{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                    {% if rank == section.count %}
+                    <button type="submit" class="account-card__move" aria-label="{% blocktranslate trimmed with title=title %}{{ title }} is ranked last{% endblocktranslate %}" disabled>
+                    {% else %}
+                    <button type="submit" class="account-card__move" aria-label="{% blocktranslate trimmed with title=title rank=lower %}Move {{ title }} to rank {{ rank }}{% endblocktranslate %}">
+                    {% endif %}
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                    </button>
                 </form>
             </div>
+            {% endwith %}
             {% endif %}
         </li>
         {% endwith %}

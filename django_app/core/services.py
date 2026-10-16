@@ -111,6 +111,43 @@ def move_collection_item(user, kind, item_id, direction):
         _touch(collection)
 
 
+def place_collection_item(user, kind, item_id, *, before=None, after=None):
+    """Drop one Top item next to another: just before `before`, or just after
+    `after` (item ids, exactly one of the two).
+
+    The /me/ shelf drags a card onto a neighbour, so the move is named by
+    that neighbour rather than by a rank number: a displayed rank skips any
+    title that has left the warehouse, and an id is the same on either side.
+    The anchor can sit on another page -- dropping on the pager places the
+    card beside the nearest title of the page before or after.
+
+    Positions are rewritten 0..n-1 in the new order; only rows whose
+    position actually changed are saved.
+    """
+    if kind != Collection.TOP or (before is None) == (after is None):
+        raise ValueError("Only Top items can be reordered.")
+    anchor_id = before if before is not None else after
+    collection = _collection(user, kind)
+    with transaction.atomic():
+        items = list(collection.items.select_for_update())
+        by_id = {item.pk: item for item in items}
+        moving, anchor = by_id.get(item_id), by_id.get(anchor_id)
+        if moving is None or anchor is None:
+            raise CollectionItem.DoesNotExist("That collection item could not be found.")
+        if moving is anchor:
+            return
+        items.remove(moving)
+        items.insert(items.index(anchor) + (0 if before is not None else 1), moving)
+        changed = []
+        for position, item in enumerate(items):
+            if item.position != position:
+                item.position = position
+                changed.append(item)
+        if changed:
+            CollectionItem.objects.bulk_update(changed, ["position"])
+            _touch(collection)
+
+
 def account_rows(user):
     """Every item in all three of `user`'s collections, hydrated and grouped
     by kind: {kind: [CollectionItem, ...]}. Top is in rank order (position,

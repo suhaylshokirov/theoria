@@ -397,14 +397,15 @@ def test_account_top_section_renders_move_buttons():
 
         content = response.content.decode()
         assert "account-card__moves" in content
+        assert "data-account-grip" in content
         assert "Rank 1:" in content
         assert "Rank 3:" in content
         # First item overall can't move up, last item overall can't move down.
-        assert 'aria-label="Move Top Movie 1 up" disabled' in content
-        assert 'aria-label="Move Top Movie 3 down" disabled' in content
-        # The middle item can move both ways.
-        assert 'aria-label="Move Top Movie 2 up">' in content
-        assert 'aria-label="Move Top Movie 2 down">' in content
+        assert 'aria-label="Top Movie 1 is ranked first" disabled' in content
+        assert 'aria-label="Top Movie 3 is ranked last" disabled' in content
+        # The middle item can move both ways, and each arrow names its rank.
+        assert 'aria-label="Move Top Movie 2 to rank 1">' in content
+        assert 'aria-label="Move Top Movie 2 to rank 3">' in content
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()
 
@@ -655,5 +656,114 @@ def test_account_hero_counts_and_remove_labels():
         assert '<span class="account-jump__count mono">2</span>' in content
         assert 'aria-label="Remove A Show from Watch later"' in content
         assert "Account · collections-reader" in content
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+def _top_order(user):
+    return list(
+        CollectionItem.objects.filter(collection__user=user, collection__kind=Collection.TOP)
+        .order_by("position")
+        .values_list("content_id", flat=True)
+    )
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_place_item_drops_a_top_card_beside_another():
+    """The drag-to-reorder endpoint: before=<id> or after=<id>, any distance,
+    positions rewritten 0..n-1."""
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="collections-reader")
+    client = Client()
+    client.force_login(user)
+    try:
+        _add_items(user, Collection.TOP, CollectionItem.MOVIE, [1, 2, 3, 4, 5, 6, 7])
+        items = {i.content_id: i.pk for i in CollectionItem.objects.filter(collection__user=user)}
+
+        def place(content_id, **anchor):
+            return client.post(
+                reverse("account:place_item", kwargs={"kind": "top", "item_id": items[content_id]}),
+                {key: items[value] for key, value in anchor.items()},
+            )
+
+        response = place(7, before=1)
+        assert response.json() == {"moved": True}
+        assert _top_order(user) == [7, 1, 2, 3, 4, 5, 6]
+
+        place(7, after=6)
+        assert _top_order(user) == [1, 2, 3, 4, 5, 6, 7]
+
+        place(2, after=5)
+        assert _top_order(user) == [1, 3, 4, 5, 2, 6, 7]
+        positions = CollectionItem.objects.filter(collection__user=user).order_by("position")
+        assert [i.position for i in positions] == list(range(7))
+
+        # Onto itself: nothing moves.
+        place(4, before=4)
+        assert _top_order(user) == [1, 3, 4, 5, 2, 6, 7]
+    finally:
+        User.objects.filter(email=_TEST_EMAIL).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_place_item_refuses_bad_requests():
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="collections-reader")
+    other = User.objects.create_user(email="other-" + _TEST_EMAIL, username="collections-other")
+    client = Client()
+    client.force_login(user)
+    try:
+        _add_items(user, Collection.TOP, CollectionItem.MOVIE, [1, 2])
+        _add_items(user, Collection.LIKED, CollectionItem.MOVIE, [1, 2])
+        _add_items(other, Collection.TOP, CollectionItem.MOVIE, [8])
+        top = {i.content_id: i.pk for i in CollectionItem.objects.filter(collection__user=user, collection__kind="top")}
+        liked = {i.content_id: i.pk for i in CollectionItem.objects.filter(collection__user=user, collection__kind="liked")}
+        stranger = CollectionItem.objects.get(collection__user=other).pk
+
+        def place(kind, item_id, **data):
+            return client.post(
+                reverse("account:place_item", kwargs={"kind": kind, "item_id": item_id}), data
+            )
+
+        assert place("top", top[2]).status_code == 400                                  # no anchor
+        assert place("top", top[2], before=top[1], after=top[1]).status_code == 400     # both
+        assert place("top", top[2], before="x").status_code == 400                      # junk
+        assert place("liked", liked[2], before=liked[1]).status_code == 400             # unranked
+        assert place("top", top[2], before=stranger).status_code == 400                 # not theirs
+        assert place("top", stranger, before=top[1]).status_code == 400
+        assert _top_order(user) == [1, 2]
+        assert client.get(reverse("account:place_item", kwargs={"kind": "top", "item_id": top[2]})).status_code == 405
+    finally:
+        User.objects.filter(email__in=[_TEST_EMAIL, "other-" + _TEST_EMAIL]).delete()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_move_answers_json_and_top_shelf_carries_page_edge_anchors():
+    """The arrows answer JSON to theoria.js; page 2 of Top names the titles
+    just over each page edge, which the pager's drop targets place beside."""
+    User.objects.filter(email=_TEST_EMAIL).delete()
+    user = User.objects.create_user(email=_TEST_EMAIL, username="collections-reader")
+    client = Client()
+    client.force_login(user)
+    try:
+        ids = list(range(1, 13))
+        _add_items(user, Collection.TOP, CollectionItem.MOVIE, ids)
+        items = {i.content_id: i.pk for i in CollectionItem.objects.filter(collection__user=user)}
+
+        response = client.post(
+            reverse("account:move_item", kwargs={"kind": "top", "item_id": items[2], "direction": "up"}),
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.json() == {"moved": True}
+        assert _top_order(user)[:2] == [2, 1]
+
+        movies = [Movie(movie_id=i, title=f"Movie {i}") for i in ids]
+        response = _get_profile(client, movies, {"top_page": "2"})
+        top = {s["slug"]: s for s in response.context["sections"]}["top"]
+        # Page 2 is ranks 6-10: rank 5 is movie 5, rank 11 is movie 11.
+        assert top["prev_anchor"] == items[5]
+        assert top["next_anchor"] == items[11]
+        content = response.content.decode()
+        assert f'data-prev-anchor="{items[5]}" data-next-anchor="{items[11]}"' in content
     finally:
         User.objects.filter(email=_TEST_EMAIL).delete()

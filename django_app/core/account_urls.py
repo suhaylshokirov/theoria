@@ -30,4 +30,9 @@ urlpatterns = [
         views.move_item,
         name="move_item",
     ),
+    path(
+        "collections/<str:kind>/<int:item_id>/place/",
+        views.place_item,
+        name="place_item",
+    ),
 ]

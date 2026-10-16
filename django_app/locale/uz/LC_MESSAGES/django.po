@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 11:09+0000\n"
+"POT-Creation-Date: 2026-10-16 13:29+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: uz\n"
@@ -50,7 +50,7 @@ msgid "Change username — Theoria"
 msgstr "Foydalanuvchi nomini oʻzgartirish — Theoria"
 
 #: accounts/templates/accounts/change_username.html:18
-#: core/templates/core/account.html:54
+#: core/templates/core/account.html:47
 msgid "Change username"
 msgstr "Foydalanuvchi nomini oʻzgartirish"
 
@@ -277,7 +277,7 @@ msgstr "Qiziquvchilar uchun raqamlar."
 #: analytics/templates/analytics/dashboard.html:401
 #: analytics/templates/analytics/dashboard.html:444
 #: analytics/templates/analytics/dashboard.html:469
-#: core/context_processors.py:72 movies/templates/movies/_person_header.html:36
+#: core/context_processors.py:74 movies/templates/movies/_person_header.html:36
 #: movies/templates/movies/_studio_header.html:33
 #: movies/templates/movies/home.html:84
 #: movies/templates/movies/movie_list.html:4
@@ -291,7 +291,7 @@ msgstr "Filmlar"
 #: analytics/templates/analytics/dashboard.html:522
 #: analytics/templates/analytics/dashboard.html:550
 #: analytics/templates/analytics/dashboard.html:577
-#: core/context_processors.py:73 movies/templates/movies/_person_header.html:46
+#: core/context_processors.py:75 movies/templates/movies/_person_header.html:46
 msgid "Shows"
 msgstr "Seriallar"
 
@@ -314,7 +314,7 @@ msgid "Median return on budget"
 msgstr "Byudjetning median qaytimi"
 
 #: analytics/templates/analytics/dashboard.html:40
-#: core/context_processors.py:86
+#: core/context_processors.py:88
 msgid "Not in English"
 msgstr "Ingliz tilida emas"
 
@@ -362,9 +362,8 @@ msgid ""
 "<strong>%(show)s</strong> against ★ <strong>%(movie)s</strong> for a movie, "
 "%(gap)s points apart."
 msgstr ""
-"Seriallar filmlardan yuqoriroq baholanadi: odatiy serial ★ "
-"<strong>%(show)s</strong> oladi, film esa ★ <strong>%(movie)s</strong>, farq "
-"— %(gap)s ball."
+"Seriallar filmlardan yuqoriroq baholanadi: odatiy serial ★ <strong>%(show)s</"
+"strong> oladi, film esa ★ <strong>%(movie)s</strong>, farq — %(gap)s ball."
 
 #: analytics/templates/analytics/dashboard.html:63
 #, python-format
@@ -373,9 +372,8 @@ msgid ""
 "<strong>%(movie)s</strong> against ★ <strong>%(show)s</strong> for a show, "
 "%(gap)s points apart."
 msgstr ""
-"Filmlar seriallardan yuqoriroq baholanadi: odatiy film ★ "
-"<strong>%(movie)s</strong> oladi, serial esa ★ <strong>%(show)s</strong>, "
-"farq — %(gap)s ball."
+"Filmlar seriallardan yuqoriroq baholanadi: odatiy film ★ <strong>%(movie)s</"
+"strong> oladi, serial esa ★ <strong>%(show)s</strong>, farq — %(gap)s ball."
 
 #: analytics/templates/analytics/dashboard.html:64
 #, python-format
@@ -461,8 +459,9 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:139
 #, python-format
 msgid ""
-"<strong>%(over)s%%</strong> of movies with a known budget returned five times"
-" it or more; only <strong>%(under)s%%</strong> earned less than they cost."
+"<strong>%(over)s%%</strong> of movies with a known budget returned five "
+"times it or more; only <strong>%(under)s%%</strong> earned less than they "
+"cost."
 msgstr ""
 "Byudjeti maʼlum filmlarning <strong>%(over)s%%</strong> qismi uni besh "
 "baravar yoki undan koʻp qaytargan; atigi <strong>%(under)s%%</strong> "
@@ -471,16 +470,16 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:142
 #, python-format
 msgid ""
-"Based on %(counter)s movie with a known budget of at least $1M and box-office"
-" revenue. Not adjusted for inflation; streaming releases and movies still in "
-"cinemas can read low."
+"Based on %(counter)s movie with a known budget of at least $1M and box-"
+"office revenue. Not adjusted for inflation; streaming releases and movies "
+"still in cinemas can read low."
 msgid_plural ""
 "Based on %(counter)s movies with a known budget of at least $1M and box-"
 "office revenue. Not adjusted for inflation; streaming releases and movies "
 "still in cinemas can read low."
 msgstr[0] ""
-"Byudjeti kamida $1 mln boʻlgan va kassa tushumi maʼlum boʻlgan %(counter)s ta"
-" filmga asoslangan. Inflyatsiyaga tuzatishsiz; striming relizlari va hali "
+"Byudjeti kamida $1 mln boʻlgan va kassa tushumi maʼlum boʻlgan %(counter)s "
+"ta filmga asoslangan. Inflyatsiyaga tuzatishsiz; striming relizlari va hali "
 "kinoteatrlarda namoyish etilayotgan filmlar past koʻrinishi mumkin."
 
 #: analytics/templates/analytics/dashboard.html:150
@@ -586,8 +585,8 @@ msgstr "Eng qimmat"
 #: analytics/templates/analytics/dashboard.html:261
 #, python-format
 msgid ""
-"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes "
-"longer</strong> than one from the %(first)ss."
+"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes longer</"
+"strong> than one from the %(first)ss."
 msgstr ""
 "%(last)s-yillardagi odatiy film %(first)s-yillardagiga qaraganda "
 "<strong>%(minutes)s daqiqa uzunroq</strong>."
@@ -595,8 +594,8 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:262
 #, python-format
 msgid ""
-"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes "
-"shorter</strong> than one from the %(first)ss."
+"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes shorter</"
+"strong> than one from the %(first)ss."
 msgstr ""
 "%(last)s-yillardagi odatiy film %(first)s-yillardagiga qaraganda "
 "<strong>%(minutes)s daqiqa qisqaroq</strong>."
@@ -637,7 +636,7 @@ msgid "Decade"
 msgstr "Oʻn yillik"
 
 #: analytics/templates/analytics/dashboard.html:286
-#: core/context_processors.py:77
+#: core/context_processors.py:79
 msgid "Median minutes"
 msgstr "Median, daqiqa"
 
@@ -659,8 +658,8 @@ msgstr ""
 msgid ""
 "This reflects how the archive was assembled as much as how cinema changed."
 msgstr ""
-"Bu kino qanday oʻzgargani bilan bir qatorda arxiv qanday yigʻilganini ham aks"
-" ettiradi."
+"Bu kino qanday oʻzgargani bilan bir qatorda arxiv qanday yigʻilganini ham "
+"aks ettiradi."
 
 #: analytics/templates/analytics/dashboard.html:319
 msgid "Genre mix"
@@ -682,8 +681,8 @@ msgid ""
 "A movie counts in every genre it belongs to, so each decade's shares add up "
 "to more than 100 percent. The ten most common genres."
 msgstr ""
-"Film oʻzining har bir janrida hisoblanadi, shuning uchun oʻn yillik ulushlari"
-" yigʻindisi 100 foizdan oshadi. Eng koʻp uchraydigan oʻnta janr."
+"Film oʻzining har bir janrida hisoblanadi, shuning uchun oʻn yillik "
+"ulushlari yigʻindisi 100 foizdan oshadi. Eng koʻp uchraydigan oʻnta janr."
 
 #: analytics/templates/analytics/dashboard.html:358
 #, python-format
@@ -692,8 +691,8 @@ msgid ""
 "%(country)s took part in <strong>%(pct)s%%</strong> of them."
 msgstr ""
 "Arxiv filmlarining <strong>%(english)s%%</strong> qismi ingliz tilida; "
-"“%(country)s” davlati filmlarning <strong>%(pct)s%%</strong> qismida ishtirok"
-" etgan."
+"“%(country)s” davlati filmlarning <strong>%(pct)s%%</strong> qismida "
+"ishtirok etgan."
 
 #: analytics/templates/analytics/dashboard.html:360
 msgid ""
@@ -776,33 +775,33 @@ msgstr "Vazifasi"
 #: analytics/templates/analytics/dashboard.html:497
 #, python-format
 msgid ""
-"Shows hold their first-season rating <strong>all the way to season "
-"%(last)s</strong>."
+"Shows hold their first-season rating <strong>all the way to season %(last)s</"
+"strong>."
 msgstr ""
-"Seriallar birinchi fasl reytingini <strong>%(last)s-faslgacha</strong> saqlab"
-" qoladi."
+"Seriallar birinchi fasl reytingini <strong>%(last)s-faslgacha</strong> "
+"saqlab qoladi."
 
 #: analytics/templates/analytics/dashboard.html:498
 #, python-format
 msgid ""
-"Shows hold their first-season rating <strong>through season "
-"%(hold)s</strong>, then slip about <strong>%(size)s points</strong> across "
-"seasons %(first)s–%(last)s."
+"Shows hold their first-season rating <strong>through season %(hold)s</"
+"strong>, then slip about <strong>%(size)s points</strong> across seasons "
+"%(first)s–%(last)s."
 msgstr ""
 "Seriallar birinchi fasl reytingini <strong>%(hold)s-faslgacha</strong> "
-"saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s "
-"ball</strong> pasayadi."
+"saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s ball</"
+"strong> pasayadi."
 
 #: analytics/templates/analytics/dashboard.html:499
 #, python-format
 msgid ""
-"Shows hold their first-season rating <strong>through season "
-"%(hold)s</strong>, then climb about <strong>%(size)s points</strong> across "
-"seasons %(first)s–%(last)s."
+"Shows hold their first-season rating <strong>through season %(hold)s</"
+"strong>, then climb about <strong>%(size)s points</strong> across seasons "
+"%(first)s–%(last)s."
 msgstr ""
 "Seriallar birinchi fasl reytingini <strong>%(hold)s-faslgacha</strong> "
-"saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s "
-"ball</strong> oshadi."
+"saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s ball</"
+"strong> oshadi."
 
 #: analytics/templates/analytics/dashboard.html:510
 msgid "Rating by season, against season 1"
@@ -824,11 +823,11 @@ msgid ""
 "Each show is compared with its own first season, so shows cancelled early "
 "don’t flatter the later seasons."
 msgstr ""
-"Har bir serial oʻzining birinchi fasli bilan solishtiriladi, shu sababli erta"
-" yopilgan seriallar keyingi fasllarni yaxshiroq qilib koʻrsatmaydi."
+"Har bir serial oʻzining birinchi fasli bilan solishtiriladi, shu sababli "
+"erta yopilgan seriallar keyingi fasllarni yaxshiroq qilib koʻrsatmaydi."
 
 #: analytics/templates/analytics/dashboard.html:522
-#: core/context_processors.py:87 movies/templates/movies/_season_kpis.html:23
+#: core/context_processors.py:89 movies/templates/movies/_season_kpis.html:23
 #: movies/templates/movies/_season_picker.html:26
 #: movies/templates/movies/_season_table.html:20
 #: movies/templates/movies/_season_table.html:27
@@ -886,15 +885,15 @@ msgstr ""
 "Telekanallar hali yuklanmagan. Omborni toʻldirish uchun jarayonni ishga "
 "tushiring."
 
-#: analytics/templatetags/dash_format.py:25 core/context_processors.py:67
+#: analytics/templatetags/dash_format.py:25 core/context_processors.py:69
 msgid "B"
 msgstr " mlrd"
 
-#: analytics/templatetags/dash_format.py:27 core/context_processors.py:68
+#: analytics/templatetags/dash_format.py:27 core/context_processors.py:70
 msgid "M"
 msgstr " mln"
 
-#: analytics/templatetags/dash_format.py:29 core/context_processors.py:69
+#: analytics/templatetags/dash_format.py:29 core/context_processors.py:71
 msgid "K"
 msgstr " ming"
 
@@ -1023,31 +1022,36 @@ msgstr ""
 msgid "{label} ({seconds}s)"
 msgstr "{label} ({seconds} s)"
 
-#: core/context_processors.py:74
+#: core/context_processors.py:66
+#, python-brace-format
+msgid "Moved {title} to rank {rank}"
+msgstr "“{title}” endi {rank}-oʻrinda"
+
+#: core/context_processors.py:76
 #, python-brace-format
 msgid "Movies: {count}"
 msgstr "Filmlar: {count}"
 
-#: core/context_processors.py:75
+#: core/context_processors.py:77
 #, python-brace-format
 msgid "Shows: {count}"
 msgstr "Seriallar: {count}"
 
-#: core/context_processors.py:76
+#: core/context_processors.py:78
 msgid "Median"
 msgstr "Median"
 
-#: core/context_processors.py:78 movies/templates/movies/movie_detail.html:162
+#: core/context_processors.py:80 movies/templates/movies/movie_detail.html:162
 #: movies/templates/movies/series_detail.html:170
 msgid "IMDb rating"
 msgstr "IMDb reytingi"
 
-#: core/context_processors.py:79 movies/templates/movies/movie_detail.html:119
+#: core/context_processors.py:81 movies/templates/movies/movie_detail.html:119
 #: movies/templates/movies/movie_detail.html:176
 msgid "Budget"
 msgstr "Byudjet"
 
-#: core/context_processors.py:80 movies/templates/movies/_studio_header.html:45
+#: core/context_processors.py:82 movies/templates/movies/_studio_header.html:45
 #: movies/templates/movies/movie_detail.html:123
 #: movies/templates/movies/movie_detail.html:177
 #: movies/templates/movies/movie_list.html:37
@@ -1057,33 +1061,33 @@ msgstr "Byudjet"
 msgid "Revenue"
 msgstr "Daromad"
 
-#: core/context_processors.py:81
+#: core/context_processors.py:83
 msgid "Break-even"
 msgstr "Zararsizlik chegarasi"
 
-#: core/context_processors.py:82
+#: core/context_processors.py:84
 msgid "5× budget"
 msgstr "5× byudjet"
 
-#: core/context_processors.py:83
+#: core/context_processors.py:85
 msgid "Under 1×"
 msgstr "1× dan kam"
 
-#: core/context_processors.py:84
+#: core/context_processors.py:86
 msgid "5× or more"
 msgstr "5× va undan koʻp"
 
-#: core/context_processors.py:85 movies/templates/movies/home.html:231
+#: core/context_processors.py:87 movies/templates/movies/home.html:231
 #, python-brace-format
 msgid "{decade}s"
 msgstr "{decade}-yillar"
 
-#: core/context_processors.py:88
+#: core/context_processors.py:90
 #, python-brace-format
 msgid "Season {n}"
 msgstr "{n}-fasl"
 
-#: core/context_processors.py:89
+#: core/context_processors.py:91
 msgid "vs season 1"
 msgstr "1-faslga nisbatan"
 
@@ -1092,7 +1096,7 @@ msgstr "1-faslga nisbatan"
 msgid "Keep the note to %(max)d characters."
 msgstr "Izoh %(max)d belgidan oshmasin."
 
-#: core/sharing.py:73 core/views.py:165
+#: core/sharing.py:73 core/views.py:179
 msgid "Unknown collection."
 msgstr "Nomaʼlum toʻplam."
 
@@ -1108,25 +1112,25 @@ msgstr "Havola hozir yaratilmadi. Qayta urinib koʻring."
 msgid "This collection is not shared."
 msgstr "Bu toʻplam ulashilmagan."
 
-#: core/templates/core/_account_pager.html:15
+#: core/templates/core/_account_pager.html:17
 #, python-format
 msgid "%(label)s pages"
 msgstr "%(label)s: sahifalar"
 
-#: core/templates/core/_account_pager.html:16
+#: core/templates/core/_account_pager.html:18
 #: core/templates/core/share/page.html:164
 #, python-format
 msgid "Showing %(start)s–%(end)s of %(total)s"
 msgstr "%(total)s tadan %(start)s–%(end)s koʻrsatilmoqda"
 
-#: core/templates/core/_account_pager.html:19
-#: core/templates/core/_account_pager.html:23
+#: core/templates/core/_account_pager.html:21
+#: core/templates/core/_account_pager.html:25
 #, python-format
 msgid "Previous page of %(label)s"
 msgstr "%(label)s: oldingi sahifa"
 
-#: core/templates/core/_account_pager.html:37
-#: core/templates/core/_account_pager.html:41
+#: core/templates/core/_account_pager.html:39
+#: core/templates/core/_account_pager.html:43
 #, python-format
 msgid "Next page of %(label)s"
 msgstr "%(label)s: keyingi sahifa"
@@ -1176,83 +1180,89 @@ msgstr ""
 msgid "Find something"
 msgstr "Biror narsa toping"
 
-#: core/templates/core/_collection_section.html:23
+#: core/templates/core/_collection_section.html:27
 #, python-format
 msgid "<span class=\"mono\">%(counter)s</span> movie"
 msgid_plural "<span class=\"mono\">%(counter)s</span> movies"
 msgstr[0] "<span class=\"mono\">%(counter)s</span> ta film"
 
-#: core/templates/core/_collection_section.html:42
-#: core/templates/core/_collection_section.html:49
-#: core/templates/core/_collection_section.html:56
+#: core/templates/core/_collection_section.html:46
+#: core/templates/core/_collection_section.html:53
+#: core/templates/core/_collection_section.html:64
 msgctxt "share sheet"
 msgid "Share"
 msgstr "Ulashish"
 
-#: core/templates/core/_collection_section.html:45
+#: core/templates/core/_collection_section.html:49
 #, python-format
 msgid "Share %(label)s — add a movie first"
 msgstr "%(label)s ulashish — avval film qoʻshing"
 
-#: core/templates/core/_collection_section.html:58
+#: core/templates/core/_collection_section.html:66
 msgid "Link to this list"
 msgstr "Bu roʻyxatga havola"
 
-#: core/templates/core/_collection_section.html:64
+#: core/templates/core/_collection_section.html:72
 #: core/templates/core/share/_sheet.html:135
 #: core/templates/core/share/_sheet.html:144
 msgid "Stop sharing"
 msgstr "Ulashishni toʻxtatish"
 
-#: core/templates/core/_collection_section.html:71
+#: core/templates/core/_collection_section.html:79
 msgid "Add a line (optional)"
 msgstr "Izoh qoʻshing (ixtiyoriy)"
 
-#: core/templates/core/_collection_section.html:73
+#: core/templates/core/_collection_section.html:81
 msgid "Create link"
 msgstr "Havola yaratish"
 
-#: core/templates/core/_collection_section.html:84
+#: core/templates/core/_collection_section.html:92
 #: core/templates/core/share/page.html:145
 #, python-format
 msgid "Rank %(rank)s:"
 msgstr "%(rank)s-oʻrin:"
 
-#: core/templates/core/_collection_section.html:97
+#: core/templates/core/_collection_section.html:105
 #: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "Movie"
 msgstr "Film"
 
-#: core/templates/core/_collection_section.html:97
+#: core/templates/core/_collection_section.html:105
 #: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "TV show"
 msgstr "Serial"
 
-#: core/templates/core/_collection_section.html:101
+#: core/templates/core/_collection_section.html:109
 #, python-format
 msgid "Remove %(title)s from %(label)s"
 msgstr "“%(title)s”ni “%(label)s” boʻlimidan olib tashlash"
 
-#: core/templates/core/_collection_section.html:117
+#: core/templates/core/_collection_section.html:134
 #, python-format
-msgid "Move %(title)s up"
-msgstr "“%(title)s”ni yuqoriga koʻtarish"
+msgid "%(title)s is ranked first"
+msgstr "“%(title)s” allaqachon birinchi oʻrinda"
 
-#: core/templates/core/_collection_section.html:122
+#: core/templates/core/_collection_section.html:136
+#: core/templates/core/_collection_section.html:150
 #, python-format
-msgid "Move %(title)s down"
-msgstr "“%(title)s”ni pastga tushirish"
+msgid "Move %(title)s to rank %(rank)s"
+msgstr "“%(title)s”ni %(rank)s-oʻringa koʻchirish"
 
-#: core/templates/core/_collection_section.html:140
+#: core/templates/core/_collection_section.html:148
+#, python-format
+msgid "%(title)s is ranked last"
+msgstr "“%(title)s” allaqachon oxirgi oʻrinda"
+
+#: core/templates/core/_collection_section.html:172
 msgid "Add to Top"
 msgstr "Topga qoʻshish"
 
-#: core/templates/core/_collection_section.html:140
+#: core/templates/core/_collection_section.html:172
 #, python-format
 msgid "at rank %(rank)s"
 msgstr "%(rank)s-oʻrinda"
 
-#: core/templates/core/_collection_section.html:142
+#: core/templates/core/_collection_section.html:174
 msgid "Empty slot"
 msgstr "Boʻsh oʻrin"
 
@@ -1260,25 +1270,21 @@ msgstr "Boʻsh oʻrin"
 msgid "Your account — Theoria"
 msgstr "Hisobingiz — Theoria"
 
-#: core/templates/core/account.html:27
-msgid "Account"
-msgstr "Hisob"
-
-#: core/templates/core/account.html:36 core/templates/core/share/page.html:59
+#: core/templates/core/account.html:34 core/templates/core/share/page.html:59
 #, python-format
 msgid "Member since %(joined)s"
 msgstr "%(joined)s dan beri biz bilan"
 
-#: core/templates/core/account.html:38
-msgid "Your collections"
-msgstr "Toʻplamlaringiz"
-
-#: core/templates/core/account.html:64 templates/base.html:202
+#: core/templates/core/account.html:57 templates/base.html:202
 #: templates/base.html:248
 msgid "Sign out"
 msgstr "Chiqish"
 
-#: core/templates/core/account.html:77
+#: core/templates/core/account.html:62
+msgid "Your collections"
+msgstr "Toʻplamlaringiz"
+
+#: core/templates/core/account.html:84
 #, python-format
 msgid "Account · %(username)s"
 msgstr "Hisob · %(username)s"
@@ -1597,73 +1603,73 @@ msgstr "Hisob yaratish"
 msgid "Shared collection"
 msgstr "Ulashilgan toʻplam"
 
-#: core/views.py:39 core/views.py:274
+#: core/views.py:40 core/views.py:307
 #: movies/templates/movies/_collection_actions.html:8
 msgid "Liked"
 msgstr "Yoqqanlar"
 
-#: core/views.py:40 core/views.py:277
+#: core/views.py:41 core/views.py:310
 #: movies/templates/movies/_collection_actions.html:14
 #: movies/templates/movies/_collection_actions.html:16
 msgid "Watch later"
 msgstr "Keyin koʻrish"
 
-#: core/views.py:41 core/views.py:271
+#: core/views.py:42 core/views.py:304
 msgid "Top"
 msgstr "Top"
 
-#: core/views.py:194
+#: core/views.py:208
 msgid "That collection could not be found."
 msgstr "Bunday toʻplam topilmadi."
 
-#: core/views.py:209
+#: core/views.py:223 core/views.py:242
 msgid "That collection item could not be moved."
 msgstr "Toʻplam elementini koʻchirib boʻlmadi."
 
-#: core/views.py:236
+#: core/views.py:269
 msgid "Too many share changes — please try again in a few minutes."
 msgstr ""
 "Ulashish sozlamalari juda koʻp oʻzgartirildi — bir necha daqiqadan keyin "
 "qayta urinib koʻring."
 
-#: core/views.py:252
+#: core/views.py:285
 msgid "Unknown share action."
 msgstr "Nomaʼlum ulashish amali."
 
-#: core/views.py:271
+#: core/views.py:304
 msgid "Picked by hand and ranked in order."
 msgstr "Qoʻlda tanlangan va tartib bilan joylashtirilgan."
 
-#: core/views.py:274
+#: core/views.py:307
 msgid "Everything they liked, newest first."
 msgstr "Yoqqan hamma narsa, eng yangisi birinchi."
 
-#: core/views.py:277
+#: core/views.py:310
 msgid "Saved for a free evening."
 msgstr "Boʻsh kech uchun saqlangan."
 
-#: core/views.py:393
+#: core/views.py:426
 msgctxt "share card"
 msgid "My best, in order."
 msgstr "Eng yaxshilarim, tartib bilan."
 
-#: core/views.py:394
+#: core/views.py:427
 msgctxt "share card"
 msgid "Good taste, documented."
 msgstr "Yaxshi did, hujjatlangan."
 
-#: core/views.py:395
+#: core/views.py:428
 msgctxt "share card"
 msgid "Next on my list."
 msgstr "Roʻyxatimdagi navbatdagilar."
 
-#: core/views.py:553
+#: core/views.py:586
 #, python-format
 msgctxt "share card"
 msgid "Member since %(month)s %(year)s"
 msgstr "%(month)s %(year)s dan beri biz bilan"
 
-#: core/views.py:557
+#: core/views.py:590
 msgctxt "share card"
 msgid "more"
 msgstr "yana"
@@ -2090,11 +2096,11 @@ msgstr "Multfilmlar"
 
 #: movies/templates/movies/cartoon_list.html:11
 msgid ""
-"Animated movies and shows made for younger viewers. Search by name or reorder"
-" by what was measured."
+"Animated movies and shows made for younger viewers. Search by name or "
+"reorder by what was measured."
 msgstr ""
-"Yosh tomoshabinlar uchun animatsion film va seriallar. Nomi boʻyicha qidiring"
-" yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
+"Yosh tomoshabinlar uchun animatsion film va seriallar. Nomi boʻyicha "
+"qidiring yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
 
 #: movies/templates/movies/cartoon_list.html:24
 msgid "Search cartoons"
@@ -2525,8 +2531,8 @@ msgid ""
 "Every show the warehouse holds. Search by name, narrow by genre, or reorder "
 "by what was measured."
 msgstr ""
-"Ombordagi barcha seriallar. Nomi boʻyicha qidiring, janr boʻyicha toraytiring"
-" yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
+"Ombordagi barcha seriallar. Nomi boʻyicha qidiring, janr boʻyicha "
+"toraytiring yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
 
 #: movies/templates/movies/series_list.html:22
 msgid "Search shows"
