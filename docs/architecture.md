@@ -966,6 +966,66 @@ with a `sessionStorage` loop guard). Old `/ru/…` and `/uz/…` links 302 to th
 cookie (302, so the cookie keeps being set). Accepted cost: a shared link opens in the recipient's
 language, and search engines see English only.
 
+### 6.3 Sharing a collection: one live link, two renderers (Phase 16)
+
+**The model.** A collection (Top, Liked, Watch later) is private until its owner presses
+"Make a link". The link is a 10-character letters-and-digits token stored on the `Collection` row.
+Sharing is opt-in and reversible in two different ways, and the difference matters: **Stop sharing**
+keeps the token but sets `shared_at` to NULL, so the old link answers **410 Gone** ("this list is no
+longer shared") instead of looking like a typo; sharing again mints a *new* token. **New link**
+(rotate) replaces the token in place, so the old address answers **404**, as if it had never
+existed. No `/s/` response ever contains the owner's email.
+
+**Live link, snapshot artwork.** `/s/<token>/` always renders the list as it is now. A downloaded
+image is a moment: it does not update when the list changes, which is why the card prints the
+link. Someone who finds an old screenshot follows the link to the list as it is today: the link,
+not the picture, is the thing that stays true.
+
+**Two renderers, and why.** The same card is drawn twice because two different readers look at it.
+
+- *The artwork the owner saves* is HTML and CSS: card templates plus `static/css/share-card.css`,
+  captured in the owner's browser with the vendored `modern-screenshot` 4.6.8. The site is a
+  Python-only Vercel function with no headless Chrome, so the capture has to happen where a browser
+  already exists. Exports are exactly 1080x1920 (Story) and 1600x900 (Wide).
+- *The link preview* (`og.png`, what a chat app shows under a pasted link) is drawn by Pillow on the
+  server, because crawlers do not run JavaScript and would never see the HTML version.
+
+Both need a Cyrillic-capable face: Archivo and Spline Sans Mono have no Cyrillic glyphs, so Russian
+text falls back to Roboto Flex (so does Uzbek's `ʻ`, which they lack too). The CSS side does it with
+a font stack; Pillow has no per-glyph fallback, so it picks a font per string: any character outside
+Latin and general punctuation switches the whole string to Roboto Flex. The faces are static
+instances cut from the variable fonts and subset, about 260 KB in `core/share/fonts`.
+
+**The owner card endpoint.** `/account/collections/<kind>/card/` renders the card for the signed-in
+owner, so the sheet can show a preview before a link exists. The image buttons create the link
+first, because the picture prints the address. `navigator.share` is only allowed for a few seconds
+after a tap; on a private list, making the link, redrawing the card and capturing it can outlast that
+window, so the sheet keeps the finished image and says "Ready. Tap once more to share." The second
+tap is instant. On a list that is already shared the image is made ahead of the tap, so this does not
+come up.
+
+**Caching `og.png`.** The language is in the URL (`?lang=`), not the cookie: the CDN keeps one copy
+per URL, so a body chosen by cookie would show the first reader's language to everyone after them.
+The page's `og:image` also carries a `?v=` hash, so chat apps fetch a fresh picture after an edit
+instead of their own cached one. The ETag (and the Redis key) is built from the token, the
+collection's `updated_at`, the warehouse data version, the language, the host and a drawing version
+bumped whenever `core/share/og.py` changes. Normal
+responses are `public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800`. Two cases get
+only `max-age=300`: a card drawn while a poster was missing (it should heal soon) and the static
+fallback image. The accepted trade-off: a CDN copy may outlive Stop sharing by up to a day. The
+image holds posters and a title, never an email, so the cost is a stale picture, not a leak, and
+`/s/<token>/` itself is never cached that way.
+
+**Safari / WebKit: not yet verified (2026-10-16).** The phase's main risk was that WebKit can drop
+images on its first DOM-to-canvas pass. `share.js` already guards against it: on Safari it captures
+twice and keeps the second. Chromium is verified by `tests/ui/test_share.py` (exact sizes, posters
+present, repeatable). WebKit is not: Playwright's Linux WebKit needs about 515 MB of system libraries
+that the development machine does not have, and it is not Safari anyway. The real check is a manual
+one on an iPhone: on the deployed site, open `/me`, share a list and download the image two or three
+times; the posters must be in every file. If they are not, the fallback decided at planning is to have
+Pillow render the Story and Wide downloads too (`core/share/og.py` already draws the Wide layout),
+at the cost of designing them in Python.
+
 ## 7. URL and page design
 
 ### 7.1 Slugs instead of surrogate keys
@@ -1071,6 +1131,17 @@ reload, because an unordered SQL read combined with Python's insertion-order-pre
 iteration order accidentally significant. Both are the same lesson from two different angles: a
 mocked session can't reproduce behaviour that only exists under a real database's actual execution
 order.
+
+**Running it locally and the share UI tests.** The suite has no separate test database, and the
+local `.env` points the auth database at the production Neon project, so run
+`AUTH_DATABASE_URL="" pytest` (about 28 s, against a throwaway database) rather than a bare `pytest`
+(about 8 minutes of round trips to Neon, and against live data). The browser tests in
+`tests/ui/test_share.py` are opt-in like the rest of `tests/ui`: start a site, then run
+`UI_SESSION=sessionid=<key> pytest tests/ui/test_share.py --base-url http://127.0.0.1:8000`.
+They download the real Story and Wide PNGs and check the exact pixel size and that the posters were
+actually drawn, check the sheet on 320-430 px phones, and check `/s/<token>/` for sideways scroll.
+They write to the site under test (a private collection gets its link), so point them at a scratch
+site, not production.
 
 ## 11. Explicit non-goals
 

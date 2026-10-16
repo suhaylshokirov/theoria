@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 10:48+0000\n"
+"POT-Creation-Date: 2026-10-16 11:09+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -1098,7 +1098,7 @@ msgstr "к 1-му сезону"
 msgid "Keep the note to %(max)d characters."
 msgstr "Подпись — не длиннее %(max)d символов."
 
-#: core/sharing.py:73 core/views.py:166
+#: core/sharing.py:73 core/views.py:165
 msgid "Unknown collection."
 msgstr "Неизвестная коллекция."
 
@@ -1611,71 +1611,71 @@ msgstr "Создать аккаунт"
 msgid "Shared collection"
 msgstr "Коллекция по ссылке"
 
-#: core/views.py:40 core/views.py:275
+#: core/views.py:39 core/views.py:274
 #: movies/templates/movies/_collection_actions.html:8
 msgid "Liked"
 msgstr "Понравившиеся"
 
-#: core/views.py:41 core/views.py:278
+#: core/views.py:40 core/views.py:277
 #: movies/templates/movies/_collection_actions.html:14
 #: movies/templates/movies/_collection_actions.html:16
 msgid "Watch later"
 msgstr "Смотреть позже"
 
-#: core/views.py:42 core/views.py:272
+#: core/views.py:41 core/views.py:271
 msgid "Top"
 msgstr "Топ"
 
-#: core/views.py:195
+#: core/views.py:194
 msgid "That collection could not be found."
 msgstr "Такая коллекция не найдена."
 
-#: core/views.py:210
+#: core/views.py:209
 msgid "That collection item could not be moved."
 msgstr "Не удалось переместить этот элемент коллекции."
 
-#: core/views.py:237
+#: core/views.py:236
 msgid "Too many share changes — please try again in a few minutes."
 msgstr "Слишком много изменений доступа — попробуйте через несколько минут."
 
-#: core/views.py:253
+#: core/views.py:252
 msgid "Unknown share action."
 msgstr "Неизвестное действие."
 
-#: core/views.py:272
+#: core/views.py:271
 msgid "Picked by hand and ranked in order."
 msgstr "Отобраны вручную и расставлены по местам."
 
-#: core/views.py:275
+#: core/views.py:274
 msgid "Everything they liked, newest first."
 msgstr "Всё, что понравилось, — сначала новое."
 
-#: core/views.py:278
+#: core/views.py:277
 msgid "Saved for a free evening."
 msgstr "Отложено на свободный вечер."
 
-#: core/views.py:394
+#: core/views.py:393
 msgctxt "share card"
 msgid "My best, in order."
 msgstr "Моё лучшее — по порядку."
 
-#: core/views.py:395
+#: core/views.py:394
 msgctxt "share card"
 msgid "Good taste, documented."
 msgstr "Хороший вкус — с доказательствами."
 
-#: core/views.py:396
+#: core/views.py:395
 msgctxt "share card"
 msgid "Next on my list."
 msgstr "Следующее в моём списке."
 
-#: core/views.py:544
+#: core/views.py:553
 #, python-format
 msgctxt "share card"
 msgid "Member since %(month)s %(year)s"
 msgstr "С нами с %(month)s %(year)s"
 
-#: core/views.py:548
+#: core/views.py:557
 msgctxt "share card"
 msgid "more"
 msgstr "ещё"
