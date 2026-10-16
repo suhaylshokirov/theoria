@@ -275,20 +275,6 @@
   text-wrap: balance;
 }
 
-/* Story: the line is the owner's caption, so it joins their block — tight
-   under "Member since", on the handle's text column — and the posters get
-   the clear break instead. With equal gaps above and below, it read as stuck
-   between the two. Wide sets it opposite the owner and keeps its own rules. */
-.sc[data-format="story"] .sc-note {
-  margin-top: 20px;
-  margin-left: calc(var(--disc) * 1.22);
-  font-size: calc(var(--t-note) * 0.87);
-}
-
-.sc[data-format="story"] .sc-shelf {
-  margin-top: 96px;
-}
-
 /* --- The posters ----------------------------------------------------------- */
 
 /* The posters' room. What sits in it is centred, so any height the
