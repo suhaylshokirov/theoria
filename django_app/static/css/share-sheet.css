@@ -82,29 +82,6 @@ html.has-js .account-share {
   cursor: not-allowed;
 }
 
-/* "On" while a link is live: an ink tag set into the lime, like the counts
-   in the jump chips. */
-.account-share__live,
-.account-share__live-text {
-  display: none;
-}
-
-.account-share[data-shared] .account-share__live {
-  display: inline-block;
-  margin-right: calc(var(--space-2) * -1);
-  padding: 3px 7px;
-  font-size: var(--text-3xs);
-  letter-spacing: 0.12em;
-  line-height: 1;
-  color: var(--lime);
-  background: var(--ink-on-lime);
-  border-radius: var(--radius-pill);
-}
-
-.account-share[data-shared] .account-share__live-text {
-  display: inline;
-}
-
 /* Without JS there is no sheet: a plain disclosure with a form does the job. */
 .account-share-plain {
   margin-top: var(--space-5);
@@ -585,21 +562,6 @@ html.has-js.no-share-sheet .account-share-plain {
 }
 
 /* --- Link ---------------------------------------------------------------------- */
-
-.share-on {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink-muted);
-  letter-spacing: 0.12em;
-}
-
-.share-on i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--sheet-mark);
-}
 
 /* Address and its Copy as one joined control. */
 .share-link {

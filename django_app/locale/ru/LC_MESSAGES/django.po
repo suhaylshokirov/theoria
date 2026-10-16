@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 10:04+0000\n"
+"POT-Creation-Date: 2026-10-16 10:14+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -1188,86 +1188,76 @@ msgstr[2] "<span class=\"mono\">%(counter)s</span> фильмов"
 msgstr[3] "<span class=\"mono\">%(counter)s</span> фильма"
 
 #: core/templates/core/_collection_section.html:41
-#: core/templates/core/_collection_section.html:50
-#: core/templates/core/_collection_section.html:57
+#: core/templates/core/_collection_section.html:48
+#: core/templates/core/_collection_section.html:55
 msgctxt "share sheet"
 msgid "Share"
 msgstr "Поделиться"
 
-#: core/templates/core/_collection_section.html:42
-#: core/templates/core/share/_sheet.html:105
-msgctxt "share sheet"
-msgid "On"
-msgstr "Вкл."
-
-#: core/templates/core/_collection_section.html:43
-msgid "(link is on)"
-msgstr "(ссылка включена)"
-
-#: core/templates/core/_collection_section.html:46
+#: core/templates/core/_collection_section.html:44
 #, python-format
 msgid "Share %(label)s — add a movie first"
 msgstr "Поделиться: %(label)s — сначала добавьте фильм"
 
-#: core/templates/core/_collection_section.html:59
+#: core/templates/core/_collection_section.html:57
 msgid "Link to this list"
 msgstr "Ссылка на этот список"
 
-#: core/templates/core/_collection_section.html:65
-#: core/templates/core/share/_sheet.html:130
-#: core/templates/core/share/_sheet.html:139
+#: core/templates/core/_collection_section.html:63
+#: core/templates/core/share/_sheet.html:129
+#: core/templates/core/share/_sheet.html:138
 msgid "Stop sharing"
 msgstr "Закрыть доступ"
 
-#: core/templates/core/_collection_section.html:72
+#: core/templates/core/_collection_section.html:70
 msgid "Add a line (optional)"
 msgstr "Подпись (необязательно)"
 
-#: core/templates/core/_collection_section.html:74
+#: core/templates/core/_collection_section.html:72
 msgid "Create link"
 msgstr "Создать ссылку"
 
-#: core/templates/core/_collection_section.html:85
+#: core/templates/core/_collection_section.html:83
 #: core/templates/core/share/page.html:145
 #, python-format
 msgid "Rank %(rank)s:"
 msgstr "Место %(rank)s:"
 
-#: core/templates/core/_collection_section.html:98
+#: core/templates/core/_collection_section.html:96
 #: core/templates/core/share/page.html:154 templates/base.html:273
 msgid "Movie"
 msgstr "Фильм"
 
-#: core/templates/core/_collection_section.html:98
+#: core/templates/core/_collection_section.html:96
 #: core/templates/core/share/page.html:154 templates/base.html:273
 msgid "TV show"
 msgstr "Сериал"
 
-#: core/templates/core/_collection_section.html:102
+#: core/templates/core/_collection_section.html:100
 #, python-format
 msgid "Remove %(title)s from %(label)s"
 msgstr "Убрать «%(title)s» из раздела «%(label)s»"
 
-#: core/templates/core/_collection_section.html:118
+#: core/templates/core/_collection_section.html:116
 #, python-format
 msgid "Move %(title)s up"
 msgstr "Поднять «%(title)s» выше"
 
-#: core/templates/core/_collection_section.html:123
+#: core/templates/core/_collection_section.html:121
 #, python-format
 msgid "Move %(title)s down"
 msgstr "Опустить «%(title)s» ниже"
 
-#: core/templates/core/_collection_section.html:141
+#: core/templates/core/_collection_section.html:139
 msgid "Add to Top"
 msgstr "Добавить в топ"
 
-#: core/templates/core/_collection_section.html:141
+#: core/templates/core/_collection_section.html:139
 #, python-format
 msgid "at rank %(rank)s"
 msgstr "на месте %(rank)s"
 
-#: core/templates/core/_collection_section.html:143
+#: core/templates/core/_collection_section.html:141
 msgid "Empty slot"
 msgstr "Свободное место"
 
@@ -1413,12 +1403,12 @@ msgstr "Тема"
 
 #: core/templates/core/share/_sheet.html:72
 msgctxt "share sheet"
-msgid "Ink"
+msgid "Dark"
 msgstr "Тёмная"
 
 #: core/templates/core/share/_sheet.html:74
 msgctxt "share sheet"
-msgid "Paper"
+msgid "Light"
 msgstr "Светлая"
 
 #: core/templates/core/share/_sheet.html:80
@@ -1444,25 +1434,25 @@ msgctxt "share sheet"
 msgid "Link"
 msgstr "Ссылка"
 
-#: core/templates/core/share/_sheet.html:111
+#: core/templates/core/share/_sheet.html:110
 msgctxt "share sheet"
 msgid "Copy"
 msgstr "Копировать"
 
-#: core/templates/core/share/_sheet.html:117
+#: core/templates/core/share/_sheet.html:116
 msgid "A line on the link's page"
 msgstr "Подпись на странице по ссылке"
 
-#: core/templates/core/share/_sheet.html:120
+#: core/templates/core/share/_sheet.html:119
 msgctxt "share sheet"
 msgid "Optional"
 msgstr "Необязательно"
 
-#: core/templates/core/share/_sheet.html:126
+#: core/templates/core/share/_sheet.html:125
 msgid "New link"
 msgstr "Новая ссылка"
 
-#: core/templates/core/share/_sheet.html:137
+#: core/templates/core/share/_sheet.html:136
 msgid ""
 "The link you have now stops working. Anyone who has it will see that it has "
 "gone."
@@ -1470,17 +1460,17 @@ msgstr ""
 "Текущая ссылка перестанет работать. Все, у кого она есть, увидят, что список "
 "больше недоступен."
 
-#: core/templates/core/share/_sheet.html:138
+#: core/templates/core/share/_sheet.html:137
 msgid "The link stops working. Anyone who has it will see that it has gone."
 msgstr ""
 "Ссылка перестанет работать. Все, у кого она есть, увидят, что список больше "
 "недоступен."
 
-#: core/templates/core/share/_sheet.html:139
+#: core/templates/core/share/_sheet.html:138
 msgid "Make a new link"
 msgstr "Создать новую ссылку"
 
-#: core/templates/core/share/_sheet.html:140
+#: core/templates/core/share/_sheet.html:139
 msgid "Keep it"
 msgstr "Оставить"
 
