@@ -28,7 +28,7 @@
     <form method="post" class="share-sheet__csrf" hidden>{% csrf_token %}</form>
     <div class="share-sheet__panel">
         <header class="share-sheet__head">
-            <span class="share-sheet__mark" aria-hidden="true"></span>
+            <span class="account-section__icon share-sheet__icon" aria-hidden="true"></span>
             <h2 class="display share-sheet__title" id="share-sheet-title">{% blocktranslate trimmed %}Share <span data-share-name></span>{% endblocktranslate %}</h2>
             <button type="button" class="share-sheet__close" data-share-close aria-label="{% translate 'Close' %}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
