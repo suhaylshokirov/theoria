@@ -360,18 +360,19 @@ def shared_page(request, token):
 # (width, height) in CSS px, which the capture writes 1:1 as image pixels.
 CARD_FORMATS = {"story": (1080, 1920), "wide": (1600, 900)}
 CARD_THEMES = ("ink", "paper")
-# How many posters each card shows. Top is always its first five; Liked is a
-# contact sheet (3 × 3 on a Story, 4 × 2 on a Wide); Watch later's reel shows
-# the next title and the two after it, the last running off the edge.
+# How many posters each card shows. A Story (a phone screen) is four big
+# posters, 2 × 2, for every kind -- Top numbers them. On a Wide, Top is its
+# first five, Liked a 4 × 2 contact sheet, and Watch later's reel the next
+# title and the two after it, the last running off the edge.
 CARD_SLOTS = {
-    (Collection.TOP, "story"): 5,
+    (Collection.TOP, "story"): 4,
     (Collection.TOP, "wide"): 5,
-    (Collection.LIKED, "story"): 9,
+    (Collection.LIKED, "story"): 4,
     (Collection.LIKED, "wide"): 8,
-    (Collection.WATCH_LATER, "story"): 3,
+    (Collection.WATCH_LATER, "story"): 4,
     (Collection.WATCH_LATER, "wide"): 3,
 }
-CARD_SHEET_COLUMNS = {"story": 3, "wide": 4}
+CARD_SHEET_COLUMNS = {"story": 2, "wide": 4}
 
 
 def _card_frame(row, number):

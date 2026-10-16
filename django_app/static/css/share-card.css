@@ -327,6 +327,64 @@
   color: var(--c-ink-faint);
 }
 
+/* A ranked print: the number in lime on the poster's lower right, over a
+   dark fade so it reads on any art -- the same mark /me puts on a Top card.
+   Sized from the print's own width. */
+.sc-print.is-ranked {
+  container-type: inline-size;
+}
+
+.sc-print.is-ranked::after {
+  content: "";
+  position: absolute;
+  inset: 45% 0 0;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(to top, rgba(11, 11, 11, 0.82), rgba(11, 11, 11, 0));
+}
+
+.sc-print__rank {
+  position: absolute;
+  right: 6cqi;
+  bottom: 3cqi;
+  z-index: 1;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-stretch: 118%;
+  font-size: 44cqi;
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  color: #a3e635;
+}
+
+/* A title plate has no art to read over: no fade, and its number in ink
+   (lime on the light Paper sheet would vanish). */
+.sc-print.is-ranked:has(.sc-plate)::after {
+  display: none;
+}
+
+.sc-print.is-ranked:has(.sc-plate) .sc-print__rank {
+  color: var(--c-ink);
+}
+
+/* --- Story: four big posters, two by two --------------------------------------
+   Every kind on a phone. Each print takes its share of the shelf's height and
+   its width from 2:3, capped by half the width; the pair is centred, so a note
+   (which shortens the shelf) narrows the posters without spreading them. */
+
+.sc-grid {
+  --cols: 2;
+  --print-h: calc((100cqh - (var(--rows) - 1) * 24px) / var(--rows));
+  --print-w: min(calc(var(--print-h) * 2 / 3), calc((100cqw - 24px) / 2));
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--print-w));
+  justify-content: center;
+  gap: 24px;
+}
+
+.sc-cell .sc-print {
+  width: 100%;
+}
+
 /* --- Foot: the live link, printed so a screenshot still leads back -------- */
 
 .sc-foot {

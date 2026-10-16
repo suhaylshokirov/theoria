@@ -36,7 +36,16 @@
     {% if note %}<blockquote class="sc-note">{{ note }}</blockquote>{% endif %}
 
     <div class="sc-shelf">
-        {% if kind == "top" %}
+        {% if format == "story" %}
+        {% comment %} A phone screen: four big posters, two by two, for every
+           kind. Top's carry their rank in lime, as they do on /me. {% endcomment %}
+        <ol class="sc-grid">
+            {% for f in frames %}
+            <li class="sc-cell">{% if kind == "top" %}{% include "core/share/_card_poster.html" with f=f rank=f.number only %}{% else %}{% include "core/share/_card_poster.html" with f=f only %}{% endif %}</li>
+            {% endfor %}
+        </ol>
+
+        {% elif kind == "top" %}
         {% comment %} The canon: #1 large with its numeral beside it, the rest in
            a row beneath, each under its number. {% endcomment %}
         <ol class="sc-canon">

@@ -4,8 +4,9 @@
    the layout). crossorigin: TMDB's image host allows it, and without it the
    poster would taint the canvas the share sheet captures into. Not lazy:
    the capture draws whatever has loaded, and every print is in view.
-   Param (pass with `only`): f, a frame from core.views._card_frame. {% endcomment %}
-<span class="sc-print">
+   Params (pass with `only`): f, a frame from core.views._card_frame; rank,
+   optional, set in lime on the poster's corner as on /me. {% endcomment %}
+<span class="sc-print{% if rank %} is-ranked{% endif %}">
     {% if f.poster %}
     <img class="sc-poster" src="{{ f.poster }}" alt="{{ f.title }}" crossorigin="anonymous" decoding="async">
     {% else %}
@@ -14,4 +15,5 @@
         <span class="sc-plate__year sc-mono">{% if f.is_show %}{{ f.year_span|default:"" }}{% elif f.year %}{{ f.year|stringformat:"d" }}{% endif %}</span>
     </span>
     {% endif %}
+    {% if rank %}<span class="sc-print__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>{% endif %}
 </span>

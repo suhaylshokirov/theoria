@@ -510,8 +510,9 @@ def test_card_ranks_top_and_draws_plates_for_missing_posters(owner):
     assert "/w500/godfather.jpg" in html
     assert 'crossorigin="anonymous"' in html
     assert html.count("sc-plate__title") == 2          # Movie 2 and Show 3
+    # On a Story, Top's posters carry their rank in lime, as on /me.
     for rank in ("01", "02", "03"):
-        assert f'sc-rank__no" aria-hidden="true">{rank}<' in html
+        assert f'sc-print__rank" aria-hidden="true">{rank}<' in html
     # Only the people, the posters, the note and the link: no measurements.
     assert "IMDb" not in html and "9.2" not in html
 
@@ -523,9 +524,10 @@ def test_liked_card_fills_the_contact_sheet(owner):
     many = [_row(_movie(i, 1990 + i, 100, 7.0), "movie", i) for i in range(1, 14)]
     with _hydrate_with(many):
         html = _card(collection.share_token, format="story").content.decode()
-    # A Story sheet is 3 × 3: nine prints of the thirteen, and no count.
-    assert html.count('class="sc-frame"') == 9
-    assert "--rows: 3" in html
+    # A Story is four big posters, 2 × 2, unnumbered on Liked, and no count.
+    assert html.count('class="sc-cell"') == 4
+    assert "--rows: 2" in html
+    assert "sc-print__rank" not in html
     assert "more" not in html
     cache.clear()                   # the list is cached by updated_at
     with _hydrate_with(many[:5]):
