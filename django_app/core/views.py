@@ -88,9 +88,11 @@ def _account_sections(request):
         resolved.append((kind, slug, label, ranked, page_obj))
 
     path = request.path
+    collections = {c.kind: c for c in Collection.objects.filter(user=request.user)}
     sections = []
     for kind, slug, label, ranked, page_obj in resolved:
         count = page_obj.paginator.count
+        collection = collections.get(kind)
         on_page = len(page_obj.object_list)
 
         def page_url(number, slug=slug):
@@ -116,6 +118,9 @@ def _account_sections(request):
             "fill": fill,
             "rank_slots": rank_slots,
             "self_url": page_url(page_obj.number),
+            # What the share sheet opens with: the live link (None while the
+            # collection is private) and the owner's note for its page.
+            "share": _share_payload(request, collection) if collection else {"url": None, "note": ""},
             "prev_url": page_url(page_obj.previous_page_number()) if page_obj.has_previous() else None,
             "next_url": page_url(page_obj.next_page_number()) if page_obj.has_next() else None,
             "page_links": [

@@ -22,7 +22,58 @@
                 <span class="label account-section__count">{% blocktranslate trimmed count counter=section.count %}<span class="mono">{{ counter }}</span> movie{% plural %}<span class="mono">{{ counter }}</span> movies{% endblocktranslate %}</span>
             </div>
         </div>
+
+        {% comment %} Share opens the one sheet on account.html (it can't live in
+           here: this partial is swapped out whole on every page change). The
+           button carries what the sheet needs. With JS off, the plain form
+           below does the same job without a preview. {% endcomment %}
+        {% if section.count %}
+        <button type="button" class="account-share" data-share-open="{{ section.kind }}"
+                data-share-label="{{ label }}" data-share-slug="{{ slug }}"
+                data-share-endpoint="{% url 'account:share_collection' section.kind %}"
+                data-share-url="{{ section.share.url|default:'' }}" data-share-note="{{ section.share.note }}"
+                {% if section.share.url %}data-shared{% endif %}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>
+            </svg>
+            <span>{% translate "Share" %}</span>
+            <span class="account-share__live" aria-hidden="true"></span>
+            <span class="visually-hidden account-share__live-text">{% translate "(link is on)" %}</span>
+        </button>
+        {% else %}
+        <button type="button" class="account-share" disabled aria-label="{% blocktranslate trimmed with label=label %}Share {{ label }} — add a movie first{% endblocktranslate %}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>
+            </svg>
+            <span>{% translate "Share" %}</span>
+        </button>
+        {% endif %}
     </div>
+
+    {% if section.count %}
+    <details class="account-share-plain">
+        <summary>{% translate "Share" %}</summary>
+        {% if section.share.url %}
+        <label class="label" for="share-plain-{{ slug }}">{% translate "Link to this list" %}</label>
+        <input class="account-share-plain__url" id="share-plain-{{ slug }}" type="text" readonly value="{{ section.share.url }}">
+        <form method="post" action="{% url 'account:share_collection' section.kind %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ section.self_url }}">
+            <input type="hidden" name="action" value="disable">
+            <button type="submit">{% translate "Stop sharing" %}</button>
+        </form>
+        {% else %}
+        <form method="post" action="{% url 'account:share_collection' section.kind %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ section.self_url }}">
+            <input type="hidden" name="action" value="enable">
+            <label class="label" for="share-note-{{ slug }}">{% translate "Add a line (optional)" %}</label>
+            <input id="share-note-{{ slug }}" name="note" type="text" maxlength="140" value="{{ section.share.note }}">
+            <button type="submit">{% translate "Create link" %}</button>
+        </form>
+        {% endif %}
+    </details>
+    {% endif %}
 
     {% if section.count or section.rank_slots %}
     <ol class="account-grid" data-account-grid>

@@ -1,0 +1,674 @@
+/* Theoria — the share sheet on /me (Task 139).
+
+   One <dialog> for all three collections. A bottom sheet on a phone, where the
+   thumb is; on a wide screen a dialog with the artwork on the left, big enough
+   to judge, and the things you do with it on the right. It is an Operate
+   surface -- the owner is finishing a job -- so it takes the site's quiet
+   tokens: hairlines, ink-filled primary, the collection's own mark colour in
+   one small bar and the "link is on" dot, nothing else coloured.
+
+   The preview is the real artwork (share-card.css), drawn at its true pixel
+   size and scaled down with CSS; share.js captures a second, unscaled copy.
+   Global `button` rules (lime fill, pill) are reset on purpose: every control
+   here restates its hover, since `button:hover` out-specifies a bare class. */
+
+/* --- The section's Share button ------------------------------------------- */
+
+.account-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-5);
+}
+
+.account-share {
+  display: none;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 40px;
+  padding: var(--space-2) var(--space-5);
+  margin-left: auto;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+}
+
+html.has-js .account-share {
+  display: inline-flex;
+}
+
+.account-share svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.account-share:hover:not(:disabled) {
+  background: var(--sheet-2);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.account-share:disabled {
+  color: var(--ink-faint);
+  border-color: var(--rule);
+  cursor: not-allowed;
+}
+
+.account-share:disabled:hover {
+  background: transparent;
+  color: var(--ink-faint);
+  border-color: var(--rule);
+}
+
+/* "The link is on": a dot in the collection's own colour, only while shared. */
+.account-share__live,
+.account-share__live-text {
+  display: none;
+}
+
+.account-share[data-shared] .account-share__live {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sheet-mark, var(--ink));
+}
+
+.account-share[data-shared] .account-share__live-text {
+  display: inline;
+}
+
+[data-account-section="liked"] { --sheet-mark: var(--mark-like); }
+[data-account-section="later"] { --sheet-mark: var(--mark-watch-later); }
+[data-account-section="top"] { --sheet-mark: var(--mark-top); }
+
+/* Without JS there is no sheet: a plain disclosure with a form does the job. */
+.account-share-plain {
+  margin-top: var(--space-5);
+}
+
+html.has-js .account-share-plain {
+  display: none;
+}
+
+html.no-share-sheet .account-share {
+  display: none;
+}
+
+html.has-js.no-share-sheet .account-share-plain {
+  display: block;
+}
+
+.account-share-plain summary {
+  cursor: pointer;
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.account-share-plain form {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 28rem;
+  margin-top: var(--space-4);
+}
+
+.account-share-plain input[type="text"] {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+}
+
+.account-share-plain__url {
+  display: block;
+  width: 100%;
+  max-width: 28rem;
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+/* --- The sheet ------------------------------------------------------------- */
+
+.share-sheet {
+  --sheet-mark: var(--ink);
+  padding: 0;
+  margin: auto 0 0;            /* phone: sits on the bottom edge */
+  width: 100%;
+  max-width: none;
+  max-height: 94dvh;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  border: var(--hairline);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  box-shadow: var(--shadow-card);
+}
+
+.share-sheet[data-slug="liked"] { --sheet-mark: var(--mark-like); }
+.share-sheet[data-slug="later"] { --sheet-mark: var(--mark-watch-later); }
+.share-sheet[data-slug="top"] { --sheet-mark: var(--mark-top); }
+
+.share-sheet::backdrop {
+  background: rgb(11 11 11 / 0.55);
+  backdrop-filter: blur(3px);
+}
+
+.share-sheet[open] .share-sheet__panel {
+  animation: share-sheet-in 260ms var(--ease);
+}
+
+@keyframes share-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+.share-sheet__panel {
+  display: flex;
+  flex-direction: column;
+  max-height: 94dvh;
+  padding: var(--space-6) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.share-sheet__csrf {
+  display: none;
+}
+
+.share-sheet__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "mark close" "title close";
+  align-items: start;
+  column-gap: var(--space-4);
+}
+
+.share-sheet__mark {
+  grid-area: mark;
+  display: block;
+  width: 56px;
+  height: 5px;
+  background: var(--sheet-mark);
+}
+
+.share-sheet__title {
+  grid-area: title;
+  margin-top: 14px;
+  font-size: var(--text-xl);
+  line-height: 0.95;
+  overflow-wrap: anywhere;
+}
+
+.share-sheet__close {
+  grid-area: close;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px 0 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  border: 0;
+  border-radius: 50%;
+}
+
+.share-sheet__close:hover {
+  background: var(--sheet-2);
+  color: var(--ink);
+  border: 0;
+}
+
+.share-sheet__close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.share-sheet__body {
+  margin-top: var(--space-6);
+}
+
+/* Private: one decision, stated plainly. */
+.share-private {
+  max-width: 34rem;
+}
+
+.share-private__lead {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-md);
+}
+
+.share-private .share-status {
+  margin-top: var(--space-4);
+}
+
+.share-private__text {
+  margin: var(--space-3) 0 var(--space-6);
+  color: var(--ink-muted);
+  line-height: 1.5;
+}
+
+/* --- Preview --------------------------------------------------------------- */
+
+.share-live {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.share-view {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* The preview is as big as the sheet allows, at the card's own proportions.
+   --pw/--ph are the card's pixel size (unitless), set by share.js. */
+.share-preview {
+  --max-h: 38dvh;
+  --pw: 1080;
+  --ph: 1920;
+  position: relative;
+  width: min(100%, calc(var(--max-h) * var(--pw) / var(--ph)));
+  aspect-ratio: calc(var(--pw) / var(--ph));
+  background: var(--sheet-2);
+  outline: 1px solid var(--rule);
+  outline-offset: -1px;
+  overflow: hidden;
+}
+
+.share-preview__frame {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 240ms var(--ease);
+}
+
+.share-preview__frame .sc {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  transform: scale(var(--k, 0.2));
+  pointer-events: none;
+  user-select: none;
+}
+
+.share-preview[aria-busy="false"] .share-preview__frame {
+  opacity: 1;
+}
+
+.share-preview__state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  text-align: center;
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  transition: opacity 160ms var(--ease);
+}
+
+.share-preview[aria-busy="false"] .share-preview__state {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The unscaled copy share.js captures. Rendered (so fonts and layout are
+   real) but off the page and out of every input path. */
+.share-stage {
+  position: fixed;
+  top: 0;
+  left: -100000px;
+  pointer-events: none;
+}
+
+/* --- Pickers --------------------------------------------------------------- */
+
+.share-pick {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-3) var(--space-5);
+}
+
+.share-seg {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+}
+
+.share-seg label {
+  display: block;
+  cursor: pointer;
+}
+
+.share-seg input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.share-seg span {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 var(--space-5);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.share-seg label:hover span {
+  background: var(--sheet-2);
+  color: var(--ink);
+}
+
+.share-seg input:checked + span {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.share-seg label:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: -3px;
+}
+
+/* --- Fields and actions ---------------------------------------------------- */
+
+.share-side {
+  display: grid;
+  align-content: start;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.share-field {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.share-field__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.share-count {
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+.share-count.is-near {
+  color: var(--ink);
+}
+
+.share-link {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.share-link .share-btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.share-link input,
+.share-field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+}
+
+.share-link input {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+}
+
+.share-field textarea {
+  resize: none;
+  line-height: 1.4;
+}
+
+.share-link input:focus-visible,
+.share-field textarea:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.share-field textarea::placeholder {
+  color: var(--ink-faint);
+}
+
+.share-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-5);
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+}
+
+.share-btn:hover {
+  background: var(--sheet-2);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.share-btn--primary {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.share-btn--primary:hover {
+  background: color-mix(in srgb, var(--ink) 82%, var(--paper));
+  border-color: color-mix(in srgb, var(--ink) 82%, var(--paper));
+  color: var(--paper);
+}
+
+.share-btn--danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--paper);
+}
+
+.share-btn--danger:hover {
+  background: color-mix(in srgb, var(--danger) 85%, var(--ink));
+  border-color: color-mix(in srgb, var(--danger) 85%, var(--ink));
+  color: var(--paper);
+}
+
+.share-btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+.share-btn:focus-visible,
+.share-text:focus-visible,
+.share-sheet__close:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* The status line holds its space, so a message appearing moves nothing. */
+.share-status {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.share-status.is-error {
+  color: var(--danger);
+}
+
+.share-danger {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--rule);
+}
+
+.share-danger__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+}
+
+.share-text {
+  min-height: 44px;
+  padding: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  border: 0;
+  border-radius: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.share-text:hover {
+  background: transparent;
+  color: var(--ink);
+  border: 0;
+}
+
+.share-text--danger,
+.share-text--danger:hover {
+  color: var(--danger);
+}
+
+.share-confirm p {
+  line-height: 1.5;
+  max-width: 34rem;
+}
+
+.share-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* --- Wide screens: the artwork beside the controls ------------------------- */
+
+@media (min-width: 52rem) {
+  .share-sheet {
+    width: min(60rem, calc(100% - 2rem));
+    margin: auto;
+    border-bottom: var(--hairline);
+    border-radius: 0.875rem;
+  }
+
+  .share-sheet[open] .share-sheet__panel {
+    animation-name: share-dialog-in;
+  }
+
+  .share-sheet__panel {
+    max-height: min(90dvh, 52rem);
+    padding: var(--space-7);
+  }
+
+  .share-live {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    align-items: start;
+    gap: var(--space-8);
+  }
+
+  /* A Wide card is landscape: give it the wider column. */
+  .share-live[data-format="wide"] {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: var(--space-7);
+  }
+
+  .share-view {
+    position: sticky;
+    top: 0;
+  }
+
+  .share-preview {
+    --max-h: min(58dvh, 34rem);
+  }
+
+  .share-live[data-format="wide"] .share-preview {
+    --max-h: 40dvh;
+  }
+
+  .share-actions {
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  }
+
+  .share-actions .share-btn--primary {
+    grid-column: 1 / -1;
+  }
+}
+
+@keyframes share-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+/* A phone on its side has no height for the preview above the controls:
+   put them side by side as on a wide screen. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .share-live {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    align-items: start;
+    gap: var(--space-6);
+  }
+
+  .share-preview {
+    --max-h: 60dvh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-sheet[open] .share-sheet__panel {
+    animation: none;
+  }
+}

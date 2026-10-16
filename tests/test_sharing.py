@@ -565,3 +565,53 @@ def test_card_unknown_is_404_revoked_is_410_and_renders_in_russian(owner):
     assert Client().get("/s/doesnotexist/card/").status_code == 404
     sharing.disable_share(owner, "top")
     assert _card(token).status_code == 410
+
+
+# --- the share sheet on /me (Task 139) ------------------------------------------
+
+def _me(owner, rows):
+    client = Client()
+    client.force_login(owner)
+    top = Collection.objects.get(user=owner, kind=Collection.TOP)
+    for row in rows:
+        row.collection = top
+    with patch("core.services._hydrate", side_effect=lambda items: list(rows)):
+        return client.get(reverse("profile"))
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_me_has_one_share_sheet_and_a_button_per_collection(owner):
+    _collection(owner, Collection.TOP, ids=(1, 2, 3))
+    response = _me(owner, _top_rows())
+    html = response.content.decode()
+    assert html.count('id="share-sheet"') == 1
+    assert 'data-share-open="top"' in html
+    # An empty collection's button is greyed out, not wired to the sheet.
+    assert 'data-share-open="liked"' not in html
+    assert "share-sheet.css" in html and "modern-screenshot.js" in html and "share.js" in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_share_button_carries_the_live_link_only_while_shared(owner):
+    _collection(owner, Collection.TOP, ids=(1, 2, 3))
+    private = _me(owner, _top_rows()).content.decode()
+    assert 'data-share-url=""' in private and "data-shared" not in private
+
+    collection = sharing.enable_share(owner, "top", "Five I'd stake my taste on.")
+    live = _me(owner, _top_rows()).content.decode()
+    assert f"/s/{collection.share_token}/" in live
+    assert "data-shared" in live
+    assert 'data-share-note="Five I&#x27;d stake my taste on."' in live
+
+    sharing.disable_share(owner, "top")
+    stopped = _me(owner, _top_rows()).content.decode()
+    assert collection.share_token not in stopped
+    assert "data-shared" not in stopped
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_no_js_fallback_form_posts_to_the_share_endpoint(owner):
+    _collection(owner, Collection.TOP, ids=(1, 2, 3))
+    html = _me(owner, _top_rows()).content.decode()
+    assert 'class="account-share-plain"' in html
+    assert 'value="enable"' in html

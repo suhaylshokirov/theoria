@@ -5,6 +5,12 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="{% static 'css/account.css' %}">
+<link rel="stylesheet" href="{% static 'css/share-sheet.css' %}">
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/vendor/modern-screenshot.js' %}" defer></script>
+<script src="{% static 'js/share.js' %}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -62,6 +68,8 @@
 {% for section in sections %}
 {% include "core/_collection_section.html" with section=section request=request csrf_token=csrf_token only %}
 {% endfor %}
+
+{% include "core/share/_sheet.html" with username=request.user.username csrf_token=csrf_token only %}
 {% endblock %}
 
 {% block footer_meta %}{% blocktranslate trimmed with username=request.user.username %}Account · {{ username }}{% endblocktranslate %}{% endblock %}
