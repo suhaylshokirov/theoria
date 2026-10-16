@@ -10,10 +10,14 @@
 
    Cards are the shared movies/_movie_card.html and _series_card.html; this
    partial only lays the collection's own controls (type badge, remove, Top's
-   rank and reorder arrows) over and under them. {% endcomment %}
+   rank and reorder arrows) over and under them.
+
+   Shelf head: title left, Share and (when there is more than one page) the
+   pager right, on one ruled row. A shelf that fits on one page gets no
+   pager at all; `is-paged` is what gives the section its two-column head. {% endcomment %}
 {% load i18n %}
 {% with slug=section.slug label=section.label page_obj=section.page_obj %}
-<section class="account-section" id="{{ slug }}" aria-labelledby="account-section-{{ slug }}-title" data-account-section="{{ slug }}">
+<section class="account-section{% if section.count and page_obj.has_other_pages %} is-paged{% endif %}" id="{{ slug }}" aria-labelledby="account-section-{{ slug }}-title" data-account-section="{{ slug }}">
     <div class="account-section__head">
         <div class="account-section__title">
             <span class="account-section__icon account-section__icon--{{ slug }}" aria-hidden="true"></span>
@@ -48,6 +52,10 @@
         </button>
         {% endif %}
     </div>
+
+    {% if section.count and page_obj.has_other_pages %}
+    {% include "core/_account_pager.html" with section=section only %}
+    {% endif %}
 
     {% if section.count %}
     <details class="account-share-plain">
@@ -111,12 +119,12 @@
                 <form method="post" action="{% url 'account:move_item' section.kind item.id 'up' %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ section.self_url }}">
-                    <button type="submit" aria-label="{% blocktranslate trimmed with title=title %}Move {{ title }} up{% endblocktranslate %}"{% if rank == 1 %} disabled{% endif %}>↑</button>
+                    <button type="submit" aria-label="{% blocktranslate trimmed with title=title %}Move {{ title }} up{% endblocktranslate %}"{% if rank == 1 %} disabled{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
                 </form>
                 <form method="post" action="{% url 'account:move_item' section.kind item.id 'down' %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ section.self_url }}">
-                    <button type="submit" aria-label="{% blocktranslate trimmed with title=title %}Move {{ title }} down{% endblocktranslate %}"{% if rank == section.count %} disabled{% endif %}>↓</button>
+                    <button type="submit" aria-label="{% blocktranslate trimmed with title=title %}Move {{ title }} down{% endblocktranslate %}"{% if rank == section.count %} disabled{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
                 </form>
             </div>
             {% endif %}
@@ -146,8 +154,5 @@
     </div>
     {% endif %}
 
-    {% if section.count %}
-    {% include "core/_account_pager.html" with section=section only %}
-    {% endif %}
 </section>
 {% endwith %}

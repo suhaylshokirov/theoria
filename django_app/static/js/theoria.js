@@ -1829,9 +1829,12 @@
       return next;
     }
 
-    // focusSelector: what to put focus on inside the new section, since the
-    // element the reader just used was replaced along with everything else.
-    function load(slug, href, focusSelector) {
+    // focusSelectors: candidates, in order, for what to put focus on inside
+    // the new section, since the element the reader just used was replaced
+    // along with everything else. One that isn't rendered (the pager's page
+    // numbers are hidden on a phone) or isn't there (the arrow went disabled
+    // on the last page) is skipped; the heading is the last resort.
+    function load(slug, href, focusSelectors) {
       var section = document.getElementById(slug);
       if (!section) return;
       var address = addressFor(slug, href);
@@ -1872,7 +1875,11 @@
             fresh.scrollIntoView({ block: "start" });
           }
 
-          var focusTarget = focusSelector && fresh.querySelector(focusSelector);
+          var focusTarget = null;
+          for (var i = 0; focusSelectors && i < focusSelectors.length && !focusTarget; i++) {
+            var candidate = fresh.querySelector(focusSelectors[i]);
+            if (candidate && candidate.getClientRects().length) focusTarget = candidate;
+          }
           if (!focusTarget && heading) {
             heading.setAttribute("tabindex", "-1");
             focusTarget = heading;
@@ -1898,7 +1905,11 @@
       var slug = slugOf(link);
       if (!slug) return;
       event.preventDefault();
-      load(slug, link.href, '.account-pager__btn[aria-current="page"]');
+      var focusSelectors = [];
+      var dir = link.getAttribute("data-account-dir");
+      if (dir) focusSelectors.push('a[data-account-dir="' + dir + '"]');
+      focusSelectors.push('.account-pager__btn[aria-current="page"]');
+      load(slug, link.href, focusSelectors);
     });
 
     document.addEventListener("submit", function (event) {

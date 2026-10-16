@@ -1,63 +1,69 @@
 /* Theoria — Account page only ("/me/"). The reader's own shelf: a hero with
    their name and a monogram disc, then three collections (Liked / Watch
-   later / Top), each a paged grid of the same poster cards every other page
+   later / Top), each a paged shelf of the same poster cards every other page
    uses, plus the controls only this page needs: a numbered pager,
    a remove button, Top's rank and reorder arrows, and dashed panels where a
    page runs short.
 
+   Laid out like a channel page: the disc beside a name, its email and two
+   compact pill actions, the jump chips on their own row beneath; each shelf
+   a ruled head (title left, Share and the pager right) over one row of five
+   posters on a wide screen, a swipeable row below 1024px. No orphan cards,
+   no full-width bars.
+
    Per the contract in theoria.css, this file only ADDS components; it never
    restyles a shared one. Every colour is a theme token, so light and dark
    both come for free. Lime keeps its one job: it marks a figure (a rank, the
-   page you're on, the count bar over the name).
+   page you're on) or the one action that sends something out.
 
    Vertical rhythm is owned here, not by .sheet-section: hero → first
-   section 96px, section → section 88px. */
+   section and section → section are both --space-9 (56px on a phone). */
 
 /* --- Hero ------------------------------------------------------------------ */
 
-/* Monogram, then the reader's name beside it, bottom-aligned so the chips
-   under the name land on the disc's lower edge; Sign out follows the name
-   column rather than hugging the far right. */
+/* The page shell's side padding (theoria.css: 1.5rem, 1rem at <=720px). The
+   phone rows that scroll sideways bleed out by exactly this much so they
+   run to the screen edge and the first item still lines up with the name. */
+.account-hero,
+.account-section {
+  --account-gutter: var(--space-6);
+}
+
+@media (max-width: 720px) {
+  .account-hero,
+  .account-section {
+    --account-gutter: var(--space-5);
+  }
+}
+
+/* The disc sits beside the name AND the actions, centred on the pair, the
+   way a channel header does it; the jump chips take a row of their own. */
 .account-hero {
   display: grid;
-  grid-template-columns: auto minmax(0, 480px) 220px;
-  justify-content: start;
-  grid-template-areas: "plate id side";
-  gap: var(--space-7);
-  align-items: end;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "plate id"
+    "plate actions"
+    "jumps jumps";
+  column-gap: var(--space-7);
   padding-top: var(--space-6);
 }
 
 .account-hero__id {
   grid-area: id;
+  align-self: end;
   /* The name sizes itself against this column's width (cqi, below). */
   container-type: inline-size;
   min-width: 0;
 }
 
-/* The caliper tick from .stat-value, drawn long: this page measures a
-   reader, and this is where the measuring starts. */
-.account-hero__bar {
-  display: block;
-  width: 88px;
-  height: 5px;
-  background: var(--lime);
-}
-
-.account-hero__eyebrow {
-  display: block;
-  margin-top: 22px;
-  color: var(--lime-text);
-  letter-spacing: 0.22em;
-}
-
 /* 40px (--text-2xl, the same ceiling every .sheet-title uses) when the name
-   fits; otherwise shrunk to what one line of this column holds. 0.86em is
-   Archivo's expanded uppercase advance, measured. overflow-wrap is the
-   backstop for a browser without container units. */
+  fits; otherwise shrunk to what one line of this column holds. 0.86em is
+  Archivo's expanded uppercase advance, measured. overflow-wrap is the
+  backstop for a browser without container units. */
 .account-hero__name {
-  margin-top: 12px;
-  font-size: clamp(1.75rem, calc(100cqi / (var(--name-length, 8) * 0.86)), var(--text-2xl));
+  margin-top: 0;
+  font-size: clamp(var(--text-lg), calc(100cqi / (var(--name-length, 8) * 0.86)), var(--text-2xl));
   line-height: 0.86;
   letter-spacing: -0.035em;
   overflow-wrap: anywhere;
@@ -68,9 +74,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3) var(--space-4);
-  margin-top: 30px;
+  margin-top: var(--space-3);
   color: var(--ink-muted);
-  font-size: 1.0625rem;
+  font-size: var(--text-base);
 }
 
 .account-hero__dot {
@@ -80,21 +86,33 @@
   background: var(--rule-strong);
 }
 
-.account-jumps {
+.account-hero__actions {
+  grid-area: actions;
+  align-self: start;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 38px;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
 }
 
-/* A .chip at a 44px hit target, carrying its count in a paper disc — the
-   same disc shape the header's account pill puts the initial in. */
+.account-jumps {
+  grid-area: jumps;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+}
+
+/* A .chip carrying its count in a paper disc — the same disc shape the
+   header's account pill puts the initial in. */
 .account-jump {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
-  padding: 0 var(--space-3) 0 var(--space-5);
+  min-height: 36px;
+  padding: 0 var(--space-3) 0 var(--space-4);
+  white-space: nowrap;
 }
 
 .account-jump__count {
@@ -109,23 +127,17 @@
   text-align: center;
 }
 
-.account-hero__side {
-  grid-area: side;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 /* The monogram disc: the header pill's .account-disc at full size — a
    round sheet-filled avatar with the reader's initial in the display face. */
 .account-plate {
   grid-area: plate;
+  align-self: center;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 148px;
-  height: 148px;
+  width: 72px;
+  height: 72px;
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
   border-radius: 50%;
@@ -137,7 +149,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   font-stretch: 118%;
-  font-size: 4.75rem;
+  font-size: 2.25rem;
   line-height: 1;
   color: var(--ink);
 }
@@ -146,21 +158,20 @@
   margin: 0;
 }
 
-
 /* The one red control on the page: it ends the session. Solid --danger with
    --paper text, so it flips with the theme: white on #b91c1c in light
    (6.5:1), near-black on #f87171 in dark (7.5:1). */
 /* Change username (an <a class="btn">) shares Sign out's shape and keeps the
-   global lime .btn fill. */
+   global lime .btn fill. Both are compact auto-width pills, not bars. */
 .account-rename,
 .account-signout {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 100%;
-  min-height: 38px;
-  padding: var(--space-2) var(--space-4);
+  min-height: 36px;
+  padding: 0 var(--space-5);
+  white-space: nowrap;
   font-size: var(--text-2xs);
 }
 
@@ -185,23 +196,43 @@
 
 /* --- Sections -------------------------------------------------------------- */
 
-.account-hero + .account-section {
-  margin-top: var(--space-9);
-}
-
+.account-hero + .account-section,
 .account-section + .account-section {
   margin-top: var(--space-9);
 }
 
+/* A shelf's head is ruled; with a pager it becomes a two-column grid so the
+   pager shares the head row (and its rule). A shelf on one page has no
+   pager and keeps the plain block layout. */
+.account-section.is-paged {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "head"
+    "plain"
+    "body"
+    "pages";
+}
+
 .account-section__head {
+  grid-area: head;
   padding-bottom: 20px;
   border-bottom: 1px solid var(--rule-strong);
+}
+
+.account-share-plain {
+  grid-area: plain;
+}
+
+.account-grid,
+.account-empty {
+  grid-area: body;
 }
 
 .account-section__title {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: var(--space-5);
   min-width: 0;
 }
 
@@ -217,7 +248,7 @@
 }
 
 .account-section__title h2 {
-  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-size: clamp(1.25rem, 5.5vw, 1.5rem);
   line-height: 1;
 }
 
@@ -229,16 +260,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   background: var(--sheet-2);
   border-radius: var(--radius);
 }
 
 .account-section__icon::before {
   content: "";
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
   background: var(--icon-colour);
   -webkit-mask: var(--icon) center / contain no-repeat;
   mask: var(--icon) center / contain no-repeat;
@@ -270,26 +301,58 @@
 
 /* --- Grid ------------------------------------------------------------------ */
 
+/* One row, never a wrapped second one: a swipeable shelf below 1024px (the
+   cards keep a poster's width, a sliver of the next one shows that it
+   scrolls), exactly five across above it — one page is one row, so a short
+   last page leaves no orphans. The vertical padding keeps the poster's hover
+   lift and focus rings from being clipped by the scroller. */
 .account-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 24px;
-  margin: 34px 0 0;
-  padding: 0;
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: 42%;
+  gap: var(--space-4);
+  margin: var(--space-5) calc(var(--account-gutter) * -1) 0;
+  padding: 6px var(--account-gutter) 12px;
+  scroll-padding-inline: var(--account-gutter);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
   list-style: none;
   transition: opacity var(--dur-fast) var(--ease);
 }
 
+/* position: relative so the visually-hidden text inside a rank slot is
+   clipped by this scroller, not placed against <main> where its offscreen
+   static position widens the whole page on a phone. */
+.account-grid > li {
+  position: relative;
+  scroll-snap-align: start;
+}
+
 @media (min-width: 768px) {
-  .account-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .account-grid {
+    grid-auto-columns: 30%;
+    gap: var(--space-5);
+    margin-inline: 0;
+    padding-inline: 0;
+    scroll-padding-inline: 0;
+  }
 }
 
 @media (min-width: 1024px) {
-  .account-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-}
-
-@media (min-width: 1280px) {
-  .account-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .account-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    gap: var(--space-6);
+    margin-top: var(--space-6);
+    padding: 0;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
 }
 
 /* Mid-fetch (page change, remove): the old cards stay put, dimmed, rather
@@ -351,8 +414,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   background: var(--paper);
   color: var(--ink);
@@ -365,8 +428,8 @@
 }
 
 .account-card__remove svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 
 .account-card:hover .account-card__remove,
@@ -425,15 +488,21 @@
 }
 
 .account-card__moves button {
-  width: 44px;
-  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
   padding: 0;
   background: var(--paper);
   color: var(--ink);
   border: 1px solid var(--rule-strong);
   border-radius: 50%;
-  font-family: var(--font-label);
-  font-size: var(--text-sm);
+}
+
+.account-card__moves svg {
+  width: 16px;
+  height: 16px;
 }
 
 .account-card__moves button:hover:not(:disabled) {
@@ -451,39 +520,19 @@
 
 /* --- Empty panel ----------------------------------------------------------- */
 
-/* Fills out a short last page: spans exactly the cells left on the grid's
-   final row at each width. data-on-page is how many cards the page holds
-   (1–4); a count that fills its last row whole shows no panel at all. */
+/* Fills out a short last page. Wide: spans exactly the cells left on the
+   five-across row (data-on-page is how many cards the page holds, 1–4; a
+   full page shows no panel at all). Below 1024 the shelf scrolls, so it is
+   just one more card-wide cell at the end, stretched to the row's height. */
 .account-fill {
   display: flex;
 }
 
-/* 2 columns */
-.account-fill[data-on-page="2"],
-.account-fill[data-on-page="4"] { display: none; }
-
-@media (min-width: 768px) {
-  /* 3 columns */
-  .account-fill[data-on-page="1"],
-  .account-fill[data-on-page="4"] { display: flex; grid-column: span 2; }
-  .account-fill[data-on-page="2"] { display: flex; grid-column: span 1; }
-  .account-fill[data-on-page="3"] { display: none; }
-}
-
 @media (min-width: 1024px) {
-  /* 4 columns */
-  .account-fill[data-on-page="1"] { display: flex; grid-column: span 3; }
-  .account-fill[data-on-page="2"] { display: flex; grid-column: span 2; }
-  .account-fill[data-on-page="3"] { display: flex; grid-column: span 1; }
-  .account-fill[data-on-page="4"] { display: none; }
-}
-
-@media (min-width: 1280px) {
-  /* 5 columns */
   .account-fill[data-on-page="1"] { grid-column: span 4; }
   .account-fill[data-on-page="2"] { grid-column: span 3; }
   .account-fill[data-on-page="3"] { grid-column: span 2; }
-  .account-fill[data-on-page="4"] { display: flex; grid-column: span 1; }
+  .account-fill[data-on-page="4"] { grid-column: span 1; }
 }
 
 .account-panel-empty {
@@ -493,7 +542,7 @@
   justify-content: center;
   gap: var(--space-4);
   width: 100%;
-  padding: var(--space-6);
+  padding: var(--space-5);
   border: 1px dashed var(--rule-strong);
   border-radius: var(--radius);
   transition: border-color var(--dur-fast) var(--ease);
@@ -504,7 +553,7 @@
 }
 
 .account-empty {
-  margin-top: 34px;
+  margin-top: var(--space-6);
 }
 
 .account-panel-empty.is-whole {
@@ -593,36 +642,41 @@
 
 /* --- Pager ----------------------------------------------------------------- */
 
+/* Phone and tablet: under the shelf, readout left and arrows right. The
+   page numbers only appear where there is room in the head row (>=1024). */
 .account-pager {
+  grid-area: pages;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-5);
-  margin-top: 34px;
-  padding-top: 22px;
-  border-top: var(--hairline);
+  gap: var(--space-4);
+  margin-top: var(--space-4);
 }
 
 .account-pager__count {
+  margin: 0;
   font-size: var(--text-xs);
   color: var(--ink-faint);
 }
 
 .account-pager__pages {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
+}
+
+.account-pager__pages > .account-pager__btn:not(.is-arrow),
+.account-pager__gap {
+  display: none;
 }
 
 .account-pager__btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  height: 44px;
-  padding: 0 14px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 var(--space-4);
   background: transparent;
   color: var(--ink-muted);
   border: 1px solid var(--rule-strong);
@@ -637,13 +691,13 @@
 }
 
 .account-pager__btn.is-arrow {
-  width: 44px;
+  width: 36px;
   padding: 0;
 }
 
 .account-pager__btn svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
 }
 
 .account-pager__btn:not(:disabled):hover {
@@ -662,11 +716,12 @@
   font-weight: 600;
 }
 
+/* Disabled stays legible (faint ink is 4.8:1 on paper): it is the answer to
+   "is there more?", not decoration. */
 .account-pager__btn:disabled {
   background: transparent;
   border-color: var(--rule);
   color: var(--ink-faint);
-  opacity: 0.55;
   cursor: default;
 }
 
@@ -676,54 +731,105 @@
   text-align: center;
 }
 
-/* --- Responsive ------------------------------------------------------------ */
-
-/* Below 1024px the monogram stays beside the name and Sign out drops to its
-   own row underneath. */
-@media (max-width: 1023px) {
-  .account-hero {
-    grid-template-columns: auto minmax(0, 1fr);
+/* 768+: the pager moves up into the head row and shares its rule. Where the
+   numbers don't fit yet (768–1023) the readout says where you are. */
+@media (min-width: 768px) {
+  .account-section.is-paged {
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "plate id"
-      "side side";
-    gap: 40px 36px;
+      "head pager"
+      "plain plain"
+      "body body"
+      "pages pages";
   }
 
-  .account-plate {
-    width: 100px;
-    height: 100px;
-  }
-
-  .account-plate__initial {
-    font-size: 3.25rem;
-  }
-
-  /* Caps the whole side column, not just the Sign out form, so Change
-     username and Sign out stay the same width as each other instead of
-     the unwrapped rename link stretching to the full "side side" row. */
-  .account-hero__side {
-    max-width: 320px;
+  .account-pager {
+    grid-area: pager;
+    align-self: stretch;
+    margin: 0;
+    padding: 0 0 20px var(--space-4);
+    border-bottom: 1px solid var(--rule-strong);
   }
 }
 
-/* Phones: too narrow for a disc beside the name, so everything stacks. */
-@media (max-width: 767px) {
-  .account-hero {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "plate"
-      "id"
-      "side";
-    gap: 28px;
+@media (min-width: 1024px) {
+  .account-pager__pages > .account-pager__btn:not(.is-arrow),
+  .account-pager__gap {
+    display: inline-flex;
   }
 
+  /* The numbers say where you are, and the count under the heading says how
+     many; the readout stays for screen readers only. */
+  .account-pager__count {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* --- Responsive ------------------------------------------------------------ */
+
+/* Tablet: a smaller disc, same arrangement. */
+@media (min-width: 768px) and (max-width: 1023px) {
   .account-plate {
-    width: 72px;
-    height: 72px;
+    width: 112px;
+    height: 112px;
   }
 
   .account-plate__initial {
-    font-size: 2.25rem;
+    font-size: 3.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .account-section__icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .account-section__icon::before {
+    width: 20px;
+    height: 20px;
+  }
+
+  .account-section__title h2 {
+    font-size: clamp(1.375rem, 2.4vw, 1.75rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  .account-plate {
+    width: 148px;
+    height: 148px;
+  }
+
+  .account-plate__initial {
+    font-size: 4.75rem;
+  }
+}
+
+/* Phones: the disc stays beside the name; the actions drop under both, and
+   the jump chips become a swipeable strip bleeding to the screen edge. */
+@media (max-width: 767px) {
+  .account-hero {
+    grid-template-areas:
+      "plate id"
+      "actions actions"
+      "jumps jumps";
+    column-gap: var(--space-5);
+  }
+
+  .account-plate,
+  .account-hero__id {
+    align-self: center;
+  }
+
+  .account-hero__actions {
+    margin-top: var(--space-5);
   }
 
   /* Email and join date on their own lines; a dot left dangling at the end
@@ -738,16 +844,26 @@
     display: none;
   }
 
-  .account-hero__side {
-    max-width: none;
+  .account-jumps {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-inline: calc(var(--account-gutter) * -1);
+    padding: 4px var(--account-gutter);
+    scroll-padding-inline: var(--account-gutter);
   }
 
-  .account-hero + .account-section {
-    margin-top: 64px;
+  .account-jumps::-webkit-scrollbar {
+    display: none;
   }
 
+  .account-jump {
+    flex: none;
+  }
+
+  .account-hero + .account-section,
   .account-section + .account-section {
-    margin-top: 64px;
+    margin-top: calc(var(--space-8) + var(--space-4));
   }
 }
 
@@ -765,39 +881,83 @@
 }
 
 /* --- Touch --------------------------------------------------------------------
-   The jump chips and the two hero buttons are the only small targets left on
-   a phone; the cards, pager and remove/reorder circles are already 44px. */
+   Controls are drawn 40px, not 44: the extra 2px each side is an invisible
+   plate, so the tap target still clears 44 without the page looking
+   oversized. */
 @media (pointer: coarse) {
-  .account-jump {
-    min-height: 44px;
+  .account-rename,
+  .account-signout,
+  .account-jump,
+  .account-share {
+    min-height: 40px;
+  }
+
+  .account-pager__btn {
+    min-width: 40px;
+    height: 40px;
+  }
+
+  .account-pager__btn.is-arrow {
+    width: 40px;
+  }
+
+  .account-card__remove,
+  .account-card__moves button {
+    width: 40px;
+    height: 40px;
   }
 
   .account-rename,
-  .account-signout {
-    min-height: 48px;
+  .account-signout,
+  .account-jump,
+  .account-share,
+  .account-pager__btn,
+  .account-card__remove,
+  .account-card__moves button {
+    position: relative;
+  }
+
+  .account-rename::after,
+  .account-signout::after,
+  .account-jump::after,
+  .account-share::after,
+  .account-pager__btn::after,
+  .account-card__remove::after,
+  .account-card__moves button::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
   }
 }
 
-/* Phone on its side: the stacked hero would eat the whole 390px of height
-   before the first poster, so the disc sits beside the name again. */
+/* Phone on its side: the disc is small and the actions sit under the name
+   again, so the hero doesn't eat the 390px of height before the first
+   poster. */
 @media (max-height: 480px) and (orientation: landscape) and (max-width: 1023px) {
   .account-hero {
-    grid-template-columns: auto minmax(0, 1fr) minmax(0, 220px);
-    grid-template-areas: "plate id side";
-    gap: var(--space-5);
+    grid-template-areas:
+      "plate id"
+      "plate actions"
+      "jumps jumps";
+    column-gap: var(--space-5);
   }
 
   .account-plate {
     width: 64px;
     height: 64px;
+    align-self: center;
   }
 
   .account-plate__initial {
     font-size: 2rem;
   }
 
-  .account-hero__side {
-    max-width: none;
+  .account-hero__id {
+    align-self: end;
+  }
+
+  .account-hero__actions {
+    margin-top: var(--space-3);
   }
 }
 

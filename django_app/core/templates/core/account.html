@@ -22,28 +22,20 @@
     </div>
 
     <div class="account-hero__id">
-        <span class="account-hero__bar" aria-hidden="true"></span>
-        <span class="label account-hero__eyebrow">{% translate "Account" %}</span>
         {% comment %} --name-length lets account.css size the name to fit its
-           column: a four-letter handle gets the full 124px, a long one
-           shrinks until it sits on one line instead of breaking mid-word. {% endcomment %}
+           column: a short handle gets the full 40px, a long one shrinks
+           until it sits on one line instead of breaking mid-word. {% endcomment %}
         <h1 class="display account-hero__name" id="account-page-title" style="--name-length: {{ request.user.username|length }}">{{ request.user.username }}</h1>
         <p class="account-hero__meta">
             <span>{{ request.user.email }}</span>
             <span class="account-hero__dot" aria-hidden="true"></span>
             <span>{% blocktranslate trimmed with joined=request.user.date_joined|date:"j M Y" %}Member since {{ joined }}{% endblocktranslate %}</span>
         </p>
-        <nav aria-label="{% translate "Your collections" %}" class="account-jumps">
-            {% for section in sections %}
-            <a class="chip account-jump" href="#{{ section.slug }}">
-                {{ section.label }}
-                <span class="account-jump__count mono">{{ section.count }}</span>
-            </a>
-            {% endfor %}
-        </nav>
     </div>
 
-    <div class="account-hero__side">
+    {% comment %} Compact pills under the name, the way a channel page puts
+       its account actions: beside the avatar, not in a column of their own. {% endcomment %}
+    <div class="account-hero__actions">
         <a href="{% url 'accounts:change_username' %}" class="btn account-rename">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 20h9"/>
@@ -63,6 +55,15 @@
             </button>
         </form>
     </div>
+
+    <nav aria-label="{% translate "Your collections" %}" class="account-jumps">
+        {% for section in sections %}
+        <a class="chip account-jump" href="#{{ section.slug }}">
+            {{ section.label }}
+            <span class="account-jump__count mono">{{ section.count }}</span>
+        </a>
+        {% endfor %}
+    </nav>
 </header>
 
 {% for section in sections %}

@@ -31,9 +31,9 @@
 .account-share {
   display: none;
   align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 0 var(--space-6) 0 var(--space-5);
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 var(--space-5) 0 var(--space-4);
   margin-left: auto;
   font-size: var(--text-xs);
   font-weight: 700;
@@ -50,8 +50,8 @@ html.has-js .account-share {
 }
 
 .account-share svg {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex: none;
 }
 
@@ -84,7 +84,7 @@ html.has-js .account-share {
 
 /* Phones: a labelled pill can't share the row with the name (in Russian it
    can't even at 430px), and wrapped it hung alone under the heading. So it
-   folds to a 44px lime square on the title row, the twin of the 44px kind
+   folds to a 40px lime square on the title row, the twin of the 32px kind
    glyph on the left: the collection on one end, sending it out on the other.
    The word stays in the DOM, so the button still reads "Share". The name
    takes what's left and wraps inside its own block if it has to. */
@@ -96,7 +96,7 @@ html.has-js .account-share {
 
   .account-section__title {
     flex: 1 1 auto;
-    gap: 14px;
+    gap: var(--space-4);
   }
 
   .account-section__title h2 {
@@ -109,14 +109,14 @@ html.has-js .account-share {
     position: relative;
     flex: none;
     justify-content: center;
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     padding: 0;
   }
 
   .account-share svg {
-    width: 20px;
-    height: 20px;
+    width: 18px;
+    height: 18px;
   }
 
   .account-share span {
