@@ -1,18 +1,22 @@
 from __future__ import annotations
 
+import hashlib
+import logging
+
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.conf import settings
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
+from django.utils.dateformat import format as date_format
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
-from django.utils.translation import gettext, gettext_lazy as _, pgettext
-from django.templatetags.static import static
+from django.utils import translation
+from django.utils.translation import get_language, gettext, gettext_lazy as _, pgettext
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from accounts import ratelimit
-from core import sharing
+from core import datacache, sharing
 from core.models import Collection, CollectionItem
 from movies.templatetags.tmdb_images import tmdb_image
 from core.services import (
@@ -355,7 +359,12 @@ def shared_page(request, token):
         "og_title": f"{label} · @{owner.username}",
         "og_description": og_description,
         "og_url": page_url,
-        "og_image": request.build_absolute_uri(static("img/og-default.png")),
+        "og_image": request.build_absolute_uri(
+            reverse("share:og", args=[token])
+        ) + "?" + urlencode({
+            "lang": get_language() if get_language() in OG_LANGUAGES else "en",
+            "v": _og_version(token, collection.updated_at, get_language(), request.get_host()),
+        }),
         **_share_page_links(request, page_obj),
     }
     return _private_headers(render(request, "core/share/page.html", context))
@@ -472,6 +481,130 @@ def _card_response(request, shared, printed_url):
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         template = "core/share/_card.html"
     return _private_headers(render(request, template, context))
+
+
+# --- the link-preview image (Task 140) ---------------------------------------
+
+logger = logging.getLogger(__name__)
+
+# Bump when the drawing in core/share/og.py changes: it is part of the ETag and
+# the cache key, so every cached image and every social-card `?v=` moves on.
+OG_RENDER_VERSION = 1
+OG_LANGUAGES = ("en", "ru", "uz")
+OG_POSTERS = 4
+_OG_CACHE_CONTROL = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800"
+
+
+def _og_etag(token, updated_at, lang, host):
+    """Everything that changes the picture, hashed: the list (updated_at), the
+    warehouse data (version), the language, the printed host and the drawing code."""
+    parts = (
+        token, updated_at.isoformat(), datacache.data_version() or "",
+        lang, host, OG_RENDER_VERSION,
+    )
+    return hashlib.sha1("|".join(map(str, parts)).encode()).hexdigest()[:20]
+
+
+def _og_version(token, updated_at, lang, host):
+    """The short `?v=` on the page's og:image, so social caches refetch after an edit."""
+    return _og_etag(token, updated_at, lang if lang in OG_LANGUAGES else "en", host)[:10]
+
+
+class _OgIncomplete(Exception):
+    """A preview drawn with a poster missing because TMDB didn't answer. It is
+    still served, but briefly and never cached, so a passing outage doesn't
+    stick to the link for a day."""
+
+    def __init__(self, body):
+        super().__init__("poster fetch failed")
+        self.body = body
+
+
+def _og_build(token, lang, host):
+    """The PNG bytes for a live token in `lang`. Imports the drawing lazily so
+    a missing Pillow breaks only this route (which then serves the default)."""
+    from core.share import og
+
+    with translation.override(lang):
+        shared = sharing.shared_collection(token)
+        if shared is None:
+            raise LookupError("token went away")
+        owner = shared.owner
+        kind = shared.collection.kind
+        rows = shared.items[:OG_POSTERS]
+        posters = []
+        for number, row in enumerate(rows, start=1):
+            frame = _card_frame(row, number)
+            posters.append(og.Poster(
+                title=str(frame["title"] or ""),
+                year=str(frame["year_span"] or frame["year"] or ""),
+                rank=number if kind == Collection.TOP else None,
+                url=tmdb_image(row.content.poster_path, "w342") or None,
+            ))
+        for poster, body in zip(posters, og.fetch_posters([p.url for p in posters])):
+            poster.image = body
+        data = og.OgData(
+            kind=kind,
+            heading=str(_share_kind_copy()[kind][1]),
+            line=str(_card_lines()[kind]),
+            owner_name=owner.username,
+            owner_since=owner.date_joined,
+            month_label=str(date_format(owner.date_joined, "E")),
+            since_template=pgettext("share card", "Member since %(month)s %(year)s"),
+            posters=posters,
+            more=max(len(shared.items) - len(posters), 0),
+            printed_url=f"{host}{sharing.share_path(token)}".rstrip("/"),
+            more_label=pgettext("share card", "more"),
+        )
+        body = og.render_og(data)
+        if any(p.url and p.image is None for p in posters):
+            raise _OgIncomplete(body)
+        return body
+
+
+def shared_og(request, token):
+    """`/s/<token>/og.png`: the 1200x630 preview a chat app unfurls.
+
+    Language is `?lang=`, not the cookie: the CDN caches this response by URL
+    alone, so a cookie-dependent body would show one reader's language to all.
+    Same token rules as the page (404 unknown, 410 stopped). Any failure to
+    draw serves the static default rather than a broken preview.
+    """
+    lang = request.GET.get("lang")
+    lang = lang if lang in OG_LANGUAGES else "en"
+    host = request.get_host()
+    collection = sharing._live(token)
+    if collection is None:
+        if sharing.is_revoked(token):
+            return _private_headers(HttpResponse(status=410))
+        raise Http404("No such shared collection.")
+
+    etag = f'"{_og_etag(token, collection.updated_at, lang, host)}"'
+    headers = {"Cache-Control": _OG_CACHE_CONTROL, "ETag": etag}
+    if request.headers.get("If-None-Match") == etag:
+        response = HttpResponse(status=304)
+        for name, value in headers.items():
+            response[name] = value
+        return _private_headers(response)
+    try:
+        body = datacache.cached(
+            "share_og", lambda: _og_build(token, lang, host),
+            token, collection.updated_at.isoformat(), OG_RENDER_VERSION, host, lang=lang,
+        )
+    except _OgIncomplete as incomplete:
+        response = HttpResponse(incomplete.body, content_type="image/png")
+        response["Cache-Control"] = "public, max-age=300"
+        return _private_headers(response)
+    except Exception:
+        logger.warning("Could not draw the link preview for a shared collection", exc_info=True)
+        fallback = (settings.BASE_DIR / "static" / "img" / "og-default.png").read_bytes()
+        response = HttpResponse(fallback, content_type="image/png")
+        response["Cache-Control"] = "public, max-age=300"
+        return _private_headers(response)
+    response = HttpResponse(body, content_type="image/png")
+    for name, value in headers.items():
+        response[name] = value
+    return _private_headers(response)
 
 
 def set_language_cookie(response, code):

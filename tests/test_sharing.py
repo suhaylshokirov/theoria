@@ -373,7 +373,7 @@ def test_public_page_needs_no_login_and_hides_the_owners_email(owner):
     assert "Five I&#x27;d stake my taste on." in html or "Five I'd stake my taste on." in html
     assert '<meta name="robots" content="noindex, nofollow">' in html
     assert 'property="og:title" content="Top · @share_owner"' in html
-    assert "og-default.png" in html
+    assert "/og.png?lang=en" in html                  # the rendered preview (Task 140)
     assert response["Referrer-Policy"] == "same-origin"
     assert "noindex" in response["X-Robots-Tag"]
     # Signed out: the invitation shows, the owner strip does not.
@@ -646,3 +646,142 @@ def test_owner_card_needs_login_and_something_to_draw(owner):
     client.force_login(owner)
     assert client.get(url).status_code == 404
     assert client.get(reverse("account:collection_card", args=["nope"])).status_code == 404
+
+
+# --- the link-preview image (Task 140) ---------------------------------------
+
+def _og(token, query="", **extra):
+    return Client().get(f"/s/{token}/og.png{query}", **extra)
+
+
+def _tiny_poster():
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (20, 30), "#884422").save(buf, "PNG")
+    return buf.getvalue()
+
+
+@pytest.fixture
+def no_poster_network():
+    """Every poster arrives (a tiny stand-in image); nothing touches the network."""
+    body = _tiny_poster()
+    with patch(
+        "core.share.og.fetch_posters",
+        side_effect=lambda urls, timeout=3.0: [body if u else None for u in urls],
+    ) as m:
+        yield m
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_og_with_a_failed_poster_is_served_briefly_and_not_cached(owner):
+    """TMDB not answering draws a title plate, but that picture must not stick
+    to the link: short Cache-Control, no ETag, and the next request redraws."""
+    collection = _shared_top(owner)
+    rows = _top_rows()
+    rows[0].content.poster_path = "/godfather.jpg"
+    failing = lambda urls, timeout=3.0: [None for _ in urls]  # noqa: E731
+    with _hydrate_with(rows), patch("core.share.og.fetch_posters", side_effect=failing) as fetch:
+        first = _og(collection.share_token)
+        _og(collection.share_token)
+    assert first.status_code == 200 and first["Content-Type"] == "image/png"
+    assert first["Cache-Control"] == "public, max-age=300"
+    assert not first.has_header("ETag")
+    assert fetch.call_count == 2
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_og_image_is_a_cacheable_1200x630_png(owner, no_poster_network):
+    import io
+
+    from PIL import Image
+
+    collection = _shared_top(owner)
+    with _hydrate_with(_top_rows()):
+        response = _og(collection.share_token)
+    assert response.status_code == 200
+    assert response["Content-Type"] == "image/png"
+    assert "s-maxage" in response["Cache-Control"] and "public" in response["Cache-Control"]
+    assert response["ETag"]
+    assert "noindex" in response["X-Robots-Tag"]
+    assert Image.open(io.BytesIO(response.content)).size == (1200, 630)
+    with _hydrate_with(_top_rows()):
+        again = _og(collection.share_token, HTTP_IF_NONE_MATCH=response["ETag"])
+    assert again.status_code == 304
+    assert again["ETag"] == response["ETag"]
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_og_unknown_is_404_revoked_is_410(owner, no_poster_network):
+    collection = _shared_top(owner)
+    token = collection.share_token
+    assert _og("doesnotexist").status_code == 404
+    sharing.disable_share(owner, "top")
+    assert _og(token).status_code == 410
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_og_language_is_the_query_not_the_cookie(owner, no_poster_network):
+    collection = _shared_top(owner)
+    token = collection.share_token
+    with _hydrate_with(_top_rows()):
+        en = _og(token)
+        ru = _og(token, "?lang=ru")
+        client = Client()
+        client.cookies["django_language"] = "ru"
+        cookie_only = client.get(f"/s/{token}/og.png")
+    assert ru.status_code == 200 and ru.content != en.content
+    assert ru["ETag"] != en["ETag"]
+    assert cookie_only["ETag"] == en["ETag"]
+    assert cookie_only.content == en.content
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_og_falls_back_to_the_static_default_when_drawing_fails(owner):
+    from django.conf import settings
+
+    collection = _shared_top(owner)
+    with _hydrate_with(_top_rows()), patch("core.share.og.fetch_posters", return_value=[]), \
+            patch("core.share.og.render_og", side_effect=RuntimeError("boom")):
+        response = _og(collection.share_token)
+    assert response.status_code == 200
+    assert response.content == (settings.BASE_DIR / "static" / "img" / "og-default.png").read_bytes()
+    assert response["Cache-Control"] == "public, max-age=300"
+    assert not response.has_header("ETag")
+
+
+def test_og_poster_fetch_refuses_urls_outside_tmdb():
+    from core.share import og
+
+    with patch("core.share.og.urllib.request.urlopen") as opened:
+        assert og.fetch_posters(["http://evil.example/x.png"]) == [None]
+    opened.assert_not_called()
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_page_og_image_points_at_the_rendered_preview(owner):
+    collection = _shared_top(owner)
+    with _hydrate_with(_top_rows()):
+        html = Client().get(f"/s/{collection.share_token}/").content.decode()
+    assert f"/s/{collection.share_token}/og.png?lang=en&amp;v=" in html
+    assert "og-default.png" not in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_og_response_never_carries_the_owners_email(owner, no_poster_network):
+    collection = _shared_top(owner)
+    with _hydrate_with(_top_rows()):
+        response = _og(collection.share_token)
+    assert _EMAIL not in str(dict(response.headers))
+    assert _EMAIL.encode() not in response.content
+
+
+def test_og_font_fallback_is_picked_per_string():
+    from core.share import og
+
+    assert og.face_file("display", "THEORIA") == "Archivo-ExpandedExtraBold.ttf"
+    assert og.face_file("body", "Café — 2025") == "Archivo-Medium.ttf"
+    assert og.face_file("display", "ПОНРАВИЛОСЬ") == "RobotoFlex-ExpandedExtraBold.ttf"
+    assert og.face_file("mono", "oʻzbek") == "RobotoFlex-Medium.ttf"

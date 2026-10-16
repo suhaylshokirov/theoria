@@ -12,3 +12,5 @@ psycopg2-binary==2.9.10
 python-dotenv==1.0.1
 google-genai==2.25.0
 redis==8.1.0
+# Link-preview image for shared collections (Task 140); ~21 MB installed.
+Pillow==12.3.0

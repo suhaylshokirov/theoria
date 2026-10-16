@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 10:34+0000\n"
+"POT-Creation-Date: 2026-10-16 10:48+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: uz\n"
@@ -83,8 +83,8 @@ msgstr "Kirish — Theoria"
 
 #: accounts/templates/accounts/login.html:18
 #: accounts/templates/accounts/signup.html:44
-#: core/templates/core/share/page.html:197 templates/base.html:175
-#: templates/base.html:251
+#: core/templates/core/share/page.html:197 templates/base.html:179
+#: templates/base.html:255
 msgid "Sign in"
 msgstr "Kirish"
 
@@ -259,7 +259,7 @@ msgid "Theoria — Analytics"
 msgstr "Theoria — Tahlil"
 
 #: analytics/templates/analytics/dashboard.html:13
-#: movies/templates/movies/home.html:224 templates/base.html:232
+#: movies/templates/movies/home.html:224 templates/base.html:236
 msgid "Analytics"
 msgstr "Tahlil"
 
@@ -281,7 +281,7 @@ msgstr "Qiziquvchilar uchun raqamlar."
 #: movies/templates/movies/_studio_header.html:33
 #: movies/templates/movies/home.html:84
 #: movies/templates/movies/movie_list.html:4
-#: movies/templates/movies/movie_list.html:11 templates/base.html:227
+#: movies/templates/movies/movie_list.html:11 templates/base.html:231
 msgid "Movies"
 msgstr "Filmlar"
 
@@ -345,7 +345,7 @@ msgstr "Kelib chiqishi"
 #: analytics/templates/analytics/dashboard.html:51
 #: analytics/templates/analytics/dashboard.html:427
 #: movies/templates/movies/home.html:94 movies/views.py:629
-#: templates/base.html:230
+#: templates/base.html:234
 msgid "People"
 msgstr "Odamlar"
 
@@ -897,11 +897,11 @@ msgstr " mln"
 msgid "K"
 msgstr " ming"
 
-#: assistant/views.py:72 templates/base.html:400
+#: assistant/views.py:72 templates/base.html:404
 msgid "New chat"
 msgstr "Yangi chat"
 
-#: core/context_processors.py:20 templates/base.html:209
+#: core/context_processors.py:20 templates/base.html:213
 msgid "Open menu"
 msgstr "Menyuni ochish"
 
@@ -909,7 +909,7 @@ msgstr "Menyuni ochish"
 msgid "Close menu"
 msgstr "Menyuni yopish"
 
-#: core/context_processors.py:22 templates/base.html:323
+#: core/context_processors.py:22 templates/base.html:327
 msgid "Switch to dark theme"
 msgstr "Qorongʻi mavzuga oʻtish"
 
@@ -937,8 +937,8 @@ msgstr "Video"
 msgid "Open film guide"
 msgstr "Film yordamchisini ochish"
 
-#: core/context_processors.py:31 templates/base.html:416
-#: templates/base.html:487
+#: core/context_processors.py:31 templates/base.html:420
+#: templates/base.html:491
 msgid "Close film guide"
 msgstr "Film yordamchisini yopish"
 
@@ -1091,7 +1091,7 @@ msgstr "1-faslga nisbatan"
 msgid "Keep the note to %(max)d characters."
 msgstr ""
 
-#: core/sharing.py:73 core/views.py:161
+#: core/sharing.py:73 core/views.py:166
 msgid "Unknown collection."
 msgstr "Nomaʼlum toʻplam."
 
@@ -1226,12 +1226,12 @@ msgid "Rank %(rank)s:"
 msgstr "%(rank)s-oʻrin:"
 
 #: core/templates/core/_collection_section.html:97
-#: core/templates/core/share/page.html:154 templates/base.html:273
+#: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "Movie"
 msgstr "Film"
 
 #: core/templates/core/_collection_section.html:97
-#: core/templates/core/share/page.html:154 templates/base.html:273
+#: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "TV show"
 msgstr "Serial"
 
@@ -1280,8 +1280,8 @@ msgstr "%(joined)s dan beri biz bilan"
 msgid "Your collections"
 msgstr "Toʻplamlaringiz"
 
-#: core/templates/core/account.html:64 templates/base.html:198
-#: templates/base.html:244
+#: core/templates/core/account.html:64 templates/base.html:202
+#: templates/base.html:248
 msgid "Sign out"
 msgstr "Chiqish"
 
@@ -1364,8 +1364,8 @@ msgstr ""
 msgid "Share <span data-share-name></span>"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:37 templates/base.html:416
-#: templates/base.html:427 templates/base.html:487
+#: core/templates/core/share/_sheet.html:37 templates/base.html:420
+#: templates/base.html:431 templates/base.html:491
 msgid "Close"
 msgstr "Yopish"
 
@@ -1630,30 +1630,30 @@ msgstr "Hisobingiz bormi?"
 msgid "Shared collection"
 msgstr "Toʻplamlaringiz"
 
-#: core/views.py:35 core/views.py:270
+#: core/views.py:40 core/views.py:275
 #: movies/templates/movies/_collection_actions.html:8
 msgid "Liked"
 msgstr "Yoqqanlar"
 
-#: core/views.py:36 core/views.py:273
+#: core/views.py:41 core/views.py:278
 #: movies/templates/movies/_collection_actions.html:14
 #: movies/templates/movies/_collection_actions.html:16
 msgid "Watch later"
 msgstr "Keyin koʻrish"
 
-#: core/views.py:37 core/views.py:267
+#: core/views.py:42 core/views.py:272
 msgid "Top"
 msgstr "Top"
 
-#: core/views.py:190
+#: core/views.py:195
 msgid "That collection could not be found."
 msgstr "Bunday toʻplam topilmadi."
 
-#: core/views.py:205
+#: core/views.py:210
 msgid "That collection item could not be moved."
 msgstr "Toʻplam elementini koʻchirib boʻlmadi."
 
-#: core/views.py:232
+#: core/views.py:237
 #, fuzzy
 #| msgid "Too many username changes — please try again later."
 msgid "Too many share changes — please try again in a few minutes."
@@ -1661,37 +1661,48 @@ msgstr ""
 "Foydalanuvchi nomi juda koʻp marta oʻzgartirildi — keyinroq qayta urinib "
 "koʻring."
 
-#: core/views.py:248
+#: core/views.py:253
 #, fuzzy
 #| msgid "Unknown collection."
 msgid "Unknown share action."
 msgstr "Nomaʼlum toʻplam."
 
-#: core/views.py:267
+#: core/views.py:272
 msgid "Picked by hand and ranked in order."
 msgstr ""
 
-#: core/views.py:270
+#: core/views.py:275
 msgid "Everything they liked, newest first."
 msgstr ""
 
-#: core/views.py:273
+#: core/views.py:278
 msgid "Saved for a free evening."
 msgstr ""
 
-#: core/views.py:384
+#: core/views.py:394
 msgctxt "share card"
 msgid "My best, in order."
 msgstr ""
 
-#: core/views.py:385
+#: core/views.py:395
 msgctxt "share card"
 msgid "Good taste, documented."
 msgstr ""
 
-#: core/views.py:386
+#: core/views.py:396
 msgctxt "share card"
 msgid "Next on my list."
+msgstr ""
+
+#: core/views.py:544
+#, python-format
+msgctxt "share card"
+msgid "Member since %(month)s %(year)s"
+msgstr ""
+
+#: core/views.py:548
+msgctxt "share card"
+msgid "more"
 msgstr ""
 
 #: movies/templates/movies/_browse_grid.html:20
@@ -2039,7 +2050,7 @@ msgid "No credits recorded for this actor yet."
 msgstr "Bu aktyor uchun hali qayd etilgan ishlar yoʻq."
 
 #: movies/templates/movies/browse.html:4 movies/templates/movies/browse.html:11
-#: templates/base.html:226
+#: templates/base.html:230
 msgid "Browse"
 msgstr "Koʻrib chiqish"
 
@@ -2110,7 +2121,7 @@ msgid "Apply"
 msgstr "Qoʻllash"
 
 #: movies/templates/movies/cartoon_list.html:4
-#: movies/templates/movies/cartoon_list.html:11 templates/base.html:229
+#: movies/templates/movies/cartoon_list.html:11 templates/base.html:233
 msgid "Cartoons"
 msgstr "Multfilmlar"
 
@@ -2166,7 +2177,7 @@ msgstr "Tanlangan filmlar"
 
 #: movies/templates/movies/home.html:89
 #: movies/templates/movies/series_list.html:4
-#: movies/templates/movies/series_list.html:11 templates/base.html:228
+#: movies/templates/movies/series_list.html:11 templates/base.html:232
 msgid "TV Shows"
 msgstr "Seriallar"
 
@@ -2296,7 +2307,7 @@ msgstr "Rejissyor"
 #: movies/templates/movies/movie_detail.html:136
 #: movies/templates/movies/series_detail.html:145
 #: movies/templates/movies/studio_list.html:10
-#: movies/templates/movies/studio_list.html:13 templates/base.html:231
+#: movies/templates/movies/studio_list.html:13 templates/base.html:235
 msgid "Studios"
 msgstr "Studiyalar"
 
@@ -3076,92 +3087,92 @@ msgstr ""
 "Theoria — boshidan oxirigacha oʻlchangan film katalogi: har bir film, aktyor "
 "va reyting “yulduz” sxemali maʼlumotlar omboridan bevosita olinadi."
 
-#: templates/base.html:146
+#: templates/base.html:150
 msgid "Skip to content"
 msgstr "Mazmunga oʻtish"
 
-#: templates/base.html:155
+#: templates/base.html:159
 msgid "Main"
 msgstr "Asosiy menyu"
 
-#: templates/base.html:195 templates/base.html:241
+#: templates/base.html:199 templates/base.html:245
 msgid "Your account"
 msgstr "Hisobingiz"
 
-#: templates/base.html:267 templates/base.html:279
+#: templates/base.html:271 templates/base.html:283
 msgid "Search"
 msgstr "Qidiruv"
 
-#: templates/base.html:274
+#: templates/base.html:278
 msgid "No title matches that search. Try another title."
 msgstr "Bu qidiruv bo'yicha hech narsa topilmadi. Boshqa nomni sinab ko'ring."
 
-#: templates/base.html:275
+#: templates/base.html:279
 msgid "Type at least two letters of a title."
 msgstr "Nomning kamida ikki harfini kiriting."
 
-#: templates/base.html:280
+#: templates/base.html:284
 msgid "Search movies and TV shows"
 msgstr "Filmlar va seriallarni qidirish"
 
-#: templates/base.html:305 templates/base.html:313
+#: templates/base.html:309 templates/base.html:317
 msgctxt "language switcher"
 msgid "Language"
 msgstr "Til"
 
-#: templates/base.html:323
+#: templates/base.html:327
 msgid "Switch theme"
 msgstr "Mavzuni almashtirish"
 
-#: templates/base.html:357
+#: templates/base.html:361
 msgid "Theoria — a movie catalog measured end to end."
 msgstr "Theoria — boshidan oxirigacha oʻlchangan film katalogi."
 
-#: templates/base.html:358
+#: templates/base.html:362
 msgid "Source · TMDB"
 msgstr "Manba · TMDB"
 
-#: templates/base.html:371
+#: templates/base.html:375
 msgid "Are you sure?"
 msgstr "Ishonchingiz komilmi?"
 
-#: templates/base.html:373
+#: templates/base.html:377
 msgid "No, stay"
 msgstr "Yoʻq, qolaman"
 
-#: templates/base.html:374
+#: templates/base.html:378
 msgid "Yes, sign out"
 msgstr "Ha, chiqaman"
 
-#: templates/base.html:395
+#: templates/base.html:399
 msgid "Film guide"
 msgstr "Film yordamchisi"
 
-#: templates/base.html:396
+#: templates/base.html:400
 msgid "Picks from Theoria"
 msgstr "Theoria tanlovlari"
 
-#: templates/base.html:405 templates/base.html:426
+#: templates/base.html:409 templates/base.html:430
 msgid "Recent chats"
 msgstr "So‘nggi chatlar"
 
-#: templates/base.html:410
+#: templates/base.html:414
 msgid "Expand film guide"
 msgstr "Film yordamchisini kengaytirish"
 
-#: templates/base.html:410
+#: templates/base.html:414
 msgid "Shrink film guide"
 msgstr "Film yordamchisini kichraytirish"
 
-#: templates/base.html:427
+#: templates/base.html:431
 msgid "Close recent chats"
 msgstr "So‘nggi chatlarni yopish"
 
-#: templates/base.html:438
+#: templates/base.html:442
 msgid "What are we watching?"
 msgstr "Nima tomosha qilamiz?"
 
-#: templates/base.html:439
+#: templates/base.html:443
 msgid ""
 "Tell me a mood, a genre, or how much time you have. Or start with one of "
 "these."
@@ -3169,46 +3180,46 @@ msgstr ""
 "Kayfiyatingizni, janrni yoki qancha vaqtingiz borligini ayting. Yoki "
 "quyidagilardan birini tanlang."
 
-#: templates/base.html:447
+#: templates/base.html:451
 msgid "Pick for tonight"
 msgstr "Bugun kechqurun uchun tanlov"
 
-#: templates/base.html:454
+#: templates/base.html:458
 msgid "Find by mood"
 msgstr "Kayfiyat boʻyicha topish"
 
-#: templates/base.html:461
+#: templates/base.html:465
 msgid "Browse by genre"
 msgstr "Janr boʻyicha tanlash"
 
-#: templates/base.html:467
+#: templates/base.html:471
 msgid "Surprise me"
 msgstr "Meni hayratga soling"
 
-#: templates/base.html:474
+#: templates/base.html:478
 msgid "Message the film guide"
 msgstr "Yordamchiga xabar"
 
-#: templates/base.html:476
+#: templates/base.html:480
 msgid "Ask me anything about movies..."
 msgstr "Filmlar haqida istalgan savolni bering..."
 
-#: templates/base.html:477
+#: templates/base.html:481
 msgid "Send message"
 msgstr "Xabar yuborish"
 
-#: templates/base.html:477
+#: templates/base.html:481
 msgid "Send"
 msgstr "Yuborish"
 
-#: templates/base.html:500
+#: templates/base.html:504
 msgid "Hi — not sure what to watch?"
 msgstr "Nima tomosha qilishni bilmayapsizmi?"
 
-#: templates/base.html:501
+#: templates/base.html:505
 msgid "Tell me a mood, genre, or how much time you have."
 msgstr "Kayfiyatingizni, janrni yoki qancha vaqtingiz borligini ayting."
 
-#: templates/base.html:506
+#: templates/base.html:510
 msgid "Get a film pick"
 msgstr "Film tanlash"

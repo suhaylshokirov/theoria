@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 10:34+0000\n"
+"POT-Creation-Date: 2026-10-16 10:48+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -13,7 +13,9 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || (n%100>=11 && n%100<=14)? 2 : 3);\n"
+"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || "
+"(n%100>=11 && n%100<=14)? 2 : 3);\n"
 
 #: accounts/forms.py:38
 msgid "Username or email already exists."
@@ -83,8 +85,8 @@ msgstr "Вход — Theoria"
 
 #: accounts/templates/accounts/login.html:18
 #: accounts/templates/accounts/signup.html:44
-#: core/templates/core/share/page.html:197 templates/base.html:175
-#: templates/base.html:251
+#: core/templates/core/share/page.html:197 templates/base.html:179
+#: templates/base.html:255
 msgid "Sign in"
 msgstr "Войти"
 
@@ -255,7 +257,7 @@ msgid "Theoria — Analytics"
 msgstr "Theoria — Аналитика"
 
 #: analytics/templates/analytics/dashboard.html:13
-#: movies/templates/movies/home.html:224 templates/base.html:232
+#: movies/templates/movies/home.html:224 templates/base.html:236
 msgid "Analytics"
 msgstr "Аналитика"
 
@@ -277,7 +279,7 @@ msgstr "Цифры для дотошных."
 #: movies/templates/movies/_studio_header.html:33
 #: movies/templates/movies/home.html:84
 #: movies/templates/movies/movie_list.html:4
-#: movies/templates/movies/movie_list.html:11 templates/base.html:227
+#: movies/templates/movies/movie_list.html:11 templates/base.html:231
 msgid "Movies"
 msgstr "Фильмы"
 
@@ -341,7 +343,7 @@ msgstr "Происхождение"
 #: analytics/templates/analytics/dashboard.html:51
 #: analytics/templates/analytics/dashboard.html:427
 #: movies/templates/movies/home.html:94 movies/views.py:629
-#: templates/base.html:230
+#: templates/base.html:234
 msgid "People"
 msgstr "Люди"
 
@@ -379,8 +381,8 @@ msgid ""
 "Movies and shows are rated about the same: ★ <strong>%(movie)s</strong> for "
 "the typical movie, ★ <strong>%(show)s</strong> for the typical show."
 msgstr ""
-"Фильмы и сериалы оцениваются примерно одинаково: ★ <strong>%(movie)s</strong>"
-" у типичного фильма, ★ <strong>%(show)s</strong> у типичного сериала."
+"Фильмы и сериалы оцениваются примерно одинаково: ★ <strong>%(movie)s</"
+"strong> у типичного фильма, ★ <strong>%(show)s</strong> у типичного сериала."
 
 #: analytics/templates/analytics/dashboard.html:74
 msgid "How movies and shows are rated"
@@ -457,8 +459,9 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:139
 #, python-format
 msgid ""
-"<strong>%(over)s%%</strong> of movies with a known budget returned five times"
-" it or more; only <strong>%(under)s%%</strong> earned less than they cost."
+"<strong>%(over)s%%</strong> of movies with a known budget returned five "
+"times it or more; only <strong>%(under)s%%</strong> earned less than they "
+"cost."
 msgstr ""
 "<strong>%(over)s%%</strong> фильмов с известным бюджетом окупили его в пять "
 "раз и больше; лишь <strong>%(under)s%%</strong> заработали меньше, чем "
@@ -467,9 +470,9 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:142
 #, python-format
 msgid ""
-"Based on %(counter)s movie with a known budget of at least $1M and box-office"
-" revenue. Not adjusted for inflation; streaming releases and movies still in "
-"cinemas can read low."
+"Based on %(counter)s movie with a known budget of at least $1M and box-"
+"office revenue. Not adjusted for inflation; streaming releases and movies "
+"still in cinemas can read low."
 msgid_plural ""
 "Based on %(counter)s movies with a known budget of at least $1M and box-"
 "office revenue. Not adjusted for inflation; streaming releases and movies "
@@ -592,8 +595,8 @@ msgstr "Самый дорогой"
 #: analytics/templates/analytics/dashboard.html:261
 #, python-format
 msgid ""
-"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes "
-"longer</strong> than one from the %(first)ss."
+"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes longer</"
+"strong> than one from the %(first)ss."
 msgstr ""
 "Типичный фильм %(last)s-х идёт на <strong>%(minutes)s мин дольше</strong>, "
 "чем фильм %(first)s-х."
@@ -601,8 +604,8 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:262
 #, python-format
 msgid ""
-"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes "
-"shorter</strong> than one from the %(first)ss."
+"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes shorter</"
+"strong> than one from the %(first)ss."
 msgstr ""
 "Типичный фильм %(last)s-х идёт на <strong>%(minutes)s мин короче</strong>, "
 "чем фильм %(first)s-х."
@@ -703,8 +706,8 @@ msgid ""
 "This describes the archive, which leans heavily towards English-language "
 "movies, not cinema worldwide."
 msgstr ""
-"Это описывает архив, где заметно преобладают фильмы на английском языке, а не"
-" мировое кино."
+"Это описывает архив, где заметно преобладают фильмы на английском языке, а "
+"не мировое кино."
 
 #: analytics/templates/analytics/dashboard.html:367
 #: movies/templates/movies/movie_detail.html:113
@@ -779,8 +782,8 @@ msgstr "Должность"
 #: analytics/templates/analytics/dashboard.html:497
 #, python-format
 msgid ""
-"Shows hold their first-season rating <strong>all the way to season "
-"%(last)s</strong>."
+"Shows hold their first-season rating <strong>all the way to season %(last)s</"
+"strong>."
 msgstr ""
 "Сериалы сохраняют рейтинг первого сезона <strong>вплоть до %(last)s-го "
 "сезона</strong>."
@@ -788,23 +791,23 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:498
 #, python-format
 msgid ""
-"Shows hold their first-season rating <strong>through season "
-"%(hold)s</strong>, then slip about <strong>%(size)s points</strong> across "
-"seasons %(first)s–%(last)s."
+"Shows hold their first-season rating <strong>through season %(hold)s</"
+"strong>, then slip about <strong>%(size)s points</strong> across seasons "
+"%(first)s–%(last)s."
 msgstr ""
-"Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</strong>,"
-" а затем теряют около <strong>%(size)s балла</strong> в сезонах "
+"Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</"
+"strong>, а затем теряют около <strong>%(size)s балла</strong> в сезонах "
 "%(first)s–%(last)s."
 
 #: analytics/templates/analytics/dashboard.html:499
 #, python-format
 msgid ""
-"Shows hold their first-season rating <strong>through season "
-"%(hold)s</strong>, then climb about <strong>%(size)s points</strong> across "
-"seasons %(first)s–%(last)s."
+"Shows hold their first-season rating <strong>through season %(hold)s</"
+"strong>, then climb about <strong>%(size)s points</strong> across seasons "
+"%(first)s–%(last)s."
 msgstr ""
-"Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</strong>,"
-" а затем прибавляют около <strong>%(size)s балла</strong> в сезонах "
+"Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</"
+"strong>, а затем прибавляют около <strong>%(size)s балла</strong> в сезонах "
 "%(first)s–%(last)s."
 
 #: analytics/templates/analytics/dashboard.html:510
@@ -899,11 +902,11 @@ msgstr " млн"
 msgid "K"
 msgstr " тыс."
 
-#: assistant/views.py:72 templates/base.html:400
+#: assistant/views.py:72 templates/base.html:404
 msgid "New chat"
 msgstr "Новый чат"
 
-#: core/context_processors.py:20 templates/base.html:209
+#: core/context_processors.py:20 templates/base.html:213
 msgid "Open menu"
 msgstr "Открыть меню"
 
@@ -911,7 +914,7 @@ msgstr "Открыть меню"
 msgid "Close menu"
 msgstr "Закрыть меню"
 
-#: core/context_processors.py:22 templates/base.html:323
+#: core/context_processors.py:22 templates/base.html:327
 msgid "Switch to dark theme"
 msgstr "Включить тёмную тему"
 
@@ -939,8 +942,8 @@ msgstr "Видео"
 msgid "Open film guide"
 msgstr "Открыть помощника по фильмам"
 
-#: core/context_processors.py:31 templates/base.html:416
-#: templates/base.html:487
+#: core/context_processors.py:31 templates/base.html:420
+#: templates/base.html:491
 msgid "Close film guide"
 msgstr "Закрыть помощника по фильмам"
 
@@ -1095,7 +1098,7 @@ msgstr "к 1-му сезону"
 msgid "Keep the note to %(max)d characters."
 msgstr "Подпись — не длиннее %(max)d символов."
 
-#: core/sharing.py:73 core/views.py:161
+#: core/sharing.py:73 core/views.py:166
 msgid "Unknown collection."
 msgstr "Неизвестная коллекция."
 
@@ -1153,8 +1156,8 @@ msgstr ""
 #: core/templates/core/_collection_empty.html:11
 msgid "Press Like on any movie or show and it collects here, newest first."
 msgstr ""
-"Нажмите «Нравится» на любом фильме или сериале — и он появится здесь, сначала"
-" новое."
+"Нажмите «Нравится» на любом фильме или сериале — и он появится здесь, "
+"сначала новое."
 
 #: core/templates/core/_collection_empty.html:12
 #: movies/templates/movies/home.html:58
@@ -1224,12 +1227,12 @@ msgid "Rank %(rank)s:"
 msgstr "Место %(rank)s:"
 
 #: core/templates/core/_collection_section.html:97
-#: core/templates/core/share/page.html:154 templates/base.html:273
+#: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "Movie"
 msgstr "Фильм"
 
 #: core/templates/core/_collection_section.html:97
-#: core/templates/core/share/page.html:154 templates/base.html:273
+#: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "TV show"
 msgstr "Сериал"
 
@@ -1278,8 +1281,8 @@ msgstr "С нами с %(joined)s"
 msgid "Your collections"
 msgstr "Ваши коллекции"
 
-#: core/templates/core/account.html:64 templates/base.html:198
-#: templates/base.html:244
+#: core/templates/core/account.html:64 templates/base.html:202
+#: templates/base.html:248
 msgid "Sign out"
 msgstr "Выйти"
 
@@ -1354,8 +1357,8 @@ msgstr "Доступ закрыт. Старая ссылка больше не �
 msgid "Share <span data-share-name></span>"
 msgstr "Поделиться: <span data-share-name></span>"
 
-#: core/templates/core/share/_sheet.html:37 templates/base.html:416
-#: templates/base.html:427 templates/base.html:487
+#: core/templates/core/share/_sheet.html:37 templates/base.html:420
+#: templates/base.html:431 templates/base.html:491
 msgid "Close"
 msgstr "Закрыть"
 
@@ -1608,63 +1611,74 @@ msgstr "Создать аккаунт"
 msgid "Shared collection"
 msgstr "Коллекция по ссылке"
 
-#: core/views.py:35 core/views.py:270
+#: core/views.py:40 core/views.py:275
 #: movies/templates/movies/_collection_actions.html:8
 msgid "Liked"
 msgstr "Понравившиеся"
 
-#: core/views.py:36 core/views.py:273
+#: core/views.py:41 core/views.py:278
 #: movies/templates/movies/_collection_actions.html:14
 #: movies/templates/movies/_collection_actions.html:16
 msgid "Watch later"
 msgstr "Смотреть позже"
 
-#: core/views.py:37 core/views.py:267
+#: core/views.py:42 core/views.py:272
 msgid "Top"
 msgstr "Топ"
 
-#: core/views.py:190
+#: core/views.py:195
 msgid "That collection could not be found."
 msgstr "Такая коллекция не найдена."
 
-#: core/views.py:205
+#: core/views.py:210
 msgid "That collection item could not be moved."
 msgstr "Не удалось переместить этот элемент коллекции."
 
-#: core/views.py:232
+#: core/views.py:237
 msgid "Too many share changes — please try again in a few minutes."
 msgstr "Слишком много изменений доступа — попробуйте через несколько минут."
 
-#: core/views.py:248
+#: core/views.py:253
 msgid "Unknown share action."
 msgstr "Неизвестное действие."
 
-#: core/views.py:267
+#: core/views.py:272
 msgid "Picked by hand and ranked in order."
 msgstr "Отобраны вручную и расставлены по местам."
 
-#: core/views.py:270
+#: core/views.py:275
 msgid "Everything they liked, newest first."
 msgstr "Всё, что понравилось, — сначала новое."
 
-#: core/views.py:273
+#: core/views.py:278
 msgid "Saved for a free evening."
 msgstr "Отложено на свободный вечер."
 
-#: core/views.py:384
+#: core/views.py:394
 msgctxt "share card"
 msgid "My best, in order."
 msgstr "Моё лучшее — по порядку."
 
-#: core/views.py:385
+#: core/views.py:395
 msgctxt "share card"
 msgid "Good taste, documented."
 msgstr "Хороший вкус — с доказательствами."
 
-#: core/views.py:386
+#: core/views.py:396
 msgctxt "share card"
 msgid "Next on my list."
 msgstr "Следующее в моём списке."
+
+#: core/views.py:544
+#, python-format
+msgctxt "share card"
+msgid "Member since %(month)s %(year)s"
+msgstr "С нами с %(month)s %(year)s"
+
+#: core/views.py:548
+msgctxt "share card"
+msgid "more"
+msgstr "ещё"
 
 #: movies/templates/movies/_browse_grid.html:20
 #, python-format
@@ -2015,7 +2029,7 @@ msgid "No credits recorded for this actor yet."
 msgstr "Для этого актёра пока нет записанных работ."
 
 #: movies/templates/movies/browse.html:4 movies/templates/movies/browse.html:11
-#: templates/base.html:226
+#: templates/base.html:230
 msgid "Browse"
 msgstr "Обзор"
 
@@ -2085,14 +2099,14 @@ msgid "Apply"
 msgstr "Применить"
 
 #: movies/templates/movies/cartoon_list.html:4
-#: movies/templates/movies/cartoon_list.html:11 templates/base.html:229
+#: movies/templates/movies/cartoon_list.html:11 templates/base.html:233
 msgid "Cartoons"
 msgstr "Мультфильмы"
 
 #: movies/templates/movies/cartoon_list.html:11
 msgid ""
-"Animated movies and shows made for younger viewers. Search by name or reorder"
-" by what was measured."
+"Animated movies and shows made for younger viewers. Search by name or "
+"reorder by what was measured."
 msgstr ""
 "Анимационные фильмы и сериалы для юных зрителей. Ищите по названию или "
 "меняйте порядок по измеряемым показателям."
@@ -2141,7 +2155,7 @@ msgstr "Избранные фильмы"
 
 #: movies/templates/movies/home.html:89
 #: movies/templates/movies/series_list.html:4
-#: movies/templates/movies/series_list.html:11 templates/base.html:228
+#: movies/templates/movies/series_list.html:11 templates/base.html:232
 msgid "TV Shows"
 msgstr "Сериалы"
 
@@ -2273,7 +2287,7 @@ msgstr "Режиссёр"
 #: movies/templates/movies/movie_detail.html:136
 #: movies/templates/movies/series_detail.html:145
 #: movies/templates/movies/studio_list.html:10
-#: movies/templates/movies/studio_list.html:13 templates/base.html:231
+#: movies/templates/movies/studio_list.html:13 templates/base.html:235
 msgid "Studios"
 msgstr "Студии"
 
@@ -3064,95 +3078,95 @@ msgid ""
 "Theoria — a movie catalog measured end to end: every movie, cast member and "
 "rating read straight out of a star-schema warehouse."
 msgstr ""
-"Theoria — каталог фильмов, измеренный от начала до конца: каждый фильм, актёр"
-" и рейтинг прочитаны прямо из хранилища данных со схемой «звезда»."
+"Theoria — каталог фильмов, измеренный от начала до конца: каждый фильм, "
+"актёр и рейтинг прочитаны прямо из хранилища данных со схемой «звезда»."
 
-#: templates/base.html:146
+#: templates/base.html:150
 msgid "Skip to content"
 msgstr "Перейти к содержимому"
 
-#: templates/base.html:155
+#: templates/base.html:159
 msgid "Main"
 msgstr "Главное меню"
 
-#: templates/base.html:195 templates/base.html:241
+#: templates/base.html:199 templates/base.html:245
 msgid "Your account"
 msgstr "Ваш аккаунт"
 
-#: templates/base.html:267 templates/base.html:279
+#: templates/base.html:271 templates/base.html:283
 msgid "Search"
 msgstr "Поиск"
 
-#: templates/base.html:274
+#: templates/base.html:278
 msgid "No title matches that search. Try another title."
 msgstr "По этому запросу ничего не найдено. Попробуйте другое название."
 
-#: templates/base.html:275
+#: templates/base.html:279
 msgid "Type at least two letters of a title."
 msgstr "Введите хотя бы две буквы названия."
 
-#: templates/base.html:280
+#: templates/base.html:284
 msgid "Search movies and TV shows"
 msgstr "Поиск фильмов и сериалов"
 
-#: templates/base.html:305 templates/base.html:313
+#: templates/base.html:309 templates/base.html:317
 msgctxt "language switcher"
 msgid "Language"
 msgstr "Язык"
 
-#: templates/base.html:323
+#: templates/base.html:327
 msgid "Switch theme"
 msgstr "Сменить тему"
 
-#: templates/base.html:357
+#: templates/base.html:361
 msgid "Theoria — a movie catalog measured end to end."
 msgstr "Theoria — каталог фильмов, измеренный от начала до конца."
 
-#: templates/base.html:358
+#: templates/base.html:362
 msgid "Source · TMDB"
 msgstr "Источник · TMDB"
 
-#: templates/base.html:371
+#: templates/base.html:375
 msgid "Are you sure?"
 msgstr "Вы уверены?"
 
-#: templates/base.html:373
+#: templates/base.html:377
 msgid "No, stay"
 msgstr "Нет, остаться"
 
-#: templates/base.html:374
+#: templates/base.html:378
 msgid "Yes, sign out"
 msgstr "Да, выйти"
 
-#: templates/base.html:395
+#: templates/base.html:399
 msgid "Film guide"
 msgstr "Киногид"
 
-#: templates/base.html:396
+#: templates/base.html:400
 msgid "Picks from Theoria"
 msgstr "Подборки от Theoria"
 
-#: templates/base.html:405 templates/base.html:426
+#: templates/base.html:409 templates/base.html:430
 msgid "Recent chats"
 msgstr "Недавние чаты"
 
-#: templates/base.html:410
+#: templates/base.html:414
 msgid "Expand film guide"
 msgstr "Развернуть помощника по фильмам"
 
-#: templates/base.html:410
+#: templates/base.html:414
 msgid "Shrink film guide"
 msgstr "Уменьшить помощника по фильмам"
 
-#: templates/base.html:427
+#: templates/base.html:431
 msgid "Close recent chats"
 msgstr "Закрыть недавние чаты"
 
-#: templates/base.html:438
+#: templates/base.html:442
 msgid "What are we watching?"
 msgstr "Что посмотрим?"
 
-#: templates/base.html:439
+#: templates/base.html:443
 msgid ""
 "Tell me a mood, a genre, or how much time you have. Or start with one of "
 "these."
@@ -3160,46 +3174,46 @@ msgstr ""
 "Назовите настроение, жанр или сколько у вас времени. Или начните с одного из "
 "вариантов."
 
-#: templates/base.html:447
+#: templates/base.html:451
 msgid "Pick for tonight"
 msgstr "Выбор на вечер"
 
-#: templates/base.html:454
+#: templates/base.html:458
 msgid "Find by mood"
 msgstr "Подбор по настроению"
 
-#: templates/base.html:461
+#: templates/base.html:465
 msgid "Browse by genre"
 msgstr "Выбрать по жанру"
 
-#: templates/base.html:467
+#: templates/base.html:471
 msgid "Surprise me"
 msgstr "Удивите меня"
 
-#: templates/base.html:474
+#: templates/base.html:478
 msgid "Message the film guide"
 msgstr "Сообщение помощнику"
 
-#: templates/base.html:476
+#: templates/base.html:480
 msgid "Ask me anything about movies..."
 msgstr "Спросите меня о фильмах..."
 
-#: templates/base.html:477
+#: templates/base.html:481
 msgid "Send message"
 msgstr "Отправить сообщение"
 
-#: templates/base.html:477
+#: templates/base.html:481
 msgid "Send"
 msgstr "Отправить"
 
-#: templates/base.html:500
+#: templates/base.html:504
 msgid "Hi — not sure what to watch?"
 msgstr "Не знаете, что посмотреть?"
 
-#: templates/base.html:501
+#: templates/base.html:505
 msgid "Tell me a mood, genre, or how much time you have."
 msgstr "Назовите настроение, жанр или сколько у вас времени."
 
-#: templates/base.html:506
+#: templates/base.html:510
 msgid "Get a film pick"
 msgstr "Подобрать фильм"
