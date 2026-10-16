@@ -27,8 +27,9 @@
 
   var els = {
     name: $("[data-share-name]"),
-    privateBox: $("[data-share-private]"),
     live: $("[data-share-live]"),
+    off: $("[data-share-off]"),
+    on: $("[data-share-on]"),
     preview: $("[data-share-preview]"),
     frame: $("[data-share-frame]"),
     previewState: $("[data-share-preview-state]"),
@@ -48,6 +49,8 @@
     csrf: dialog.querySelector('input[name="csrfmiddlewaretoken"]'),
   };
   var statuses = dialog.querySelectorAll("[data-share-status]");
+  var imageStatus = $(".share-group--image [data-share-status]");
+  var linkStatus = $("[data-share-off] [data-share-status]");
   var drawingText = els.previewState.textContent;
 
   var CARD_CSS = document.querySelector('link[href*="share-card.css"]');
@@ -81,10 +84,13 @@
     return null;
   }
 
-  function say(text, isError) {
+  // One message at a time, under the group it is about (the image group by
+  // default); every other status line is cleared.
+  function say(text, isError, where) {
+    var target = where || imageStatus;
     for (var i = 0; i < statuses.length; i++) {
-      statuses[i].textContent = text || "";
-      statuses[i].classList.toggle("is-error", !!isError);
+      statuses[i].textContent = statuses[i] === target ? text || "" : "";
+      statuses[i].classList.toggle("is-error", statuses[i] === target && !!isError);
     }
   }
 
@@ -156,15 +162,13 @@
     });
   }
 
-  function cardPath() {
-    return new URL(current.url).pathname.replace(/\/?$/, "/") + "card/";
-  }
+  /* --- States ------------------------------------------------------------
+     One layout for every collection; only the Link group has two faces. */
 
-  /* --- States ------------------------------------------------------------ */
-
-  function showState(live) {
-    els.privateBox.hidden = live;
-    els.live.hidden = !live;
+  function showLink(on) {
+    els.off.hidden = on;
+    els.on.hidden = !on;
+    if (on) els.link.value = current.url;
     cancelConfirm();
   }
 
@@ -178,9 +182,8 @@
     els.preview.setAttribute("aria-busy", "true");
   }
 
-  function startLive() {
-    showState(true);
-    els.link.value = current.url;
+  function fill() {
+    showLink(!!current.url);
     els.note.value = current.savedNote;
     els.noteState.textContent = "";
     updateCount();
@@ -190,7 +193,7 @@
     var theme = dialog.querySelector('input[name="share-theme"][value="' + current.theme + '"]');
     if (fmt) fmt.checked = true;
     if (theme) theme.checked = true;
-    drawCard();
+    drawCard().catch(function () {});
   }
 
   function open(btn) {
@@ -201,6 +204,7 @@
     current = {
       kind: btn.dataset.shareOpen,
       endpoint: btn.dataset.shareEndpoint,
+      card: btn.dataset.shareCard,
       url: url,
       savedNote: btn.dataset.shareNote || "",
       format: format === "story" || format === "wide" ? format : (wide ? "wide" : "story"),
@@ -214,10 +218,8 @@
     els.download.hidden = !canShareFiles;
     els.copyImage.hidden = !canCopyImage;
     dialog.showModal();
-    if (url) startLive();
-    else showState(false);
-    var first = url ? els.image : dialog.querySelector("[data-share-enable]");
-    if (first) first.focus({ preventScroll: true });
+    fill();
+    els.image.focus({ preventScroll: true });
   }
 
   /* --- The card ---------------------------------------------------------- */
@@ -266,8 +268,8 @@
     els.previewState.textContent = drawingText;
 
     els.live.dataset.format = current.format;
-    var address = cardPath() + "?format=" + current.format + "&theme=" + current.theme;
-    ensureCardAssets()
+    var address = current.card + "?format=" + current.format + "&theme=" + current.theme;
+    return ensureCardAssets()
       .then(function () {
         return fetch(address, {
           headers: { "X-Requested-With": "XMLHttpRequest" },
@@ -296,9 +298,10 @@
         });
       })
       .catch(function (err) {
-        if (seq !== drawSeq || (err && err.name === "AbortError")) return;
+        if (seq !== drawSeq || (err && err.name === "AbortError")) throw err;
         els.previewState.textContent = msg("ImageFailed");
         say(msg("ImageFailed"), true);
+        throw err;
       });
   }
 
@@ -359,18 +362,39 @@
 
   function failed() { say(msg("ImageFailed"), true); }
 
+  // The image prints the link, so a private list gets its link first (and its
+  // card redrawn with the real address). Resolves true when it made one.
+  function ensureLink() {
+    if (current.url) return Promise.resolve(false);
+    return post("enable").then(function (data) {
+      linkMade(data);
+      return drawCard().then(function () { return true; });
+    });
+  }
+
+  function linkMade(data) {
+    current.url = data.url;
+    current.savedNote = data.note || "";
+    syncButton();
+    showLink(true);
+  }
+
   function shareOrSave() {
     var button = els.image;
     say("");
     working(button, true);
-    getBlob()
+    ensureLink()
+      .then(function () { return getBlob(); })
       .then(function (blob) {
         if (!canShareFiles) { saveBlob(blob); return true; }
         var file = new File([blob], fileName(), { type: "image/png" });
         return navigator.share({ files: [file], url: current.url }).then(function () { return true; });
       })
       .catch(function (err) {
-        if (!(err && err.name === "AbortError")) failed();
+        // Making the link first can outlast the tap's permission to open
+        // the share sheet; the image is ready now, so the next tap is instant.
+        if (err && err.name === "NotAllowedError") say(msg("TapAgain"));
+        else if (!(err && err.name === "AbortError")) failed();
         return false;
       })
       .then(function (ok) {
@@ -383,7 +407,8 @@
     var button = els.download;
     say("");
     working(button, true);
-    getBlob()
+    ensureLink()
+      .then(function () { return getBlob(); })
       .then(function (blob) { saveBlob(blob); return true; })
       .catch(function () { failed(); return false; })
       .then(function (ok) {
@@ -398,7 +423,8 @@
     working(button, true);
     // The promise goes to ClipboardItem unresolved: Safari only allows the
     // write if it starts inside the tap.
-    navigator.clipboard.write([new ClipboardItem({ "image/png": getBlob() })])
+    var png = ensureLink().then(function () { return getBlob(); });
+    navigator.clipboard.write([new ClipboardItem({ "image/png": png })])
       .then(function () { return true; })
       .catch(function () { failed(); return false; })
       .then(function (ok) {
@@ -477,16 +503,15 @@
           current.url = data.url;
           els.link.value = data.url;
           cancelConfirm();
-          resetCard();
           syncButton();
-          drawCard();
+          drawCard().catch(function () {});
           say(msg("Reset"));
         } else {
           current.url = "";
-          resetCard();
           syncButton();
-          showState(false);
-          say(msg("Stopped"));
+          showLink(false);
+          drawCard().catch(function () {});
+          say(msg("Stopped"), false, linkStatus);
           dialog.querySelector("[data-share-enable]").focus();
         }
       })
@@ -500,13 +525,11 @@
     say("");
     post("enable")
       .then(function (data) {
-        current.url = data.url;
-        current.savedNote = data.note || "";
-        syncButton();
-        startLive();
-        els.image.focus({ preventScroll: true });
+        linkMade(data);
+        els.copyLink.focus({ preventScroll: true });
+        drawCard().catch(function () {});
       })
-      .catch(function (err) { say(err.message, true); })
+      .catch(function (err) { say(err.message, true, linkStatus); })
       .then(function () { button.disabled = false; });
   }
 
@@ -541,7 +564,7 @@
       var key = input.name === "share-format" ? "format" : "theme";
       current[key] = input.value;
       store(key, input.value);
-      drawCard();
+      drawCard().catch(function () {});
     } else if (input === els.note) {
       saveNote();
     }

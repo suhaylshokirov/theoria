@@ -176,6 +176,22 @@ def shared_collection(token) -> SharedCollection | None:
     )
 
 
+def own_collection(user, kind) -> SharedCollection | None:
+    """The owner's own collection, hydrated and in display order, whether or
+    not it is shared -- what the share sheet previews before a link exists.
+    None for an unknown kind or a collection that was never created. Not
+    cached: only its owner reads it, and only while the sheet is open."""
+    if kind not in dict(Collection.KINDS):
+        return None
+    collection = Collection.objects.filter(user=user, kind=kind).first()
+    if collection is None:
+        return None
+    rows = _hydrate(list(CollectionItem.objects.filter(collection_id=collection.pk)))
+    return SharedCollection(
+        collection=collection, owner=user, items=order_rows(kind, rows), stats={}
+    )
+
+
 def is_revoked(token) -> bool:
     """True for a token its owner stopped sharing (the page answers 410)."""
     if not token:

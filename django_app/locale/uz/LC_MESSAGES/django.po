@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 10:14+0000\n"
+"POT-Creation-Date: 2026-10-16 10:34+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: uz\n"
@@ -362,9 +362,8 @@ msgid ""
 "<strong>%(show)s</strong> against ★ <strong>%(movie)s</strong> for a movie, "
 "%(gap)s points apart."
 msgstr ""
-"Seriallar filmlardan yuqoriroq baholanadi: odatiy serial ★ "
-"<strong>%(show)s</strong> oladi, film esa ★ <strong>%(movie)s</strong>, farq "
-"— %(gap)s ball."
+"Seriallar filmlardan yuqoriroq baholanadi: odatiy serial ★ <strong>%(show)s</"
+"strong> oladi, film esa ★ <strong>%(movie)s</strong>, farq — %(gap)s ball."
 
 #: analytics/templates/analytics/dashboard.html:63
 #, python-format
@@ -373,9 +372,8 @@ msgid ""
 "<strong>%(movie)s</strong> against ★ <strong>%(show)s</strong> for a show, "
 "%(gap)s points apart."
 msgstr ""
-"Filmlar seriallardan yuqoriroq baholanadi: odatiy film ★ "
-"<strong>%(movie)s</strong> oladi, serial esa ★ <strong>%(show)s</strong>, "
-"farq — %(gap)s ball."
+"Filmlar seriallardan yuqoriroq baholanadi: odatiy film ★ <strong>%(movie)s</"
+"strong> oladi, serial esa ★ <strong>%(show)s</strong>, farq — %(gap)s ball."
 
 #: analytics/templates/analytics/dashboard.html:64
 #, python-format
@@ -461,8 +459,9 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:139
 #, python-format
 msgid ""
-"<strong>%(over)s%%</strong> of movies with a known budget returned five times"
-" it or more; only <strong>%(under)s%%</strong> earned less than they cost."
+"<strong>%(over)s%%</strong> of movies with a known budget returned five "
+"times it or more; only <strong>%(under)s%%</strong> earned less than they "
+"cost."
 msgstr ""
 "Byudjeti maʼlum filmlarning <strong>%(over)s%%</strong> qismi uni besh "
 "baravar yoki undan koʻp qaytargan; atigi <strong>%(under)s%%</strong> "
@@ -471,16 +470,16 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:142
 #, python-format
 msgid ""
-"Based on %(counter)s movie with a known budget of at least $1M and box-office"
-" revenue. Not adjusted for inflation; streaming releases and movies still in "
-"cinemas can read low."
+"Based on %(counter)s movie with a known budget of at least $1M and box-"
+"office revenue. Not adjusted for inflation; streaming releases and movies "
+"still in cinemas can read low."
 msgid_plural ""
 "Based on %(counter)s movies with a known budget of at least $1M and box-"
 "office revenue. Not adjusted for inflation; streaming releases and movies "
 "still in cinemas can read low."
 msgstr[0] ""
-"Byudjeti kamida $1 mln boʻlgan va kassa tushumi maʼlum boʻlgan %(counter)s ta"
-" filmga asoslangan. Inflyatsiyaga tuzatishsiz; striming relizlari va hali "
+"Byudjeti kamida $1 mln boʻlgan va kassa tushumi maʼlum boʻlgan %(counter)s "
+"ta filmga asoslangan. Inflyatsiyaga tuzatishsiz; striming relizlari va hali "
 "kinoteatrlarda namoyish etilayotgan filmlar past koʻrinishi mumkin."
 
 #: analytics/templates/analytics/dashboard.html:150
@@ -586,8 +585,8 @@ msgstr "Eng qimmat"
 #: analytics/templates/analytics/dashboard.html:261
 #, python-format
 msgid ""
-"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes "
-"longer</strong> than one from the %(first)ss."
+"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes longer</"
+"strong> than one from the %(first)ss."
 msgstr ""
 "%(last)s-yillardagi odatiy film %(first)s-yillardagiga qaraganda "
 "<strong>%(minutes)s daqiqa uzunroq</strong>."
@@ -595,8 +594,8 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:262
 #, python-format
 msgid ""
-"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes "
-"shorter</strong> than one from the %(first)ss."
+"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes shorter</"
+"strong> than one from the %(first)ss."
 msgstr ""
 "%(last)s-yillardagi odatiy film %(first)s-yillardagiga qaraganda "
 "<strong>%(minutes)s daqiqa qisqaroq</strong>."
@@ -659,8 +658,8 @@ msgstr ""
 msgid ""
 "This reflects how the archive was assembled as much as how cinema changed."
 msgstr ""
-"Bu kino qanday oʻzgargani bilan bir qatorda arxiv qanday yigʻilganini ham aks"
-" ettiradi."
+"Bu kino qanday oʻzgargani bilan bir qatorda arxiv qanday yigʻilganini ham "
+"aks ettiradi."
 
 #: analytics/templates/analytics/dashboard.html:319
 msgid "Genre mix"
@@ -682,8 +681,8 @@ msgid ""
 "A movie counts in every genre it belongs to, so each decade's shares add up "
 "to more than 100 percent. The ten most common genres."
 msgstr ""
-"Film oʻzining har bir janrida hisoblanadi, shuning uchun oʻn yillik ulushlari"
-" yigʻindisi 100 foizdan oshadi. Eng koʻp uchraydigan oʻnta janr."
+"Film oʻzining har bir janrida hisoblanadi, shuning uchun oʻn yillik "
+"ulushlari yigʻindisi 100 foizdan oshadi. Eng koʻp uchraydigan oʻnta janr."
 
 #: analytics/templates/analytics/dashboard.html:358
 #, python-format
@@ -692,8 +691,8 @@ msgid ""
 "%(country)s took part in <strong>%(pct)s%%</strong> of them."
 msgstr ""
 "Arxiv filmlarining <strong>%(english)s%%</strong> qismi ingliz tilida; "
-"“%(country)s” davlati filmlarning <strong>%(pct)s%%</strong> qismida ishtirok"
-" etgan."
+"“%(country)s” davlati filmlarning <strong>%(pct)s%%</strong> qismida "
+"ishtirok etgan."
 
 #: analytics/templates/analytics/dashboard.html:360
 msgid ""
@@ -776,33 +775,33 @@ msgstr "Vazifasi"
 #: analytics/templates/analytics/dashboard.html:497
 #, python-format
 msgid ""
-"Shows hold their first-season rating <strong>all the way to season "
-"%(last)s</strong>."
+"Shows hold their first-season rating <strong>all the way to season %(last)s</"
+"strong>."
 msgstr ""
-"Seriallar birinchi fasl reytingini <strong>%(last)s-faslgacha</strong> saqlab"
-" qoladi."
+"Seriallar birinchi fasl reytingini <strong>%(last)s-faslgacha</strong> "
+"saqlab qoladi."
 
 #: analytics/templates/analytics/dashboard.html:498
 #, python-format
 msgid ""
-"Shows hold their first-season rating <strong>through season "
-"%(hold)s</strong>, then slip about <strong>%(size)s points</strong> across "
-"seasons %(first)s–%(last)s."
+"Shows hold their first-season rating <strong>through season %(hold)s</"
+"strong>, then slip about <strong>%(size)s points</strong> across seasons "
+"%(first)s–%(last)s."
 msgstr ""
 "Seriallar birinchi fasl reytingini <strong>%(hold)s-faslgacha</strong> "
-"saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s "
-"ball</strong> pasayadi."
+"saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s ball</"
+"strong> pasayadi."
 
 #: analytics/templates/analytics/dashboard.html:499
 #, python-format
 msgid ""
-"Shows hold their first-season rating <strong>through season "
-"%(hold)s</strong>, then climb about <strong>%(size)s points</strong> across "
-"seasons %(first)s–%(last)s."
+"Shows hold their first-season rating <strong>through season %(hold)s</"
+"strong>, then climb about <strong>%(size)s points</strong> across seasons "
+"%(first)s–%(last)s."
 msgstr ""
 "Seriallar birinchi fasl reytingini <strong>%(hold)s-faslgacha</strong> "
-"saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s "
-"ball</strong> oshadi."
+"saqlaydi, soʻng %(first)s–%(last)s-fasllarda taxminan <strong>%(size)s ball</"
+"strong> oshadi."
 
 #: analytics/templates/analytics/dashboard.html:510
 msgid "Rating by season, against season 1"
@@ -824,8 +823,8 @@ msgid ""
 "Each show is compared with its own first season, so shows cancelled early "
 "don’t flatter the later seasons."
 msgstr ""
-"Har bir serial oʻzining birinchi fasli bilan solishtiriladi, shu sababli erta"
-" yopilgan seriallar keyingi fasllarni yaxshiroq qilib koʻrsatmaydi."
+"Har bir serial oʻzining birinchi fasli bilan solishtiriladi, shu sababli "
+"erta yopilgan seriallar keyingi fasllarni yaxshiroq qilib koʻrsatmaydi."
 
 #: analytics/templates/analytics/dashboard.html:522
 #: core/context_processors.py:87 movies/templates/movies/_season_kpis.html:23
@@ -1186,81 +1185,81 @@ msgid "<span class=\"mono\">%(counter)s</span> movie"
 msgid_plural "<span class=\"mono\">%(counter)s</span> movies"
 msgstr[0] "<span class=\"mono\">%(counter)s</span> ta film"
 
-#: core/templates/core/_collection_section.html:41
-#: core/templates/core/_collection_section.html:48
-#: core/templates/core/_collection_section.html:55
+#: core/templates/core/_collection_section.html:42
+#: core/templates/core/_collection_section.html:49
+#: core/templates/core/_collection_section.html:56
 #, fuzzy
 #| msgid "Share"
 msgctxt "share sheet"
 msgid "Share"
 msgstr "Ulush"
 
-#: core/templates/core/_collection_section.html:44
+#: core/templates/core/_collection_section.html:45
 #, python-format
 msgid "Share %(label)s — add a movie first"
 msgstr ""
 
-#: core/templates/core/_collection_section.html:57
+#: core/templates/core/_collection_section.html:58
 msgid "Link to this list"
 msgstr ""
 
-#: core/templates/core/_collection_section.html:63
-#: core/templates/core/share/_sheet.html:129
-#: core/templates/core/share/_sheet.html:138
+#: core/templates/core/_collection_section.html:64
+#: core/templates/core/share/_sheet.html:135
+#: core/templates/core/share/_sheet.html:144
 msgid "Stop sharing"
 msgstr ""
 
-#: core/templates/core/_collection_section.html:70
+#: core/templates/core/_collection_section.html:71
 msgid "Add a line (optional)"
 msgstr ""
 
-#: core/templates/core/_collection_section.html:72
+#: core/templates/core/_collection_section.html:73
 #, fuzzy
 #| msgid "Creation"
 msgid "Create link"
 msgstr "Yaratuvchilik"
 
-#: core/templates/core/_collection_section.html:83
+#: core/templates/core/_collection_section.html:84
 #: core/templates/core/share/page.html:145
 #, python-format
 msgid "Rank %(rank)s:"
 msgstr "%(rank)s-oʻrin:"
 
-#: core/templates/core/_collection_section.html:96
+#: core/templates/core/_collection_section.html:97
 #: core/templates/core/share/page.html:154 templates/base.html:273
 msgid "Movie"
 msgstr "Film"
 
-#: core/templates/core/_collection_section.html:96
+#: core/templates/core/_collection_section.html:97
 #: core/templates/core/share/page.html:154 templates/base.html:273
 msgid "TV show"
 msgstr "Serial"
 
-#: core/templates/core/_collection_section.html:100
+#: core/templates/core/_collection_section.html:101
 #, python-format
 msgid "Remove %(title)s from %(label)s"
 msgstr "“%(title)s”ni “%(label)s” boʻlimidan olib tashlash"
 
-#: core/templates/core/_collection_section.html:116
+#: core/templates/core/_collection_section.html:117
 #, python-format
 msgid "Move %(title)s up"
 msgstr "“%(title)s”ni yuqoriga koʻtarish"
 
-#: core/templates/core/_collection_section.html:121
+#: core/templates/core/_collection_section.html:122
 #, python-format
 msgid "Move %(title)s down"
 msgstr "“%(title)s”ni pastga tushirish"
 
-#: core/templates/core/_collection_section.html:139
+#: core/templates/core/_collection_section.html:140
 msgid "Add to Top"
 msgstr "Topga qoʻshish"
 
-#: core/templates/core/_collection_section.html:139
+#: core/templates/core/_collection_section.html:140
 #, python-format
 msgid "at rank %(rank)s"
 msgstr "%(rank)s-oʻrinda"
 
-#: core/templates/core/_collection_section.html:141
+#: core/templates/core/_collection_section.html:142
 msgid "Empty slot"
 msgstr "Boʻsh oʻrin"
 
@@ -1306,181 +1305,185 @@ msgctxt "share card"
 msgid "<span class=\"sc-mono\">+%(n)s</span> more"
 msgstr "<span class=\"mono\">%(counter)s</span> ta film"
 
-#: core/templates/core/share/_sheet.html:22
+#: core/templates/core/share/_sheet.html:24
 msgctxt "share sheet"
 msgid "Copied"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:22
+#: core/templates/core/share/_sheet.html:24
 msgid "Select the link and copy it"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:23
+#: core/templates/core/share/_sheet.html:25
 msgctxt "share sheet"
 msgid "Saved"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:23
+#: core/templates/core/share/_sheet.html:25
 #, fuzzy
 #| msgid "Sending…"
 msgctxt "share sheet"
 msgid "Saving…"
 msgstr "Yuborilmoqda…"
 
-#: core/templates/core/share/_sheet.html:24
+#: core/templates/core/share/_sheet.html:26
 #, fuzzy
 #| msgid "Sending…"
 msgctxt "share sheet"
 msgid "Making…"
 msgstr "Yuborilmoqda…"
 
-#: core/templates/core/share/_sheet.html:24
+#: core/templates/core/share/_sheet.html:26
 msgctxt "share sheet"
 msgid "Done"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:25
+#: core/templates/core/share/_sheet.html:27
+msgid "Ready. Tap once more to share."
+msgstr ""
+
+#: core/templates/core/share/_sheet.html:28
 #, fuzzy
 #| msgid "That chat could not be opened just now. Please try again."
 msgid "That did not work. Please try again."
 msgstr "Bu chatni hozir ochib bo‘lmadi. Qayta urinib ko‘ring."
 
-#: core/templates/core/share/_sheet.html:26
+#: core/templates/core/share/_sheet.html:29
 msgid "Could not make the image here. Try again, or share the link instead."
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:27
+#: core/templates/core/share/_sheet.html:30
 msgid "New link is ready. The old one no longer works."
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:28
+#: core/templates/core/share/_sheet.html:31
 msgid "Sharing is off. The old link no longer works."
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:33
+#: core/templates/core/share/_sheet.html:36
 msgid "Share <span data-share-name></span>"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:34 templates/base.html:416
+#: core/templates/core/share/_sheet.html:37 templates/base.html:416
 #: templates/base.html:427 templates/base.html:487
 msgid "Close"
 msgstr "Yopish"
 
-#: core/templates/core/share/_sheet.html:42
-msgid "Only you can see this list."
-msgstr ""
-
-#: core/templates/core/share/_sheet.html:43
-msgid ""
-"Make a link anyone can open, without an account. It shows this list as it is "
-"now and as you change it, never your email. You can turn it off at any time."
-msgstr ""
-
-#: core/templates/core/share/_sheet.html:46
-msgid "Make a link"
-msgstr ""
-
-#: core/templates/core/share/_sheet.html:54
+#: core/templates/core/share/_sheet.html:45
 msgid "Drawing the preview…"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:60
+#: core/templates/core/share/_sheet.html:51
 msgctxt "share sheet"
 msgid "Image"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:63
+#: core/templates/core/share/_sheet.html:54
 msgctxt "share sheet"
 msgid "Shape"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:65
+#: core/templates/core/share/_sheet.html:56
 #, fuzzy
 #| msgid "Story"
 msgctxt "share sheet"
 msgid "Story"
 msgstr "Hikoya muallifi"
 
-#: core/templates/core/share/_sheet.html:67
+#: core/templates/core/share/_sheet.html:58
 msgctxt "share sheet"
 msgid "Wide"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:70
+#: core/templates/core/share/_sheet.html:61
 msgctxt "share sheet"
 msgid "Theme"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:72
+#: core/templates/core/share/_sheet.html:63
 msgctxt "share sheet"
 msgid "Dark"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:74
+#: core/templates/core/share/_sheet.html:65
 msgctxt "share sheet"
 msgid "Light"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:80
+#: core/templates/core/share/_sheet.html:71
 #, fuzzy
 #| msgid "Share"
 msgid "Share image"
 msgstr "Ulush"
 
-#: core/templates/core/share/_sheet.html:80
-#: core/templates/core/share/_sheet.html:83
+#: core/templates/core/share/_sheet.html:71
+#: core/templates/core/share/_sheet.html:74
 msgid "Download image"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:88
+#: core/templates/core/share/_sheet.html:79
 msgctxt "share sheet"
 msgid "Download"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:92
+#: core/templates/core/share/_sheet.html:83
 msgid "Copy image"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:104
+#: core/templates/core/share/_sheet.html:95
 msgctxt "share sheet"
 msgid "Link"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:110
+#: core/templates/core/share/_sheet.html:102
+msgid "Only you can see this list."
+msgstr ""
+
+#: core/templates/core/share/_sheet.html:103
+msgid ""
+"Make a link anyone can open, without an account. It shows this list as it is "
+"now and as you change it, never your email. You can turn it off at any time."
+msgstr ""
+
+#: core/templates/core/share/_sheet.html:106
+msgid "Make a link"
+msgstr ""
+
+#: core/templates/core/share/_sheet.html:116
 msgctxt "share sheet"
 msgid "Copy"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:116
+#: core/templates/core/share/_sheet.html:122
 #, fuzzy
 #| msgid "Sections of this page"
 msgid "A line on the link's page"
 msgstr "Sahifa boʻlimlari"
 
-#: core/templates/core/share/_sheet.html:119
+#: core/templates/core/share/_sheet.html:125
 msgctxt "share sheet"
 msgid "Optional"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:125
+#: core/templates/core/share/_sheet.html:131
 msgid "New link"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:136
+#: core/templates/core/share/_sheet.html:142
 msgid ""
 "The link you have now stops working. Anyone who has it will see that it has "
 "gone."
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:137
+#: core/templates/core/share/_sheet.html:143
 msgid "The link stops working. Anyone who has it will see that it has gone."
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:138
+#: core/templates/core/share/_sheet.html:144
 msgid "Make a new link"
 msgstr ""
 
-#: core/templates/core/share/_sheet.html:139
+#: core/templates/core/share/_sheet.html:145
 msgid "Keep it"
 msgstr ""
 
@@ -2113,11 +2116,11 @@ msgstr "Multfilmlar"
 
 #: movies/templates/movies/cartoon_list.html:11
 msgid ""
-"Animated movies and shows made for younger viewers. Search by name or reorder"
-" by what was measured."
+"Animated movies and shows made for younger viewers. Search by name or "
+"reorder by what was measured."
 msgstr ""
-"Yosh tomoshabinlar uchun animatsion film va seriallar. Nomi boʻyicha qidiring"
-" yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
+"Yosh tomoshabinlar uchun animatsion film va seriallar. Nomi boʻyicha "
+"qidiring yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
 
 #: movies/templates/movies/cartoon_list.html:24
 msgid "Search cartoons"
@@ -2548,8 +2551,8 @@ msgid ""
 "Every show the warehouse holds. Search by name, narrow by genre, or reorder "
 "by what was measured."
 msgstr ""
-"Ombordagi barcha seriallar. Nomi boʻyicha qidiring, janr boʻyicha toraytiring"
-" yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
+"Ombordagi barcha seriallar. Nomi boʻyicha qidiring, janr boʻyicha "
+"toraytiring yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
 
 #: movies/templates/movies/series_list.html:22
 msgid "Search shows"

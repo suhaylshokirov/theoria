@@ -16,6 +16,11 @@ urlpatterns = [
         name="share_collection",
     ),
     path(
+        "collections/<str:kind>/card/",
+        views.own_card,
+        name="collection_card",
+    ),
+    path(
         "collections/<str:kind>/<int:item_id>/remove/",
         views.remove_item,
         name="remove_item",

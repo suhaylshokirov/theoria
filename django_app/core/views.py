@@ -415,6 +415,28 @@ def shared_card(request, token):
     shared, gone = _shared_or_gone(request, token)
     if gone:
         return gone
+    printed_url = f"{request.get_host()}{sharing.share_path(shared.collection.share_token)}"
+    return _card_response(request, shared, printed_url)
+
+
+@login_required
+def own_card(request, kind):
+    """The same artwork for the owner's own collection, shared or not: the
+    share sheet previews it before a link exists, so it looks the same for
+    every collection. A private one prints where its link will go; the sheet
+    makes the link before it exports an image, so no file carries that."""
+    own = sharing.own_collection(request.user, kind)
+    if own is None or not own.items:
+        raise Http404("Nothing to draw.")
+    collection = own.collection
+    if collection.share_token and collection.shared_at:
+        path = sharing.share_path(collection.share_token)
+    else:
+        path = sharing.share_path("-").replace("-", "…")
+    return _card_response(request, own, f"{request.get_host()}{path}")
+
+
+def _card_response(request, shared, printed_url):
     fmt = request.GET.get("format")
     fmt = fmt if fmt in CARD_FORMATS else "story"
     theme = request.GET.get("theme")
@@ -444,7 +466,7 @@ def shared_card(request, token):
         "more": max(len(shared.items) - len(frames), 0),
         "sheet_rows": max(1, -(-len(frames) // columns)),
         # Printed without the scheme: it is read off an image and typed.
-        "printed_url": f"{request.get_host()}{sharing.share_path(collection.share_token)}".rstrip("/"),
+        "printed_url": printed_url.rstrip("/"),
     }
     template = "core/share/card.html"
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":

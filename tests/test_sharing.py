@@ -615,3 +615,34 @@ def test_no_js_fallback_form_posts_to_the_share_endpoint(owner):
     html = _me(owner, _top_rows()).content.decode()
     assert 'class="account-share-plain"' in html
     assert 'value="enable"' in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_owner_card_previews_a_private_collection(owner):
+    """The sheet previews every collection the same way, shared or not: the
+    owner's card needs no link, and prints where the link will go."""
+    _collection(owner, Collection.TOP, ids=(1, 2, 3))
+    client = Client()
+    client.force_login(owner)
+    url = reverse("account:collection_card", args=["top"])
+    with patch("core.sharing._hydrate", side_effect=lambda items: list(_top_rows())):
+        response = client.get(url + "?format=wide&theme=paper", HTTP_X_REQUESTED_WITH="XMLHttpRequest")
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert 'class="sc"' in html and 'data-format="wide"' in html
+        assert "testserver/s/…" in html
+        assert owner.email not in html
+
+        collection = sharing.enable_share(owner, "top")
+        html = client.get(url, HTTP_X_REQUESTED_WITH="XMLHttpRequest").content.decode()
+        assert f"testserver/s/{collection.share_token}" in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_owner_card_needs_login_and_something_to_draw(owner):
+    url = reverse("account:collection_card", args=["liked"])
+    assert Client().get(url).status_code == 302
+    client = Client()
+    client.force_login(owner)
+    assert client.get(url).status_code == 404
+    assert client.get(reverse("account:collection_card", args=["nope"])).status_code == 404

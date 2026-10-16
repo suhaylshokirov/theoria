@@ -236,25 +236,6 @@ html.has-js.no-share-sheet .account-share-plain {
   height: 20px;
 }
 
-/* --- Private --------------------------------------------------------------- */
-
-.share-private {
-  max-width: 34rem;
-  margin-top: var(--space-6);
-}
-
-.share-private__lead {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: var(--text-md);
-}
-
-.share-private__text {
-  margin: var(--space-3) 0 var(--space-6);
-  color: var(--ink-muted);
-  line-height: 1.55;
-}
-
 /* --- Live: layout ---------------------------------------------------------- */
 
 .share-live {
@@ -575,6 +556,35 @@ html.has-js.no-share-sheet .account-share-plain {
 
 /* --- Link ---------------------------------------------------------------------- */
 
+/* The link group has two faces: "make a link" while private, the address
+   and its controls once shared. Same place, same rhythm. */
+.share-off,
+.share-on-block:not([hidden]) {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.share-off[hidden] {
+  display: none;
+}
+
+.share-off__lead {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-md);
+}
+
+.share-off__text {
+  margin-top: calc(var(--space-5) * -1 + var(--space-2));
+  max-width: 34rem;
+  color: var(--ink-muted);
+  line-height: 1.55;
+}
+
+.share-off .share-btn {
+  justify-self: start;
+}
+
 /* Address and its Copy as one joined control. */
 .share-link {
   display: flex;
@@ -747,9 +757,6 @@ html.has-js.no-share-sheet .account-share-plain {
   color: var(--danger);
 }
 
-.share-private .share-status {
-  margin-top: var(--space-4);
-}
 
 /* --- Wide screens: the preview owns the left ------------------------------- */
 

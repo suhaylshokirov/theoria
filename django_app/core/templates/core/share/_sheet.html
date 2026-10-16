@@ -10,10 +10,12 @@
    in that order, as a bottom sheet. Wide screen: the preview on the left, the
    two groups stacked on the right.
 
-   Two states, flipped by the [data-share-private] / [data-share-live]
-   blocks: private (the card is drawn from the public link, so there is
-   nothing to preview until the owner makes one) and shared. Every string the
-   script prints is a data-* attribute here, so it is translated here.
+   One layout whether or not the collection is shared: the preview is drawn
+   from the owner's own card (account:collection_card), so it is there from
+   the first open. Only the Link group changes: "make a link" while private
+   ([data-share-off]), the address and its controls once shared
+   ([data-share-on]). Every string the script prints is a data-* attribute
+   here, so it is translated here.
    Params (pass with `only`): username, csrf_token. {% endcomment %}
 <dialog class="share-sheet" id="share-sheet" aria-labelledby="share-sheet-title" data-username="{{ username }}"
         data-card-css="{% static 'css/share-card.css' %}"
@@ -21,6 +23,7 @@
         data-msg-copied="{% translate "Copied" context "share sheet" %}" data-msg-copy-failed="{% translate 'Select the link and copy it' %}"
         data-msg-saved="{% translate "Saved" context "share sheet" %}" data-msg-saving="{% translate "Saving…" context "share sheet" %}"
         data-msg-working="{% translate "Making…" context "share sheet" %}" data-msg-done="{% translate "Done" context "share sheet" %}"
+        data-msg-tap-again="{% translate 'Ready. Tap once more to share.' %}"
         data-msg-failed="{% translate 'That did not work. Please try again.' %}"
         data-msg-image-failed="{% translate 'Could not make the image here. Try again, or share the link instead.' %}"
         data-msg-reset="{% translate 'New link is ready. The old one no longer works.' %}"
@@ -35,18 +38,7 @@
             </button>
         </header>
 
-        {% comment %} Private: one decision, stated plainly. {% endcomment %}
-        <section class="share-private" data-share-private>
-            <p class="share-private__lead">{% translate "Only you can see this list." %}</p>
-            <p class="share-private__text">{% translate "Make a link anyone can open, without an account. It shows this list as it is now and as you change it, never your email. You can turn it off at any time." %}</p>
-            <button type="button" class="share-btn share-btn--go" data-share-enable>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                <span>{% translate "Make a link" %}</span>
-            </button>
-            <p class="share-status" data-share-status role="status" aria-live="polite"></p>
-        </section>
-
-        <div class="share-live" data-share-live hidden>
+        <div class="share-live" data-share-live>
             <div class="share-preview" data-share-preview aria-busy="true">
                 <div class="share-preview__frame" data-share-frame></div>
                 <p class="share-preview__state" data-share-preview-state>{% translate "Drawing the preview…" %}</p>
@@ -99,6 +91,20 @@
                 <h3 class="label share-group__title" id="share-link-title">
                     {% translate "Link" context "share sheet" %}
                 </h3>
+
+                {% comment %} No link yet: one decision, stated plainly. The image
+                   buttons above make the link too, since the image prints it. {% endcomment %}
+                <div class="share-off" data-share-off>
+                    <p class="share-off__lead">{% translate "Only you can see this list." %}</p>
+                    <p class="share-off__text">{% translate "Make a link anyone can open, without an account. It shows this list as it is now and as you change it, never your email. You can turn it off at any time." %}</p>
+                    <button type="button" class="share-btn" data-share-enable>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        <span data-label>{% translate "Make a link" %}</span>
+                    </button>
+                    <p class="share-status" data-share-status role="status" aria-live="polite"></p>
+                </div>
+
+                <div class="share-on-block" data-share-on hidden>
                 <div class="share-link">
                     <input id="share-link" type="text" readonly data-share-link aria-labelledby="share-link-title">
                     <button type="button" class="share-link__copy" data-share-copy-link>
@@ -134,6 +140,7 @@
                                 data-yes-rotate="{% translate 'Make a new link' %}" data-yes-disable="{% translate 'Stop sharing' %}"></button>
                         <button type="button" class="share-btn" data-share-undo>{% translate "Keep it" %}</button>
                     </div>
+                </div>
                 </div>
             </section>
         </div>

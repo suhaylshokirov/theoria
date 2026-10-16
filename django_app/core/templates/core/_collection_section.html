@@ -31,6 +31,7 @@
         <button type="button" class="account-share" data-share-open="{{ section.kind }}"
                 data-share-label="{{ label }}" data-share-slug="{{ slug }}"
                 data-share-endpoint="{% url 'account:share_collection' section.kind %}"
+                data-share-card="{% url 'account:collection_card' section.kind %}"
                 data-share-url="{{ section.share.url|default:'' }}" data-share-note="{{ section.share.note }}"
                 {% if section.share.url %}data-shared{% endif %}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 10:14+0000\n"
+"POT-Creation-Date: 2026-10-16 10:34+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -1187,77 +1187,77 @@ msgstr[1] "<span class=\"mono\">%(counter)s</span> фильма"
 msgstr[2] "<span class=\"mono\">%(counter)s</span> фильмов"
 msgstr[3] "<span class=\"mono\">%(counter)s</span> фильма"
 
-#: core/templates/core/_collection_section.html:41
-#: core/templates/core/_collection_section.html:48
-#: core/templates/core/_collection_section.html:55
+#: core/templates/core/_collection_section.html:42
+#: core/templates/core/_collection_section.html:49
+#: core/templates/core/_collection_section.html:56
 msgctxt "share sheet"
 msgid "Share"
 msgstr "Поделиться"
 
-#: core/templates/core/_collection_section.html:44
+#: core/templates/core/_collection_section.html:45
 #, python-format
 msgid "Share %(label)s — add a movie first"
 msgstr "Поделиться: %(label)s — сначала добавьте фильм"
 
-#: core/templates/core/_collection_section.html:57
+#: core/templates/core/_collection_section.html:58
 msgid "Link to this list"
 msgstr "Ссылка на этот список"
 
-#: core/templates/core/_collection_section.html:63
-#: core/templates/core/share/_sheet.html:129
-#: core/templates/core/share/_sheet.html:138
+#: core/templates/core/_collection_section.html:64
+#: core/templates/core/share/_sheet.html:135
+#: core/templates/core/share/_sheet.html:144
 msgid "Stop sharing"
 msgstr "Закрыть доступ"
 
-#: core/templates/core/_collection_section.html:70
+#: core/templates/core/_collection_section.html:71
 msgid "Add a line (optional)"
 msgstr "Подпись (необязательно)"
 
-#: core/templates/core/_collection_section.html:72
+#: core/templates/core/_collection_section.html:73
 msgid "Create link"
 msgstr "Создать ссылку"
 
-#: core/templates/core/_collection_section.html:83
+#: core/templates/core/_collection_section.html:84
 #: core/templates/core/share/page.html:145
 #, python-format
 msgid "Rank %(rank)s:"
 msgstr "Место %(rank)s:"
 
-#: core/templates/core/_collection_section.html:96
+#: core/templates/core/_collection_section.html:97
 #: core/templates/core/share/page.html:154 templates/base.html:273
 msgid "Movie"
 msgstr "Фильм"
 
-#: core/templates/core/_collection_section.html:96
+#: core/templates/core/_collection_section.html:97
 #: core/templates/core/share/page.html:154 templates/base.html:273
 msgid "TV show"
 msgstr "Сериал"
 
-#: core/templates/core/_collection_section.html:100
+#: core/templates/core/_collection_section.html:101
 #, python-format
 msgid "Remove %(title)s from %(label)s"
 msgstr "Убрать «%(title)s» из раздела «%(label)s»"
 
-#: core/templates/core/_collection_section.html:116
+#: core/templates/core/_collection_section.html:117
 #, python-format
 msgid "Move %(title)s up"
 msgstr "Поднять «%(title)s» выше"
 
-#: core/templates/core/_collection_section.html:121
+#: core/templates/core/_collection_section.html:122
 #, python-format
 msgid "Move %(title)s down"
 msgstr "Опустить «%(title)s» ниже"
 
-#: core/templates/core/_collection_section.html:139
+#: core/templates/core/_collection_section.html:140
 msgid "Add to Top"
 msgstr "Добавить в топ"
 
-#: core/templates/core/_collection_section.html:139
+#: core/templates/core/_collection_section.html:140
 #, python-format
 msgid "at rank %(rank)s"
 msgstr "на месте %(rank)s"
 
-#: core/templates/core/_collection_section.html:141
+#: core/templates/core/_collection_section.html:142
 msgid "Empty slot"
 msgstr "Свободное место"
 
@@ -1300,66 +1300,132 @@ msgctxt "share card"
 msgid "<span class=\"sc-mono\">+%(n)s</span> more"
 msgstr "<span class=\"sc-mono\">+%(n)s</span> ещё"
 
-#: core/templates/core/share/_sheet.html:22
+#: core/templates/core/share/_sheet.html:24
 msgctxt "share sheet"
 msgid "Copied"
 msgstr "Скопировано"
 
-#: core/templates/core/share/_sheet.html:22
+#: core/templates/core/share/_sheet.html:24
 msgid "Select the link and copy it"
 msgstr "Выделите ссылку и скопируйте её"
 
-#: core/templates/core/share/_sheet.html:23
+#: core/templates/core/share/_sheet.html:25
 msgctxt "share sheet"
 msgid "Saved"
 msgstr "Сохранено"
 
-#: core/templates/core/share/_sheet.html:23
+#: core/templates/core/share/_sheet.html:25
 msgctxt "share sheet"
 msgid "Saving…"
 msgstr "Сохраняем…"
 
-#: core/templates/core/share/_sheet.html:24
+#: core/templates/core/share/_sheet.html:26
 msgctxt "share sheet"
 msgid "Making…"
 msgstr "Готовим…"
 
-#: core/templates/core/share/_sheet.html:24
+#: core/templates/core/share/_sheet.html:26
 msgctxt "share sheet"
 msgid "Done"
 msgstr "Готово"
 
-#: core/templates/core/share/_sheet.html:25
+#: core/templates/core/share/_sheet.html:27
+msgid "Ready. Tap once more to share."
+msgstr "Готово. Нажмите ещё раз, чтобы поделиться."
+
+#: core/templates/core/share/_sheet.html:28
 msgid "That did not work. Please try again."
 msgstr "Не получилось. Попробуйте ещё раз."
 
-#: core/templates/core/share/_sheet.html:26
+#: core/templates/core/share/_sheet.html:29
 msgid "Could not make the image here. Try again, or share the link instead."
 msgstr ""
 "Не удалось создать картинку. Попробуйте ещё раз или поделитесь ссылкой."
 
-#: core/templates/core/share/_sheet.html:27
+#: core/templates/core/share/_sheet.html:30
 msgid "New link is ready. The old one no longer works."
 msgstr "Новая ссылка готова. Старая больше не работает."
 
-#: core/templates/core/share/_sheet.html:28
+#: core/templates/core/share/_sheet.html:31
 msgid "Sharing is off. The old link no longer works."
 msgstr "Доступ закрыт. Старая ссылка больше не работает."
 
-#: core/templates/core/share/_sheet.html:33
+#: core/templates/core/share/_sheet.html:36
 msgid "Share <span data-share-name></span>"
 msgstr "Поделиться: <span data-share-name></span>"
 
-#: core/templates/core/share/_sheet.html:34 templates/base.html:416
+#: core/templates/core/share/_sheet.html:37 templates/base.html:416
 #: templates/base.html:427 templates/base.html:487
 msgid "Close"
 msgstr "Закрыть"
 
-#: core/templates/core/share/_sheet.html:42
+#: core/templates/core/share/_sheet.html:45
+msgid "Drawing the preview…"
+msgstr "Рисуем превью…"
+
+#: core/templates/core/share/_sheet.html:51
+msgctxt "share sheet"
+msgid "Image"
+msgstr "Картинка"
+
+#: core/templates/core/share/_sheet.html:54
+msgctxt "share sheet"
+msgid "Shape"
+msgstr "Формат"
+
+#: core/templates/core/share/_sheet.html:56
+msgctxt "share sheet"
+msgid "Story"
+msgstr "Сторис"
+
+#: core/templates/core/share/_sheet.html:58
+msgctxt "share sheet"
+msgid "Wide"
+msgstr "Широкий"
+
+#: core/templates/core/share/_sheet.html:61
+msgctxt "share sheet"
+msgid "Theme"
+msgstr "Тема"
+
+#: core/templates/core/share/_sheet.html:63
+msgctxt "share sheet"
+msgid "Dark"
+msgstr "Тёмная"
+
+#: core/templates/core/share/_sheet.html:65
+msgctxt "share sheet"
+msgid "Light"
+msgstr "Светлая"
+
+#: core/templates/core/share/_sheet.html:71
+msgid "Share image"
+msgstr "Поделиться картинкой"
+
+#: core/templates/core/share/_sheet.html:71
+#: core/templates/core/share/_sheet.html:74
+msgid "Download image"
+msgstr "Скачать картинку"
+
+#: core/templates/core/share/_sheet.html:79
+msgctxt "share sheet"
+msgid "Download"
+msgstr "Скачать"
+
+#: core/templates/core/share/_sheet.html:83
+msgid "Copy image"
+msgstr "Копировать картинку"
+
+#: core/templates/core/share/_sheet.html:95
+msgctxt "share sheet"
+msgid "Link"
+msgstr "Ссылка"
+
+#: core/templates/core/share/_sheet.html:102
 msgid "Only you can see this list."
 msgstr "Этот список видите только вы."
 
-#: core/templates/core/share/_sheet.html:43
+#: core/templates/core/share/_sheet.html:103
 msgid ""
 "Make a link anyone can open, without an account. It shows this list as it is "
 "now and as you change it, never your email. You can turn it off at any time."
@@ -1368,91 +1434,29 @@ msgstr ""
 "этот список — таким, какой он сейчас и каким станет после ваших правок, — но "
 "никогда не ваш email. Доступ можно закрыть в любой момент."
 
-#: core/templates/core/share/_sheet.html:46
+#: core/templates/core/share/_sheet.html:106
 msgid "Make a link"
 msgstr "Создать ссылку"
 
-#: core/templates/core/share/_sheet.html:54
-msgid "Drawing the preview…"
-msgstr "Рисуем превью…"
-
-#: core/templates/core/share/_sheet.html:60
-msgctxt "share sheet"
-msgid "Image"
-msgstr "Картинка"
-
-#: core/templates/core/share/_sheet.html:63
-msgctxt "share sheet"
-msgid "Shape"
-msgstr "Формат"
-
-#: core/templates/core/share/_sheet.html:65
-msgctxt "share sheet"
-msgid "Story"
-msgstr "Сторис"
-
-#: core/templates/core/share/_sheet.html:67
-msgctxt "share sheet"
-msgid "Wide"
-msgstr "Широкий"
-
-#: core/templates/core/share/_sheet.html:70
-msgctxt "share sheet"
-msgid "Theme"
-msgstr "Тема"
-
-#: core/templates/core/share/_sheet.html:72
-msgctxt "share sheet"
-msgid "Dark"
-msgstr "Тёмная"
-
-#: core/templates/core/share/_sheet.html:74
-msgctxt "share sheet"
-msgid "Light"
-msgstr "Светлая"
-
-#: core/templates/core/share/_sheet.html:80
-msgid "Share image"
-msgstr "Поделиться картинкой"
-
-#: core/templates/core/share/_sheet.html:80
-#: core/templates/core/share/_sheet.html:83
-msgid "Download image"
-msgstr "Скачать картинку"
-
-#: core/templates/core/share/_sheet.html:88
-msgctxt "share sheet"
-msgid "Download"
-msgstr "Скачать"
-
-#: core/templates/core/share/_sheet.html:92
-msgid "Copy image"
-msgstr "Копировать картинку"
-
-#: core/templates/core/share/_sheet.html:104
-msgctxt "share sheet"
-msgid "Link"
-msgstr "Ссылка"
-
-#: core/templates/core/share/_sheet.html:110
+#: core/templates/core/share/_sheet.html:116
 msgctxt "share sheet"
 msgid "Copy"
 msgstr "Копировать"
 
-#: core/templates/core/share/_sheet.html:116
+#: core/templates/core/share/_sheet.html:122
 msgid "A line on the link's page"
 msgstr "Подпись на странице по ссылке"
 
-#: core/templates/core/share/_sheet.html:119
+#: core/templates/core/share/_sheet.html:125
 msgctxt "share sheet"
 msgid "Optional"
 msgstr "Необязательно"
 
-#: core/templates/core/share/_sheet.html:125
+#: core/templates/core/share/_sheet.html:131
 msgid "New link"
 msgstr "Новая ссылка"
 
-#: core/templates/core/share/_sheet.html:136
+#: core/templates/core/share/_sheet.html:142
 msgid ""
 "The link you have now stops working. Anyone who has it will see that it has "
 "gone."
@@ -1460,17 +1464,17 @@ msgstr ""
 "Текущая ссылка перестанет работать. Все, у кого она есть, увидят, что список "
 "больше недоступен."
 
-#: core/templates/core/share/_sheet.html:137
+#: core/templates/core/share/_sheet.html:143
 msgid "The link stops working. Anyone who has it will see that it has gone."
 msgstr ""
 "Ссылка перестанет работать. Все, у кого она есть, увидят, что список больше "
 "недоступен."
 
-#: core/templates/core/share/_sheet.html:138
+#: core/templates/core/share/_sheet.html:144
 msgid "Make a new link"
 msgstr "Создать новую ссылку"
 
-#: core/templates/core/share/_sheet.html:139
+#: core/templates/core/share/_sheet.html:145
 msgid "Keep it"
 msgstr "Оставить"
 
