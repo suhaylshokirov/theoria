@@ -16,6 +16,8 @@ Including another URLconf
 """
 from django.conf import settings
 from django.contrib import admin
+from django.http import HttpResponseRedirect
+from django.templatetags.static import static
 from django.urls import include, path, re_path
 
 from core import account_urls, share_urls
@@ -28,7 +30,14 @@ _legacy_langs = "|".join(
     code for code, _name in settings.LANGUAGES if code != settings.LANGUAGE_CODE
 )
 
+def favicon(_request):
+    # Browsers and crawlers probe /favicon.ico before (or without) reading <head>.
+    # Resolved per request: the hashed static name only exists after collectstatic.
+    return HttpResponseRedirect(static('img/favicon.ico'))
+
+
 urlpatterns = [
+    path('favicon.ico', favicon),
     re_path(rf"^(?P<lang>{_legacy_langs})/(?P<rest>.*)$", core_views.legacy_language_redirect),
     path('i18n/', include('django.conf.urls.i18n')),
     path('assistant/', include('assistant.urls')),

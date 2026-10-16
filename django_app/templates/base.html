@@ -6,10 +6,14 @@
     <title>{% block title %}Theoria{% endblock %}</title>
     <meta name="description" content="{% block description %}{% translate "Theoria — a movie catalog measured end to end: every movie, cast member and rating read straight out of a star-schema warehouse." %}{% endblock %}">
 
-    {% comment %} Favicon: the same Θ mark, at the heavier weight that survives 16px.
-       Transparent ground and currentColor-equivalent stroke picked per scheme,
-       so the ring doesn't disappear against a dark tab bar. {% endcomment %}
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 26 32'%3E%3Cstyle%3Eellipse%7Bstroke:%230b0b0b%7D@media(prefers-color-scheme:dark)%7Bellipse%7Bstroke:%23f2f1ed%7D%7D%3C/style%3E%3Cellipse cx='13' cy='16' rx='9.9' ry='13.3' fill='none' stroke-width='6.4'/%3E%3Crect x='3.6' y='12.7' width='18.8' height='6.6' fill='%23a3e635'/%3E%3C/svg%3E">
+    {% comment %} Favicon: the Θ mark as real files, not a data: URI. The SVG adapts to
+       the tab bar's scheme; the ICO is the fallback for Safari and anything that
+       ignores SVG icons (dark tile, so the ring survives any tab colour); the
+       apple-touch icon is what iOS uses for "Add to Home Screen". /favicon.ico
+       also redirects to the ICO for crawlers that ask for it unprompted. {% endcomment %}
+    <link rel="icon" href="{% static 'img/favicon.ico' %}" sizes="48x48">
+    <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml" sizes="any">
+    <link rel="apple-touch-icon" href="{% static 'img/apple-touch-icon.png' %}">
 
     {% comment %} Tints the browser chrome around the page: the iOS Safari
        address bar and status bar, and the Android Chrome toolbar. Without it a
