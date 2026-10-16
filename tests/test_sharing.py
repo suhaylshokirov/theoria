@@ -531,14 +531,14 @@ def test_liked_card_fills_the_contact_sheet(owner):
     assert html.count('class="sc-cell"') == 4
     assert "--rows: 2" in html
     assert "sc-print__rank" not in html
-    assert '<span class="sc-mono">+9</span> more at the link' in html
+    assert '<span class="sc-mono">+9</span> more<' in html
     cache.clear()                   # the list is cached by updated_at
     with _hydrate_with(many[:5]):
         html = _card(collection.share_token, format="wide").content.decode()
     # A Wide sheet is 4 across: five prints make two rows.
     assert html.count('class="sc-frame"') == 5
     assert "--rows: 2" in html
-    assert "more at the link" not in html          # all five fit
+    assert "sc-foot__more" not in html             # all five fit
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
