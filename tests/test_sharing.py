@@ -535,10 +535,10 @@ def test_liked_card_fills_the_contact_sheet(owner):
     cache.clear()                   # the list is cached by updated_at
     with _hydrate_with(many[:5]):
         html = _card(collection.share_token, format="wide").content.decode()
-    # A Wide sheet is 4 across: five prints make two rows.
-    assert html.count('class="sc-frame"') == 5
-    assert "--rows: 2" in html
-    assert "sc-foot__more" not in html             # all five fit
+    # A Wide is one row of four; the fifth is counted.
+    assert html.count('class="sc-cell"') == 4
+    assert "--rows: 1" in html
+    assert '<span class="sc-mono">+1</span> more<' in html
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])

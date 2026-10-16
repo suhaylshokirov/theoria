@@ -105,7 +105,9 @@
   --t-url: 22px;
   --disc: 88px;
   --gutter: 18px;
-  --text-w: 440px;
+  /* The owner's half of the row under the header: what a long handle is
+     sized against. */
+  --text-w: 760px;
 }
 
 .sc *,
@@ -375,15 +377,15 @@
   color: var(--c-ink);
 }
 
-/* --- Story: four big posters, two by two --------------------------------------
-   Every kind on a phone. Each print takes its share of the shelf's height and
+/* --- The posters: four, two by two on a Story, one row on a Wide ---------------
+   Every kind. Each print takes its share of the shelf's height and
    its width from 2:3, capped by half the width; the pair is centred, so a note
    (which shortens the shelf) narrows the posters without spreading them. */
 
 .sc-grid {
   --cols: 2;
   --print-h: calc((100cqh - (var(--rows) - 1) * 24px) / var(--rows));
-  --print-w: min(calc(var(--print-h) * 2 / 3), calc((100cqw - 24px) / 2));
+  --print-w: min(calc(var(--print-h) * 2 / 3), calc((100cqw - (var(--cols) - 1) * 24px) / var(--cols)));
   display: grid;
   grid-template-columns: repeat(var(--cols), var(--print-w));
   justify-content: center;
@@ -438,220 +440,56 @@
 }
 
 /* ===========================================================================
-   Wide: the words down the left, the posters filling the right.
+   Wide: the Story's pieces in the same order, laid out landscape. The header
+   across the top; the owner on the left with the collection's line opposite;
+   the four posters in one row; the link and the count along the foot.
    =========================================================================== */
 
 .sc[data-format="wide"] {
   display: grid;
-  grid-template-columns: var(--text-w) minmax(0, 1fr);
-  /* The header at the top; who shared it, their note and the link held
-     together at the foot; the space between is the column's breathing room. */
-  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   grid-template-areas:
-    "mast  shelf"
-    ".     shelf"
-    "owner shelf"
-    "note  shelf"
-    "foot  shelf";
-  column-gap: 64px;
+    "mast  mast"
+    "owner note"
+    "shelf shelf"
+    "foot  foot";
+  column-gap: 48px;
 }
 
 .sc[data-format="wide"] .sc-mast { grid-area: mast; }
-.sc[data-format="wide"] .sc-owner { grid-area: owner; margin-top: 0; }
-.sc[data-format="wide"] .sc-note { grid-area: note; margin-top: 28px; -webkit-line-clamp: 6; }
-.sc[data-format="wide"] .sc-foot { grid-area: foot; margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--c-rule-strong); }
-.sc[data-format="wide"] .sc-shelf { grid-area: shelf; margin-top: 0; }
 
-/* ===========================================================================
-   TOP — the canon. #1 large with its numeral beside it; 02 onwards in a row
-   beneath, each under its number.
-   =========================================================================== */
-
-.sc-canon {
-  --small-w: calc((100cqw - 3 * var(--gutter)) / 4);
-  --small-h: calc(var(--small-w) * 1.5);
-  --small-no: 64px;
-  --lead-h: min(calc(100cqh - var(--small-h) - var(--small-no) - 56px), calc(100cqw * 0.6 * 1.5));
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 56px var(--gutter);
+.sc[data-format="wide"] .sc-owner {
+  grid-area: owner;
+  margin-top: 32px;
 }
 
-/* A list of one: #1 takes the whole shelf. */
-.sc-canon:not(:has(.sc-rank:nth-child(2))) {
-  --lead-h: min(100cqh, calc(100cqw * 0.6 * 1.5));
+.sc[data-format="wide"] .sc-note {
+  grid-area: note;
+  align-self: center;
+  justify-self: end;
+  margin-top: 32px;
+  -webkit-line-clamp: 2;
+  text-align: right;
 }
 
-.sc-rank {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
+.sc[data-format="wide"] .sc-shelf {
+  grid-area: shelf;
+  margin-top: 36px;
 }
 
-.sc-rank__no {
-  font-family: var(--f-display);
-  font-weight: 900;
-  font-stretch: 125%;
-  font-size: 44px;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  color: var(--c-ink);
+.sc[data-format="wide"] .sc-foot {
+  grid-area: foot;
+  margin-top: 28px;
 }
 
-.sc-rank .sc-print {
-  width: 100%;
-}
-
-.sc-rank.is-lead {
-  grid-column: 1 / -1;
-  flex-direction: row-reverse;
-  justify-content: flex-end;
-  align-items: flex-start;
-  gap: 40px;
-}
-
-.sc-rank.is-lead .sc-print {
-  width: auto;
-  height: var(--lead-h);
-}
-
-/* The numeral beside #1, with Top's yellow bar under it. */
-.sc-rank.is-lead .sc-rank__no {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  font-size: 200px;
-  line-height: 0.8;
-}
-
-.sc-rank.is-lead .sc-rank__no::after {
-  content: "";
-  width: 100%;
-  height: 12px;
-  background: var(--c-field);
-}
-
-/* Wide: #1 the full height on the left, 02–05 two by two beside it, each
-   small print sized from the shelf's height so the pair of rows fits. */
-.sc[data-format="wide"] .sc-canon {
-  --small-no: 42px;
-  --small-h: calc((100cqh - 2 * var(--small-no) - 28px) / 2);
-  grid-template-columns: auto repeat(2, calc(var(--small-h) * 2 / 3));
-  grid-template-rows: repeat(2, auto);
-  justify-content: start;
-  gap: 28px 24px;
-}
-
-.sc[data-format="wide"] .sc-rank.is-lead {
-  grid-column: 1;
-  grid-row: 1 / span 2;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.sc[data-format="wide"] .sc-rank.is-lead .sc-print {
-  height: calc(100cqh - 112px);
-}
-
-.sc[data-format="wide"] .sc-rank.is-lead .sc-rank__no {
-  font-size: 80px;
-  gap: 12px;
-}
-
-.sc[data-format="wide"] .sc-rank.is-lead .sc-rank__no::after {
-  height: 8px;
-}
-
-.sc[data-format="wide"] .sc-rank__no {
-  font-size: 32px;
-}
-
-.sc[data-format="wide"] .sc-rank:not(.is-lead) .sc-print {
-  height: var(--small-h);
-  width: auto;
-}
-
-.sc[data-format="wide"] .sc-rank {
-  gap: 10px;
-}
-
-.sc[data-format="wide"] .sc-rank.is-lead {
-  margin-right: 16px;
-}
-
-.sc[data-format="wide"] .sc-canon:not(:has(.sc-rank:nth-child(2))) .sc-rank.is-lead .sc-print {
-  height: calc(100cqh - 112px);
-}
-
-/* ===========================================================================
-   LIKED — the contact sheet. Even rows of prints; the columns are set to
-   exactly the width a print may have (by the shelf's height and width), so
-   the outer prints sit on the margins.
-   =========================================================================== */
-
-.sc-sheet {
-  --cols: 3;
-  --print-h: calc((100cqh - (var(--rows) - 1) * var(--gutter)) / var(--rows));
-  --print-w: min(calc(var(--print-h) * 2 / 3), calc((100cqw - (var(--cols) - 1) * var(--gutter)) / var(--cols)));
-  display: grid;
-  grid-template-columns: repeat(var(--cols), var(--print-w));
-  justify-content: space-between;
-  align-content: center;
-  gap: var(--gutter);
-  height: 100%;
-}
-
-.sc-frame .sc-print {
-  width: 100%;
-}
-
-/* Fewer prints than a row: keep them together on the left. */
-.sc-sheet:not(:has(.sc-frame:nth-child(3))) {
-  justify-content: start;
-}
-
-.sc[data-format="wide"] .sc-sheet {
+/* A full row spans margin to margin, under the header's rule; a shorter
+   one keeps its posters together from the left. */
+.sc[data-format="wide"] .sc-grid {
   --cols: 4;
+  justify-content: space-between;
 }
 
-.sc[data-format="wide"] .sc-sheet:not(:has(.sc-frame:nth-child(4))) {
+.sc[data-format="wide"] .sc-grid:not(:has(.sc-cell:nth-child(4))) {
   justify-content: start;
-}
-
-/* ===========================================================================
-   WATCH LATER — the queue. The next title largest, the rest waiting smaller
-   behind it, bottom-aligned, the last running off the card's right edge.
-   =========================================================================== */
-
-.sc-reel {
-  --next-h: min(100cqh, calc(100cqw * 0.72 * 1.5));
-  display: flex;
-  align-items: flex-end;
-  gap: var(--gutter);
-  margin-right: calc(var(--pad-x) * -1);
-}
-
-.sc-reel__frame {
-  flex: none;
-}
-
-.sc-reel__frame .sc-print {
-  height: calc(var(--next-h) * 0.6);
-}
-
-.sc-reel__frame.is-next .sc-print {
-  height: var(--next-h);
-}
-
-.sc[data-format="wide"] .sc-reel {
-  --next-h: min(100cqh, calc(100cqw * 0.5 * 1.5));
-}
-
-.sc[data-format="wide"] .sc-reel__frame .sc-print {
-  height: calc(var(--next-h) * 0.62);
-}
-
-.sc[data-format="wide"] .sc-reel__frame.is-next .sc-print {
-  height: var(--next-h);
 }
