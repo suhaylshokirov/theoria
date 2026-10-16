@@ -82,6 +82,54 @@ html.has-js .account-share {
   cursor: not-allowed;
 }
 
+/* Phones: a labelled pill can't share the row with the name (in Russian it
+   can't even at 430px), and wrapped it hung alone under the heading. So it
+   folds to a 44px lime square on the title row, the twin of the 44px kind
+   glyph on the left: the collection on one end, sending it out on the other.
+   The word stays in the DOM, so the button still reads "Share". The name
+   takes what's left and wraps inside its own block if it has to. */
+@media (max-width: 767px) {
+  .account-section__head {
+    flex-wrap: nowrap;
+    gap: var(--space-4);
+  }
+
+  .account-section__title {
+    flex: 1 1 auto;
+    gap: 14px;
+  }
+
+  .account-section__title h2 {
+    -webkit-hyphens: auto;
+    hyphens: auto;
+    overflow-wrap: break-word;
+  }
+
+  .account-share {
+    position: relative;
+    flex: none;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  .account-share svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .account-share span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 /* Without JS there is no sheet: a plain disclosure with a form does the job. */
 .account-share-plain {
   margin-top: var(--space-5);
