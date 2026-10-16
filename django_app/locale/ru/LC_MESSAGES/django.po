@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-24 12:54+0000\n"
+"POT-Creation-Date: 2026-10-16 04:01+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -13,7 +13,9 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || (n%100>=11 && n%100<=14)? 2 : 3);\n"
+"Plural-Forms: nplurals=4; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<12 || n%100>14) ? 1 : n%10==0 || (n%10>=5 && n%10<=9) || "
+"(n%100>=11 && n%100<=14)? 2 : 3);\n"
 
 #: accounts/forms.py:38
 msgid "Username or email already exists."
@@ -23,7 +25,7 @@ msgstr "Такое имя пользователя или email уже заня�
 msgid "That's already your username."
 msgstr "Это уже ваше имя пользователя."
 
-#: accounts/forms.py:65 accounts/views.py:262
+#: accounts/forms.py:65 accounts/views.py:255
 msgid "That username is already taken."
 msgstr "Это имя пользователя уже занято."
 
@@ -32,13 +34,18 @@ msgid "Enter the 6-digit code."
 msgstr "Введите 6-значный код."
 
 #: accounts/models.py:33
-msgid "Usernames must be 3-30 characters: letters, numbers, and underscores only."
-msgstr "Имя пользователя должно содержать от 3 до 30 символов: только буквы, цифры и знак подчёркивания."
+msgid ""
+"Usernames must be 3-30 characters: letters, numbers, and underscores only."
+msgstr ""
+"Имя пользователя должно содержать от 3 до 30 символов: только буквы, цифры и "
+"знак подчёркивания."
 
 #: accounts/models.py:40
 #, python-format
 msgid "%(value)s is a reserved name and can't be used as a username."
-msgstr "«%(value)s» — зарезервированное имя, его нельзя использовать как имя пользователя."
+msgstr ""
+"«%(value)s» — зарезервированное имя, его нельзя использовать как имя "
+"пользователя."
 
 #: accounts/templates/accounts/change_username.html:5
 msgid "Change username — Theoria"
@@ -77,8 +84,9 @@ msgid "Sign in — Theoria"
 msgstr "Вход — Theoria"
 
 #: accounts/templates/accounts/login.html:18
-#: accounts/templates/accounts/signup.html:44 templates/base.html:128
-#: templates/base.html:204
+#: accounts/templates/accounts/signup.html:44
+#: core/templates/core/share/page.html:197 templates/base.html:175
+#: templates/base.html:251
 msgid "Sign in"
 msgstr "Войти"
 
@@ -166,7 +174,8 @@ msgstr "Неверный код."
 
 #: accounts/views.py:81
 msgid "A code was just sent — wait a moment before requesting another."
-msgstr "Код только что отправлен — подождите немного, прежде чем запрашивать новый."
+msgstr ""
+"Код только что отправлен — подождите немного, прежде чем запрашивать новый."
 
 #: accounts/views.py:82
 msgid "Too many codes requested for that address recently. Try again later."
@@ -188,31 +197,67 @@ msgstr "Войдите, чтобы открыть страницу сериал�
 msgid "Sign in to open a person's record."
 msgstr "Войдите, чтобы открыть страницу человека."
 
-#: accounts/views.py:176
+#: accounts/views.py:169
 msgid "We'll email you a code."
 msgstr "Мы пришлём код на почту."
 
-#: accounts/views.py:186
+#: accounts/views.py:179
 msgid "Too many sign-up attempts — please try again later."
 msgstr "Слишком много попыток регистрации — попробуйте позже."
 
-#: accounts/views.py:219 accounts/views.py:343
+#: accounts/views.py:212 accounts/views.py:336
 msgid "No account for that address."
 msgstr "Аккаунта с таким адресом нет."
 
-#: accounts/views.py:252
+#: accounts/views.py:245
 msgid "Too many username changes — please try again later."
 msgstr "Слишком много смен имени пользователя — попробуйте позже."
 
-#: accounts/views.py:365
-msgid "That username or email was taken while you were verifying — please start over."
-msgstr "Пока вы подтверждали, это имя пользователя или email заняли — начните заново."
+#: accounts/views.py:358
+msgid ""
+"That username or email was taken while you were verifying — please start "
+"over."
+msgstr ""
+"Пока вы подтверждали, это имя пользователя или email заняли — начните заново."
+
+#: analytics/insights.py:286
+msgid "Composer"
+msgstr "Композитор"
+
+#: analytics/insights.py:287
+msgid "Cinematographer"
+msgstr "Оператор-постановщик"
+
+#: analytics/insights.py:288 movies/vocab.py:59
+msgid "Editor"
+msgstr "Монтажёр"
+
+#: analytics/insights.py:289
+msgid "Production designer"
+msgstr "Художник-постановщик"
+
+#: analytics/insights.py:290
+msgid "Screenwriter"
+msgstr "Сценарист"
+
+#: analytics/insights.py:348
+msgid "Still running"
+msgstr "Продолжается"
+
+#: analytics/insights.py:349 movies/vocab.py:146
+msgid "Ended"
+msgstr "Завершён"
+
+#: analytics/insights.py:350
+msgid "Cancelled"
+msgstr "Закрыт"
 
 #: analytics/templates/analytics/dashboard.html:4
 msgid "Theoria — Analytics"
 msgstr "Theoria — Аналитика"
 
-#: analytics/templates/analytics/dashboard.html:13 templates/base.html:185
+#: analytics/templates/analytics/dashboard.html:13
+#: movies/templates/movies/home.html:224 templates/base.html:232
 msgid "Analytics"
 msgstr "Аналитика"
 
@@ -220,272 +265,856 @@ msgstr "Аналитика"
 msgid "Stats for nerds."
 msgstr "Цифры для дотошных."
 
-#: analytics/templates/analytics/dashboard.html:19
-msgid "Rating by decade"
-msgstr "Рейтинг по десятилетиям"
-
 #: analytics/templates/analytics/dashboard.html:20
-#: analytics/templates/analytics/dashboard.html:137
-msgid "by decade"
-msgstr "по десятилетиям"
-
-#: analytics/templates/analytics/dashboard.html:24
-msgid "Average rating by decade, line chart"
-msgstr "Средний рейтинг по десятилетиям, линейный график"
-
-#: analytics/templates/analytics/dashboard.html:29
-#: analytics/templates/analytics/dashboard.html:143
-msgid "Decade"
-msgstr "Десятилетие"
-
-#: analytics/templates/analytics/dashboard.html:29
-#: analytics/templates/analytics/dashboard.html:60
-#: analytics/templates/analytics/dashboard.html:88
-#: analytics/templates/analytics/dashboard.html:116
-#: movies/templates/movies/_person_header.html:36
+#: analytics/templates/analytics/dashboard.html:77
+#: analytics/templates/analytics/dashboard.html:90
+#: analytics/templates/analytics/dashboard.html:174
+#: analytics/templates/analytics/dashboard.html:202
+#: analytics/templates/analytics/dashboard.html:286
+#: analytics/templates/analytics/dashboard.html:374
+#: analytics/templates/analytics/dashboard.html:401
+#: analytics/templates/analytics/dashboard.html:444
+#: analytics/templates/analytics/dashboard.html:469
+#: core/context_processors.py:72 movies/templates/movies/_person_header.html:36
 #: movies/templates/movies/_studio_header.html:33
-#: movies/templates/movies/home.html:27
+#: movies/templates/movies/home.html:84
 #: movies/templates/movies/movie_list.html:4
-#: movies/templates/movies/movie_list.html:7 templates/base.html:180
+#: movies/templates/movies/movie_list.html:11 templates/base.html:227
 msgid "Movies"
 msgstr "Фильмы"
 
-#: analytics/templates/analytics/dashboard.html:29
-#: analytics/templates/analytics/dashboard.html:88
-#: analytics/templates/analytics/dashboard.html:116
-#: analytics/templates/analytics/dashboard.html:143
-#: analytics/templates/analytics/dashboard.html:173
-#: analytics/templates/analytics/dashboard.html:200
-#: analytics/templates/analytics/dashboard.html:229
-#: core/context_processors.py:23 movies/templates/movies/_person_header.html:51
-#: movies/templates/movies/_studio_header.html:37
-#: movies/templates/movies/home.html:35
-msgid "Avg rating"
-msgstr "Средний рейтинг"
-
-#: analytics/templates/analytics/dashboard.html:29
-#: analytics/templates/analytics/dashboard.html:60
-#: analytics/templates/analytics/dashboard.html:88
-#: core/context_processors.py:24
-msgid "Total revenue"
-msgstr "Общие сборы"
-
-#: analytics/templates/analytics/dashboard.html:44
-#: analytics/templates/analytics/dashboard.html:75
-#: analytics/templates/analytics/dashboard.html:130
-msgid "No movies loaded yet. Run the pipeline to fill the warehouse."
-msgstr "Фильмы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
-
-#: analytics/templates/analytics/dashboard.html:50
-msgid "Revenue by genre"
-msgstr "Сборы по жанрам"
-
-#: analytics/templates/analytics/dashboard.html:51
-msgid "by genre"
-msgstr "по жанрам"
-
-#: analytics/templates/analytics/dashboard.html:55
-msgid "Total revenue by genre, bar chart"
-msgstr "Общие сборы по жанрам, столбчатая диаграмма"
-
-#: analytics/templates/analytics/dashboard.html:60
-msgid "Genre"
-msgstr "Жанр"
-
-#: analytics/templates/analytics/dashboard.html:60
-msgid "Avg / movie"
-msgstr "В среднем на фильм"
-
-#: analytics/templates/analytics/dashboard.html:81
-msgid "Top studios by revenue"
-msgstr "Лучшие студии по сборам"
-
-#: analytics/templates/analytics/dashboard.html:82
-msgid "3+ movies"
-msgstr "от 3 фильмов"
-
-#: analytics/templates/analytics/dashboard.html:88
-msgid "Studio"
-msgstr "Студия"
-
-#: analytics/templates/analytics/dashboard.html:103
-msgid "No studios loaded yet. Run the pipeline to fill the warehouse."
-msgstr "Студии ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
-
-#: analytics/templates/analytics/dashboard.html:109
-msgid "Movies by production country"
-msgstr "Фильмы по странам производства"
-
-#: analytics/templates/analytics/dashboard.html:110
-msgid "co-productions counted once each"
-msgstr "совместные постановки учитываются по одному разу"
-
-#: analytics/templates/analytics/dashboard.html:116
-msgid "Country"
-msgstr "Страна"
-
-#: analytics/templates/analytics/dashboard.html:136
-msgid "Shows by decade"
-msgstr "Сериалы по десятилетиям"
-
-#: analytics/templates/analytics/dashboard.html:143
-#: analytics/templates/analytics/dashboard.html:173
-#: analytics/templates/analytics/dashboard.html:229
-#: movies/templates/movies/_person_header.html:46
+#: analytics/templates/analytics/dashboard.html:24
+#: analytics/templates/analytics/dashboard.html:78
+#: analytics/templates/analytics/dashboard.html:90
+#: analytics/templates/analytics/dashboard.html:522
+#: analytics/templates/analytics/dashboard.html:550
+#: analytics/templates/analytics/dashboard.html:577
+#: core/context_processors.py:73 movies/templates/movies/_person_header.html:46
 msgid "Shows"
 msgstr "Сериалы"
 
-#: analytics/templates/analytics/dashboard.html:157
-#: analytics/templates/analytics/dashboard.html:216
-msgid "No shows loaded yet. Run the pipeline to fill the warehouse."
-msgstr "Сериалы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+#: analytics/templates/analytics/dashboard.html:28
+#: movies/templates/movies/_season_kpis.html:39
+#: movies/templates/movies/_season_kpis.html:58
+#: movies/templates/movies/series_detail.html:243
+msgid "Rated episodes"
+msgstr "Серий с оценкой"
 
-#: analytics/templates/analytics/dashboard.html:163
-msgid "Rating by season"
-msgstr "Рейтинг по сезонам"
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
+#: analytics/templates/analytics/dashboard.html:32
+#: analytics/templates/analytics/dashboard.html:112
+msgid "Median movie rating"
+msgstr "Медианный рейтинг фильмов"
 
-#: analytics/templates/analytics/dashboard.html:164
-msgid "does a show decline?"
-msgstr "сдаёт ли сериал к концу?"
+#: analytics/templates/analytics/dashboard.html:36
+msgid "Median return on budget"
+msgstr "Медианная окупаемость бюджета"
+
+#: analytics/templates/analytics/dashboard.html:40
+#: core/context_processors.py:86
+msgid "Not in English"
+msgstr "Не на английском"
+
+#: analytics/templates/analytics/dashboard.html:45
+msgid "Sections of this page"
+msgstr "Разделы страницы"
+
+#: analytics/templates/analytics/dashboard.html:47
+#: analytics/templates/analytics/dashboard.html:59
+msgid "Ratings"
+msgstr "Рейтинги"
+
+#: analytics/templates/analytics/dashboard.html:48
+#: analytics/templates/analytics/dashboard.html:137
+msgid "Money"
+msgstr "Деньги"
+
+#: analytics/templates/analytics/dashboard.html:49
+#: analytics/templates/analytics/dashboard.html:258
+msgid "Decades"
+msgstr "Десятилетия"
+
+#: analytics/templates/analytics/dashboard.html:50
+#: analytics/templates/analytics/dashboard.html:356
+msgid "Origins"
+msgstr "Происхождение"
+
+#: analytics/templates/analytics/dashboard.html:51
+#: analytics/templates/analytics/dashboard.html:427
+#: movies/templates/movies/home.html:94 movies/views.py:629
+#: templates/base.html:230
+msgid "People"
+msgstr "Люди"
+
+#: analytics/templates/analytics/dashboard.html:52
+#: analytics/templates/analytics/dashboard.html:494
+#: core/templates/core/share/page.html:87
+msgid "TV shows"
+msgstr "Сериалы"
+
+#: analytics/templates/analytics/dashboard.html:62
+#, python-format
+msgid ""
+"Shows are rated higher than movies: the typical show scores ★ "
+"<strong>%(show)s</strong> against ★ <strong>%(movie)s</strong> for a movie, "
+"%(gap)s points apart."
+msgstr ""
+"Сериалы оцениваются выше фильмов: типичный сериал набирает ★ "
+"<strong>%(show)s</strong> против ★ <strong>%(movie)s</strong> у фильма, "
+"разница — %(gap)s балла."
+
+#: analytics/templates/analytics/dashboard.html:63
+#, python-format
+msgid ""
+"Movies are rated higher than shows: the typical movie scores ★ "
+"<strong>%(movie)s</strong> against ★ <strong>%(show)s</strong> for a show, "
+"%(gap)s points apart."
+msgstr ""
+"Фильмы оцениваются выше сериалов: типичный фильм набирает ★ "
+"<strong>%(movie)s</strong> против ★ <strong>%(show)s</strong> у сериала, "
+"разница — %(gap)s балла."
+
+#: analytics/templates/analytics/dashboard.html:64
+#, python-format
+msgid ""
+"Movies and shows are rated about the same: ★ <strong>%(movie)s</strong> for "
+"the typical movie, ★ <strong>%(show)s</strong> for the typical show."
+msgstr ""
+"Фильмы и сериалы оцениваются примерно одинаково: ★ <strong>%(movie)s</"
+"strong> у типичного фильма, ★ <strong>%(show)s</strong> у типичного сериала."
+
+#: analytics/templates/analytics/dashboard.html:74
+msgid "How movies and shows are rated"
+msgstr "Как оценены фильмы и сериалы"
+
+#: analytics/templates/analytics/dashboard.html:75
+msgid "IMDb, by half point"
+msgstr "IMDb, по полбалла"
+
+#: analytics/templates/analytics/dashboard.html:76
+msgid "Show ratings for"
+msgstr "Показать рейтинги для"
+
+#: analytics/templates/analytics/dashboard.html:82
+msgid "Number of movies and shows at each IMDb rating, bar chart"
+msgstr "Число фильмов и сериалов по рейтингу IMDb, столбчатая диаграмма"
+
+#: analytics/templates/analytics/dashboard.html:84
+msgid ""
+"Each bar counts the movies or shows whose rating falls in that half-point "
+"band; the dashed line marks the median."
+msgstr ""
+"Каждый столбец показывает, сколько фильмов или сериалов попало в этот "
+"полубалльный интервал рейтинга; пунктир отмечает медиану."
+
+#: analytics/templates/analytics/dashboard.html:86
+#: analytics/templates/analytics/dashboard.html:170
+#: analytics/templates/analytics/dashboard.html:282
+#: analytics/templates/analytics/dashboard.html:518
+msgid "Show the numbers"
+msgstr "Показать цифры"
+
+#: analytics/templates/analytics/dashboard.html:90
+#: movies/templates/movies/_episode_table.html:28
+#: movies/templates/movies/_season_table.html:30
+#: movies/templates/movies/movie_detail.html:83
+#: movies/templates/movies/series_detail.html:82
+#: movies/templates/movies/series_detail.html:241
+msgid "Rating"
+msgstr "Рейтинг"
+
+#: analytics/templates/analytics/dashboard.html:108
+msgid "Reading the scores"
+msgstr "Как читать оценки"
+
+#: analytics/templates/analytics/dashboard.html:116
+msgid "Median show rating"
+msgstr "Медианный рейтинг сериалов"
+
+#: analytics/templates/analytics/dashboard.html:121
+msgid "IMDb and TMDB agree"
+msgstr "IMDb и TMDB сходятся"
+
+#: analytics/templates/analytics/dashboard.html:123
+msgid ""
+"How closely the two rating sources move together, from 0 (not at all) to 1 "
+"(identical), for movies with at least 50 TMDB votes."
+msgstr ""
+"Насколько согласованно меняются оценки двух источников: от 0 (никак) до 1 "
+"(полностью совпадают), для фильмов минимум с 50 голосами на TMDB."
+
+#: analytics/templates/analytics/dashboard.html:130
+#: analytics/templates/analytics/dashboard.html:189
+#: analytics/templates/analytics/dashboard.html:251
+#: analytics/templates/analytics/dashboard.html:349
+#: analytics/templates/analytics/dashboard.html:389
+#: analytics/templates/analytics/dashboard.html:415
+#: analytics/templates/analytics/dashboard.html:420
+#: analytics/templates/analytics/dashboard.html:487
+msgid "No movies loaded yet. Run the pipeline to fill the warehouse."
+msgstr ""
+"Фильмы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+
+#: analytics/templates/analytics/dashboard.html:139
+#, python-format
+msgid ""
+"<strong>%(over)s%%</strong> of movies with a known budget returned five "
+"times it or more; only <strong>%(under)s%%</strong> earned less than they "
+"cost."
+msgstr ""
+"<strong>%(over)s%%</strong> фильмов с известным бюджетом окупили его в пять "
+"раз и больше; лишь <strong>%(under)s%%</strong> заработали меньше, чем "
+"стоили."
+
+#: analytics/templates/analytics/dashboard.html:142
+#, python-format
+msgid ""
+"Based on %(counter)s movie with a known budget of at least $1M and box-"
+"office revenue. Not adjusted for inflation; streaming releases and movies "
+"still in cinemas can read low."
+msgid_plural ""
+"Based on %(counter)s movies with a known budget of at least $1M and box-"
+"office revenue. Not adjusted for inflation; streaming releases and movies "
+"still in cinemas can read low."
+msgstr[0] ""
+"Основано на %(counter)s фильме с известным бюджетом от $1 млн и кассовыми "
+"сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё "
+"идут в кино, могут выглядеть скромнее."
+msgstr[1] ""
+"Основано на %(counter)s фильмах с известным бюджетом от $1 млн и кассовыми "
+"сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё "
+"идут в кино, могут выглядеть скромнее."
+msgstr[2] ""
+"Основано на %(counter)s фильмах с известным бюджетом от $1 млн и кассовыми "
+"сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё "
+"идут в кино, могут выглядеть скромнее."
+msgstr[3] ""
+"Основано на %(counter)s фильмах с известным бюджетом от $1 млн и кассовыми "
+"сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё "
+"идут в кино, могут выглядеть скромнее."
+
+#: analytics/templates/analytics/dashboard.html:150
+msgid "Budget and revenue"
+msgstr "Бюджет и сборы"
+
+#: analytics/templates/analytics/dashboard.html:151
+msgid "log scale"
+msgstr "логарифмическая шкала"
+
+#: analytics/templates/analytics/dashboard.html:154
+msgid "Budget against revenue for each movie, scatter chart"
+msgstr "Бюджет и сборы каждого фильма, точечная диаграмма"
+
+#: analytics/templates/analytics/dashboard.html:156
+msgid ""
+"Each point is a movie. Above the lower dashed line it earned more than it "
+"cost; above the upper one, five times as much. Select a point to open the "
+"movie."
+msgstr ""
+"Каждая точка — фильм. Выше нижней пунктирной линии он заработал больше, чем "
+"стоил; выше верхней — в пять раз больше. Выберите точку, чтобы открыть фильм."
+
+#: analytics/templates/analytics/dashboard.html:161
+msgid "Return on budget by genre"
+msgstr "Окупаемость бюджета по жанрам"
+
+#: analytics/templates/analytics/dashboard.html:162
+msgid "30+ movies each"
+msgstr "от 30 фильмов"
+
+#: analytics/templates/analytics/dashboard.html:166
+msgid ""
+"Share of each genre's movies by how much they returned on their budget, "
+"stacked bar chart"
+msgstr ""
+"Доля фильмов каждого жанра по тому, какую часть бюджета они вернули, "
+"диаграмма с накоплением"
 
 #: analytics/templates/analytics/dashboard.html:168
-msgid "Average episode rating by season number, line chart"
-msgstr "Средний рейтинг серий по номеру сезона, линейный график"
+msgid ""
+"Share of each genre's movies in each return band, ordered by median return."
+msgstr ""
+"Доля фильмов каждого жанра в каждом диапазоне окупаемости; жанры упорядочены "
+"по медианной окупаемости."
 
-#: analytics/templates/analytics/dashboard.html:173
-#: movies/templates/movies/_season_picker.html:19
-#: movies/templates/movies/series_detail.html:203
+#: analytics/templates/analytics/dashboard.html:174
+#: analytics/templates/analytics/dashboard.html:326
+msgid "Genre"
+msgstr "Жанр"
+
+#: analytics/templates/analytics/dashboard.html:174
+#: analytics/templates/analytics/dashboard.html:202
+msgid "Median return"
+msgstr "Медианная окупаемость"
+
+#: analytics/templates/analytics/dashboard.html:195
+msgid "Studios with the most movies"
+msgstr "Студии с наибольшим числом фильмов"
+
+#: analytics/templates/analytics/dashboard.html:196
+msgid "5+ movies"
+msgstr "от 5 фильмов"
+
+#: analytics/templates/analytics/dashboard.html:202
+msgid "Studio"
+msgstr "Студия"
+
+#: analytics/templates/analytics/dashboard.html:202
+#: analytics/templates/analytics/dashboard.html:374
+#: analytics/templates/analytics/dashboard.html:444
+#: analytics/templates/analytics/dashboard.html:522
+#: core/context_processors.py:27 movies/templates/movies/_person_header.html:51
+#: movies/templates/movies/_studio_header.html:37
+#: movies/templates/movies/home.html:98
+msgid "Avg rating"
+msgstr "Средний рейтинг"
+
+#: analytics/templates/analytics/dashboard.html:202
+#: core/context_processors.py:28
+msgid "Total revenue"
+msgstr "Общие сборы"
+
+#: analytics/templates/analytics/dashboard.html:218
+msgid "No studios loaded yet. Run the pipeline to fill the warehouse."
+msgstr ""
+"Студии ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+
+#: analytics/templates/analytics/dashboard.html:224
+msgid "Two extremes"
+msgstr "Два полюса"
+
+#: analytics/templates/analytics/dashboard.html:232
+msgid "Biggest return"
+msgstr "Наибольшая окупаемость"
+
+#: analytics/templates/analytics/dashboard.html:242
+msgid "Most expensive"
+msgstr "Самый дорогой"
+
+#: analytics/templates/analytics/dashboard.html:261
+#, python-format
+msgid ""
+"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes longer</"
+"strong> than one from the %(first)ss."
+msgstr ""
+"Типичный фильм %(last)s-х идёт на <strong>%(minutes)s мин дольше</strong>, "
+"чем фильм %(first)s-х."
+
+#: analytics/templates/analytics/dashboard.html:262
+#, python-format
+msgid ""
+"The typical movie of the %(last)ss runs <strong>%(minutes)s minutes shorter</"
+"strong> than one from the %(first)ss."
+msgstr ""
+"Типичный фильм %(last)s-х идёт на <strong>%(minutes)s мин короче</strong>, "
+"чем фильм %(first)s-х."
+
+#: analytics/templates/analytics/dashboard.html:263
+#, python-format
+msgid ""
+"The typical movie runs <strong>about the same length</strong> in the "
+"%(last)ss as in the %(first)ss."
+msgstr ""
+"Типичный фильм идёт <strong>примерно столько же</strong> в %(last)s-х, "
+"сколько в %(first)s-х."
+
+#: analytics/templates/analytics/dashboard.html:267
+msgid ""
+"Each decade holds roughly the same number of movies by design, so these "
+"charts compare shares and typical values, never totals."
+msgstr ""
+"В каждом десятилетии примерно одинаковое число фильмов — так задумано, "
+"поэтому здесь сравниваются доли и типичные значения, а не итоги."
+
+#: analytics/templates/analytics/dashboard.html:275
+msgid "Typical running time"
+msgstr "Типичная продолжительность"
+
+#: analytics/templates/analytics/dashboard.html:276
+msgid "median, minutes"
+msgstr "медиана, минуты"
+
+#: analytics/templates/analytics/dashboard.html:279
+msgid "Median running time by decade, line chart"
+msgstr "Медианная продолжительность фильмов по десятилетиям, линейный график"
+
+#: analytics/templates/analytics/dashboard.html:286
+#: movies/templates/movies/home.html:241
+msgid "Decade"
+msgstr "Десятилетие"
+
+#: analytics/templates/analytics/dashboard.html:286
+#: core/context_processors.py:77
+msgid "Median minutes"
+msgstr "Медиана, мин"
+
+#: analytics/templates/analytics/dashboard.html:306
+msgid "Movies not in English"
+msgstr "Фильмы не на английском"
+
+#: analytics/templates/analytics/dashboard.html:307
+msgid "share of each decade"
+msgstr "доля в каждом десятилетии"
+
+#: analytics/templates/analytics/dashboard.html:310
+msgid "Share of movies not in English by decade, bar chart"
+msgstr "Доля фильмов не на английском по десятилетиям, столбчатая диаграмма"
+
+#: analytics/templates/analytics/dashboard.html:312
+msgid ""
+"This reflects how the archive was assembled as much as how cinema changed."
+msgstr ""
+"Здесь сказывается и то, как собирался архив, а не только то, как менялось "
+"кино."
+
+#: analytics/templates/analytics/dashboard.html:319
+msgid "Genre mix"
+msgstr "Жанровый состав"
+
+#: analytics/templates/analytics/dashboard.html:320
+msgid "share of each decade's movies"
+msgstr "доля фильмов десятилетия"
+
+#: analytics/templates/analytics/dashboard.html:328
+#, python-format
+msgid "%(d)ss"
+msgstr "%(d)s-е"
+
+# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
+#: analytics/templates/analytics/dashboard.html:344
+msgid ""
+"A movie counts in every genre it belongs to, so each decade's shares add up "
+"to more than 100 percent. The ten most common genres."
+msgstr ""
+"Фильм учитывается в каждом своём жанре, поэтому доли за десятилетие в сумме "
+"дают больше 100 процентов. Десять самых частых жанров."
+
+#: analytics/templates/analytics/dashboard.html:358
+#, python-format
+msgid ""
+"<strong>%(english)s%%</strong> of the archive’s movies are in English, and "
+"%(country)s took part in <strong>%(pct)s%%</strong> of them."
+msgstr ""
+"<strong>%(english)s%%</strong> фильмов архива сняты на английском языке; "
+"страна «%(country)s» участвовала в производстве <strong>%(pct)s%%</strong> "
+"фильмов."
+
+#: analytics/templates/analytics/dashboard.html:360
+msgid ""
+"This describes the archive, which leans heavily towards English-language "
+"movies, not cinema worldwide."
+msgstr ""
+"Это описывает архив, где заметно преобладают фильмы на английском языке, а "
+"не мировое кино."
+
+#: analytics/templates/analytics/dashboard.html:367
+#: movies/templates/movies/movie_detail.html:113
+#: movies/templates/movies/series_detail.html:124
+msgid "Production countries"
+msgstr "Страны производства"
+
+#: analytics/templates/analytics/dashboard.html:368
+msgid "co-productions counted once each"
+msgstr "совместные постановки учитываются по одному разу"
+
+#: analytics/templates/analytics/dashboard.html:374
+msgid "Country"
+msgstr "Страна"
+
+#: analytics/templates/analytics/dashboard.html:374
+#: analytics/templates/analytics/dashboard.html:401
+msgid "Share"
+msgstr "Доля"
+
+#: analytics/templates/analytics/dashboard.html:395
+msgid "Original language"
+msgstr "Язык оригинала"
+
+#: analytics/templates/analytics/dashboard.html:401
+msgctxt "table column"
+msgid "Language"
+msgstr "Язык"
+
+#: analytics/templates/analytics/dashboard.html:406
+msgid "Other languages"
+msgstr "Другие языки"
+
+#: analytics/templates/analytics/dashboard.html:429
+#, python-format
+msgid ""
+"<strong>%(name)s</strong> is the highest-rated director with at least four "
+"movies here: ★ %(rating)s across %(count)s movies."
+msgstr ""
+"<strong>%(name)s</strong> — режиссёр с самым высоким рейтингом среди тех, у "
+"кого здесь не менее четырёх фильмов: ★ %(rating)s (фильмов: %(count)s)."
+
+#: analytics/templates/analytics/dashboard.html:437
+msgid "Top-rated directors"
+msgstr "Режиссёры с лучшими рейтингами"
+
+#: analytics/templates/analytics/dashboard.html:438
+msgid "4+ movies"
+msgstr "от 4 фильмов"
+
+#: analytics/templates/analytics/dashboard.html:444
+#: analytics/templates/analytics/dashboard.html:469 movies/vocab.py:43
+msgid "Director"
+msgstr "Режиссёр"
+
+#: analytics/templates/analytics/dashboard.html:462
+msgid "Recurring partnerships"
+msgstr "Постоянные творческие союзы"
+
+#: analytics/templates/analytics/dashboard.html:463
+msgid "3+ movies together"
+msgstr "от 3 общих фильмов"
+
+#: analytics/templates/analytics/dashboard.html:469
+msgid "Worked with"
+msgstr "Совместно с"
+
+#: analytics/templates/analytics/dashboard.html:469
+msgid "Role"
+msgstr "Должность"
+
+#: analytics/templates/analytics/dashboard.html:497
+#, python-format
+msgid ""
+"Shows hold their first-season rating <strong>all the way to season %(last)s</"
+"strong>."
+msgstr ""
+"Сериалы сохраняют рейтинг первого сезона <strong>вплоть до %(last)s-го "
+"сезона</strong>."
+
+#: analytics/templates/analytics/dashboard.html:498
+#, python-format
+msgid ""
+"Shows hold their first-season rating <strong>through season %(hold)s</"
+"strong>, then slip about <strong>%(size)s points</strong> across seasons "
+"%(first)s–%(last)s."
+msgstr ""
+"Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</"
+"strong>, а затем теряют около <strong>%(size)s балла</strong> в сезонах "
+"%(first)s–%(last)s."
+
+#: analytics/templates/analytics/dashboard.html:499
+#, python-format
+msgid ""
+"Shows hold their first-season rating <strong>through season %(hold)s</"
+"strong>, then climb about <strong>%(size)s points</strong> across seasons "
+"%(first)s–%(last)s."
+msgstr ""
+"Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</"
+"strong>, а затем прибавляют около <strong>%(size)s балла</strong> в сезонах "
+"%(first)s–%(last)s."
+
+#: analytics/templates/analytics/dashboard.html:510
+msgid "Rating by season, against season 1"
+msgstr "Рейтинг по сезонам относительно первого сезона"
+
+#: analytics/templates/analytics/dashboard.html:511
+msgid "15+ shows per season"
+msgstr "от 15 сериалов на сезон"
+
+#: analytics/templates/analytics/dashboard.html:514
+msgid ""
+"Change in average episode rating from season 1, by season number, line chart"
+msgstr ""
+"Изменение среднего рейтинга серий относительно первого сезона по номеру "
+"сезона, линейный график"
+
+#: analytics/templates/analytics/dashboard.html:516
+msgid ""
+"Each show is compared with its own first season, so shows cancelled early "
+"don’t flatter the later seasons."
+msgstr ""
+"Каждый сериал сравнивается с собственным первым сезоном, поэтому рано "
+"закрытые сериалы не приукрашивают поздние сезоны."
+
+#: analytics/templates/analytics/dashboard.html:522
+#: core/context_processors.py:87 movies/templates/movies/_season_kpis.html:23
+#: movies/templates/movies/_season_picker.html:26
+#: movies/templates/movies/_season_table.html:20
+#: movies/templates/movies/_season_table.html:27
+#: movies/templates/movies/series_detail.html:221
+#: movies/templates/movies/series_detail.html:238
 msgid "Season"
 msgstr "Сезон"
 
-#: analytics/templates/analytics/dashboard.html:187
-msgid "No episode ratings loaded yet. Run the pipeline to fill the warehouse."
-msgstr "Рейтинги серий ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+#: analytics/templates/analytics/dashboard.html:522
+msgid "Change"
+msgstr "Изменение"
 
-#: analytics/templates/analytics/dashboard.html:193
-msgid "Longest-running shows"
-msgstr "Самые долгие сериалы"
+#: analytics/templates/analytics/dashboard.html:543
+msgid "Rating by show status"
+msgstr "Рейтинг по статусу сериала"
 
-#: analytics/templates/analytics/dashboard.html:194
-msgid "by calendar span"
-msgstr "по календарному сроку"
+#: analytics/templates/analytics/dashboard.html:544
+msgid "median"
+msgstr "медиана"
 
-#: analytics/templates/analytics/dashboard.html:200
-msgid "Show"
-msgstr "Сериал"
+#: analytics/templates/analytics/dashboard.html:550
+#: movies/templates/movies/_person_header.html:58
+#: movies/templates/movies/series_detail.html:95
+msgid "Status"
+msgstr "Статус"
 
-#: analytics/templates/analytics/dashboard.html:200
-msgid "Years on air"
-msgstr "Лет в эфире"
+#: analytics/templates/analytics/dashboard.html:550
+#: analytics/templates/analytics/dashboard.html:577
+msgid "Median rating"
+msgstr "Медианный рейтинг"
 
-#: analytics/templates/analytics/dashboard.html:200
-#: movies/templates/movies/series_detail.html:55
-msgid "Seasons"
-msgstr "Сезоны"
+#: analytics/templates/analytics/dashboard.html:564
+#: analytics/templates/analytics/dashboard.html:597
+msgid "No shows loaded yet. Run the pipeline to fill the warehouse."
+msgstr ""
+"Сериалы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
 
-#: analytics/templates/analytics/dashboard.html:200
-#: movies/templates/movies/series_detail.html:59
-#: movies/templates/movies/series_detail.html:194
-msgid "Episodes"
-msgstr "Серии"
+#: analytics/templates/analytics/dashboard.html:570
+msgid "Networks with the most shows"
+msgstr "Каналы с наибольшим числом сериалов"
 
-#: analytics/templates/analytics/dashboard.html:222
-msgid "Top networks by series"
-msgstr "Лучшие каналы по числу сериалов"
+#: analytics/templates/analytics/dashboard.html:571
+msgid "5+ rated shows"
+msgstr "от 5 оценённых сериалов"
 
-#: analytics/templates/analytics/dashboard.html:223
-msgid "3+ shows"
-msgstr "от 3 сериалов"
-
-#: analytics/templates/analytics/dashboard.html:229
+#: analytics/templates/analytics/dashboard.html:577
 msgctxt "table column"
 msgid "Network"
 msgstr "Канал"
 
-#: analytics/templates/analytics/dashboard.html:243
+#: analytics/templates/analytics/dashboard.html:591
 msgid "No networks loaded yet. Run the pipeline to fill the warehouse."
-msgstr "Каналы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
+msgstr ""
+"Каналы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
 
-#: core/context_processors.py:16 templates/base.html:162
+#: analytics/templatetags/dash_format.py:25 core/context_processors.py:67
+msgid "B"
+msgstr " млрд"
+
+#: analytics/templatetags/dash_format.py:27 core/context_processors.py:68
+msgid "M"
+msgstr " млн"
+
+#: analytics/templatetags/dash_format.py:29 core/context_processors.py:69
+msgid "K"
+msgstr " тыс."
+
+#: assistant/views.py:72 templates/base.html:400
+msgid "New chat"
+msgstr "Новый чат"
+
+#: core/context_processors.py:20 templates/base.html:209
 msgid "Open menu"
 msgstr "Открыть меню"
 
-#: core/context_processors.py:17
+#: core/context_processors.py:21
 msgid "Close menu"
 msgstr "Закрыть меню"
 
-#: core/context_processors.py:18 templates/base.html:227
+#: core/context_processors.py:22 templates/base.html:323
 msgid "Switch to dark theme"
 msgstr "Включить тёмную тему"
 
-#: core/context_processors.py:19
+#: core/context_processors.py:23
 msgid "Switch to light theme"
 msgstr "Включить светлую тему"
 
-#: core/context_processors.py:20 movies/templates/movies/person_detail.html:32
+#: core/context_processors.py:24 movies/templates/movies/person_detail.html:38
 msgid "See more"
 msgstr "Ещё"
 
-#: core/context_processors.py:21
+#: core/context_processors.py:25
 msgid "See less"
 msgstr "Свернуть"
 
-#: core/context_processors.py:22
+#: core/context_processors.py:26
 msgid "Filter"
 msgstr "Фильтр"
 
-#: core/context_processors.py:25
+#: core/context_processors.py:29
 msgid "Video"
 msgstr "Видео"
 
-#: core/context_processors.py:26
+#: core/context_processors.py:30
 msgid "Open film guide"
 msgstr "Открыть помощника по фильмам"
 
-#: core/context_processors.py:27 templates/base.html:290
+#: core/context_processors.py:31 templates/base.html:416
+#: templates/base.html:487
 msgid "Close film guide"
 msgstr "Закрыть помощника по фильмам"
 
-#: core/context_processors.py:28
+#: core/context_processors.py:32
+msgid "Your last three chats will appear here."
+msgstr "Здесь появятся ваши последние три чата."
+
+#: core/context_processors.py:33
+msgid "Loading chats…"
+msgstr "Загрузка чатов…"
+
+#: core/context_processors.py:34
+msgid "Your chats could not be loaded just now."
+msgstr "Не удалось загрузить чаты. Попробуйте ещё раз."
+
+#: core/context_processors.py:36
+msgid "That chat could not be opened just now. Please try again."
+msgstr "Не удалось открыть этот чат. Попробуйте ещё раз."
+
+#: core/context_processors.py:39
+msgid "A new chat could not be started just now. Please try again."
+msgstr "Не удалось начать новый чат. Попробуйте ещё раз."
+
+#: core/context_processors.py:41
+msgid "On your list"
+msgstr "В вашем списке"
+
+#: core/context_processors.py:42
+msgid "Already watched"
+msgstr "Уже смотрел(а)"
+
+#: core/context_processors.py:43
+msgid "Not for me"
+msgstr "Не для меня"
+
+#: core/context_processors.py:44
+#, python-brace-format
+msgid "{minutes} min"
+msgstr "{minutes} мин"
+
+#: core/context_processors.py:45
 msgid "Sending…"
 msgstr "Отправляем…"
 
-#: core/context_processors.py:29
+#: core/context_processors.py:46
 msgid "Enter a valid email address."
 msgstr "Введите корректный адрес электронной почты."
 
-#: core/context_processors.py:31
-msgid "Tell me a little about your mood. I can start with something funny, thoughtful, intense, or comforting."
-msgstr "Расскажите немного о своём настроении. Могу начать с чего-нибудь смешного, вдумчивого, напряжённого или утешительного."
+#: core/context_processors.py:48
+msgid ""
+"Tell me a little about your mood. I can start with something funny, "
+"thoughtful, intense, or comforting."
+msgstr ""
+"Расскажите немного о своём настроении. Могу начать с чего-нибудь смешного, "
+"вдумчивого, напряжённого или утешительного."
 
-#: core/context_processors.py:35
-msgid "Choose a feeling and I will narrow it down: light, romantic, thrilling, or strange."
-msgstr "Выберите настроение, и я сужу выбор: лёгкое, романтичное, захватывающее или странное."
+#: core/context_processors.py:52
+msgid ""
+"Choose a feeling and I will narrow it down: light, romantic, thrilling, or "
+"strange."
+msgstr ""
+"Выберите настроение, и я сужу выбор: лёгкое, романтичное, захватывающее или "
+"странное."
 
-#: core/context_processors.py:39
-msgid "A surprise pick will be ready once your personal recommendations are connected."
-msgstr "Сюрприз-подборка появится, когда будут подключены ваши персональные рекомендации."
+#: core/context_processors.py:56
+msgid ""
+"A surprise pick will be ready once your personal recommendations are "
+"connected."
+msgstr ""
+"Сюрприз-подборка появится, когда будут подключены ваши персональные "
+"рекомендации."
 
-#: core/context_processors.py:43
-msgid "I am still in demo mode. Soon I will use your taste profile to make a personal recommendation."
-msgstr "Я пока работаю в демо-режиме. Скоро я буду использовать ваш профиль вкусов, чтобы давать личные рекомендации."
+#: core/context_processors.py:60
+msgid ""
+"I am still in demo mode. Soon I will use your taste profile to make a "
+"personal recommendation."
+msgstr ""
+"Я пока работаю в демо-режиме. Скоро я буду использовать ваш профиль вкусов, "
+"чтобы давать личные рекомендации."
 
-#: core/context_processors.py:47
+#: core/context_processors.py:64
 #, python-brace-format
 msgid "{label} ({seconds}s)"
 msgstr "{label} ({seconds} с)"
 
-#: core/context_processors.py:50
-msgid "B"
-msgstr " млрд"
+#: core/context_processors.py:74
+#, python-brace-format
+msgid "Movies: {count}"
+msgstr "Фильмов: {count}"
 
-#: core/context_processors.py:51
-msgid "M"
-msgstr " млн"
+#: core/context_processors.py:75
+#, python-brace-format
+msgid "Shows: {count}"
+msgstr "Сериалов: {count}"
 
-#: core/context_processors.py:52
-msgid "K"
-msgstr " тыс."
+#: core/context_processors.py:76
+msgid "Median"
+msgstr "Медиана"
+
+#: core/context_processors.py:78 movies/templates/movies/movie_detail.html:162
+#: movies/templates/movies/series_detail.html:170
+msgid "IMDb rating"
+msgstr "Рейтинг IMDb"
+
+#: core/context_processors.py:79 movies/templates/movies/movie_detail.html:119
+#: movies/templates/movies/movie_detail.html:176
+msgid "Budget"
+msgstr "Бюджет"
+
+#: core/context_processors.py:80 movies/templates/movies/_studio_header.html:45
+#: movies/templates/movies/movie_detail.html:123
+#: movies/templates/movies/movie_detail.html:177
+#: movies/templates/movies/movie_list.html:37
+#: movies/templates/movies/person_detail.html:78
+#: movies/templates/movies/studio_detail.html:73
+#: movies/templates/movies/studio_list.html:38
+msgid "Revenue"
+msgstr "Сборы"
+
+#: core/context_processors.py:81
+msgid "Break-even"
+msgstr "Порог окупаемости"
+
+#: core/context_processors.py:82
+msgid "5× budget"
+msgstr "5× бюджета"
+
+#: core/context_processors.py:83
+msgid "Under 1×"
+msgstr "Меньше 1×"
+
+#: core/context_processors.py:84
+msgid "5× or more"
+msgstr "5× и больше"
+
+#: core/context_processors.py:85 movies/templates/movies/home.html:231
+#, python-brace-format
+msgid "{decade}s"
+msgstr "{decade}-е"
+
+#: core/context_processors.py:88
+#, python-brace-format
+msgid "Season {n}"
+msgstr "Сезон {n}"
+
+#: core/context_processors.py:89
+msgid "vs season 1"
+msgstr "к 1-му сезону"
+
+#: core/sharing.py:66
+#, python-format
+msgid "Keep the note to %(max)d characters."
+msgstr ""
+
+#: core/sharing.py:73 core/views.py:156
+msgid "Unknown collection."
+msgstr "Неизвестная коллекция."
+
+#: core/sharing.py:76 core/sharing.py:104
+msgid "Add something to this collection before sharing it."
+msgstr ""
+
+#: core/sharing.py:94
+#, fuzzy
+#| msgid "A new chat could not be started just now. Please try again."
+msgid "Could not create a link just now. Please try again."
+msgstr "Не удалось начать новый чат. Попробуйте ещё раз."
+
+#: core/sharing.py:120
+#, fuzzy
+#| msgid "That collection could not be found."
+msgid "This collection is not shared."
+msgstr "Такая коллекция не найдена."
 
 #: core/templates/core/_account_pager.html:15
 #, python-format
@@ -493,6 +1122,7 @@ msgid "%(label)s pages"
 msgstr "%(label)s: страницы"
 
 #: core/templates/core/_account_pager.html:16
+#: core/templates/core/share/page.html:164
 #, python-format
 msgid "Showing %(start)s–%(end)s of %(total)s"
 msgstr "Показано %(start)s–%(end)s из %(total)s"
@@ -518,15 +1148,21 @@ msgid "Nothing liked yet"
 msgstr "Пока нет отметок «Нравится»"
 
 #: core/templates/core/_collection_empty.html:11
-msgid "Everything you like across Movies, TV Shows and Cartoons collects here, newest first."
-msgstr "Всё, что вам нравится среди фильмов, сериалов и мультфильмов, собирается здесь — сначала новое."
+msgid ""
+"Everything you like across Movies, TV Shows and Cartoons collects here, "
+"newest first."
+msgstr ""
+"Всё, что вам нравится среди фильмов, сериалов и мультфильмов, собирается "
+"здесь — сначала новое."
 
 #: core/templates/core/_collection_empty.html:11
 msgid "Press Like on any movie or show and it collects here, newest first."
-msgstr "Нажмите «Нравится» на любом фильме или сериале — и он появится здесь, сначала новое."
+msgstr ""
+"Нажмите «Нравится» на любом фильме или сериале — и он появится здесь, "
+"сначала новое."
 
 #: core/templates/core/_collection_empty.html:12
-#: movies/templates/movies/home.html:43
+#: movies/templates/movies/home.html:58
 msgid "Browse movies"
 msgstr "Перейти к фильмам"
 
@@ -540,7 +1176,8 @@ msgstr "Ничего не отложено"
 
 #: core/templates/core/_collection_empty.html:15
 msgid "Save anything you mean to get to and it waits here until you do."
-msgstr "Сохраняйте всё, до чего собираетесь добраться, — оно дождётся вас здесь."
+msgstr ""
+"Сохраняйте всё, до чего собираетесь добраться, — оно дождётся вас здесь."
 
 #: core/templates/core/_collection_empty.html:16
 msgid "Find something"
@@ -556,17 +1193,27 @@ msgstr[2] "<span class=\"mono\">%(counter)s</span> фильмов"
 msgstr[3] "<span class=\"mono\">%(counter)s</span> фильма"
 
 #: core/templates/core/_collection_section.html:33
+#: core/templates/core/share/page.html:145
 #, python-format
 msgid "Rank %(rank)s:"
 msgstr "Место %(rank)s:"
 
 #: core/templates/core/_collection_section.html:46
+#: core/templates/core/share/page.html:154 templates/base.html:273
 msgid "Movie"
 msgstr "Фильм"
 
 #: core/templates/core/_collection_section.html:46
+#: core/templates/core/share/page.html:63
+#: core/templates/core/share/page.html:154 templates/base.html:273
+#, fuzzy
+#| msgid "TV show"
 msgid "TV show"
-msgstr "Сериал"
+msgid_plural "TV shows"
+msgstr[0] "Сериал"
+msgstr[1] "Сериал"
+msgstr[2] "Сериал"
+msgstr[3] "Сериал"
 
 #: core/templates/core/_collection_section.html:50
 #, python-format
@@ -604,7 +1251,7 @@ msgstr "Ваш аккаунт — Theoria"
 msgid "Account"
 msgstr "Аккаунт"
 
-#: core/templates/core/account.html:30
+#: core/templates/core/account.html:30 core/templates/core/share/page.html:59
 #, python-format
 msgid "Member since %(joined)s"
 msgstr "С нами с %(joined)s"
@@ -613,8 +1260,8 @@ msgstr "С нами с %(joined)s"
 msgid "Your collections"
 msgstr "Ваши коллекции"
 
-#: core/templates/core/account.html:58 templates/base.html:151
-#: templates/base.html:197
+#: core/templates/core/account.html:58 templates/base.html:198
+#: templates/base.html:244
 msgid "Sign out"
 msgstr "Выйти"
 
@@ -623,35 +1270,216 @@ msgstr "Выйти"
 msgid "Account · %(username)s"
 msgstr "Аккаунт · %(username)s"
 
-#: core/views.py:29 movies/templates/movies/_collection_actions.html:8
+#: core/templates/core/share/_card.html:42
+#, python-format
+msgctxt "share card"
+msgid "Member since %(month)s <span class=\"sc-mono\">%(year)s</span>"
+msgstr "С нами с %(month)s <span class=\"sc-mono\">%(year)s</span>"
+
+#: core/templates/core/share/gone.html:9
+msgid "This link is no longer shared — Theoria"
+msgstr ""
+
+#: core/templates/core/share/gone.html:20
+msgid "This list is no longer shared."
+msgstr ""
+
+#: core/templates/core/share/gone.html:22
+msgid ""
+"Its owner turned the link off. Ask them for a new one if you still want to "
+"see it."
+msgstr ""
+
+#: core/templates/core/share/gone.html:24 templates/404.html:25
+msgid "Back to homepage"
+msgstr "На главную"
+
+#: core/templates/core/share/page.html:38
+msgid "Your public link"
+msgstr ""
+
+#: core/templates/core/share/page.html:39
+msgid "This is your public link."
+msgstr ""
+
+#: core/templates/core/share/page.html:40
+msgid "Manage"
+msgstr ""
+
+#: core/templates/core/share/page.html:62
+#, fuzzy
+#| msgid "Movie"
+msgid "movie"
+msgid_plural "movies"
+msgstr[0] "Фильм"
+msgstr[1] "Фильм"
+msgstr[2] "Фильм"
+msgstr[3] "Фильм"
+
+#: core/templates/core/share/page.html:64
+#, fuzzy
+#| msgid "Nothing liked yet"
+msgid "Nothing yet"
+msgstr "Пока нет отметок «Нравится»"
+
+#: core/templates/core/share/page.html:75
+msgid "At a glance"
+msgstr ""
+
+#: core/templates/core/share/page.html:80
+#: core/templates/core/share/page.html:112
+#, python-format
+msgid "%(h)s h %(m)s m"
+msgstr ""
+
+#: core/templates/core/share/page.html:81
+msgid "Of movies still to watch"
+msgstr ""
+
+#: core/templates/core/share/page.html:87
+#, fuzzy, python-format
+#| msgid "%(n)s episode"
+#| msgid_plural "%(n)s episodes"
+msgid "TV shows · %(n)s episodes"
+msgstr "%(n)s серия"
+
+#: core/templates/core/share/page.html:94
+#, python-format
+msgid "%(pct)s%% of the list"
+msgstr ""
+
+#: core/templates/core/share/page.html:100
+#: core/templates/core/share/page.html:107
+#: movies/templates/movies/home.html:235 movies/templates/movies/home.html:241
+msgid "Average IMDb rating"
+msgstr "Средний рейтинг IMDb"
+
+#: core/templates/core/share/page.html:113
+#, fuzzy
+#| msgid "Total revenue"
+msgid "Total runtime"
+msgstr "Общие сборы"
+
+#: core/templates/core/share/page.html:120
+#, fuzzy
+#| msgid "Released"
+msgid "Release years"
+msgstr "Дата выхода"
+
+#: core/templates/core/share/page.html:126
+#, fuzzy
+#| msgid "by decade"
+msgid "By decade"
+msgstr "по десятилетиям"
+
+#: core/templates/core/share/page.html:163
+msgid "Pages"
+msgstr ""
+
+#: core/templates/core/share/page.html:167
+#, fuzzy
+#| msgid "Previous page of %(label)s"
+msgid "Previous page"
+msgstr "Предыдущая страница: %(label)s"
+
+#: core/templates/core/share/page.html:179
+msgid "Next page"
+msgstr ""
+
+#: core/templates/core/share/page.html:187
+msgid "Nothing in this list right now."
+msgstr ""
+
+#: core/templates/core/share/page.html:193
+#, fuzzy
+#| msgid "Enter your code — Theoria"
+msgid "Make your own list on Theoria"
+msgstr "Введите код — Theoria"
+
+#: core/templates/core/share/page.html:194
+msgid ""
+"Like, save and rank movies and TV shows, and share the list with a link."
+msgstr ""
+
+#: core/templates/core/share/page.html:196
+#, fuzzy
+#| msgid "Already have an account?"
+msgid "Create an account"
+msgstr "Уже есть аккаунт?"
+
+#: core/templates/core/share/page.html:203
+#, fuzzy
+#| msgid "Your collections"
+msgid "Shared collection"
+msgstr "Ваши коллекции"
+
+#: core/views.py:35 core/views.py:265
+#: movies/templates/movies/_collection_actions.html:8
 msgid "Liked"
 msgstr "Понравившиеся"
 
-#: core/views.py:30 movies/templates/movies/_collection_actions.html:14
+#: core/views.py:36 core/views.py:268
+#: movies/templates/movies/_collection_actions.html:14
 #: movies/templates/movies/_collection_actions.html:16
 msgid "Watch later"
 msgstr "Смотреть позже"
 
-#: core/views.py:31
+#: core/views.py:37 core/views.py:262
 msgid "Top"
 msgstr "Топ"
 
-#: core/views.py:150
-msgid "Unknown collection."
-msgstr "Неизвестная коллекция."
-
-#: core/views.py:179
+#: core/views.py:185
 msgid "That collection could not be found."
 msgstr "Такая коллекция не найдена."
 
-#: core/views.py:194
+#: core/views.py:200
 msgid "That collection item could not be moved."
 msgstr "Не удалось переместить этот элемент коллекции."
+
+#: core/views.py:227
+#, fuzzy
+#| msgid "Too many username changes — please try again later."
+msgid "Too many share changes — please try again in a few minutes."
+msgstr "Слишком много смен имени пользователя — попробуйте позже."
+
+#: core/views.py:243
+#, fuzzy
+#| msgid "Unknown collection."
+msgid "Unknown share action."
+msgstr "Неизвестная коллекция."
+
+#: core/views.py:262
+msgid "Picked by hand and ranked in order."
+msgstr ""
+
+#: core/views.py:265
+msgid "Everything they liked, newest first."
+msgstr ""
+
+#: core/views.py:268
+msgid "Saved for a free evening."
+msgstr ""
+
+#: core/views.py:383
+msgctxt "share card"
+msgid "My best, in order."
+msgstr "Моё лучшее — по порядку."
+
+#: core/views.py:384
+msgctxt "share card"
+msgid "Good taste, documented."
+msgstr "Хороший вкус — с доказательствами."
+
+#: core/views.py:385
+msgctxt "share card"
+msgid "Next on my list."
+msgstr "Следующее в моём списке."
 
 #: movies/templates/movies/_browse_grid.html:20
 #, python-format
 msgid "Nothing matches “%(q)s”. Try a shorter title."
-msgstr "Ничего не найдено по запросу «%(q)s». Попробуйте более короткое название."
+msgstr ""
+"Ничего не найдено по запросу «%(q)s». Попробуйте более короткое название."
 
 #: movies/templates/movies/_browse_grid.html:21
 msgid "Nothing loaded yet. Run the pipeline to fill the catalog."
@@ -660,11 +1488,13 @@ msgstr "Пока ничего не загружено. Запустите кон
 #: movies/templates/movies/_cartoon_grid.html:20
 #, python-format
 msgid "No cartoons match “%(q)s”. Try a shorter title."
-msgstr "Мультфильмов по запросу «%(q)s» нет. Попробуйте более короткое название."
+msgstr ""
+"Мультфильмов по запросу «%(q)s» нет. Попробуйте более короткое название."
 
 #: movies/templates/movies/_cartoon_grid.html:21
 msgid "No cartoons loaded yet. Run the pipeline to fill the catalog."
-msgstr "Мультфильмы ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
+msgstr ""
+"Мультфильмы ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
 
 #: movies/templates/movies/_collection_actions.html:1
 msgid "Personal collections"
@@ -697,18 +1527,14 @@ msgid "Air date"
 msgstr "Дата выхода в эфир"
 
 #: movies/templates/movies/_episode_table.html:27
-#: movies/templates/movies/movie_detail.html:50
+#: movies/templates/movies/movie_detail.html:92
 msgid "Runtime"
 msgstr "Длительность"
 
-#: movies/templates/movies/_episode_table.html:28
-#: movies/templates/movies/movie_detail.html:41
-#: movies/templates/movies/series_detail.html:38
-msgid "Rating"
-msgstr "Рейтинг"
-
 #: movies/templates/movies/_episode_table.html:37
-#: movies/templates/movies/movie_detail.html:51
+#: movies/templates/movies/home.html:49
+#: movies/templates/movies/movie_detail.html:47
+#: movies/templates/movies/movie_detail.html:93
 #, python-format
 msgid "%(n)s min"
 msgstr "%(n)s мин"
@@ -721,10 +1547,10 @@ msgstr "серии"
 msgid "Episodes for this season haven't been catalogued yet."
 msgstr "Серии этого сезона ещё не внесены в каталог."
 
-#: movies/templates/movies/_movie_card.html:12
-#: movies/templates/movies/_series_card.html:15
-#: movies/templates/movies/movie_detail.html:21
-#: movies/templates/movies/series_detail.html:19
+#: movies/templates/movies/_movie_card.html:15
+#: movies/templates/movies/_series_card.html:17
+#: movies/templates/movies/movie_detail.html:35
+#: movies/templates/movies/series_detail.html:34
 #, python-format
 msgid "%(title)s poster"
 msgstr "Постер: %(title)s"
@@ -740,7 +1566,7 @@ msgid "No movies match this filter. Try loosening it."
 msgstr "Нет фильмов, подходящих под этот фильтр. Попробуйте смягчить условия."
 
 #: movies/templates/movies/_movie_grid.html:16
-#: movies/templates/movies/home.html:75 movies/templates/movies/home.html:89
+#: movies/templates/movies/home.html:173 movies/templates/movies/home.html:188
 msgid "No movies loaded yet. Run the pipeline to fill the catalog."
 msgstr "Фильмы ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
 
@@ -771,7 +1597,8 @@ msgstr "Поп. %(pop)s"
 #: movies/templates/movies/_person_filmography_grid.html:26
 #, python-format
 msgid "No titles match “%(q)s”. Try a shorter title."
-msgstr "Ничего не найдено по запросу «%(q)s». Попробуйте более короткое название."
+msgstr ""
+"Ничего не найдено по запросу «%(q)s». Попробуйте более короткое название."
 
 #: movies/templates/movies/_person_filmography_grid.html:27
 msgid "No credits recorded for this person yet."
@@ -789,11 +1616,6 @@ msgstr "Никто не подходит под этот фильтр."
 #: movies/templates/movies/_person_grid.html:16
 msgid "Nothing loaded yet. Run the pipeline to fill the index."
 msgstr "Пока ничего не загружено. Запустите конвейер, чтобы наполнить индекс."
-
-#: movies/templates/movies/_person_header.html:58
-#: movies/templates/movies/series_detail.html:51
-msgid "Status"
-msgstr "Статус"
 
 #: movies/templates/movies/_person_header.html:73
 msgid "Credits"
@@ -834,6 +1656,7 @@ msgid "IMDb rating %(value)s out of 10"
 msgstr "Рейтинг IMDb: %(value)s из 10"
 
 #: movies/templates/movies/_rating_badge.html:29
+#: movies/templates/movies/_season_table.html:43
 #, python-format
 msgid "%(formatted)s vote"
 msgid_plural "%(formatted)s votes"
@@ -842,12 +1665,80 @@ msgstr[1] "%(formatted)s голоса"
 msgstr[2] "%(formatted)s голосов"
 msgstr[3] "%(formatted)s голоса"
 
-#: movies/templates/movies/_season_picker.html:21
+#: movies/templates/movies/_season_kpis.html:27
+msgid "Episode average"
+msgstr "Средняя по сериям"
+
+#: movies/templates/movies/_season_kpis.html:28
+#: movies/templates/movies/_season_kpis.html:47
+msgid "Not rated yet"
+msgstr "Пока без оценок"
+
+#: movies/templates/movies/_season_kpis.html:31
+msgid "Best season"
+msgstr "Лучший сезон"
+
+#: movies/templates/movies/_season_kpis.html:35
+msgid "Weakest season"
+msgstr "Самый слабый сезон"
+
+#: movies/templates/movies/_season_kpis.html:46
+#: movies/templates/movies/series_detail.html:252
+#: movies/templates/movies/series_detail.html:253
+msgid "Season average"
+msgstr "Средняя за сезон"
+
+#: movies/templates/movies/_season_kpis.html:47
+#: movies/templates/movies/_season_table.html:44
+#: movies/templates/movies/series_detail.html:245
+msgid "few ratings"
+msgstr "мало оценок"
+
+#: movies/templates/movies/_season_kpis.html:50
+msgid "Best episode"
+msgstr "Лучшая серия"
+
+#: movies/templates/movies/_season_kpis.html:51
+#: movies/templates/movies/_season_kpis.html:55
+#, python-format
+msgid "Episode %(n)s"
+msgstr "Серия %(n)s"
+
+#: movies/templates/movies/_season_kpis.html:54
+msgid "Weakest episode"
+msgstr "Самая слабая серия"
+
+#: movies/templates/movies/_season_picker.html:28
 msgid "Choose a season"
 msgstr "Выберите сезон"
 
-#: movies/templates/movies/_series_card.html:25
-#: movies/templates/movies/series_detail.html:195
+#: movies/templates/movies/_season_picker.html:31
+#: movies/templates/movies/series_detail.html:216
+msgid "All seasons"
+msgstr "Все сезоны"
+
+#: movies/templates/movies/_season_table.html:28
+msgid "Aired"
+msgstr "Даты показа"
+
+#: movies/templates/movies/_season_table.html:29
+#: movies/templates/movies/series_detail.html:103
+#: movies/templates/movies/series_detail.html:188
+msgid "Episodes"
+msgstr "Серии"
+
+#: movies/templates/movies/_season_table.html:40
+#, python-format
+msgid "Average IMDb rating %(value)s out of 10"
+msgstr "Средний рейтинг IMDb: %(value)s из 10"
+
+#: movies/templates/movies/_season_table.html:50
+msgid "seasons"
+msgstr "сезоны"
+
+#: movies/templates/movies/_series_card.html:27
+#: movies/templates/movies/series_detail.html:46
+#: movies/templates/movies/series_detail.html:189
 #, python-format
 msgid "%(n)s season"
 msgid_plural "%(n)s seasons"
@@ -866,7 +1757,7 @@ msgid "No shows match this filter. Try loosening it."
 msgstr "Нет сериалов, подходящих под этот фильтр. Попробуйте смягчить условия."
 
 #: movies/templates/movies/_series_grid.html:15
-#: movies/templates/movies/home.html:111
+#: movies/templates/movies/home.html:211
 msgid "No shows loaded yet. Run the pipeline to fill the catalog."
 msgstr "Сериалы ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
 
@@ -877,10 +1768,10 @@ msgid "%(name)s logo"
 msgstr "Логотип: %(name)s"
 
 #: movies/templates/movies/_studio_card.html:34
-#: movies/templates/movies/director_detail.html:12
-#: movies/templates/movies/person_detail.html:6
-#: movies/templates/movies/person_detail.html:82
-#: movies/templates/movies/studio_detail.html:77
+#: movies/templates/movies/director_detail.html:18
+#: movies/templates/movies/person_detail.html:12
+#: movies/templates/movies/person_detail.html:88
+#: movies/templates/movies/studio_detail.html:83
 #, python-format
 msgid "%(n)s movie"
 msgid_plural "%(n)s movies"
@@ -898,19 +1789,10 @@ msgstr "Студий по запросу «%(q)s» нет."
 msgid "No studios loaded yet. Run the pipeline to fill the catalog."
 msgstr "Студии ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
 
-#: movies/templates/movies/_studio_header.html:41 movies/views.py:1255
-#: movies/views.py:1621
+#: movies/templates/movies/_studio_header.html:41 movies/views.py:1280
+#: movies/views.py:1653
 msgid "Active"
 msgstr "Активная карьера"
-
-#: movies/templates/movies/_studio_header.html:45
-#: movies/templates/movies/movie_detail.html:81
-#: movies/templates/movies/movie_list.html:33
-#: movies/templates/movies/person_detail.html:72
-#: movies/templates/movies/studio_detail.html:67
-#: movies/templates/movies/studio_list.html:32
-msgid "Revenue"
-msgstr "Сборы"
 
 #: movies/templates/movies/_video_embed.html:19
 msgid "video"
@@ -921,14 +1803,14 @@ msgstr "видео"
 msgid "Play %(kind)s: %(name)s"
 msgstr "Смотреть %(kind)s: %(name)s"
 
-#: movies/templates/movies/actor_detail.html:11
-#: movies/templates/movies/director_detail.html:11
-#: movies/templates/movies/person_detail.html:81
-#: movies/templates/movies/studio_detail.html:76
+#: movies/templates/movies/actor_detail.html:17
+#: movies/templates/movies/director_detail.html:17
+#: movies/templates/movies/person_detail.html:87
+#: movies/templates/movies/studio_detail.html:82
 msgid "Filmography"
 msgstr "Фильмография"
 
-#: movies/templates/movies/actor_detail.html:12
+#: movies/templates/movies/actor_detail.html:18
 #, python-format
 msgid "%(n)s credit"
 msgid_plural "%(n)s credits"
@@ -937,157 +1819,245 @@ msgstr[1] "%(n)s работы"
 msgstr[2] "%(n)s работ"
 msgstr[3] "%(n)s работы"
 
-#: movies/templates/movies/actor_detail.html:18
+#: movies/templates/movies/actor_detail.html:24
 msgid "No credits recorded for this actor yet."
 msgstr "Для этого актёра пока нет записанных работ."
 
-#: movies/templates/movies/browse.html:4 movies/templates/movies/browse.html:7
-#: templates/base.html:179
+#: movies/templates/movies/browse.html:4 movies/templates/movies/browse.html:11
+#: templates/base.html:226
 msgid "Browse"
 msgstr "Обзор"
 
-#: movies/templates/movies/browse.html:7
-msgid "Every movie and TV show in one place. Search by name or change the order."
-msgstr "Все фильмы и сериалы в одном месте. Ищите по названию или меняйте порядок."
+#: movies/templates/movies/browse.html:11
+msgid ""
+"Every movie and TV show in one place. Search by name or change the order."
+msgstr ""
+"Все фильмы и сериалы в одном месте. Ищите по названию или меняйте порядок."
 
-#: movies/templates/movies/browse.html:21
+#: movies/templates/movies/browse.html:25
 msgid "Search movies and shows"
 msgstr "Поиск фильмов и сериалов"
 
-#: movies/templates/movies/browse.html:21
+#: movies/templates/movies/browse.html:25
 msgid "Search movies and shows by title"
 msgstr "Поиск фильмов и сериалов по названию"
-
-#: movies/templates/movies/browse.html:24
-#: movies/templates/movies/cartoon_list.html:23
-#: movies/templates/movies/movie_list.html:27
-#: movies/templates/movies/person_detail.html:66
-#: movies/templates/movies/person_list.html:27
-#: movies/templates/movies/series_list.html:23
-#: movies/templates/movies/studio_detail.html:61
-#: movies/templates/movies/studio_list.html:28
-msgid "Order by"
-msgstr "Сортировка"
-
-#: movies/templates/movies/browse.html:26
-#: movies/templates/movies/cartoon_list.html:25
-#: movies/templates/movies/movie_list.html:29
-#: movies/templates/movies/person_detail.html:68
-#: movies/templates/movies/series_list.html:25
-#: movies/templates/movies/studio_detail.html:63
-msgid "Newest"
-msgstr "Новые"
 
 #: movies/templates/movies/browse.html:28
 #: movies/templates/movies/cartoon_list.html:27
 #: movies/templates/movies/movie_list.html:31
-#: movies/templates/movies/person_detail.html:70
+#: movies/templates/movies/person_detail.html:72
+#: movies/templates/movies/person_list.html:33
 #: movies/templates/movies/series_list.html:27
-#: movies/templates/movies/studio_detail.html:65
-msgid "Rated"
-msgstr "По рейтингу"
+#: movies/templates/movies/studio_detail.html:67
+#: movies/templates/movies/studio_list.html:34
+msgid "Order by"
+msgstr "Сортировка"
 
 #: movies/templates/movies/browse.html:30
 #: movies/templates/movies/cartoon_list.html:29
-#: movies/templates/movies/movie_list.html:35
+#: movies/templates/movies/movie_list.html:33
 #: movies/templates/movies/person_detail.html:74
-#: movies/templates/movies/person_list.html:31
 #: movies/templates/movies/series_list.html:29
 #: movies/templates/movies/studio_detail.html:69
-#: movies/templates/movies/studio_list.html:34
-msgid "A–Z"
-msgstr "А–Я"
+msgid "Newest"
+msgstr "Новые"
 
 #: movies/templates/movies/browse.html:32
 #: movies/templates/movies/cartoon_list.html:31
-#: movies/templates/movies/movie_list.html:62
+#: movies/templates/movies/movie_list.html:35
 #: movies/templates/movies/person_detail.html:76
-#: movies/templates/movies/person_list.html:56
-#: movies/templates/movies/series_list.html:40
+#: movies/templates/movies/series_list.html:31
 #: movies/templates/movies/studio_detail.html:71
-#: movies/templates/movies/studio_list.html:41
+msgid "Rated"
+msgstr "По рейтингу"
+
+#: movies/templates/movies/browse.html:34
+#: movies/templates/movies/cartoon_list.html:33
+#: movies/templates/movies/movie_list.html:39
+#: movies/templates/movies/person_detail.html:80
+#: movies/templates/movies/person_list.html:37
+#: movies/templates/movies/series_list.html:33
+#: movies/templates/movies/studio_detail.html:75
+#: movies/templates/movies/studio_list.html:40
+msgid "A–Z"
+msgstr "А–Я"
+
+#: movies/templates/movies/browse.html:36
+#: movies/templates/movies/cartoon_list.html:35
+#: movies/templates/movies/movie_list.html:66
+#: movies/templates/movies/person_detail.html:82
+#: movies/templates/movies/person_list.html:62
+#: movies/templates/movies/series_list.html:44
+#: movies/templates/movies/studio_detail.html:77
+#: movies/templates/movies/studio_list.html:47
 msgid "Apply"
 msgstr "Применить"
 
 #: movies/templates/movies/cartoon_list.html:4
-#: movies/templates/movies/cartoon_list.html:7 templates/base.html:182
+#: movies/templates/movies/cartoon_list.html:11 templates/base.html:229
 msgid "Cartoons"
 msgstr "Мультфильмы"
 
-#: movies/templates/movies/cartoon_list.html:7
-msgid "Animated movies and shows made for younger viewers. Search by name or reorder by what was measured."
-msgstr "Анимационные фильмы и сериалы для юных зрителей. Ищите по названию или меняйте порядок по измеряемым показателям."
+#: movies/templates/movies/cartoon_list.html:11
+msgid ""
+"Animated movies and shows made for younger viewers. Search by name or "
+"reorder by what was measured."
+msgstr ""
+"Анимационные фильмы и сериалы для юных зрителей. Ищите по названию или "
+"меняйте порядок по измеряемым показателям."
 
-#: movies/templates/movies/cartoon_list.html:20
+#: movies/templates/movies/cartoon_list.html:24
 msgid "Search cartoons"
 msgstr "Поиск мультфильмов"
 
-#: movies/templates/movies/cartoon_list.html:20
+#: movies/templates/movies/cartoon_list.html:24
 msgid "Search cartoons by title"
 msgstr "Поиск мультфильмов по названию"
 
-#: movies/templates/movies/director_detail.html:18
+#: movies/templates/movies/director_detail.html:24
 msgid "No movies recorded for this director yet."
 msgstr "Для этого режиссёра пока нет записанных фильмов."
 
-#: movies/templates/movies/home.html:5
+#: movies/templates/movies/home.html:5 movies/templates/movies/home.html:14
 msgid "Theoria — Welcome to the world of movies"
 msgstr "Theoria — добро пожаловать в мир кино"
 
-#: movies/templates/movies/home.html:20
-msgid "Welcome<br>to the world<br>of movies."
-msgstr "Добро<br>пожаловать<br>в мир кино."
+#: movies/templates/movies/home.html:25 movies/templates/movies/home.html:39
+msgid "Explore"
+msgstr "Обзор"
 
-#: movies/templates/movies/home.html:22
-msgid "Built for people who love the craft of cinema — every movie, every performance, gathered in one place to explore."
-msgstr "Создано для тех, кто любит искусство кино: каждый фильм, каждая роль — всё собрано в одном месте."
+#: movies/templates/movies/home.html:38
+#, python-format
+msgid "%(n)s of %(total)s"
+msgstr "%(n)s из %(total)s"
 
-#: movies/templates/movies/home.html:31 movies/views.py:692
-#: templates/base.html:183
-msgid "People"
-msgstr "Люди"
-
-#: movies/templates/movies/home.html:44
-msgid "See the analytics →"
-msgstr "Открыть аналитику →"
-
-#: movies/templates/movies/home.html:68
+#: movies/templates/movies/home.html:39 movies/templates/movies/home.html:141
 msgid "Highest rated"
 msgstr "Самые высокие оценки"
 
-#: movies/templates/movies/home.html:82
-msgid "See what's new"
-msgstr "Что нового"
+#: movies/templates/movies/home.html:51
+#, python-format
+msgid "Directed by %(name)s"
+msgstr "Режиссёр: %(name)s"
 
-#: movies/templates/movies/home.html:83
+#: movies/templates/movies/home.html:55
+msgid "Open film"
+msgstr "Открыть фильм"
+
+#: movies/templates/movies/home.html:65
+msgid "Featured films"
+msgstr "Избранные фильмы"
+
+#: movies/templates/movies/home.html:89
+#: movies/templates/movies/series_list.html:4
+#: movies/templates/movies/series_list.html:11 templates/base.html:228
+msgid "TV Shows"
+msgstr "Сериалы"
+
+#: movies/templates/movies/home.html:112
+msgid "The catalogue"
+msgstr "Каталог"
+
+#: movies/templates/movies/home.html:113
+msgid "Every title."
+msgstr "Каждое название."
+
+#: movies/templates/movies/home.html:113
+msgid "Every performance."
+msgstr "Каждая роль."
+
+#: movies/templates/movies/home.html:115
+msgid "Hover a poster to stop the wall and tilt it toward the light."
+msgstr "Наведите на постер, чтобы остановить ленту и повернуть его к свету."
+
+#: movies/templates/movies/home.html:142
+msgid "The top ten,"
+msgstr "Лучшие десять,"
+
+#: movies/templates/movies/home.html:142
+msgid "by IMDb rating."
+msgstr "по рейтингу IMDb."
+
+#: movies/templates/movies/home.html:145
+msgid "Scroll back"
+msgstr "Прокрутить назад"
+
+#: movies/templates/movies/home.html:148
+msgid "Scroll forward"
+msgstr "Прокрутить вперёд"
+
+#: movies/templates/movies/home.html:180
 msgid "by release date"
 msgstr "по дате выхода"
 
-#: movies/templates/movies/home.html:104
-msgid "Recently aired"
-msgstr "Недавно в эфире"
+#: movies/templates/movies/home.html:181
+msgid "See what's new"
+msgstr "Что нового"
 
-#: movies/templates/movies/home.html:105
+#: movies/templates/movies/home.html:203
 msgid "by last air date"
 msgstr "по дате последней серии"
 
-#: movies/templates/movies/movie_detail.html:32
-#: movies/templates/movies/series_detail.html:30
+#: movies/templates/movies/home.html:204
+msgid "Recently aired"
+msgstr "Недавно в эфире"
+
+#: movies/templates/movies/home.html:225
+msgid "Films by decade,"
+msgstr "Фильмы по десятилетиям,"
+
+#: movies/templates/movies/home.html:225
+msgid "and how they rate."
+msgstr "и их рейтинг."
+
+#: movies/templates/movies/home.html:227
+msgid ""
+"Bars count the films released in each decade. The line tracks their average "
+"IMDb rating."
+msgstr ""
+"Столбцы — число фильмов, вышедших за десятилетие. Линия — их средний рейтинг "
+"IMDb."
+
+#: movies/templates/movies/home.html:228
+msgid "See the analytics →"
+msgstr "Открыть аналитику →"
+
+#: movies/templates/movies/home.html:232
+#, python-brace-format
+msgid "{decade}s · {films} films · average {rating}"
+msgstr "{decade}-е · фильмов: {films} · в среднем {rating}"
+
+#: movies/templates/movies/home.html:234 movies/templates/movies/home.html:241
+msgid "Films released"
+msgstr "Вышло фильмов"
+
+#: movies/templates/movies/home.html:240
+msgid "Films released and average IMDb rating, by decade"
+msgstr "Число вышедших фильмов и средний рейтинг IMDb по десятилетиям"
+
+#: movies/templates/movies/home.html:246
+#, python-format
+msgid "%(decade)ss"
+msgstr "%(decade)s-е"
+
+#: movies/templates/movies/movie_detail.html:57
+#: movies/templates/movies/series_detail.html:56
 #, python-format
 msgid "originally “%(title)s”"
 msgstr "в оригинале «%(title)s»"
 
-#: movies/templates/movies/movie_detail.html:36
-#: movies/templates/movies/person_detail.html:33
+#: movies/templates/movies/movie_detail.html:78
+#: movies/templates/movies/person_detail.html:39
+#: movies/templates/movies/series_detail.html:77
 msgid "Shown in English — no translation yet"
 msgstr "Показано на английском — перевода пока нет"
 
-#: movies/templates/movies/movie_detail.html:46 movies/vocab.py:139
+#: movies/templates/movies/movie_detail.html:88 movies/vocab.py:139
 msgid "Released"
 msgstr "Дата выхода"
 
-#: movies/templates/movies/movie_detail.html:54
-#: movies/templates/movies/series_detail.html:63
+#: movies/templates/movies/movie_detail.html:96
+#: movies/templates/movies/series_detail.html:107
 msgid "Language"
 msgid_plural "Languages"
 msgstr[0] "Язык"
@@ -1095,48 +2065,47 @@ msgstr[1] "Языки"
 msgstr[2] "Языки"
 msgstr[3] "Языки"
 
-#: movies/templates/movies/movie_detail.html:59
-#: movies/templates/movies/series_detail.html:68
+#: movies/templates/movies/movie_detail.html:101
+#: movies/templates/movies/series_detail.html:112
 msgid "Countries"
 msgstr "Страны"
 
-#: movies/templates/movies/movie_detail.html:65
-#: movies/templates/movies/series_detail.html:74
+#: movies/templates/movies/movie_detail.html:107
+#: movies/templates/movies/series_detail.html:118
 msgid "Country of origin"
 msgstr "Страна происхождения"
 
-#: movies/templates/movies/movie_detail.html:71
-#: movies/templates/movies/series_detail.html:80
-msgid "Production countries"
-msgstr "Страны производства"
-
-#: movies/templates/movies/movie_detail.html:77
-msgid "Budget"
-msgstr "Бюджет"
-
-#: movies/templates/movies/movie_detail.html:86
+#: movies/templates/movies/movie_detail.html:128
 msgid "Directed by"
 msgstr "Режиссёр"
 
-#: movies/templates/movies/movie_detail.html:94
-#: movies/templates/movies/series_detail.html:101
-#: movies/templates/movies/studio_list.html:4
-#: movies/templates/movies/studio_list.html:7 templates/base.html:184
+#: movies/templates/movies/movie_detail.html:136
+#: movies/templates/movies/series_detail.html:145
+#: movies/templates/movies/studio_list.html:10
+#: movies/templates/movies/studio_list.html:13 templates/base.html:231
 msgid "Studios"
 msgstr "Студии"
 
-#: movies/templates/movies/movie_detail.html:127
-#: movies/templates/movies/series_detail.html:129
+#: movies/templates/movies/movie_detail.html:172
+msgid "Box office"
+msgstr "Кассовые сборы"
+
+#: movies/templates/movies/movie_detail.html:174
+msgid "its budget, earned back at the box office"
+msgstr "бюджета вернулось в прокате"
+
+#: movies/templates/movies/movie_detail.html:191
+#: movies/templates/movies/series_detail.html:182
 msgid "trailer"
 msgstr "трейлер"
 
-#: movies/templates/movies/movie_detail.html:137
-#: movies/templates/movies/series_detail.html:139
+#: movies/templates/movies/movie_detail.html:197
+#: movies/templates/movies/series_detail.html:271
 msgid "Cast"
 msgstr "В ролях"
 
-#: movies/templates/movies/movie_detail.html:138
-#: movies/templates/movies/series_detail.html:140
+#: movies/templates/movies/movie_detail.html:198
+#: movies/templates/movies/series_detail.html:272
 #, python-format
 msgid "%(cast)s cast · %(counter)s credit"
 msgid_plural "%(cast)s cast · %(counter)s credits"
@@ -1145,59 +2114,63 @@ msgstr[1] "%(cast)s в ролях · %(counter)s работы"
 msgstr[2] "%(cast)s в ролях · %(counter)s работ"
 msgstr[3] "%(cast)s в ролях · %(counter)s работы"
 
-#: movies/templates/movies/movie_detail.html:152
+#: movies/templates/movies/movie_detail.html:212
 msgid "No cast recorded for this movie."
 msgstr "Для этого фильма нет записанного актёрского состава."
 
-#: movies/templates/movies/movie_detail.html:155
-#: movies/templates/movies/series_detail.html:154
+#: movies/templates/movies/movie_detail.html:215
+#: movies/templates/movies/series_detail.html:286
 msgid "cast"
 msgstr "актёры"
 
-#: movies/templates/movies/movie_detail.html:169
-#: movies/templates/movies/series_detail.html:160 movies/vocab.py:35
+#: movies/templates/movies/movie_detail.html:229
+#: movies/templates/movies/series_detail.html:292 movies/vocab.py:35
 msgid "Crew"
 msgstr "Съёмочная группа"
 
-#: movies/templates/movies/movie_detail.html:170
-#: movies/templates/movies/series_detail.html:161
+#: movies/templates/movies/movie_detail.html:230
+#: movies/templates/movies/series_detail.html:293
 #, python-format
 msgid "%(n)s crew"
 msgstr "%(n)s чел. в съёмочной группе"
 
-#: movies/templates/movies/movie_detail.html:195
+#: movies/templates/movies/movie_detail.html:255
 msgid "No crew recorded for this movie."
 msgstr "Для этого фильма нет записанной съёмочной группы."
 
-#: movies/templates/movies/movie_detail.html:197
-#: movies/templates/movies/series_detail.html:188
+#: movies/templates/movies/movie_detail.html:257
+#: movies/templates/movies/series_detail.html:320
 msgid "crew"
 msgstr "съёмочная группа"
 
-#: movies/templates/movies/movie_list.html:7
-msgid "Every title the warehouse holds. Search by name, narrow by genre, or reorder by what was measured."
-msgstr "Все фильмы, что есть в хранилище. Ищите по названию, выбирайте жанр или меняйте порядок по измеряемым показателям."
+#: movies/templates/movies/movie_list.html:11
+msgid ""
+"Every title the warehouse holds. Search by name, narrow by genre, or reorder "
+"by what was measured."
+msgstr ""
+"Все фильмы, что есть в хранилище. Ищите по названию, выбирайте жанр или "
+"меняйте порядок по измеряемым показателям."
 
-#: movies/templates/movies/movie_list.html:20
+#: movies/templates/movies/movie_list.html:24
 msgid "Search movies"
 msgstr "Поиск фильмов"
 
-#: movies/templates/movies/movie_list.html:20
+#: movies/templates/movies/movie_list.html:24
 msgid "Search movies by title"
 msgstr "Поиск фильмов по названию"
 
-#: movies/templates/movies/movie_list.html:49
-#: movies/templates/movies/series_list.html:32
+#: movies/templates/movies/movie_list.html:53
+#: movies/templates/movies/series_list.html:36
 msgid "Filter by genre"
 msgstr "Фильтр по жанру"
 
-#: movies/templates/movies/movie_list.html:51
-#: movies/templates/movies/series_list.html:34
+#: movies/templates/movies/movie_list.html:55
+#: movies/templates/movies/series_list.html:38
 msgid "Any genre"
 msgstr "Любой жанр"
 
-#: movies/templates/movies/person_detail.html:6
-#: movies/templates/movies/person_detail.html:82
+#: movies/templates/movies/person_detail.html:12
+#: movies/templates/movies/person_detail.html:88
 #, python-format
 msgid "%(n)s show"
 msgid_plural "%(n)s shows"
@@ -1206,87 +2179,94 @@ msgstr[1] "%(n)s сериала"
 msgstr[2] "%(n)s сериалов"
 msgstr[3] "%(n)s сериала"
 
-#: movies/templates/movies/person_detail.html:6
+#: movies/templates/movies/person_detail.html:12
 #, python-format
 msgid "%(name)s: %(films)s and %(shows)s in the Theoria catalog."
 msgstr "%(name)s: %(films)s и %(shows)s в каталоге Theoria."
 
-#: movies/templates/movies/person_detail.html:6
+#: movies/templates/movies/person_detail.html:12
 #, python-format
 msgid "%(name)s: %(films)s in the Theoria catalog."
 msgstr "%(name)s: %(films)s в каталоге Theoria."
 
-#: movies/templates/movies/person_detail.html:39
+#: movies/templates/movies/person_detail.html:45
 msgid "Elsewhere"
 msgstr "На других сайтах"
 
-#: movies/templates/movies/person_detail.html:43
-#: movies/templates/movies/studio_detail.html:32
+#: movies/templates/movies/person_detail.html:49
+#: movies/templates/movies/studio_detail.html:38
 msgid "Official site"
 msgstr "Официальный сайт"
 
-#: movies/templates/movies/person_detail.html:63
-#: movies/templates/movies/studio_detail.html:58
+#: movies/templates/movies/person_detail.html:69
+#: movies/templates/movies/studio_detail.html:64
 msgid "Search this filmography"
 msgstr "Поиск по этой фильмографии"
 
-#: movies/templates/movies/person_detail.html:63
+#: movies/templates/movies/person_detail.html:69
 #, python-format
 msgid "Search %(name)s's movies and shows by title"
 msgstr "Поиск по названию среди фильмов и сериалов: %(name)s"
 
-#: movies/templates/movies/person_detail.html:63
-#: movies/templates/movies/studio_detail.html:58
+#: movies/templates/movies/person_detail.html:69
+#: movies/templates/movies/studio_detail.html:64
 #, python-format
 msgid "Search %(name)s's movies by title"
 msgstr "Поиск по названию среди фильмов: %(name)s"
 
-#: movies/templates/movies/person_list.html:7
-msgid "Search by name, filter by gender or craft, and reorder by what was measured."
-msgstr "Ищите по имени, фильтруйте по полу или профессии и меняйте порядок по измеряемым показателям."
+#: movies/templates/movies/person_list.html:13
+msgid ""
+"Search by name, filter by gender or craft, and reorder by what was measured."
+msgstr ""
+"Ищите по имени, фильтруйте по полу или профессии и меняйте порядок по "
+"измеряемым показателям."
 
-#: movies/templates/movies/person_list.html:20
+#: movies/templates/movies/person_list.html:26
 msgid "Search names"
 msgstr "Поиск по именам"
 
-#: movies/templates/movies/person_list.html:20
+#: movies/templates/movies/person_list.html:26
 #, python-format
 msgid "Search %(title)s by name"
 msgstr "Поиск по имени: %(title)s"
 
-#: movies/templates/movies/person_list.html:29
+#: movies/templates/movies/person_list.html:35
 msgid "Most popular"
 msgstr "Самые популярные"
 
-#: movies/templates/movies/person_list.html:34
+#: movies/templates/movies/person_list.html:40
 msgid "Filter by gender"
 msgstr "Фильтр по полу"
 
-#: movies/templates/movies/person_list.html:36
+#: movies/templates/movies/person_list.html:42
 msgid "Any gender"
 msgstr "Любой пол"
 
-#: movies/templates/movies/person_list.html:43
+#: movies/templates/movies/person_list.html:49
 msgid "Filter by craft"
 msgstr "Фильтр по профессии"
 
-#: movies/templates/movies/person_list.html:45
+#: movies/templates/movies/person_list.html:51
 msgid "Any craft"
 msgstr "Любая профессия"
 
-#: movies/templates/movies/series_detail.html:43
+#: movies/templates/movies/series_detail.html:87
 msgid "First aired"
 msgstr "Первый эфир"
 
-#: movies/templates/movies/series_detail.html:47
+#: movies/templates/movies/series_detail.html:91
 msgid "Last aired"
 msgstr "Последний эфир"
 
-#: movies/templates/movies/series_detail.html:87
+#: movies/templates/movies/series_detail.html:99
+msgid "Seasons"
+msgstr "Сезоны"
+
+#: movies/templates/movies/series_detail.html:131
 msgid "Created by"
 msgstr "Создатели"
 
-#: movies/templates/movies/series_detail.html:95
+#: movies/templates/movies/series_detail.html:139
 msgid "Network"
 msgid_plural "Networks"
 msgstr[0] "Канал"
@@ -1294,15 +2274,7 @@ msgstr[1] "Каналы"
 msgstr[2] "Каналы"
 msgstr[3] "Каналы"
 
-#: movies/templates/movies/series_detail.html:151
-msgid "No cast recorded for this show."
-msgstr "Для этого сериала нет записанного актёрского состава."
-
-#: movies/templates/movies/series_detail.html:186
-msgid "No crew recorded for this show."
-msgstr "Для этого сериала нет записанной съёмочной группы."
-
-#: movies/templates/movies/series_detail.html:195
+#: movies/templates/movies/series_detail.html:189
 #, python-format
 msgid "%(n)s episode"
 msgid_plural "%(n)s episodes"
@@ -1311,28 +2283,84 @@ msgstr[1] "%(n)s серии"
 msgstr[2] "%(n)s серий"
 msgstr[3] "%(n)s серии"
 
-#: movies/templates/movies/series_detail.html:210
+#: movies/templates/movies/series_detail.html:229
 msgid "No seasons recorded for this show."
 msgstr "Для этого сериала нет записанных сезонов."
 
-#: movies/templates/movies/series_list.html:4
-#: movies/templates/movies/series_list.html:7 templates/base.html:181
-msgid "TV Shows"
-msgstr "Сериалы"
+#: movies/templates/movies/series_detail.html:239
+msgid "Episode"
+msgstr "Серия"
 
-#: movies/templates/movies/series_list.html:7
-msgid "Every show the warehouse holds. Search by name, narrow by genre, or reorder by what was measured."
-msgstr "Все сериалы, что есть в хранилище. Ищите по названию, выбирайте жанр или меняйте порядок по измеряемым показателям."
+#: movies/templates/movies/series_detail.html:240
+msgid "Average"
+msgstr "Средняя"
 
-#: movies/templates/movies/series_list.html:18
+#: movies/templates/movies/series_detail.html:242
+msgid "Range"
+msgstr "Разброс"
+
+#: movies/templates/movies/series_detail.html:244
+msgid "Votes"
+msgstr "Голоса"
+
+#: movies/templates/movies/series_detail.html:246
+msgid "Average episode rating by season, area chart"
+msgstr "Средний рейтинг серий по сезонам, диаграмма с областями"
+
+#: movies/templates/movies/series_detail.html:247
+#: movies/templates/movies/series_detail.html:259
+msgid "Episode ratings in this season, area chart"
+msgstr "Рейтинг серий этого сезона, диаграмма с областями"
+
+#: movies/templates/movies/series_detail.html:249
+msgid "Average rating by season"
+msgstr "Средний рейтинг по сезонам"
+
+#: movies/templates/movies/series_detail.html:250
+msgid "Rating by episode"
+msgstr "Рейтинг по сериям"
+
+#: movies/templates/movies/series_detail.html:252
+msgid "Episode rating"
+msgstr "Рейтинг серии"
+
+#: movies/templates/movies/series_detail.html:253
+msgid "Show-wide episode average"
+msgstr "Средняя по всем сериям"
+
+#: movies/templates/movies/series_detail.html:254
+msgid "Best"
+msgstr "Лучшая"
+
+#: movies/templates/movies/series_detail.html:255
+msgid "Lowest"
+msgstr "Худшая"
+
+#: movies/templates/movies/series_detail.html:283
+msgid "No cast recorded for this show."
+msgstr "Для этого сериала нет записанного актёрского состава."
+
+#: movies/templates/movies/series_detail.html:318
+msgid "No crew recorded for this show."
+msgstr "Для этого сериала нет записанной съёмочной группы."
+
+#: movies/templates/movies/series_list.html:11
+msgid ""
+"Every show the warehouse holds. Search by name, narrow by genre, or reorder "
+"by what was measured."
+msgstr ""
+"Все сериалы, что есть в хранилище. Ищите по названию, выбирайте жанр или "
+"меняйте порядок по измеряемым показателям."
+
+#: movies/templates/movies/series_list.html:22
 msgid "Search shows"
 msgstr "Поиск сериалов"
 
-#: movies/templates/movies/series_list.html:18
+#: movies/templates/movies/series_list.html:22
 msgid "Search TV shows by name"
 msgstr "Поиск сериалов по названию"
 
-#: movies/templates/movies/studio_detail.html:5
+#: movies/templates/movies/studio_detail.html:11
 #, python-format
 msgid "%(name)s: %(n)s movie in the Theoria catalog."
 msgid_plural "%(name)s: %(n)s movies in the Theoria catalog."
@@ -1341,58 +2369,62 @@ msgstr[1] "%(name)s: %(n)s фильма в каталоге Theoria."
 msgstr[2] "%(name)s: %(n)s фильмов в каталоге Theoria."
 msgstr[3] "%(name)s: %(n)s фильма в каталоге Theoria."
 
-#: movies/templates/movies/studio_detail.html:26
+#: movies/templates/movies/studio_detail.html:32
 msgid "Headquarters"
 msgstr "Штаб-квартира"
 
-#: movies/templates/movies/studio_detail.html:38
+#: movies/templates/movies/studio_detail.html:44
 msgid "Parent company"
 msgstr "Материнская компания"
 
-#: movies/templates/movies/studio_list.html:7
-msgid "Every production company credited on a movie in the catalog. Search by name, or reorder by output or revenue."
-msgstr "Все продюсерские компании, указанные в титрах фильмов каталога. Ищите по названию или меняйте порядок по количеству фильмов или сборам."
+#: movies/templates/movies/studio_list.html:13
+msgid ""
+"Every production company credited on a movie in the catalog. Search by name, "
+"or reorder by output or revenue."
+msgstr ""
+"Все продюсерские компании, указанные в титрах фильмов каталога. Ищите по "
+"названию или меняйте порядок по количеству фильмов или сборам."
 
-#: movies/templates/movies/studio_list.html:20
+#: movies/templates/movies/studio_list.html:26
 msgid "Search studios"
 msgstr "Поиск студий"
 
-#: movies/templates/movies/studio_list.html:20
+#: movies/templates/movies/studio_list.html:26
 msgid "Search studios by name"
 msgstr "Поиск студий по названию"
 
-#: movies/templates/movies/studio_list.html:30
+#: movies/templates/movies/studio_list.html:36
 msgid "Most movies"
 msgstr "Больше всего фильмов"
 
-#: movies/views.py:609
+#: movies/views.py:529
 msgid "Female"
 msgstr "Женский"
 
-#: movies/views.py:610
+#: movies/views.py:530
 msgid "Male"
 msgstr "Мужской"
 
-#: movies/views.py:611
+#: movies/views.py:531
 msgid "Non-binary"
 msgstr "Небинарный"
 
-#: movies/views.py:698
+#: movies/views.py:635
 msgctxt "people list title"
 msgid "Acting"
 msgstr "Актёры"
 
-#: movies/views.py:705
+#: movies/views.py:642
 msgctxt "people list title"
 msgid "Directing"
 msgstr "Режиссёры"
 
-#: movies/views.py:1258
+#: movies/views.py:1283
 #, python-format
 msgid "%(year)s–Active"
 msgstr "%(year)s – н. в."
 
-#: movies/views.py:1621
+#: movies/views.py:1653
 msgid "Retired"
 msgstr "Карьера окончена"
 
@@ -1443,10 +2475,6 @@ msgstr "Актёры"
 #: movies/vocab.py:42
 msgid "Actor"
 msgstr "Актёр"
-
-#: movies/vocab.py:43
-msgid "Director"
-msgstr "Режиссёр"
 
 #: movies/vocab.py:44
 msgid "Creator"
@@ -1507,10 +2535,6 @@ msgstr "Редактор сценария"
 #: movies/vocab.py:58
 msgid "Executive Story Editor"
 msgstr "Главный редактор сценария"
-
-#: movies/vocab.py:59
-msgid "Editor"
-msgstr "Монтажёр"
 
 #: movies/vocab.py:60
 msgid "Assistant Editor"
@@ -1828,10 +2852,6 @@ msgstr "Отменён"
 msgid "Returning Series"
 msgstr "Сериал продолжается"
 
-#: movies/vocab.py:146
-msgid "Ended"
-msgstr "Завершён"
-
 #: movies/vocab.py:147
 msgid "Pilot"
 msgstr "Пилот"
@@ -1840,696 +2860,159 @@ msgstr "Пилот"
 msgid "Page not found — Theoria"
 msgstr "Страница не найдена — Theoria"
 
-#: templates/404.html:15
+#: templates/404.html:21
 msgid "This page doesn’t exist."
 msgstr "Такой страницы нет."
 
-#: templates/404.html:17
+#: templates/404.html:23
 msgid "The link may be broken, or the page may have been moved or removed."
 msgstr "Возможно, ссылка неверна, а страницу переместили или удалили."
 
-#: templates/404.html:19
-msgid "Back to homepage"
-msgstr "На главную"
-
 #: templates/base.html:7
-msgid "Theoria — a movie catalog measured end to end: every movie, cast member and rating read straight out of a star-schema warehouse."
-msgstr "Theoria — каталог фильмов, измеренный от начала до конца: каждый фильм, актёр и рейтинг прочитаны прямо из хранилища данных со схемой «звезда»."
+msgid ""
+"Theoria — a movie catalog measured end to end: every movie, cast member and "
+"rating read straight out of a star-schema warehouse."
+msgstr ""
+"Theoria — каталог фильмов, измеренный от начала до конца: каждый фильм, "
+"актёр и рейтинг прочитаны прямо из хранилища данных со схемой «звезда»."
 
-#: templates/base.html:105
+#: templates/base.html:146
 msgid "Skip to content"
 msgstr "Перейти к содержимому"
 
-#: templates/base.html:108
+#: templates/base.html:155
 msgid "Main"
 msgstr "Главное меню"
 
-#: templates/base.html:148 templates/base.html:194
+#: templates/base.html:195 templates/base.html:241
 msgid "Your account"
 msgstr "Ваш аккаунт"
 
-#: templates/base.html:215
+#: templates/base.html:267 templates/base.html:279
+msgid "Search"
+msgstr "Поиск"
+
+#: templates/base.html:274
+msgid "No title matches that search. Try another title."
+msgstr "По этому запросу ничего не найдено. Попробуйте другое название."
+
+#: templates/base.html:275
+msgid "Type at least two letters of a title."
+msgstr "Введите хотя бы две буквы названия."
+
+#: templates/base.html:280
+msgid "Search movies and TV shows"
+msgstr "Поиск фильмов и сериалов"
+
+#: templates/base.html:305 templates/base.html:313
 msgctxt "language switcher"
 msgid "Language"
 msgstr "Язык"
 
-#: templates/base.html:227
+#: templates/base.html:323
 msgid "Switch theme"
 msgstr "Сменить тему"
 
-#: templates/base.html:260
+#: templates/base.html:357
 msgid "Theoria — a movie catalog measured end to end."
 msgstr "Theoria — каталог фильмов, измеренный от начала до конца."
 
-#: templates/base.html:261
+#: templates/base.html:358
 msgid "Source · TMDB"
 msgstr "Источник · TMDB"
 
-#: templates/base.html:274
+#: templates/base.html:371
 msgid "Are you sure?"
 msgstr "Вы уверены?"
 
-#: templates/base.html:276
+#: templates/base.html:373
 msgid "No, stay"
 msgstr "Нет, остаться"
 
-#: templates/base.html:277
+#: templates/base.html:374
 msgid "Yes, sign out"
 msgstr "Да, выйти"
 
-#: templates/base.html:288
-msgid "Theoria assistant"
-msgstr "Ассистент Theoria"
-
-#: templates/base.html:291
-msgid "Expand film guide"
-msgstr "Развернуть помощника по фильмам"
-
-#: templates/base.html:291
-msgid "Shrink film guide"
-msgstr "Уменьшить помощника по фильмам"
-
-#: templates/base.html:324
-msgid "Hi — not sure what to watch?"
-msgstr "Не знаете, что посмотреть?"
-
-#: templates/base.html:325
-msgid "Tell me a mood, genre, or how much time you have."
-msgstr "Назовите настроение, жанр или сколько у вас времени."
-
-#: templates/base.html:290
-msgid "Close"
-msgstr "Закрыть"
-
-#: templates/base.html:299
-msgid "👋 Hi there! Want to find a movie to watch? I’m here to help."
-msgstr "👋 Здравствуйте! Хотите найти фильм для просмотра? Я помогу."
-
-#: templates/base.html:302
-msgid "Ask me or select an option below."
-msgstr "Спросите меня или выберите вариант ниже."
-
-#: templates/base.html:304
-msgid "🍿 Pick for tonight"
-msgstr "🍿 Выбор на вечер"
-
-#: templates/base.html:305
-msgid "😊 Find by mood"
-msgstr "😊 Подбор по настроению"
-
-#: templates/base.html:307
-msgid "🎬 Browse by genre"
-msgstr "🎬 Выбрать по жанру"
-
-#: templates/base.html:306
-msgid "🎲 Surprise me"
-msgstr "🎲 Удивите меня"
-
-#: templates/base.html:310
-msgid "Message the film guide"
-msgstr "Сообщение помощнику"
-
-#: templates/base.html:311
-msgid "Ask me anything about movies..."
-msgstr "Спросите меня о фильмах..."
-
-#: templates/base.html:312
-msgid "Send message"
-msgstr "Отправить сообщение"
-
-#: templates/base.html:312
-msgid "Send"
-msgstr "Отправить"
-
-#: templates/base.html:321
-msgid "Get a film pick"
-msgstr "Подобрать фильм"
-
-#: templates/base.html:280
-msgid "New chat"
-msgstr "Новый чат"
-
-#: templates/base.html:285
-msgid "Recent chats"
-msgstr "Недавние чаты"
-
-#: templates/base.html:300
-msgid "Close recent chats"
-msgstr "Закрыть недавние чаты"
-
-#: assistant/views.py:64
-msgid "Your last three chats will appear here."
-msgstr "Здесь появятся ваши последние три чата."
-
-#: core/context_processors.py:24
-msgid "Loading chats…"
-msgstr "Загрузка чатов…"
-
-#: core/context_processors.py:25
-msgid "Your chats could not be loaded just now."
-msgstr "Не удалось загрузить чаты. Попробуйте ещё раз."
-
-#: core/context_processors.py:26
-msgid "That chat could not be opened just now. Please try again."
-msgstr "Не удалось открыть этот чат. Попробуйте ещё раз."
-
-#: core/context_processors.py:29
-msgid "A new chat could not be started just now. Please try again."
-msgstr "Не удалось начать новый чат. Попробуйте ещё раз."
-
+#: templates/base.html:395
 msgid "Film guide"
 msgstr "Киногид"
 
+#: templates/base.html:396
 msgid "Picks from Theoria"
 msgstr "Подборки от Theoria"
 
+#: templates/base.html:405 templates/base.html:426
+msgid "Recent chats"
+msgstr "Недавние чаты"
+
+#: templates/base.html:410
+msgid "Expand film guide"
+msgstr "Развернуть помощника по фильмам"
+
+#: templates/base.html:410
+msgid "Shrink film guide"
+msgstr "Уменьшить помощника по фильмам"
+
+#: templates/base.html:416 templates/base.html:427 templates/base.html:487
+msgid "Close"
+msgstr "Закрыть"
+
+#: templates/base.html:427
+msgid "Close recent chats"
+msgstr "Закрыть недавние чаты"
+
+#: templates/base.html:438
 msgid "What are we watching?"
 msgstr "Что посмотрим?"
 
-msgid "Tell me a mood, a genre, or how much time you have. Or start with one of these."
-msgstr "Назовите настроение, жанр или сколько у вас времени. Или начните с одного из вариантов."
+#: templates/base.html:439
+msgid ""
+"Tell me a mood, a genre, or how much time you have. Or start with one of "
+"these."
+msgstr ""
+"Назовите настроение, жанр или сколько у вас времени. Или начните с одного из "
+"вариантов."
 
+#: templates/base.html:447
 msgid "Pick for tonight"
 msgstr "Выбор на вечер"
 
+#: templates/base.html:454
 msgid "Find by mood"
 msgstr "Подбор по настроению"
 
+#: templates/base.html:461
 msgid "Browse by genre"
 msgstr "Выбрать по жанру"
 
+#: templates/base.html:467
 msgid "Surprise me"
 msgstr "Удивите меня"
 
-msgid "On your list"
-msgstr "В вашем списке"
-
-msgid "Already watched"
-msgstr "Уже смотрел(а)"
-
-msgid "Not for me"
-msgstr "Не для меня"
-
-msgid "{minutes} min"
-msgstr "{minutes} мин"
-
-msgid "Explore"
-msgstr "Обзор"
-
-#, python-format
-msgid "%(n)s of %(total)s"
-msgstr "%(n)s из %(total)s"
-
-#, python-format
-msgid "Directed by %(name)s"
-msgstr "Режиссёр: %(name)s"
-
-msgid "Open film"
-msgstr "Открыть фильм"
-
-msgid "Featured films"
-msgstr "Избранные фильмы"
-
-msgid "The catalogue"
-msgstr "Каталог"
-
-msgid "Every title."
-msgstr "Каждое название."
-
-msgid "Every performance."
-msgstr "Каждая роль."
-
-msgid "Hover a poster to stop the wall and tilt it toward the light."
-msgstr "Наведите на постер, чтобы остановить ленту и повернуть его к свету."
-
-msgid "The top ten,"
-msgstr "Лучшие десять,"
-
-msgid "by IMDb rating."
-msgstr "по рейтингу IMDb."
-
-msgid "Scroll back"
-msgstr "Прокрутить назад"
-
-msgid "Scroll forward"
-msgstr "Прокрутить вперёд"
-
-msgid "Films by decade,"
-msgstr "Фильмы по десятилетиям,"
-
-msgid "and how they rate."
-msgstr "и их рейтинг."
-
-msgid "Bars count the films released in each decade. The line tracks their average IMDb rating."
-msgstr "Столбцы — число фильмов, вышедших за десятилетие. Линия — их средний рейтинг IMDb."
-
-msgid "{decade}s"
-msgstr "{decade}-е"
-
-msgid "{decade}s · {films} films · average {rating}"
-msgstr "{decade}-е · фильмов: {films} · в среднем {rating}"
-
-#, python-format
-msgid "%(decade)ss"
-msgstr "%(decade)s-е"
-
-msgid "Films released"
-msgstr "Вышло фильмов"
-
-msgid "Average IMDb rating"
-msgstr "Средний рейтинг IMDb"
-
-msgid "Films released and average IMDb rating, by decade"
-msgstr "Число вышедших фильмов и средний рейтинг IMDb по десятилетиям"
-
-msgid "Search"
-msgstr "Поиск"
-
-msgid "No title matches that search. Try another title."
-msgstr "По этому запросу ничего не найдено. Попробуйте другое название."
-
-msgid "Type at least two letters of a title."
-msgstr "Введите хотя бы две буквы названия."
-
-msgid "Search movies and TV shows"
-msgstr "Поиск фильмов и сериалов"
-
-msgid "IMDb rating"
-msgstr "Рейтинг IMDb"
-
-msgid "Box office"
-msgstr "Кассовые сборы"
-
-msgid "its budget, earned back at the box office"
-msgstr "бюджета вернулось в прокате"
-
-#: movies/templates/movies/_season_picker.html movies/templates/movies/series_detail.html
-msgid "All seasons"
-msgstr "Все сезоны"
-
-#: movies/templates/movies/series_detail.html
-msgid "Rated episodes"
-msgstr "Серий с оценкой"
-
-#: movies/templates/movies/series_detail.html
-msgid "Average"
-msgstr "Средняя"
-
-#: movies/templates/movies/series_detail.html
-msgid "Range"
-msgstr "Разброс"
-
-#: movies/templates/movies/series_detail.html
-msgid "Votes"
-msgstr "Голоса"
-
-#: movies/templates/movies/series_detail.html
-msgid "few ratings"
-msgstr "мало оценок"
-
-#: movies/templates/movies/series_detail.html
-msgid "Season average"
-msgstr "Средняя за сезон"
-
-#: movies/templates/movies/series_detail.html
-msgid "Episode"
-msgstr "Серия"
-
-#: movies/templates/movies/series_detail.html
-msgid "Average episode rating by season, area chart"
-msgstr "Средний рейтинг серий по сезонам, диаграмма с областями"
-
-#: movies/templates/movies/series_detail.html
-msgid "Episode ratings in this season, area chart"
-msgstr "Рейтинг серий этого сезона, диаграмма с областями"
-
-#: movies/templates/movies/series_detail.html
-msgid "Average rating by season"
-msgstr "Средний рейтинг по сезонам"
-
-#: movies/templates/movies/series_detail.html
-msgid "Rating by episode"
-msgstr "Рейтинг по сериям"
-
-#: movies/templates/movies/series_detail.html
-msgid "Episode rating"
-msgstr "Рейтинг серии"
-
-#: movies/templates/movies/series_detail.html
-msgid "Show-wide episode average"
-msgstr "Средняя по всем сериям"
-
-#: movies/templates/movies/series_detail.html
-msgid "Best"
-msgstr "Лучшая"
-
-#: movies/templates/movies/series_detail.html
-msgid "Lowest"
-msgstr "Худшая"
-
-#: movies/templates/movies/_season_kpis.html
-msgid "Episode average"
-msgstr "Средняя по сериям"
-
-#: movies/templates/movies/_season_kpis.html
-msgid "Not rated yet"
-msgstr "Пока без оценок"
-
-#: movies/templates/movies/_season_kpis.html
-msgid "Best season"
-msgstr "Лучший сезон"
-
-#: movies/templates/movies/_season_kpis.html
-msgid "Weakest season"
-msgstr "Самый слабый сезон"
-
-#: movies/templates/movies/_season_kpis.html
-msgid "Best episode"
-msgstr "Лучшая серия"
-
-#: movies/templates/movies/_season_kpis.html
-msgid "Weakest episode"
-msgstr "Самая слабая серия"
-
-#: movies/templates/movies/_season_kpis.html
-#, python-format
-msgid "Episode %(n)s"
-msgstr "Серия %(n)s"
-
-#: movies/templates/movies/_season_table.html
-msgid "Aired"
-msgstr "Даты показа"
-
-#: movies/templates/movies/_season_table.html
-msgid "seasons"
-msgstr "сезоны"
-
-#: movies/templates/movies/_season_table.html
-#, python-format
-msgid "Average IMDb rating %(value)s out of 10"
-msgstr "Средний рейтинг IMDb: %(value)s из 10"
-
-
-# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
-
-msgid "Median movie rating"
-msgstr "Медианный рейтинг фильмов"
-
-msgid "Median return on budget"
-msgstr "Медианная окупаемость бюджета"
-
-msgid "Not in English"
-msgstr "Не на английском"
-
-msgid "Sections of this page"
-msgstr "Разделы страницы"
-
-msgid "Ratings"
-msgstr "Рейтинги"
-
-msgid "Money"
-msgstr "Деньги"
-
-msgid "Decades"
-msgstr "Десятилетия"
-
-msgid "Origins"
-msgstr "Происхождение"
-
-msgid "TV shows"
-msgstr "Сериалы"
-
-msgid "How movies and shows are rated"
-msgstr "Как оценены фильмы и сериалы"
-
-msgid "IMDb, by half point"
-msgstr "IMDb, по полбалла"
-
-msgid "Show ratings for"
-msgstr "Показать рейтинги для"
-
-msgid "Number of movies and shows at each IMDb rating, bar chart"
-msgstr "Число фильмов и сериалов по рейтингу IMDb, столбчатая диаграмма"
-
-msgid "Each bar counts the movies or shows whose rating falls in that half-point band; the dashed line marks the median."
-msgstr "Каждый столбец показывает, сколько фильмов или сериалов попало в этот полубалльный интервал рейтинга; пунктир отмечает медиану."
-
-msgid "Show the numbers"
-msgstr "Показать цифры"
-
-msgid "Reading the scores"
-msgstr "Как читать оценки"
-
-msgid "Median show rating"
-msgstr "Медианный рейтинг сериалов"
-
-msgid "IMDb and TMDB agree"
-msgstr "IMDb и TMDB сходятся"
-
-msgid "How closely the two rating sources move together, from 0 (not at all) to 1 (identical), for movies with at least 50 TMDB votes."
-msgstr "Насколько согласованно меняются оценки двух источников: от 0 (никак) до 1 (полностью совпадают), для фильмов минимум с 50 голосами на TMDB."
-
-msgid "Budget and revenue"
-msgstr "Бюджет и сборы"
-
-msgid "log scale"
-msgstr "логарифмическая шкала"
-
-msgid "Budget against revenue for each movie, scatter chart"
-msgstr "Бюджет и сборы каждого фильма, точечная диаграмма"
-
-msgid "Each point is a movie. Above the lower dashed line it earned more than it cost; above the upper one, five times as much. Select a point to open the movie."
-msgstr "Каждая точка — фильм. Выше нижней пунктирной линии он заработал больше, чем стоил; выше верхней — в пять раз больше. Выберите точку, чтобы открыть фильм."
-
-msgid "Return on budget by genre"
-msgstr "Окупаемость бюджета по жанрам"
-
-msgid "30+ movies each"
-msgstr "от 30 фильмов"
-
-msgid "Share of each genre's movies by how much they returned on their budget, stacked bar chart"
-msgstr "Доля фильмов каждого жанра по тому, какую часть бюджета они вернули, диаграмма с накоплением"
-
-msgid "Share of each genre's movies in each return band, ordered by median return."
-msgstr "Доля фильмов каждого жанра в каждом диапазоне окупаемости; жанры упорядочены по медианной окупаемости."
-
-msgid "Median return"
-msgstr "Медианная окупаемость"
-
-msgid "Studios with the most movies"
-msgstr "Студии с наибольшим числом фильмов"
-
-msgid "5+ movies"
-msgstr "от 5 фильмов"
-
-msgid "Two extremes"
-msgstr "Два полюса"
-
-msgid "Biggest return"
-msgstr "Наибольшая окупаемость"
-
-msgid "Most expensive"
-msgstr "Самый дорогой"
-
-msgid "Each decade holds roughly the same number of movies by design, so these charts compare shares and typical values, never totals."
-msgstr "В каждом десятилетии примерно одинаковое число фильмов — так задумано, поэтому здесь сравниваются доли и типичные значения, а не итоги."
-
-msgid "Typical running time"
-msgstr "Типичная продолжительность"
-
-msgid "median, minutes"
-msgstr "медиана, минуты"
-
-msgid "Median running time by decade, line chart"
-msgstr "Медианная продолжительность фильмов по десятилетиям, линейный график"
-
-msgid "Median minutes"
-msgstr "Медиана, мин"
-
-msgid "Movies not in English"
-msgstr "Фильмы не на английском"
-
-msgid "share of each decade"
-msgstr "доля в каждом десятилетии"
-
-msgid "Share of movies not in English by decade, bar chart"
-msgstr "Доля фильмов не на английском по десятилетиям, столбчатая диаграмма"
-
-msgid "This reflects how the archive was assembled as much as how cinema changed."
-msgstr "Здесь сказывается и то, как собирался архив, а не только то, как менялось кино."
-
-msgid "Genre mix"
-msgstr "Жанровый состав"
-
-msgid "share of each decade's movies"
-msgstr "доля фильмов десятилетия"
-
-msgid "This describes the archive, which leans heavily towards English-language movies, not cinema worldwide."
-msgstr "Это описывает архив, где заметно преобладают фильмы на английском языке, а не мировое кино."
-
-msgid "Share"
-msgstr "Доля"
-
-msgid "Original language"
-msgstr "Язык оригинала"
-
-msgctxt "table column"
-msgid "Language"
-msgstr "Язык"
-
-msgid "Other languages"
-msgstr "Другие языки"
-
-msgid "Top-rated directors"
-msgstr "Режиссёры с лучшими рейтингами"
-
-msgid "4+ movies"
-msgstr "от 4 фильмов"
-
-msgid "Recurring partnerships"
-msgstr "Постоянные творческие союзы"
-
-msgid "3+ movies together"
-msgstr "от 3 общих фильмов"
-
-msgid "Worked with"
-msgstr "Совместно с"
-
-msgid "Role"
-msgstr "Должность"
-
-msgid "Rating by season, against season 1"
-msgstr "Рейтинг по сезонам относительно первого сезона"
-
-msgid "15+ shows per season"
-msgstr "от 15 сериалов на сезон"
-
-msgid "Change in average episode rating from season 1, by season number, line chart"
-msgstr "Изменение среднего рейтинга серий относительно первого сезона по номеру сезона, линейный график"
-
-msgid "Each show is compared with its own first season, so shows cancelled early don’t flatter the later seasons."
-msgstr "Каждый сериал сравнивается с собственным первым сезоном, поэтому рано закрытые сериалы не приукрашивают поздние сезоны."
-
-msgid "Change"
-msgstr "Изменение"
-
-msgid "Rating by show status"
-msgstr "Рейтинг по статусу сериала"
-
-msgid "median"
-msgstr "медиана"
-
-msgid "Median rating"
-msgstr "Медианный рейтинг"
-
-msgid "Networks with the most shows"
-msgstr "Каналы с наибольшим числом сериалов"
-
-msgid "5+ rated shows"
-msgstr "от 5 оценённых сериалов"
-
-msgid "Shows are rated higher than movies: the typical show scores ★ <strong>%(show)s</strong> against ★ <strong>%(movie)s</strong> for a movie, %(gap)s points apart."
-msgstr "Сериалы оцениваются выше фильмов: типичный сериал набирает ★ <strong>%(show)s</strong> против ★ <strong>%(movie)s</strong> у фильма, разница — %(gap)s балла."
-
-msgid "Movies are rated higher than shows: the typical movie scores ★ <strong>%(movie)s</strong> against ★ <strong>%(show)s</strong> for a show, %(gap)s points apart."
-msgstr "Фильмы оцениваются выше сериалов: типичный фильм набирает ★ <strong>%(movie)s</strong> против ★ <strong>%(show)s</strong> у сериала, разница — %(gap)s балла."
-
-msgid "Movies and shows are rated about the same: ★ <strong>%(movie)s</strong> for the typical movie, ★ <strong>%(show)s</strong> for the typical show."
-msgstr "Фильмы и сериалы оцениваются примерно одинаково: ★ <strong>%(movie)s</strong> у типичного фильма, ★ <strong>%(show)s</strong> у типичного сериала."
-
-msgid "<strong>%(over)s%%</strong> of movies with a known budget returned five times it or more; only <strong>%(under)s%%</strong> earned less than they cost."
-msgstr "<strong>%(over)s%%</strong> фильмов с известным бюджетом окупили его в пять раз и больше; лишь <strong>%(under)s%%</strong> заработали меньше, чем стоили."
-
-msgid "The typical movie of the %(last)ss runs <strong>%(minutes)s minutes longer</strong> than one from the %(first)ss."
-msgstr "Типичный фильм %(last)s-х идёт на <strong>%(minutes)s мин дольше</strong>, чем фильм %(first)s-х."
-
-msgid "The typical movie of the %(last)ss runs <strong>%(minutes)s minutes shorter</strong> than one from the %(first)ss."
-msgstr "Типичный фильм %(last)s-х идёт на <strong>%(minutes)s мин короче</strong>, чем фильм %(first)s-х."
-
-msgid "The typical movie runs <strong>about the same length</strong> in the %(last)ss as in the %(first)ss."
-msgstr "Типичный фильм идёт <strong>примерно столько же</strong> в %(last)s-х, сколько в %(first)s-х."
-
-msgid "%(d)ss"
-msgstr "%(d)s-е"
-
-msgid "<strong>%(english)s%%</strong> of the archive’s movies are in English, and %(country)s took part in <strong>%(pct)s%%</strong> of them."
-msgstr "<strong>%(english)s%%</strong> фильмов архива сняты на английском языке; страна «%(country)s» участвовала в производстве <strong>%(pct)s%%</strong> фильмов."
-
-msgid "<strong>%(name)s</strong> is the highest-rated director with at least four movies here: ★ %(rating)s across %(count)s movies."
-msgstr "<strong>%(name)s</strong> — режиссёр с самым высоким рейтингом среди тех, у кого здесь не менее четырёх фильмов: ★ %(rating)s (фильмов: %(count)s)."
-
-msgid "Shows hold their first-season rating <strong>all the way to season %(last)s</strong>."
-msgstr "Сериалы сохраняют рейтинг первого сезона <strong>вплоть до %(last)s-го сезона</strong>."
-
-msgid "Shows hold their first-season rating <strong>through season %(hold)s</strong>, then slip about <strong>%(size)s points</strong> across seasons %(first)s–%(last)s."
-msgstr "Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</strong>, а затем теряют около <strong>%(size)s балла</strong> в сезонах %(first)s–%(last)s."
-
-msgid "Shows hold their first-season rating <strong>through season %(hold)s</strong>, then climb about <strong>%(size)s points</strong> across seasons %(first)s–%(last)s."
-msgstr "Сериалы держат рейтинг первого сезона <strong>до %(hold)s-го сезона</strong>, а затем прибавляют около <strong>%(size)s балла</strong> в сезонах %(first)s–%(last)s."
-
-msgid "Composer"
-msgstr "Композитор"
-
-msgid "Cinematographer"
-msgstr "Оператор-постановщик"
-
-msgid "Production designer"
-msgstr "Художник-постановщик"
-
-msgid "Screenwriter"
-msgstr "Сценарист"
-
-msgid "Still running"
-msgstr "Продолжается"
-
-msgid "Cancelled"
-msgstr "Закрыт"
-
-msgid "Movies: {count}"
-msgstr "Фильмов: {count}"
-
-msgid "Shows: {count}"
-msgstr "Сериалов: {count}"
-
-msgid "Median"
-msgstr "Медиана"
-
-msgid "Break-even"
-msgstr "Порог окупаемости"
-
-msgid "5× budget"
-msgstr "5× бюджета"
-
-msgid "Under 1×"
-msgstr "Меньше 1×"
-
-msgid "5× or more"
-msgstr "5× и больше"
-
-msgid "Season {n}"
-msgstr "Сезон {n}"
-
-msgid "vs season 1"
-msgstr "к 1-му сезону"
-
-msgid "Based on %(counter)s movie with a known budget of at least $1M and box-office revenue. Not adjusted for inflation; streaming releases and movies still in cinemas can read low."
-msgid_plural "Based on %(counter)s movies with a known budget of at least $1M and box-office revenue. Not adjusted for inflation; streaming releases and movies still in cinemas can read low."
-msgstr[0] "Основано на %(counter)s фильме с известным бюджетом от $1 млн и кассовыми сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё идут в кино, могут выглядеть скромнее."
-msgstr[1] "Основано на %(counter)s фильмах с известным бюджетом от $1 млн и кассовыми сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё идут в кино, могут выглядеть скромнее."
-msgstr[2] "Основано на %(counter)s фильмах с известным бюджетом от $1 млн и кассовыми сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё идут в кино, могут выглядеть скромнее."
-msgstr[3] "Основано на %(counter)s фильмах с известным бюджетом от $1 млн и кассовыми сборами. Без поправки на инфляцию; стриминговые релизы и фильмы, которые ещё идут в кино, могут выглядеть скромнее."
-
-
-# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
-
-msgid "A movie counts in every genre it belongs to, so each decade's shares add up to more than 100 percent. The ten most common genres."
-msgstr "Фильм учитывается в каждом своём жанре, поэтому доли за десятилетие в сумме дают больше 100 процентов. Десять самых частых жанров."
-
-
-# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
-
-
-# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
-
-
-# Task 133 — analytics dashboard (appended by hand; `makemessages` will add source locations)
+#: templates/base.html:474
+msgid "Message the film guide"
+msgstr "Сообщение помощнику"
+
+#: templates/base.html:476
+msgid "Ask me anything about movies..."
+msgstr "Спросите меня о фильмах..."
+
+#: templates/base.html:477
+msgid "Send message"
+msgstr "Отправить сообщение"
+
+#: templates/base.html:477
+msgid "Send"
+msgstr "Отправить"
+
+#: templates/base.html:500
+msgid "Hi — not sure what to watch?"
+msgstr "Не знаете, что посмотреть?"
+
+#: templates/base.html:501
+msgid "Tell me a mood, genre, or how much time you have."
+msgstr "Назовите настроение, жанр или сколько у вас времени."
+
+#: templates/base.html:506
+msgid "Get a film pick"
+msgstr "Подобрать фильм"

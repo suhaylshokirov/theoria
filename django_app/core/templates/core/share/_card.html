@@ -37,7 +37,7 @@
         <span class="sc-disc" aria-hidden="true">{{ owner_name|slice:":1"|upper }}</span>
         <span class="sc-owner__text">
             <span class="sc-handle">@{{ owner_name }}</span>
-            <span class="sc-owner__since">{% blocktranslate trimmed with month=owner_since|date:"M" year=owner_since|date:"Y" context "share card" %}Member since {{ month }} <span class="sc-mono">{{ year }}</span>{% endblocktranslate %}</span>
+            <span class="sc-owner__since">{% blocktranslate trimmed with month=owner_since|date:"E" year=owner_since|date:"Y" context "share card" %}Member since {{ month }} <span class="sc-mono">{{ year }}</span>{% endblocktranslate %}</span>
         </span>
     </div>
 
