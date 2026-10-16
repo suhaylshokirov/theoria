@@ -399,10 +399,25 @@
 .sc-foot {
   display: flex;
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.6em;
   min-width: 0;
   margin-top: 48px;
+}
+
+/* What didn't fit on the card, pointed at the link: pushed to the right of
+   the foot, quieter than the link itself. On Wide's narrow column it wraps
+   under the link. */
+.sc-foot__more {
+  margin-left: auto;
+  font-size: calc(var(--t-url) * 0.9);
+  color: var(--c-ink-muted);
+  white-space: nowrap;
+}
+
+.sc-foot__more .sc-mono {
+  color: var(--c-ink);
 }
 
 .sc-foot::before {

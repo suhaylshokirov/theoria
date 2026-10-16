@@ -86,5 +86,6 @@
 
     <footer class="sc-foot">
         <span class="sc-foot__url sc-mono">{{ printed_url }}</span>
+        {% if more %}<span class="sc-foot__more">{% blocktranslate trimmed with n=more|stringformat:"d" context "share card" %}<span class="sc-mono">+{{ n }}</span> more at the link{% endblocktranslate %}</span>{% endif %}
     </footer>
 </article>

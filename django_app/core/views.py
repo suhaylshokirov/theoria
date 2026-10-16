@@ -439,6 +439,8 @@ def shared_card(request, token):
         "owner_name": owner.username,
         "owner_since": owner.date_joined,
         "frames": frames,
+        # How many titles didn't fit: the card says they're at the link.
+        "more": max(len(shared.items) - len(frames), 0),
         "sheet_rows": max(1, -(-len(frames) // columns)),
         # Printed without the scheme: it is read off an image and typed.
         "printed_url": f"{request.get_host()}{sharing.share_path(collection.share_token)}".rstrip("/"),

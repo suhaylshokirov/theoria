@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 04:01+0000\n"
+"POT-Creation-Date: 2026-10-16 04:40+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -1275,6 +1275,12 @@ msgstr "Аккаунт · %(username)s"
 msgctxt "share card"
 msgid "Member since %(month)s <span class=\"sc-mono\">%(year)s</span>"
 msgstr "С нами с %(month)s <span class=\"sc-mono\">%(year)s</span>"
+
+#: core/templates/core/share/_card.html:95
+#, python-format
+msgctxt "share card"
+msgid "<span class=\"sc-mono\">+%(n)s</span> more at the link"
+msgstr "<span class=\"sc-mono\">+%(n)s</span> ещё по ссылке"
 
 #: core/templates/core/share/gone.html:9
 msgid "This link is no longer shared — Theoria"

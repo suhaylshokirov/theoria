@@ -526,17 +526,19 @@ def test_liked_card_fills_the_contact_sheet(owner):
     many = [_row(_movie(i, 1990 + i, 100, 7.0), "movie", i) for i in range(1, 14)]
     with _hydrate_with(many):
         html = _card(collection.share_token, format="story").content.decode()
-    # A Story is four big posters, 2 × 2, unnumbered on Liked, and no count.
+    # A Story is four big posters, 2 × 2, unnumbered on Liked; the other
+    # nine are pointed at the link.
     assert html.count('class="sc-cell"') == 4
     assert "--rows: 2" in html
     assert "sc-print__rank" not in html
-    assert "more" not in html
+    assert '<span class="sc-mono">+9</span> more at the link' in html
     cache.clear()                   # the list is cached by updated_at
     with _hydrate_with(many[:5]):
         html = _card(collection.share_token, format="wide").content.decode()
     # A Wide sheet is 4 across: five prints make two rows.
     assert html.count('class="sc-frame"') == 5
     assert "--rows: 2" in html
+    assert "more at the link" not in html          # all five fit
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
