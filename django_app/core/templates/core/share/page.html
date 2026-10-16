@@ -57,8 +57,8 @@
             <span>{% blocktranslate trimmed with joined=owner_since|date:"M Y" %}Member since {{ joined }}{% endblocktranslate %}</span>
             <span class="share-hero__dot" aria-hidden="true"></span>
             <span class="share-hero__count">
-                {% if stats.movies %}<span><span class="mono">{{ stats.movies|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=stats.movies %}movie{% plural %}movies{% endblocktranslate %}</span>{% endif %}
-                {% if stats.shows %}<span><span class="mono">{{ stats.shows|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=stats.shows %}TV show{% plural %}TV shows{% endblocktranslate %}</span>{% endif %}
+                {% if stats.movies %}<span><span class="mono">{{ stats.movies|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=stats.movies context "share stats" %}movie{% plural %}movies{% endblocktranslate %}</span>{% endif %}
+                {% if stats.shows %}<span><span class="mono">{{ stats.shows|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=stats.shows context "share stats" %}TV show{% plural %}TV shows{% endblocktranslate %}</span>{% endif %}
                 {% if not stats.total %}<span>{% translate "Nothing yet" %}</span>{% endif %}
             </span>
         </p>

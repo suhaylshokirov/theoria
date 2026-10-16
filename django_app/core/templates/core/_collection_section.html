@@ -33,26 +33,26 @@
                 data-share-endpoint="{% url 'account:share_collection' section.kind %}"
                 data-share-url="{{ section.share.url|default:'' }}" data-share-note="{{ section.share.note }}"
                 {% if section.share.url %}data-shared{% endif %}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>
             </svg>
-            <span>{% translate "Share" %}</span>
-            <span class="account-share__live" aria-hidden="true"></span>
+            <span>{% translate "Share" context "share sheet" %}</span>
+            <span class="account-share__live" aria-hidden="true">{% translate "On" context "share sheet" %}</span>
             <span class="visually-hidden account-share__live-text">{% translate "(link is on)" %}</span>
         </button>
         {% else %}
         <button type="button" class="account-share" disabled aria-label="{% blocktranslate trimmed with label=label %}Share {{ label }} — add a movie first{% endblocktranslate %}">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/>
             </svg>
-            <span>{% translate "Share" %}</span>
+            <span>{% translate "Share" context "share sheet" %}</span>
         </button>
         {% endif %}
     </div>
 
     {% if section.count %}
     <details class="account-share-plain">
-        <summary>{% translate "Share" %}</summary>
+        <summary>{% translate "Share" context "share sheet" %}</summary>
         {% if section.share.url %}
         <label class="label" for="share-plain-{{ slug }}">{% translate "Link to this list" %}</label>
         <input class="account-share-plain__url" id="share-plain-{{ slug }}" type="text" readonly value="{{ section.share.url }}">

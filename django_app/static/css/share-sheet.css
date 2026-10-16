@@ -1,16 +1,22 @@
-/* Theoria — the share sheet on /me (Task 139).
+/* Theoria — sharing a collection from /me (Tasks 139, layout pass 2026-10-16).
 
-   One <dialog> for all three collections. A bottom sheet on a phone, where the
-   thumb is; on a wide screen a dialog with the artwork on the left, big enough
-   to judge, and the things you do with it on the right. It is an Operate
-   surface -- the owner is finishing a job -- so it takes the site's quiet
-   tokens: hairlines, ink-filled primary, the collection's own mark colour in
-   one small bar and the "link is on" dot, nothing else coloured.
+   The Share button in each section head is lime: the one action on /me that
+   sends something out, and the same lime as the button inside the sheet that
+   finally does it, so the path reads as one thread from the first tap.
 
-   The preview is the real artwork (share-card.css), drawn at its true pixel
-   size and scaled down with CSS; share.js captures a second, unscaled copy.
-   Global `button` rules (lime fill, pill) are reset on purpose: every control
-   here restates its hover, since `button:hover` out-specifies a bare class. */
+   The sheet is one <dialog> for all three collections, an Operate surface in
+   two named groups, in the order a sharer works:
+     IMAGE  the preview, its shape and theme, then the lime button;
+     LINK   the address with its Copy, the line on its page, and the two
+            ways to take it back.
+   Phone: one column, preview → image → link, as a bottom sheet. Wide screen:
+   the preview owns the left, the two groups stack on the right, so the main
+   button sits beside the picture it makes and above the fold.
+
+   The preview is the real artwork (share-card.css) at its true pixel size,
+   scaled down; share.js captures a second, unscaled copy off the page.
+   Global `button` rules (lime pill) are reset where needed and every control
+   restates its hover, since `button:hover` out-specifies a bare class. */
 
 /* --- The section's Share button ------------------------------------------- */
 
@@ -25,13 +31,18 @@
 .account-share {
   display: none;
   align-items: center;
-  gap: var(--space-3);
-  min-height: 40px;
-  padding: var(--space-2) var(--space-5);
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 var(--space-6) 0 var(--space-5);
   margin-left: auto;
-  background: transparent;
-  color: var(--ink);
-  border: 1px solid var(--rule-strong);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  background: var(--lime);
+  color: var(--ink-on-lime);
+  border: 1px solid var(--lime);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 6px 16px -8px rgb(101 163 13 / 0.55);
+  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
 }
 
 html.has-js .account-share {
@@ -39,60 +50,67 @@ html.has-js .account-share {
 }
 
 .account-share svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex: none;
 }
 
 .account-share:hover:not(:disabled) {
-  background: var(--sheet-2);
-  border-color: var(--ink);
-  color: var(--ink);
+  background: var(--lime-hover);
+  border-color: var(--lime-hover);
+  color: var(--ink-on-lime);
+  transform: translateY(-1px);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 10px 22px -10px rgb(101 163 13 / 0.7);
 }
 
-.account-share:disabled {
-  color: var(--ink-faint);
-  border-color: var(--rule);
-  cursor: not-allowed;
+.account-share:active:not(:disabled) {
+  transform: none;
 }
 
+.account-share:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+/* Empty collection: nothing to share yet, so no lime. */
+.account-share:disabled,
 .account-share:disabled:hover {
   background: transparent;
   color: var(--ink-faint);
   border-color: var(--rule);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
-/* "The link is on": a dot in the collection's own colour, only while shared. */
+/* "On" while a link is live: an ink tag set into the lime, like the counts
+   in the jump chips. */
 .account-share__live,
 .account-share__live-text {
   display: none;
 }
 
 .account-share[data-shared] .account-share__live {
-  display: block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--sheet-mark, var(--ink));
+  display: inline-block;
+  margin-right: calc(var(--space-2) * -1);
+  padding: 3px 7px;
+  font-size: var(--text-3xs);
+  letter-spacing: 0.12em;
+  line-height: 1;
+  color: var(--lime);
+  background: var(--ink-on-lime);
+  border-radius: var(--radius-pill);
 }
 
 .account-share[data-shared] .account-share__live-text {
   display: inline;
 }
 
-[data-account-section="liked"] { --sheet-mark: var(--mark-like); }
-[data-account-section="later"] { --sheet-mark: var(--mark-watch-later); }
-[data-account-section="top"] { --sheet-mark: var(--mark-top); }
-
 /* Without JS there is no sheet: a plain disclosure with a form does the job. */
 .account-share-plain {
   margin-top: var(--space-5);
 }
 
-html.has-js .account-share-plain {
-  display: none;
-}
-
+html.has-js .account-share-plain,
 html.no-share-sheet .account-share {
   display: none;
 }
@@ -120,6 +138,7 @@ html.has-js.no-share-sheet .account-share-plain {
 
 .account-share-plain input[type="text"] {
   width: 100%;
+  max-width: 28rem;
   padding: var(--space-3) var(--space-4);
   font: inherit;
   color: var(--ink);
@@ -130,8 +149,6 @@ html.has-js.no-share-sheet .account-share-plain {
 
 .account-share-plain__url {
   display: block;
-  width: 100%;
-  max-width: 28rem;
   margin: var(--space-2) 0 var(--space-4);
 }
 
@@ -149,7 +166,7 @@ html.has-js.no-share-sheet .account-share-plain {
   color: var(--ink);
   border: var(--hairline);
   border-bottom: 0;
-  border-radius: 14px 14px 0 0;
+  border-radius: 16px 16px 0 0;
   box-shadow: var(--shadow-card);
 }
 
@@ -158,7 +175,7 @@ html.has-js.no-share-sheet .account-share-plain {
 .share-sheet[data-slug="top"] { --sheet-mark: var(--mark-top); }
 
 .share-sheet::backdrop {
-  background: rgb(11 11 11 / 0.55);
+  background: rgb(11 11 11 / 0.6);
   backdrop-filter: blur(3px);
 }
 
@@ -174,16 +191,10 @@ html.has-js.no-share-sheet .account-share-plain {
 }
 
 .share-sheet__panel {
-  display: flex;
-  flex-direction: column;
   max-height: 94dvh;
   padding: var(--space-6) var(--space-5) calc(var(--space-6) + env(safe-area-inset-bottom));
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-
-.share-sheet__csrf {
-  display: none;
 }
 
 .share-sheet__head {
@@ -221,14 +232,14 @@ html.has-js.no-share-sheet .account-share-plain {
   padding: 0;
   background: transparent;
   color: var(--ink);
-  border: 0;
+  border: 1px solid transparent;
   border-radius: 50%;
 }
 
 .share-sheet__close:hover {
   background: var(--sheet-2);
   color: var(--ink);
-  border: 0;
+  border-color: transparent;
 }
 
 .share-sheet__close svg {
@@ -236,13 +247,11 @@ html.has-js.no-share-sheet .account-share-plain {
   height: 20px;
 }
 
-.share-sheet__body {
-  margin-top: var(--space-6);
-}
+/* --- Private --------------------------------------------------------------- */
 
-/* Private: one decision, stated plainly. */
 .share-private {
   max-width: 34rem;
+  margin-top: var(--space-6);
 }
 
 .share-private__lead {
@@ -251,42 +260,69 @@ html.has-js.no-share-sheet .account-share-plain {
   font-size: var(--text-md);
 }
 
-.share-private .share-status {
-  margin-top: var(--space-4);
-}
-
 .share-private__text {
   margin: var(--space-3) 0 var(--space-6);
   color: var(--ink-muted);
-  line-height: 1.5;
+  line-height: 1.55;
+}
+
+/* --- Live: layout ---------------------------------------------------------- */
+
+.share-live {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "preview" "image" "link";
+  margin-top: var(--space-6);
+}
+
+.share-preview { grid-area: preview; }
+.share-group--image { grid-area: image; }
+.share-group--link { grid-area: link; }
+
+.share-group {
+  display: grid;
+  align-content: start;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.share-group--image {
+  padding-top: var(--space-5);
+}
+
+/* The one rule on the sheet: between what you post and what you link. */
+.share-group--link {
+  margin-top: var(--space-7);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--rule);
+}
+
+.share-group__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0;
+  color: var(--ink);
+  letter-spacing: 0.16em;
 }
 
 /* --- Preview --------------------------------------------------------------- */
 
-.share-live {
-  display: grid;
-  gap: var(--space-6);
-}
-
-.share-view {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-/* The preview is as big as the sheet allows, at the card's own proportions.
-   --pw/--ph are the card's pixel size (unitless), set by share.js. */
+/* As big as the sheet allows, at the card's own proportions. --pw/--ph are
+   the card's pixel size (unitless), set by share.js. */
 .share-preview {
-  --max-h: 38dvh;
+  --max-h: 40dvh;
   --pw: 1080;
   --ph: 1920;
   position: relative;
+  justify-self: center;
   width: min(100%, calc(var(--max-h) * var(--pw) / var(--ph)));
   aspect-ratio: calc(var(--pw) / var(--ph));
   background: var(--sheet-2);
   outline: 1px solid var(--rule);
   outline-offset: -1px;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 18px 40px -18px rgb(0 0 0 / 0.45);
   overflow: hidden;
 }
 
@@ -334,7 +370,7 @@ html.has-js.no-share-sheet .account-share-plain {
   pointer-events: none;
 }
 
-/* The unscaled copy share.js captures. Rendered (so fonts and layout are
+/* The unscaled copy share.js captures: rendered (so fonts and layout are
    real) but off the page and out of every input path. */
 .share-stage {
   position: fixed;
@@ -343,17 +379,26 @@ html.has-js.no-share-sheet .account-share-plain {
   pointer-events: none;
 }
 
-/* --- Pickers --------------------------------------------------------------- */
+/* --- Pickers: the site's segmented strip, selected in ink so the lime
+   button below stays the only lime in the group. --------------------------- */
 
 .share-pick {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-3) var(--space-5);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+/* Two strips side by side need ~26rem; a narrow phone (and Russian's
+   longer words) gets them stacked instead of clipped. */
+@media (max-width: 29.99rem) {
+  .share-pick {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .share-seg {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   margin: 0;
   padding: 0;
   min-width: 0;
@@ -364,7 +409,12 @@ html.has-js.no-share-sheet .account-share-plain {
 
 .share-seg label {
   display: block;
+  min-width: 0;
   cursor: pointer;
+}
+
+.share-seg label + label {
+  border-left: 1px solid var(--rule);
 }
 
 .share-seg input {
@@ -376,16 +426,25 @@ html.has-js.no-share-sheet .account-share-plain {
 .share-seg span {
   display: flex;
   align-items: center;
-  min-height: 40px;
-  padding: 0 var(--space-5);
+  justify-content: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 var(--space-3);
   font-family: var(--font-label);
   font-weight: 600;
   font-stretch: 78%;
   font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.1em;
+  white-space: nowrap;
   color: var(--ink-muted);
   transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.share-seg span svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
 }
 
 .share-seg label:hover span {
@@ -403,95 +462,38 @@ html.has-js.no-share-sheet .account-share-plain {
   outline-offset: -3px;
 }
 
-/* --- Fields and actions ---------------------------------------------------- */
-
-.share-side {
-  display: grid;
-  align-content: start;
-  gap: var(--space-6);
-  min-width: 0;
-}
-
-.share-field {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.share-field__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.share-count {
-  font-size: var(--text-2xs);
-  color: var(--ink-faint);
-}
-
-.share-count.is-near {
-  color: var(--ink);
-}
-
-.share-link {
-  display: flex;
-  gap: var(--space-3);
-}
-
-.share-link .share-btn {
+/* The two themes as the paper they print on. Fixed colours: they show the
+   card, not the site's theme. */
+.share-swatch {
+  width: 12px;
+  height: 12px;
   flex: none;
-  white-space: nowrap;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.6);
 }
 
-.share-link input,
-.share-field textarea {
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-3) var(--space-4);
-  font: inherit;
-  font-size: var(--text-sm);
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-}
+.share-swatch--ink { background: #09090b; }
+.share-swatch--paper { background: #ffffff; }
 
-.share-link input {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-overflow: ellipsis;
-}
-
-.share-field textarea {
-  resize: none;
-  line-height: 1.4;
-}
-
-.share-link input:focus-visible,
-.share-field textarea:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 1px;
-}
-
-.share-field textarea::placeholder {
-  color: var(--ink-faint);
-}
-
-.share-actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-3);
-}
+/* --- Buttons ---------------------------------------------------------------- */
 
 .share-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 9px;
   min-height: 44px;
-  padding: var(--space-3) var(--space-5);
+  padding: 0 var(--space-5);
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--rule-strong);
+  white-space: nowrap;
+}
+
+.share-btn svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
 }
 
 .share-btn:hover {
@@ -500,16 +502,21 @@ html.has-js.no-share-sheet .account-share-plain {
   color: var(--ink);
 }
 
-.share-btn--primary {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+/* The lime one: the step that hands the image (or makes the link). */
+.share-btn--go {
+  min-height: 52px;
+  padding: 0 var(--space-6);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  background: var(--lime);
+  border-color: var(--lime);
+  color: var(--ink-on-lime);
 }
 
-.share-btn--primary:hover {
-  background: color-mix(in srgb, var(--ink) 82%, var(--paper));
-  border-color: color-mix(in srgb, var(--ink) 82%, var(--paper));
-  color: var(--paper);
+.share-btn--go:hover {
+  background: var(--lime-hover);
+  border-color: var(--lime-hover);
+  color: var(--ink-on-lime);
 }
 
 .share-btn--danger {
@@ -524,50 +531,201 @@ html.has-js.no-share-sheet .account-share-plain {
   color: var(--paper);
 }
 
-.share-btn:disabled {
-  opacity: 0.55;
+.share-btn:disabled,
+.share-link__copy:disabled {
+  opacity: 0.6;
   cursor: progress;
+}
+
+/* A button that just did its job says so in place for a moment. */
+.share-btn.is-done svg,
+.share-link__copy.is-done svg {
+  display: none;
+}
+
+.share-btn.is-done::before,
+.share-link__copy.is-done::before {
+  content: "";
+  width: 17px;
+  height: 17px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Share and Download swap one icon for the other with the label. */
+[data-share-image] .share-icon-share { display: none; }
+[data-share-image].can-share .share-icon-share { display: block; }
+[data-share-image].can-share .share-icon-download { display: none; }
+
+.share-actions {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.share-actions__more {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.share-actions__more:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.share-actions__more .share-btn {
+  flex: 1 1 0;
 }
 
 .share-btn:focus-visible,
 .share-text:focus-visible,
+.share-link__copy:focus-visible,
 .share-sheet__close:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 2px;
 }
 
-/* The status line holds its space, so a message appearing moves nothing. */
-.share-status {
-  min-height: 1.4em;
-  margin: 0;
+/* --- Link ---------------------------------------------------------------------- */
+
+.share-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-muted);
+  letter-spacing: 0.12em;
+}
+
+.share-on i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--sheet-mark);
+}
+
+/* Address and its Copy as one joined control. */
+.share-link {
+  display: flex;
+  min-width: 0;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.share-link:focus-within {
+  border-color: var(--ink);
+}
+
+.share-link input {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--space-5);
+  min-height: 46px;
+  font-family: var(--font-mono);
   font-size: var(--text-xs);
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  text-overflow: ellipsis;
+}
+
+.share-link input:focus {
+  outline: none;
+}
+
+.share-link__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 0 var(--space-5);
+  background: var(--sheet-2);
+  color: var(--ink);
+  border: 0;
+  border-left: 1px solid var(--rule-strong);
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+.share-link__copy svg {
+  width: 16px;
+  height: 16px;
+}
+
+.share-link__copy:hover {
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  border-left: 1px solid var(--ink);
+}
+
+.share-note {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.share-note__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
   color: var(--ink-muted);
 }
 
-.share-status.is-error {
-  color: var(--danger);
+.share-note__meta {
+  flex: none;
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+.share-note__meta .is-near {
+  color: var(--ink);
+}
+
+.share-note textarea {
+  width: 100%;
+  padding: var(--space-4);
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  resize: none;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.share-note textarea:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+.share-note textarea::placeholder {
+  color: var(--ink-faint);
 }
 
 .share-danger {
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--rule);
-}
-
-.share-danger__row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3) var(--space-6);
+  gap: 0 var(--space-6);
 }
 
 .share-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   min-height: 44px;
   padding: 0;
   background: transparent;
   color: var(--ink-muted);
   border: 0;
   border-radius: 0;
-  text-decoration: underline;
-  text-underline-offset: 0.25em;
+}
+
+.share-text svg {
+  width: 15px;
+  height: 15px;
 }
 
 .share-text:hover {
@@ -581,9 +739,14 @@ html.has-js.no-share-sheet .account-share-plain {
   color: var(--danger);
 }
 
+.share-confirm {
+  padding: var(--space-5);
+  background: var(--sheet-2);
+  border-radius: 10px;
+}
+
 .share-confirm p {
   line-height: 1.5;
-  max-width: 34rem;
 }
 
 .share-confirm__actions {
@@ -593,14 +756,35 @@ html.has-js.no-share-sheet .account-share-plain {
   margin-top: var(--space-4);
 }
 
-/* --- Wide screens: the artwork beside the controls ------------------------- */
+/* Errors and the after-the-fact notes (new link, sharing off). Empty takes
+   no room. */
+.share-status {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.share-status:empty {
+  display: none;
+}
+
+.share-status.is-error {
+  color: var(--danger);
+}
+
+.share-private .share-status {
+  margin-top: var(--space-4);
+}
+
+/* --- Wide screens: the preview owns the left ------------------------------- */
 
 @media (min-width: 52rem) {
   .share-sheet {
-    width: min(60rem, calc(100% - 2rem));
+    width: min(62rem, calc(100% - 2rem));
     margin: auto;
     border-bottom: var(--hairline);
-    border-radius: 0.875rem;
+    border-radius: 16px;
   }
 
   .share-sheet[open] .share-sheet__panel {
@@ -608,41 +792,53 @@ html.has-js.no-share-sheet .account-share-plain {
   }
 
   .share-sheet__panel {
-    max-height: min(90dvh, 52rem);
-    padding: var(--space-7);
+    max-height: min(92dvh, 52rem);
+    padding: var(--space-7) var(--space-8) var(--space-8);
   }
 
   .share-live {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-columns: auto minmax(20rem, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: "preview image" "preview link";
+    column-gap: var(--space-8);
     align-items: start;
-    gap: var(--space-8);
-  }
-
-  /* A Wide card is landscape: give it the wider column. */
-  .share-live[data-format="wide"] {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    gap: var(--space-7);
-  }
-
-  .share-view {
-    position: sticky;
-    top: 0;
   }
 
   .share-preview {
-    --max-h: min(58dvh, 34rem);
+    --max-h: min(64dvh, 38rem);
+    position: sticky;
+    top: 0;
+    width: min(26rem, calc(var(--max-h) * var(--pw) / var(--ph)));
+  }
+
+  /* A Wide card is landscape: it spans the sheet, and the groups sit side
+     by side beneath it. */
+  .share-live[data-format="wide"] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: "preview preview" "image link";
   }
 
   .share-live[data-format="wide"] .share-preview {
-    --max-h: 40dvh;
+    --max-h: min(44dvh, 26rem);
+    position: relative;
+    width: min(100%, calc(var(--max-h) * var(--pw) / var(--ph)));
   }
 
-  .share-actions {
-    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  .share-live[data-format="wide"] .share-group--image {
+    padding-top: var(--space-6);
   }
 
-  .share-actions .share-btn--primary {
-    grid-column: 1 / -1;
+  .share-live[data-format="wide"] .share-group--link {
+    margin-top: 0;
+    padding-top: var(--space-6);
+    padding-left: var(--space-8);
+    border-top: 0;
+    border-left: 1px solid var(--rule);
+  }
+
+  .share-group--image {
+    padding-top: 0;
   }
 }
 
@@ -654,21 +850,26 @@ html.has-js.no-share-sheet .account-share-plain {
 }
 
 /* A phone on its side has no height for the preview above the controls:
-   put them side by side as on a wide screen. */
-@media (max-height: 480px) and (orientation: landscape) {
+   put it beside them. */
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 51.99rem) {
   .share-live {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "preview image" "preview link";
+    column-gap: var(--space-6);
     align-items: start;
-    gap: var(--space-6);
   }
 
   .share-preview {
-    --max-h: 60dvh;
+    --max-h: 70dvh;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .share-sheet[open] .share-sheet__panel {
     animation: none;
+  }
+
+  .account-share:hover:not(:disabled) {
+    transform: none;
   }
 }

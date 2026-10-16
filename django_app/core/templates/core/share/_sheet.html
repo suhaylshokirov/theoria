@@ -2,106 +2,141 @@
 {% comment %} The share sheet (Task 139): ONE dialog for all three collections on
    /me/, opened by a section's Share button and filled by static/js/share.js.
    It sits outside the sections because they are swapped out whole on every
-   page change. Bottom sheet on a phone, dialog beside a live preview of the
-   artwork on a wide screen.
+   page change.
 
-   Two states, flipped by [data-state]: "private" (nothing is public yet --
-   the card is drawn from the public link, so there is nothing to preview
-   until the owner makes one) and "shared" (preview, link, note, the image,
-   and the two ways to take the link back). Every string the script prints is
-   a data-msg-* attribute, so it is translated here and not in JS.
+   Two groups, in the order a sharer works: the IMAGE (preview, its shape and
+   theme, then the lime button that hands it on) and the LINK (the address,
+   the line on its page, and the two ways to take it back). Phone: one column
+   in that order, as a bottom sheet. Wide screen: the preview on the left, the
+   two groups stacked on the right.
+
+   Two states, flipped by the [data-share-private] / [data-share-live]
+   blocks: private (the card is drawn from the public link, so there is
+   nothing to preview until the owner makes one) and shared. Every string the
+   script prints is a data-* attribute here, so it is translated here.
    Params (pass with `only`): username, csrf_token. {% endcomment %}
 <dialog class="share-sheet" id="share-sheet" aria-labelledby="share-sheet-title" data-username="{{ username }}"
         data-card-css="{% static 'css/share-card.css' %}"
         data-fonts-css="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&amp;family=Instrument+Sans:wght@400;500;600&amp;family=Spline+Sans+Mono:wght@400;500&amp;family=Roboto+Flex:opsz,wdth,wght@8..144,25..151,100..1000&amp;display=block"
-        data-msg-copied="{% translate 'Link copied' %}" data-msg-copy-failed="{% translate 'Select the link and copy it' %}"
-        data-msg-image-copied="{% translate 'Image copied' %}" data-msg-saved="{% translate 'Saved' %}"
-        data-msg-saving="{% translate 'Saving…' %}" data-msg-working="{% translate 'Making the image…' %}"
+        data-msg-copied="{% translate "Copied" context "share sheet" %}" data-msg-copy-failed="{% translate 'Select the link and copy it' %}"
+        data-msg-saved="{% translate "Saved" context "share sheet" %}" data-msg-saving="{% translate "Saving…" context "share sheet" %}"
+        data-msg-working="{% translate "Making…" context "share sheet" %}" data-msg-done="{% translate "Done" context "share sheet" %}"
         data-msg-failed="{% translate 'That did not work. Please try again.' %}"
-        data-msg-image-failed="{% translate 'Could not make the image here. Try again, or open the link instead.' %}"
+        data-msg-image-failed="{% translate 'Could not make the image here. Try again, or share the link instead.' %}"
         data-msg-reset="{% translate 'New link is ready. The old one no longer works.' %}"
-        data-msg-stopped="{% translate 'Sharing is off. The link no longer works.' %}"
-        data-msg-downloaded="{% translate 'Image saved' %}">
+        data-msg-stopped="{% translate 'Sharing is off. The old link no longer works.' %}">
     <form method="post" class="share-sheet__csrf" hidden>{% csrf_token %}</form>
     <div class="share-sheet__panel">
         <header class="share-sheet__head">
             <span class="share-sheet__mark" aria-hidden="true"></span>
-            <h2 class="display share-sheet__title" id="share-sheet-title">{% translate "Share" %} <span data-share-name></span></h2>
+            <h2 class="display share-sheet__title" id="share-sheet-title">{% blocktranslate trimmed %}Share <span data-share-name></span>{% endblocktranslate %}</h2>
             <button type="button" class="share-sheet__close" data-share-close aria-label="{% translate 'Close' %}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
             </button>
         </header>
 
-        <div class="share-sheet__body">
-            {% comment %} Private: the opt-in. Nothing is public until this button. {% endcomment %}
-            <section class="share-private" data-share-private>
-                <p class="share-private__lead">{% translate "Only you can see this list." %}</p>
-                <p class="share-private__text">{% translate "Make a link anyone can open, without an account. It shows this list as it is now and as you change it, never your email. You can turn it off at any time." %}</p>
-                <button type="button" class="share-btn share-btn--primary" data-share-enable>{% translate "Make a link" %}</button>
+        {% comment %} Private: one decision, stated plainly. {% endcomment %}
+        <section class="share-private" data-share-private>
+            <p class="share-private__lead">{% translate "Only you can see this list." %}</p>
+            <p class="share-private__text">{% translate "Make a link anyone can open, without an account. It shows this list as it is now and as you change it, never your email. You can turn it off at any time." %}</p>
+            <button type="button" class="share-btn share-btn--go" data-share-enable>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                <span>{% translate "Make a link" %}</span>
+            </button>
+            <p class="share-status" data-share-status role="status" aria-live="polite"></p>
+        </section>
+
+        <div class="share-live" data-share-live hidden>
+            <div class="share-preview" data-share-preview aria-busy="true">
+                <div class="share-preview__frame" data-share-frame></div>
+                <p class="share-preview__state" data-share-preview-state>{% translate "Drawing the preview…" %}</p>
+            </div>
+
+            {% comment %} The image: what it looks like, then what to do with it. {% endcomment %}
+            <section class="share-group share-group--image" aria-labelledby="share-image-title">
+                <h3 class="label share-group__title" id="share-image-title">{% translate "Image" context "share sheet" %}</h3>
+                <div class="share-pick">
+                    <fieldset class="share-seg">
+                        <legend class="visually-hidden">{% translate "Shape" context "share sheet" %}</legend>
+                        <label><input type="radio" name="share-format" value="story">
+                            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="1.5"/></svg>{% translate "Story" context "share sheet" %}</span></label>
+                        <label><input type="radio" name="share-format" value="wide">
+                            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="6.5" width="18" height="11" rx="1.5"/></svg>{% translate "Wide" context "share sheet" %}</span></label>
+                    </fieldset>
+                    <fieldset class="share-seg">
+                        <legend class="visually-hidden">{% translate "Theme" context "share sheet" %}</legend>
+                        <label><input type="radio" name="share-theme" value="ink">
+                            <span><i class="share-swatch share-swatch--ink" aria-hidden="true"></i>{% translate "Ink" context "share sheet" %}</span></label>
+                        <label><input type="radio" name="share-theme" value="paper">
+                            <span><i class="share-swatch share-swatch--paper" aria-hidden="true"></i>{% translate "Paper" context "share sheet" %}</span></label>
+                    </fieldset>
+                </div>
+
+                <div class="share-actions">
+                    <button type="button" class="share-btn share-btn--go" data-share-image
+                            data-label-share="{% translate 'Share image' %}" data-label-download="{% translate 'Download image' %}">
+                        <svg class="share-icon-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>
+                        <svg class="share-icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                        <span data-label>{% translate "Download image" %}</span>
+                    </button>
+                    <div class="share-actions__more">
+                        <button type="button" class="share-btn" data-share-download hidden>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                            <span data-label>{% translate "Download" context "share sheet" %}</span>
+                        </button>
+                        <button type="button" class="share-btn" data-share-copy-image hidden>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a2 2 0 0 1 2-2h11"/></svg>
+                            <span data-label>{% translate "Copy image" %}</span>
+                        </button>
+                    </div>
+                </div>
                 <p class="share-status" data-share-status role="status" aria-live="polite"></p>
             </section>
 
-            <div class="share-live" data-share-live hidden>
-                <div class="share-view">
-                    <div class="share-preview" data-share-preview aria-busy="true">
-                        <div class="share-preview__frame" data-share-frame></div>
-                        <p class="share-preview__state" data-share-preview-state role="status">{% translate "Drawing the preview…" %}</p>
-                    </div>
-
-                    <div class="share-pick">
-                        <fieldset class="share-seg">
-                            <legend class="visually-hidden">{% translate "Shape" %}</legend>
-                            <label><input type="radio" name="share-format" value="story"><span>{% translate "Story" %}</span></label>
-                            <label><input type="radio" name="share-format" value="wide"><span>{% translate "Wide" %}</span></label>
-                        </fieldset>
-                        <fieldset class="share-seg">
-                            <legend class="visually-hidden">{% translate "Theme" %}</legend>
-                            <label><input type="radio" name="share-theme" value="ink"><span>{% translate "Ink" %}</span></label>
-                            <label><input type="radio" name="share-theme" value="paper"><span>{% translate "Paper" %}</span></label>
-                        </fieldset>
-                    </div>
+            {% comment %} The link: the address, the line its page shows, and the
+               two ways to take it back (behind an inline confirmation). {% endcomment %}
+            <section class="share-group share-group--link" aria-labelledby="share-link-title">
+                <h3 class="label share-group__title" id="share-link-title">
+                    {% translate "Link" context "share sheet" %}
+                    <span class="share-on"><i aria-hidden="true"></i>{% translate "On" context "share sheet" %}</span>
+                </h3>
+                <div class="share-link">
+                    <input id="share-link" type="text" readonly data-share-link aria-labelledby="share-link-title">
+                    <button type="button" class="share-link__copy" data-share-copy-link>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a2 2 0 0 1 2-2h11"/></svg>
+                        <span data-label>{% translate "Copy" context "share sheet" %}</span>
+                    </button>
                 </div>
 
-                <div class="share-side">
-                    <div class="share-field">
-                        <label class="label" for="share-link">{% translate "Link" %}</label>
-                        <div class="share-link">
-                            <input id="share-link" type="text" readonly data-share-link>
-                            <button type="button" class="share-btn" data-share-copy-link>{% translate "Copy link" %}</button>
-                        </div>
+                <div class="share-note">
+                    <div class="share-note__row">
+                        <label for="share-note">{% translate "A line on the link's page" %}</label>
+                        <span class="share-note__meta"><span data-share-note-state></span> <span class="mono" data-share-count aria-hidden="true">0/140</span></span>
                     </div>
+                    <textarea id="share-note" rows="2" maxlength="140" data-share-note placeholder="{% translate "Optional" context "share sheet" %}"></textarea>
+                </div>
 
-                    <div class="share-field">
-                        <div class="share-field__row">
-                            <label class="label" for="share-note">{% translate "A line on your link page" %}</label>
-                            <span class="share-count mono" data-share-count aria-hidden="true">0/140</span>
-                        </div>
-                        <textarea id="share-note" rows="2" maxlength="140" data-share-note placeholder="{% translate 'Optional' %}"></textarea>
-                    </div>
-
-                    <div class="share-actions">
-                        <button type="button" class="share-btn share-btn--primary" data-share-image data-label-share="{% translate 'Share image' %}" data-label-download="{% translate 'Download image' %}">{% translate "Download image" %}</button>
-                        <button type="button" class="share-btn" data-share-download hidden>{% translate "Download" %}</button>
-                        <button type="button" class="share-btn" data-share-copy-image hidden>{% translate "Copy image" %}</button>
-                    </div>
-
-                    <p class="share-status" data-share-status role="status" aria-live="polite"></p>
-
-                    <div class="share-danger">
-                        <div class="share-danger__row" data-share-danger>
-                            <button type="button" class="share-text" data-share-ask="rotate">{% translate "New link" %}</button>
-                            <button type="button" class="share-text share-text--danger" data-share-ask="disable">{% translate "Stop sharing" %}</button>
-                        </div>
-                        <div class="share-confirm" data-share-confirm hidden>
-                            <p data-share-confirm-text></p>
-                            <div class="share-confirm__actions">
-                                <button type="button" class="share-btn share-btn--danger" data-share-do data-text-rotate="{% translate 'The link you have now stops working. Anyone who has it will see that it has gone.' %}" data-text-disable="{% translate 'The link stops working. Anyone who has it will see that it has gone.' %}" data-yes-rotate="{% translate 'Make a new link' %}" data-yes-disable="{% translate 'Stop sharing' %}"></button>
-                                <button type="button" class="share-btn" data-share-undo>{% translate "Keep it" %}</button>
-                            </div>
-                        </div>
+                <div class="share-danger" data-share-danger>
+                    <button type="button" class="share-text" data-share-ask="rotate">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+                        {% translate "New link" %}
+                    </button>
+                    <button type="button" class="share-text share-text--danger" data-share-ask="disable">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.7 5.7 12.6 12.6"/></svg>
+                        {% translate "Stop sharing" %}
+                    </button>
+                </div>
+                <div class="share-confirm" data-share-confirm hidden>
+                    <p data-share-confirm-text></p>
+                    <div class="share-confirm__actions">
+                        <button type="button" class="share-btn share-btn--danger" data-share-do
+                                data-text-rotate="{% translate 'The link you have now stops working. Anyone who has it will see that it has gone.' %}"
+                                data-text-disable="{% translate 'The link stops working. Anyone who has it will see that it has gone.' %}"
+                                data-yes-rotate="{% translate 'Make a new link' %}" data-yes-disable="{% translate 'Stop sharing' %}"></button>
+                        <button type="button" class="share-btn" data-share-undo>{% translate "Keep it" %}</button>
                     </div>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
     <div class="share-stage" data-share-stage aria-hidden="true"></div>

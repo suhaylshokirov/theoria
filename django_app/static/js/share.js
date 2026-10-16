@@ -40,6 +40,8 @@
     download: $("[data-share-download]"),
     copyImage: $("[data-share-copy-image]"),
     dangerRow: $("[data-share-danger]"),
+    noteState: $("[data-share-note-state]"),
+    copyLink: $("[data-share-copy-link]"),
     confirm: $("[data-share-confirm]"),
     confirmText: $("[data-share-confirm-text]"),
     confirmDo: $("[data-share-do]"),
@@ -83,6 +85,41 @@
     for (var i = 0; i < statuses.length; i++) {
       statuses[i].textContent = text || "";
       statuses[i].classList.toggle("is-error", !!isError);
+    }
+  }
+
+  // A button's own words: its [data-label] span, so the icon stays.
+  function label(button, text) {
+    var span = button.querySelector("[data-label]") || button;
+    if (text === undefined) return span.textContent;
+    span.textContent = text;
+    return text;
+  }
+
+  // Say "Copied" / "Done" on the button that did it, then put it back.
+  function flash(button, text) {
+    if (!button.dataset.rest) button.dataset.rest = label(button);
+    clearTimeout(button._flash);
+    label(button, text);
+    button.classList.add("is-done");
+    button._flash = setTimeout(function () {
+      label(button, button.dataset.rest);
+      delete button.dataset.rest;
+      button.classList.remove("is-done");
+    }, 1800);
+  }
+
+  // While the PNG is being made: the button says so and can't be pressed twice.
+  function working(button, on) {
+    button.disabled = on;
+    if (on) {
+      clearTimeout(button._flash);
+      button.classList.remove("is-done");
+      if (!button.dataset.rest) button.dataset.rest = label(button);
+      label(button, msg("Working"));
+    } else if (!button.classList.contains("is-done") && button.dataset.rest) {
+      label(button, button.dataset.rest);
+      delete button.dataset.rest;
     }
   }
 
@@ -145,6 +182,7 @@
     showState(true);
     els.link.value = current.url;
     els.note.value = current.savedNote;
+    els.noteState.textContent = "";
     updateCount();
     els.preview.setAttribute("aria-busy", "true");
     els.previewState.textContent = drawingText;
@@ -171,7 +209,8 @@
     dialog.dataset.slug = btn.dataset.shareSlug || "";
     els.name.textContent = btn.dataset.shareLabel || "";
     say("");
-    els.image.textContent = canShareFiles ? els.image.dataset.labelShare : els.image.dataset.labelDownload;
+    label(els.image, canShareFiles ? els.image.dataset.labelShare : els.image.dataset.labelDownload);
+    els.image.classList.toggle("can-share", canShareFiles);
     els.download.hidden = !canShareFiles;
     els.copyImage.hidden = !canCopyImage;
     dialog.showModal();
@@ -308,11 +347,6 @@
     return "theoria-" + kind + "-" + (dialog.dataset.username || "me") + ".png";
   }
 
-  function busy(button, on) {
-    button.disabled = on;
-    if (on) say(msg("Working"));
-  }
-
   function saveBlob(blob) {
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -321,46 +355,60 @@
     a.click();
     a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-    say(msg("Downloaded"));
   }
 
   function failed() { say(msg("ImageFailed"), true); }
 
   function shareOrSave() {
-    busy(els.image, true);
+    var button = els.image;
+    say("");
+    working(button, true);
     getBlob()
       .then(function (blob) {
-        if (!canShareFiles) { saveBlob(blob); return; }
+        if (!canShareFiles) { saveBlob(blob); return true; }
         var file = new File([blob], fileName(), { type: "image/png" });
-        return navigator.share({ files: [file], url: current.url }).then(function () { say(""); });
+        return navigator.share({ files: [file], url: current.url }).then(function () { return true; });
       })
       .catch(function (err) {
-        if (err && err.name === "AbortError") { say(""); return; }
-        failed();
+        if (!(err && err.name === "AbortError")) failed();
+        return false;
       })
-      .then(function () { els.image.disabled = false; });
+      .then(function (ok) {
+        working(button, false);
+        if (ok) flash(button, msg("Done"));
+      });
   }
 
   function downloadOnly() {
-    busy(els.download, true);
+    var button = els.download;
+    say("");
+    working(button, true);
     getBlob()
-      .then(saveBlob)
-      .catch(failed)
-      .then(function () { els.download.disabled = false; });
+      .then(function (blob) { saveBlob(blob); return true; })
+      .catch(function () { failed(); return false; })
+      .then(function (ok) {
+        working(button, false);
+        if (ok) flash(button, msg("Done"));
+      });
   }
 
   function copyImage() {
-    busy(els.copyImage, true);
+    var button = els.copyImage;
+    say("");
+    working(button, true);
     // The promise goes to ClipboardItem unresolved: Safari only allows the
     // write if it starts inside the tap.
     navigator.clipboard.write([new ClipboardItem({ "image/png": getBlob() })])
-      .then(function () { say(msg("ImageCopied")); })
-      .catch(failed)
-      .then(function () { els.copyImage.disabled = false; });
+      .then(function () { return true; })
+      .catch(function () { failed(); return false; })
+      .then(function (ok) {
+        working(button, false);
+        if (ok) flash(button, msg("Copied"));
+      });
   }
 
   function copyLink() {
-    var done = function () { say(msg("Copied")); };
+    var done = function () { flash(els.copyLink, msg("Copied")); };
     var fallback = function () {
       els.link.focus();
       els.link.select();
@@ -379,6 +427,7 @@
   function updateCount() {
     var n = els.note.value.length;
     els.count.textContent = n + "/" + els.note.maxLength;
+    if (els.noteState.textContent === msg("Saved") + " ·") els.noteState.textContent = "";
     els.count.classList.toggle("is-near", n >= els.note.maxLength - 20);
   }
 
@@ -387,14 +436,17 @@
     if (!current || !current.url) return Promise.resolve();
     var text = els.note.value;
     if (text.trim() === current.savedNote) return Promise.resolve();
-    say(msg("Saving"));
+    els.noteState.textContent = msg("Saving");
     return post("enable", { note: text })
       .then(function (data) {
         current.savedNote = data.note;
         syncButton();
-        say(msg("Saved"));
+        els.noteState.textContent = msg("Saved") + " ·";
       })
-      .catch(function (err) { say(err.message, true); });
+      .catch(function (err) {
+        els.noteState.textContent = "";
+        say(err.message, true);
+      });
   }
 
   /* --- Rotate / stop ----------------------------------------------------- */
