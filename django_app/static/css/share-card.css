@@ -1,24 +1,22 @@
-/* Theoria — the share artwork (Task 138). A catalogue card pulled from the
-   archive drawer: masthead, one solid field in the collection's own colour,
-   the owner's plate, the titles, and the link printed at the foot.
+/* Theoria — the share artwork (Task 138). A card someone posts: who shared it,
+   their movies, their note, and the link back, under a small header that
+   says what it is (the wordmark and the collection's name). Nothing is
+   measured on it; the posters are the picture.
 
    It is an image, not a page: a fixed pixel box the share sheet captures 1:1
-   (Story 1080×1920, Wide 1600×900). So sizes here are px, the card never
-   reflows, and it carries its own copy of the theme tokens — the artwork's
-   theme (Ink / Paper) is the owner's pick at export, not the site's current
-   theme. Values are theoria.css's, so the card reads as the same sheet.
+   (Story 1080×1920, Wide 1600×900). Sizes are px, the card never reflows,
+   and it carries its own copy of the theme tokens — its theme (Ink / Paper)
+   is the owner's pick at export, not the site's. Values are theoria.css's.
 
-   Three kinds, each with one field in its colour, printed in fixed dark ink
-   (the colours are equally bright in both themes, as --ink-on-lime is):
-     Top          yellow — the rank column, numerals running down the list
-     Liked        red    — the header slab: the name and the count
-     Watch later  lime   — the slab whose headline is the hours still to go
-   Lime anywhere else marks a measured value only (a rating, a decade's bar).
-   Watch later's field is lime because its field IS the measurement.
+   Each collection keeps one small mark in its own colour: the tick before
+   its name and before the link, and Top's bar under its #1. Watch later's
+   colour is lime, and lime only ever marks a measurement, so its ticks are
+   ink instead.
 
-   Posters sit in .sc-print boxes that own the 2:3 frame and get their size
-   from the layout (a definite height, the width from the ratio); the image
-   only fills the box. TMDB's w500 would otherwise size the layout itself. */
+   The posters sit in a size container (.sc-shelf): it knows how much room is
+   left once the header, owner and note have taken theirs, and every print is
+   sized from that (cqw / cqh) at a true 2:3. The image only fills its
+   .sc-print box; TMDB's w500 would otherwise size the layout itself. */
 
 .share-card-page {
   margin: 0;
@@ -39,11 +37,7 @@
   --c-ink: #f2f1ed;
   --c-ink-muted: #a9a7a1;
   --c-ink-faint: #8a8882;
-  --c-lime: #a3e635;
-  --c-field-ink: #0b0b0b;
   --c-field: #a3e635;
-  /* The small ticks (foot, "Next") take the field's colour, except where
-     the field is lime: lime off a measurement would stop meaning one. */
   --c-tick: var(--c-field);
 
   /* Roboto Flex follows each face for the glyphs it lacks: Cyrillic. Its
@@ -53,27 +47,24 @@
   --f-body: "Instrument Sans", "Roboto Flex", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: "Spline Sans Mono", "Roboto Flex", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* --- Story scale. On a phone a Story shows at about a third of its size,
-     so nothing here goes under 20px. -------------------------------------- */
+  /* --- Story scale. A Story is seen at about a third of its size on a
+     phone, so nothing here is under 26px. -------------------------------- */
   --pad-x: 88px;
-  --pad-y: 84px;
-  --gap: 36px;
-  --t-label: 24px;
-  --t-meta: 28px;
-  --t-body: 34px;
-  --t-note: 42px;
-  --t-value: 58px;
+  --pad-y: 88px;
   --t-brand: 34px;
-  --t-edge: 22px;
-  --disc: 112px;
-  --heading-max: 184px;
+  --t-kind: 26px;
+  --t-handle: 48px;
+  --t-since: 30px;
+  --t-note: 46px;
+  --t-url: 30px;
+  --disc: 128px;
+  --gutter: 20px;
   --text-w: calc(var(--sc-w) - 2 * var(--pad-x));
 
   position: relative;
   box-sizing: border-box;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  row-gap: var(--gap);
+  display: flex;
+  flex-direction: column;
   width: var(--sc-w);
   height: var(--sc-h);
   padding: var(--pad-y) var(--pad-x);
@@ -81,7 +72,6 @@
   background: var(--c-paper);
   color: var(--c-ink);
   font-family: var(--f-body);
-  font-size: var(--t-body);
   line-height: 1.25;
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
@@ -104,18 +94,16 @@
 
 .sc[data-format="wide"] {
   --pad-x: 64px;
-  --pad-y: 56px;
-  --gap: 22px;
-  --t-label: 17px;
-  --t-meta: 20px;
-  --t-body: 24px;
-  --t-note: 28px;
-  --t-value: 44px;
+  --pad-y: 60px;
   --t-brand: 24px;
-  --t-edge: 16px;
-  --disc: 84px;
-  --heading-max: 124px;
-  --text-w: 520px;
+  --t-kind: 18px;
+  --t-handle: 32px;
+  --t-since: 21px;
+  --t-note: 32px;
+  --t-url: 22px;
+  --disc: 88px;
+  --gutter: 18px;
+  --text-w: 440px;
 }
 
 .sc *,
@@ -130,20 +118,6 @@
   list-style: none;
 }
 
-/* --- Shared type ----------------------------------------------------------- */
-
-/* The shelf label: Archivo condensed, spaced capitals. */
-.sc-label {
-  font-family: var(--f-display);
-  font-weight: 600;
-  font-stretch: 78%;
-  font-size: var(--t-label);
-  line-height: 1.1;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--c-ink-faint);
-}
-
 .sc-mono {
   font-family: var(--f-mono);
   font-weight: 500;
@@ -151,15 +125,15 @@
   font-feature-settings: "tnum";
 }
 
-/* --- Masthead -------------------------------------------------------------- */
+/* --- Header: what this is ---------------------------------------------------- */
 
 .sc-mast {
-  grid-area: mast;
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding-bottom: calc(var(--gap) * 0.7);
+  padding-bottom: 28px;
   border-bottom: 1px solid var(--c-rule-strong);
 }
 
@@ -182,40 +156,38 @@
   flex: none;
 }
 
-.sc-catalogued {
+/* The collection's name, as a shelf label with its colour tick. */
+.sc-kind {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.6em;
-  font-size: var(--t-meta);
-  color: var(--c-ink-muted);
-  white-space: nowrap;
-}
-
-/* --- The heading: the kind's name, as big as its column allows ------------- */
-
-.sc-heading {
-  grid-area: heading;
-  --heading-room: var(--text-w);
   font-family: var(--f-display);
-  font-weight: 900;
-  font-stretch: 125%;
-  /* A short name ("Top") gets the full size; a long translated one
-     ("Посмотреть позже") shrinks onto one line instead of breaking. */
-  font-size: min(var(--heading-max), calc(var(--heading-room) / (var(--heading-length) * 0.9)));
-  line-height: 0.84;
-  letter-spacing: -0.035em;
+  font-weight: 700;
+  font-stretch: 78%;
+  font-size: var(--t-kind);
+  line-height: 1;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   white-space: nowrap;
+  color: var(--c-ink);
 }
 
-/* --- Owner plate ----------------------------------------------------------- */
+.sc-kind::before {
+  content: "";
+  width: 0.62em;
+  height: 0.62em;
+  background: var(--c-tick);
+}
+
+/* --- Who shared it --------------------------------------------------------- */
 
 .sc-owner {
-  grid-area: owner;
   display: flex;
+  flex: none;
   align-items: center;
-  gap: calc(var(--disc) * 0.24);
+  gap: calc(var(--disc) * 0.22);
   min-width: 0;
+  margin-top: 56px;
 }
 
 /* The /me monogram disc, at card size. */
@@ -240,7 +212,7 @@
 .sc-owner__text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -248,61 +220,36 @@
   font-family: var(--f-mono);
   font-weight: 500;
   /* 30-character usernames fit on one line; short ones keep the full size. */
-  font-size: min(calc(var(--t-body) * 1.06), calc((var(--text-w) - var(--disc) * 1.3) / (var(--name-length) * 0.62)));
-  line-height: 1.15;
+  font-size: min(var(--t-handle), calc((var(--text-w) - var(--disc) * 1.25) / (var(--name-length) * 0.62)));
+  line-height: 1.1;
   white-space: nowrap;
   color: var(--c-ink);
 }
 
-.sc-owner__meta {
-  font-size: var(--t-meta);
+.sc-owner__since {
+  font-size: var(--t-since);
   line-height: 1.2;
   color: var(--c-ink-muted);
 }
 
-.sc-owner__counts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 0.8em;
-}
-
-.sc-owner__counts > span + span::before {
-  content: "·";
-  margin-right: 0.8em;
-  color: var(--c-ink-faint);
-}
-
-.sc-owner__counts .sc-mono {
+.sc-owner__since .sc-mono {
   color: var(--c-ink);
 }
 
-/* --- The words: the fixed line, then the owner's own note ----------------- */
+/* --- The owner's note: their own words, set as a quotation ---------------- */
 
-.sc-words {
-  grid-area: words;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-  min-width: 0;
-}
-
-.sc-line {
-  font-size: var(--t-body);
-  line-height: 1.2;
-  color: var(--c-ink-muted);
-}
-
-/* The owner's own words: a quotation, set larger than the fixed line. */
 .sc-note {
   display: -webkit-box;
+  flex: none;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  margin-top: 36px;
   font-family: var(--f-display);
   font-weight: 500;
   font-size: var(--t-note);
   line-height: 1.16;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.012em;
   color: var(--c-ink);
   overflow-wrap: break-word;
   text-wrap: balance;
@@ -317,7 +264,20 @@
   quotes: "«" "»";
 }
 
-/* --- Prints: a poster, or a title plate ------------------------------------ */
+/* --- The posters ----------------------------------------------------------- */
+
+/* The posters' room. What sits in it is centred, so any height the
+   posters don't need is shared above and below them instead of pooling on
+   one side. */
+.sc-shelf {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  margin-top: 64px;
+  container-type: size;
+}
 
 .sc-print {
   position: relative;
@@ -346,7 +306,7 @@
   border: 1px solid var(--c-rule-strong);
   background: var(--c-sheet);
   overflow: hidden;
-  font-size: var(--t-edge);
+  font-size: clamp(14px, 9cqw, 30px);
 }
 
 .sc-plate__title {
@@ -356,7 +316,6 @@
   overflow: hidden;
   font-family: var(--f-display);
   font-weight: 700;
-  font-stretch: 100%;
   line-height: 1.05;
   text-transform: uppercase;
   overflow-wrap: break-word;
@@ -368,163 +327,15 @@
   color: var(--c-ink-faint);
 }
 
-/* The frame number, printed on the film's edge under the print. */
-.sc-print__no {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  font-size: var(--t-edge);
-  line-height: 1;
-  color: var(--c-ink-faint);
-  white-space: nowrap;
-}
-
-.sc-print__no::before {
-  content: "▸ ";
-}
-
-/* A running time: the digits carry it, the units ride small against them. */
-.sc-unit {
-  margin-left: 0.04em;
-  font-size: 0.5em;
-  letter-spacing: 0;
-}
-
-/* In a line of small type the units stay readable. */
-.sc-rank__sub .sc-unit {
-  margin-left: 0.08em;
-  font-size: 0.8em;
-}
-
-/* Mono word gaps are a full digit wide; pull "16h 53m" together. */
-.sc-stat__value,
-.sc-slab__figure {
-  word-spacing: -0.32em;
-}
-
-/* --- Measurements ---------------------------------------------------------- */
-
-/* One row grid for the whole band: every label on one line, every value on
-   the next, meters and sub-lines hung below -- so values share a baseline
-   whatever sits under them. */
-.sc-stats {
-  grid-area: stats;
-  display: grid;
-  grid-auto-flow: column;
-  grid-template-rows: repeat(3, auto);
-  justify-content: start;
-  align-content: end;
-  gap: 10px calc(var(--gap) * 1.5);
-  padding-top: calc(var(--gap) * 0.8);
-  border-top: 1px solid var(--c-rule-strong);
-}
-
-.sc-stat {
-  display: grid;
-  grid-row: span 3;
-  grid-template-rows: subgrid;
-  min-width: 0;
-}
-
-.sc-stat > .sc-label {
-  align-self: end;
-}
-
-.sc-stat > .sc-stat__value {
-  align-self: last baseline;
-}
-
-.sc-stat > .sc-stat__meter,
-.sc-stat > .sc-stat__sub {
-  align-self: start;
-}
-
-.sc-stat__value {
-  font-size: var(--t-value);
-  line-height: 1;
-  letter-spacing: -0.03em;
-  white-space: nowrap;
-  color: var(--c-ink);
-}
-
-/* A word as the measurement (Liked's top genre), sized to fit its slot. */
-.sc-stat__value--word {
-  --word-room: 340px;
-  font-family: var(--f-display);
-  font-weight: 800;
-  font-stretch: 112%;
-  font-size: min(var(--t-value), calc(var(--word-room) / (var(--word-length, 8) * 0.8)));
-  letter-spacing: -0.02em;
-  text-transform: uppercase;
-}
-
-.sc-stat__sub {
-  font-size: var(--t-label);
-  color: var(--c-ink-muted);
-  white-space: nowrap;
-}
-
-/* The caliper: a lime fill on a hairline track, the value printed above it. */
-.sc-stat--meter {
-  min-width: calc(var(--t-value) * 2.6);
-}
-
-.sc-stat__meter {
-  position: relative;
-  display: block;
-  height: 8px;
-  background: var(--c-rule);
-}
-
-.sc-stat__meter > span {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--pct);
-  background: var(--c-lime);
-}
-
-/* A title's IMDb rating, as the site's rating meter draws it. */
-.sc-meter {
-  display: flex;
-  align-items: center;
-  gap: 0.55em;
-}
-
-.sc-meter__track {
-  position: relative;
-  width: 5em;
-  height: 6px;
-  background: var(--c-rule);
-}
-
-.sc-meter__fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--pct);
-  background: var(--c-lime);
-}
-
-.sc-meter__value {
-  color: var(--c-ink);
-}
-
-.sc-more {
-  grid-area: more;
-  font-family: var(--f-mono);
-  font-weight: 500;
-  font-size: var(--t-meta);
-  line-height: 1.2;
-  color: var(--c-ink-muted);
-}
-
 /* --- Foot: the live link, printed so a screenshot still leads back -------- */
 
 .sc-foot {
-  grid-area: foot;
   display: flex;
+  flex: none;
   align-items: center;
   gap: 0.6em;
   min-width: 0;
+  margin-top: 48px;
 }
 
 .sc-foot::before {
@@ -537,7 +348,7 @@
 
 .sc-foot__url {
   overflow: hidden;
-  font-size: var(--t-meta);
+  font-size: var(--t-url);
   letter-spacing: 0.01em;
   color: var(--c-ink);
   white-space: nowrap;
@@ -545,683 +356,220 @@
 }
 
 /* ===========================================================================
-   TOP — the canon
+   Wide: the words down the left, the posters filling the right.
    =========================================================================== */
 
-.sc[data-kind="top"] {
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto auto;
-  grid-template-areas:
-    "mast"
-    "heading"
-    "owner"
-    "words"
-    "canon"
-    "more"
-    "stats"
-    "foot";
-}
-
-.sc[data-kind="top"] .sc-heading {
-  margin-top: calc(var(--gap) * 0.25);
-}
-
-/* The yellow field is drawn once, behind the whole list, so the rank column
-   runs unbroken from #1 to the last row. */
-.sc-canon {
-  --rank-w: 196px;
-  --print-w: 88px;
-  --print-lead-w: 184px;
-  --row-pad: 10px;
-  --rank-gap: 28px;
-  grid-area: canon;
+.sc[data-format="wide"] {
   display: grid;
-  grid-auto-rows: minmax(0, 1fr);
-  min-height: 0;
-  background: linear-gradient(to right, var(--c-field) var(--rank-w), transparent var(--rank-w));
+  grid-template-columns: var(--text-w) minmax(0, 1fr);
+  /* The header at the top; who shared it, their note and the link held
+     together at the foot; the space between is the column's breathing room. */
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas:
+    "mast  shelf"
+    ".     shelf"
+    "owner shelf"
+    "note  shelf"
+    "foot  shelf";
+  column-gap: 64px;
+}
+
+.sc[data-format="wide"] .sc-mast { grid-area: mast; }
+.sc[data-format="wide"] .sc-owner { grid-area: owner; margin-top: 0; }
+.sc[data-format="wide"] .sc-note { grid-area: note; margin-top: 28px; -webkit-line-clamp: 6; }
+.sc[data-format="wide"] .sc-foot { grid-area: foot; margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--c-rule-strong); }
+.sc[data-format="wide"] .sc-shelf { grid-area: shelf; margin-top: 0; }
+
+/* ===========================================================================
+   TOP — the canon. #1 large with its numeral beside it; 02 onwards in a row
+   beneath, each under its number.
+   =========================================================================== */
+
+.sc-canon {
+  --small-w: calc((100cqw - 3 * var(--gutter)) / 4);
+  --small-h: calc(var(--small-w) * 1.5);
+  --small-no: 64px;
+  --lead-h: min(calc(100cqh - var(--small-h) - var(--small-no) - 56px), calc(100cqw * 0.6 * 1.5));
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 56px var(--gutter);
+}
+
+/* A list of one: #1 takes the whole shelf. */
+.sc-canon:not(:has(.sc-rank:nth-child(2))) {
+  --lead-h: min(100cqh, calc(100cqw * 0.6 * 1.5));
 }
 
 .sc-rank {
-  display: grid;
-  grid-template-columns: var(--rank-w) var(--print-w) minmax(0, 1fr);
-  column-gap: var(--rank-gap);
-  min-height: 0;
-}
-
-.sc-rank.is-lead {
-  grid-row: span 2;
-  grid-template-columns: var(--rank-w) var(--print-lead-w) minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
 }
 
 .sc-rank__no {
-  padding: 12px 20px 0 0;
   font-family: var(--f-display);
   font-weight: 900;
   font-stretch: 125%;
-  font-size: 72px;
-  line-height: 0.9;
+  font-size: 44px;
+  line-height: 1;
   letter-spacing: -0.04em;
-  text-align: right;
-  color: var(--c-field-ink);
+  color: var(--c-ink);
 }
 
-/* Rows parted by a fine rule: ink on the field, the sheet's rule beside it. */
-.sc-rank + .sc-rank .sc-rank__no {
-  box-shadow: inset 0 1px 0 rgba(11, 11, 11, 0.3);
-}
-
-.sc-rank + .sc-rank .sc-rank__text {
-  border-top: 1px solid var(--c-rule);
-}
-
-.sc-rank .sc-plate {
-  padding: 10px;
-  font-size: 14px;
-}
-
-.sc-rank.is-lead .sc-plate {
-  padding: 16px;
-  font-size: 22px;
-}
-
-/* Each print holds 2:3 at its column's width, and only gives way (cropping
-   rather than squashing) when a row is shorter than that. */
 .sc-rank .sc-print {
-  align-self: center;
   width: 100%;
-  max-height: calc(100% - 2 * var(--row-pad));
 }
 
-.sc-rank__text {
+.sc-rank.is-lead {
+  grid-column: 1 / -1;
+  flex-direction: row-reverse;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 40px;
+}
+
+.sc-rank.is-lead .sc-print {
+  width: auto;
+  height: var(--lead-h);
+}
+
+/* The numeral beside #1, with Top's yellow bar under it. */
+.sc-rank.is-lead .sc-rank__no {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  min-width: 0;
+  gap: 22px;
+  font-size: 200px;
+  line-height: 0.8;
 }
 
-.sc-rank__title {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-family: var(--f-display);
-  font-weight: 700;
-  font-stretch: 108%;
-  font-size: 38px;
-  line-height: 1.04;
-  letter-spacing: -0.015em;
-  overflow-wrap: break-word;
+.sc-rank.is-lead .sc-rank__no::after {
+  content: "";
+  width: 100%;
+  height: 12px;
+  background: var(--c-field);
 }
 
-.sc-rank__sub {
-  overflow: hidden;
-  font-size: var(--t-label);
-  color: var(--c-ink-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
+/* Wide: #1 the full height on the left, 02–05 two by two beside it, each
+   small print sized from the shelf's height so the pair of rows fits. */
+.sc[data-format="wide"] .sc-canon {
+  --small-no: 42px;
+  --small-h: calc((100cqh - 2 * var(--small-no) - 28px) / 2);
+  grid-template-columns: auto repeat(2, calc(var(--small-h) * 2 / 3));
+  grid-template-rows: repeat(2, auto);
+  justify-content: start;
+  gap: 28px 24px;
 }
 
-.sc-rank .sc-meter {
-  font-size: var(--t-label);
+.sc[data-format="wide"] .sc-rank.is-lead {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  flex-direction: column;
+  gap: 18px;
 }
 
-.sc-rank .sc-meter__value {
-  font-size: var(--t-meta);
+.sc[data-format="wide"] .sc-rank.is-lead .sc-print {
+  height: calc(100cqh - 112px);
 }
 
-/* #1 leads: twice the height, the numeral and title a step up. */
-.sc-rank.is-lead .sc-rank__no {
-  padding-top: 16px;
-  font-size: 118px;
-}
-
-.sc-rank.is-lead .sc-rank__title {
-  -webkit-line-clamp: 3;
-  font-size: 58px;
-  line-height: 1;
-}
-
-.sc-rank.is-lead .sc-rank__sub,
-.sc-rank.is-lead .sc-meter {
-  font-size: var(--t-meta);
-}
-
-.sc-rank.is-lead .sc-meter__value {
-  font-size: var(--t-body);
-}
-
-.sc-rank.is-lead .sc-rank__text {
-  gap: 14px;
-}
-
-.sc[data-kind="top"] .sc-more {
-  margin-top: calc(var(--gap) * -0.45);
-  padding-left: calc(196px + 28px);
-}
-
-/* Wide: the words on the left; the canon down the whole right side, its
-   yellow column bleeding off the top and bottom edges. */
-.sc[data-kind="top"][data-format="wide"] {
-  grid-template-columns: var(--text-w) minmax(0, 1fr);
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "mast    canon"
-    "heading canon"
-    "owner   canon"
-    "words   canon"
-    "stats   canon"
-    "foot    canon";
-  column-gap: 56px;
-}
-
-.sc[data-kind="top"][data-format="wide"] .sc-canon {
-  --rank-w: 128px;
-  --print-w: 80px;
-  --print-lead-w: 164px;
-  --row-pad: 9px;
-  --rank-gap: 24px;
-  margin-block: calc(var(--pad-y) * -1);
-  padding-block: var(--pad-y);
-}
-
-.sc[data-kind="top"][data-format="wide"] .sc-rank__no {
-  padding: 10px 14px 0 0;
-  font-size: 50px;
-}
-
-.sc[data-kind="top"][data-format="wide"] .sc-rank.is-lead .sc-rank__no {
+.sc[data-format="wide"] .sc-rank.is-lead .sc-rank__no {
   font-size: 80px;
+  gap: 12px;
 }
 
-.sc[data-kind="top"][data-format="wide"] .sc-rank__title {
-  font-size: 26px;
+.sc[data-format="wide"] .sc-rank.is-lead .sc-rank__no::after {
+  height: 8px;
 }
 
-.sc[data-kind="top"][data-format="wide"] .sc-rank.is-lead .sc-rank__title {
-  font-size: 40px;
+.sc[data-format="wide"] .sc-rank__no {
+  font-size: 32px;
 }
 
-/* "+N more ranked" sits under the last rank, in the canon's foot margin. */
-.sc[data-kind="top"][data-format="wide"] .sc-more {
-  grid-area: canon;
-  align-self: end;
-  margin: 0 0 calc(var(--pad-y) * -0.62) calc(128px + 80px + 2 * 24px);
-  padding-left: 0;
+.sc[data-format="wide"] .sc-rank:not(.is-lead) .sc-print {
+  height: var(--small-h);
+  width: auto;
 }
 
-.sc[data-kind="top"][data-format="wide"] .sc-stats {
-  grid-auto-flow: row;
-  grid-template-columns: repeat(2, auto);
-  grid-template-rows: none;
-  align-self: end;
-  gap: 10px 40px;
+.sc[data-format="wide"] .sc-rank {
+  gap: 10px;
 }
 
-.sc[data-kind="top"][data-format="wide"] .sc-stat {
-  margin-bottom: 12px;
+.sc[data-format="wide"] .sc-rank.is-lead {
+  margin-right: 16px;
+}
+
+.sc[data-format="wide"] .sc-canon:not(:has(.sc-rank:nth-child(2))) .sc-rank.is-lead .sc-print {
+  height: calc(100cqh - 112px);
 }
 
 /* ===========================================================================
-   LIKED — the contact sheet
+   LIKED — the contact sheet. Even rows of prints; the columns are set to
+   exactly the width a print may have (by the shelf's height and width), so
+   the outer prints sit on the margins.
    =========================================================================== */
 
-.sc[data-kind="liked"] {
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
-  grid-template-areas:
-    "mast"
-    "slab"
-    "owner"
-    "words"
-    "sheet"
-    "stats"
-    "foot";
-}
-
-/* The red field: full bleed, edge to edge, the name left and the count
-   right, both in ink. */
-.sc[data-kind="liked"] .sc-slab {
-  --count-w: 250px;
-  grid-area: slab;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  margin-inline: calc(var(--pad-x) * -1);
-  padding: 44px var(--pad-x) 36px;
-  background: var(--c-field);
-  color: var(--c-field-ink);
-}
-
-.sc[data-kind="liked"] .sc-heading {
-  --heading-room: calc(var(--text-w) - var(--count-w));
-  grid-area: auto;
-}
-
-.sc[data-kind="liked"] .sc-slab.is-long {
-  flex-wrap: wrap;
-  row-gap: 18px;
-}
-
-.sc[data-kind="liked"] .sc-slab.is-long .sc-heading {
-  --heading-room: var(--text-w);
-  flex-basis: 100%;
-}
-
-.sc[data-kind="liked"] .sc-slab.is-long .sc-slab__count {
-  order: -1;
-  margin-left: auto;
-}
-
-.sc-slab__count {
-  font-size: 120px;
-  font-weight: 500;
-  line-height: 0.8;
-  letter-spacing: -0.05em;
-}
-
-/* Four frames wide; each print takes its row's height and its width from
-   the 2:3 ratio, centred in its column, with room below for the edge
-   number. */
-/* The room the sheet has: a size container, so the sheet can work out how
-   tall a print may be (its share of the height, less the edge number) and
-   set its columns to exactly that print's width -- the outer prints then
-   sit on the text margins instead of floating inside wider columns. */
-.sc-sheet-room {
-  grid-area: sheet;
-  min-height: 0;
-  container-type: size;
-}
-
 .sc-sheet {
-  --edge: 36px;
-  --row-gap: 14px;
-  --print-h: calc((100cqh - (var(--sheet-rows) - 1) * var(--row-gap)) / var(--sheet-rows) - var(--edge));
+  --cols: 3;
+  --print-h: calc((100cqh - (var(--rows) - 1) * var(--gutter)) / var(--rows));
+  --print-w: min(calc(var(--print-h) * 2 / 3), calc((100cqw - (var(--cols) - 1) * var(--gutter)) / var(--cols)));
   display: grid;
-  grid-template-columns: repeat(4, min(calc(var(--print-h) * 2 / 3), calc((100cqw - 48px) / 4)));
-  grid-template-rows: repeat(var(--sheet-rows), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--cols), var(--print-w));
   justify-content: space-between;
-  gap: var(--row-gap) 16px;
+  align-content: center;
+  gap: var(--gutter);
   height: 100%;
 }
 
-.sc-frame {
-  position: relative;
-  min-height: 0;
-}
-
 .sc-frame .sc-print {
-  position: absolute;
-  inset: 0 0 var(--edge) 0;
-  aspect-ratio: auto;
-}
-
-/* "+N more": a frame of its own, the count where the print would be. */
-.sc-frame.is-more .sc-print {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 8%;
-  border: 1px solid var(--c-rule-strong);
-  border-radius: 2px;
-  background: var(--c-sheet);
-}
-
-.sc-frame__more-n {
-  font-size: 60px;
-  line-height: 0.9;
-  letter-spacing: -0.04em;
-  color: var(--c-ink);
-}
-
-/* An unexposed frame: the outline of a print that isn't there. */
-.sc-frame.is-blank .sc-print {
-  border: 1px dashed var(--c-rule-strong);
-  border-radius: 2px;
-}
-
-.sc[data-kind="liked"] .sc-stats {
-  align-items: stretch;
-}
-
-.sc[data-kind="liked"] .sc-stat {
-  justify-content: flex-end;
-}
-
-/* Decades as a small histogram: one lime column per decade, its count on
-   top, sharing the band's height with the stats beside it. */
-.sc-decades {
-  display: flex;
-  grid-row: span 3;
-  gap: 8px;
-  min-width: 0;
-  min-height: 120px;
-  justify-content: flex-end;
-}
-
-.sc[data-kind="liked"] .sc-stats {
-  grid-template-columns: auto auto minmax(0, 1fr);
-  justify-content: stretch;
-}
-
-.sc-decade {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-  max-width: 76px;
-}
-
-.sc-decade__col {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: stretch;
-  gap: 6px;
-  min-height: 0;
-}
-
-.sc-decade__count {
-  font-size: var(--t-edge);
-  line-height: 1;
-  text-align: center;
-  color: var(--c-ink);
-}
-
-.sc-decade__bar {
-  height: calc(var(--pct) * 0.78);
-  min-height: 3px;
-  background: var(--c-lime);
-}
-
-.sc-decade__label {
-  font-size: var(--t-edge);
-  line-height: 1;
-  text-align: center;
-  color: var(--c-ink-faint);
-  white-space: nowrap;
-}
-
-/* Many decades: label every other one so the labels never collide. */
-.sc-decades.is-dense .sc-decade:nth-child(even) .sc-decade__label {
-  visibility: hidden;
-}
-
-/* Wide: words left, the 4 × 2 sheet filling the right. */
-.sc[data-kind="liked"][data-format="wide"] {
-  grid-template-columns: var(--text-w) minmax(0, 1fr);
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "mast  sheet"
-    "slab  sheet"
-    "owner sheet"
-    "words sheet"
-    "stats sheet"
-    "foot  sheet";
-  column-gap: 56px;
-}
-
-.sc[data-kind="liked"][data-format="wide"] .sc-slab {
-  --count-w: 150px;
-  margin-inline: calc(var(--pad-x) * -1) 0;
-  padding: 30px 28px 24px var(--pad-x);
-}
-
-.sc[data-kind="liked"][data-format="wide"] .sc-heading {
-  --heading-room: calc(var(--text-w) - var(--count-w) - 28px);
-}
-
-.sc[data-kind="liked"][data-format="wide"] .sc-slab.is-long .sc-heading {
-  --heading-room: calc(var(--text-w) - 28px);
-}
-
-/* A long name already spends two lines of the slab; keep the left column's
-   words clear of the stats rule by tightening the slab and holding the
-   note to two lines. */
-.sc[data-kind="liked"][data-format="wide"] .sc-slab.is-long {
-  row-gap: 6px;
-  padding-top: 18px;
-  padding-bottom: 20px;
-}
-
-.sc[data-kind="liked"][data-format="wide"]:has(.sc-slab.is-long) .sc-note {
-  -webkit-line-clamp: 2;
-}
-
-.sc[data-kind="liked"][data-format="wide"] .sc-slab__count {
-  font-size: 80px;
-}
-
-/* Wide: the four columns, not the two rows, are the tighter limit, so the
-   prints take their width from the column and the sheet centres in its
-   height. */
-.sc[data-kind="liked"][data-format="wide"] .sc-sheet {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: repeat(var(--sheet-rows), auto);
-  align-content: center;
-  row-gap: 18px;
-}
-
-.sc[data-kind="liked"][data-format="wide"] .sc-frame {
-  padding-bottom: 30px;
-}
-
-.sc[data-kind="liked"][data-format="wide"] .sc-frame .sc-print {
-  position: relative;
-  inset: auto;
   width: 100%;
-  aspect-ratio: 2 / 3;
 }
 
-.sc[data-kind="liked"][data-format="wide"] .sc-stats {
-  grid-auto-flow: row;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: none;
-  align-self: end;
-  gap: 10px 40px;
+/* Fewer prints than a row: keep them together on the left. */
+.sc-sheet:not(:has(.sc-frame:nth-child(3))) {
+  justify-content: start;
 }
 
-.sc[data-kind="liked"][data-format="wide"] .sc-decades {
-  grid-column: 1 / -1;
-  grid-row: auto;
-  margin-top: 14px;
-  justify-content: flex-start;
-  min-height: 90px;
+.sc[data-format="wide"] .sc-sheet {
+  --cols: 4;
 }
 
-.sc[data-format="wide"] .sc-stat__value--word {
-  --word-room: 300px;
-}
-
-.sc[data-format="wide"] .sc-frame__more-n {
-  font-size: 44px;
+.sc[data-format="wide"] .sc-sheet:not(:has(.sc-frame:nth-child(4))) {
+  justify-content: start;
 }
 
 /* ===========================================================================
-   WATCH LATER — the queue
+   WATCH LATER — the queue. The next title largest, the rest waiting smaller
+   behind it, bottom-aligned, the last running off the card's right edge.
    =========================================================================== */
 
-.sc[data-kind="watch_later"] {
-  grid-template-rows: auto auto auto auto auto minmax(0, 1fr) auto auto;
-  grid-template-areas:
-    "mast"
-    "heading"
-    "slab"
-    "owner"
-    "words"
-    "reel"
-    "more"
-    "foot";
-}
-
-.sc[data-kind="watch_later"] .sc-heading {
-  margin-top: calc(var(--gap) * 0.25);
-}
-
-/* The lime field: the hours still to go, as big as the card allows. */
-.sc[data-kind="watch_later"] .sc-slab {
-  grid-area: slab;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-inline: calc(var(--pad-x) * -1);
-  padding: 40px var(--pad-x) 40px;
-  background: var(--c-field);
-  color: var(--c-field-ink);
-}
-
-.sc-slab__figure {
-  font-size: 172px;
-  font-weight: 500;
-  line-height: 0.86;
-  letter-spacing: -0.06em;
-  white-space: nowrap;
-}
-
-.sc-slab__caption {
-  font-family: var(--f-display);
-  font-weight: 700;
-  font-stretch: 112%;
-  font-size: var(--t-body);
-  line-height: 1.1;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-}
-
-.sc-slab__also {
-  font-size: var(--t-meta);
-  opacity: 0.8;
-}
-
-/* The reel: frames in viewing order, the next one largest, the rest
-   waiting smaller behind it and running off the card's right edge — the
-   queue goes on past what the card can hold. */
 .sc-reel {
-  --tag-h: 44px;
-  grid-area: reel;
+  --next-h: min(100cqh, calc(100cqw * 0.72 * 1.5));
   display: flex;
-  align-items: stretch;
-  gap: 20px;
-  min-height: 0;
+  align-items: flex-end;
+  gap: var(--gutter);
   margin-right: calc(var(--pad-x) * -1);
 }
 
 .sc-reel__frame {
-  display: flex;
   flex: none;
-  flex-direction: column;
-  justify-content: flex-end;
-  height: 100%;
 }
 
 .sc-reel__frame .sc-print {
-  height: calc(54% - var(--tag-h));
+  height: calc(var(--next-h) * 0.6);
 }
 
 .sc-reel__frame.is-next .sc-print {
-  height: calc(100% - var(--tag-h));
+  height: var(--next-h);
 }
 
-.sc-reel__tag {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: var(--tag-h);
-  font-size: var(--t-edge);
-  color: var(--c-ink-faint);
+.sc[data-format="wide"] .sc-reel {
+  --next-h: min(100cqh, calc(100cqw * 0.5 * 1.5));
 }
 
-/* "Next": the one frame tagged in words, with the field's tick. */
-.sc-reel__frame.is-next .sc-reel__tag::before {
-  content: "";
-  width: 28px;
-  height: 6px;
-  background: var(--c-tick);
+.sc[data-format="wide"] .sc-reel__frame .sc-print {
+  height: calc(var(--next-h) * 0.62);
 }
 
-.sc-reel__frame.is-next .sc-label {
-  color: var(--c-ink);
-}
-
-/* Story: the waiting frames are shorter than "Next", and the count of what
-   is still queued sits in the space above them. */
-.sc[data-kind="watch_later"][data-format="story"] {
-  grid-template-areas:
-    "mast"
-    "heading"
-    "slab"
-    "owner"
-    "words"
-    "reel"
-    "reel"
-    "foot";
-}
-
-.sc[data-kind="watch_later"][data-format="story"] .sc-more {
-  grid-area: reel;
-  align-self: start;
-  justify-self: end;
-  max-width: 420px;
-  margin-top: 44px;
-  font-size: var(--t-meta);
-  text-wrap: balance;
-  line-height: 1.15;
-  text-align: right;
-  color: var(--c-ink);
-}
-
-.sc-reel .sc-plate {
-  font-size: calc(var(--t-edge) * 1.2);
-}
-
-/* Wide: the lime field top left, the words beside it, the reel along the
-   bottom. */
-.sc[data-kind="watch_later"][data-format="wide"] {
-  grid-template-columns: minmax(0, 1fr) 520px;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
-  grid-template-areas:
-    "mast    mast"
-    "slab    heading"
-    "slab    owner"
-    "slab    words"
-    "reel    reel"
-    "foot    more";
-  column-gap: 48px;
-}
-
-.sc[data-kind="watch_later"][data-format="wide"] .sc-heading {
-  --heading-room: 520px;
-  --heading-max: 88px;
-  margin-top: 0;
-  align-self: start;
-}
-
-.sc[data-kind="watch_later"][data-format="wide"] .sc-slab {
-  justify-content: center;
-  gap: 10px;
-  margin-inline: calc(var(--pad-x) * -1) 0;
-  padding: 24px 32px 26px var(--pad-x);
-}
-
-.sc[data-kind="watch_later"][data-format="wide"] .sc-slab__figure {
-  font-size: 128px;
-}
-
-.sc[data-kind="watch_later"][data-format="wide"] .sc-reel {
-  --tag-h: 34px;
-}
-
-.sc[data-kind="watch_later"][data-format="wide"] .sc-reel__frame .sc-print {
-  height: calc(82% - var(--tag-h));
-}
-
-.sc[data-kind="watch_later"][data-format="wide"] .sc-reel__frame.is-next .sc-print {
-  height: calc(100% - var(--tag-h));
-}
-
-.sc[data-kind="watch_later"][data-format="wide"] .sc-more {
-  align-self: center;
-  justify-self: end;
+.sc[data-format="wide"] .sc-reel__frame.is-next .sc-print {
+  height: var(--next-h);
 }

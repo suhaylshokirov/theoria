@@ -1,16 +1,17 @@
 {% load i18n l10n %}
 {% comment %} The share artwork (Task 138): one card, laid out per kind and format.
-   Context comes from core.views.shared_card. It is a snapshot, so it prints the
-   day it was catalogued; the link printed at its foot is live.
+   Context comes from core.views.shared_card.
 
-   Every card is a catalogue card from the archive drawer: masthead, one solid
-   field in the collection's own colour (Top's rank column, Liked's header,
-   Watch later's hours to go), the owner's plate, the titles, and the link.
-   Never the owner's email. Lime marks measured values only. Sizes are pixels
-   (unlocalized: a thousands separator would void them), and the capture
-   writes them 1:1 into the image. {% endcomment %}
+   Four things and nothing else: who shared it (disc, handle, member since),
+   the posters, the owner's note, and the link back. A small header says what
+   it is: the wordmark and the collection's name. The posters lead; the
+   card is for looking at, not for reading numbers off. Top keeps its rank
+   numerals, because the order is the point of that list.
+
+   Never the owner's email. Sizes are pixels (unlocalized: a thousands
+   separator would void them), and the capture writes them 1:1. {% endcomment %}
 <article class="sc" data-kind="{{ kind }}" data-format="{{ format }}" data-theme="{{ theme }}"
-         style="--sc-w: {{ width|unlocalize }}px; --sc-h: {{ height|unlocalize }}px; --heading-length: {{ heading|length|unlocalize }}; --name-length: {{ owner_name|length|add:1|unlocalize }}"
+         style="--sc-w: {{ width|unlocalize }}px; --sc-h: {{ height|unlocalize }}px; --name-length: {{ owner_name|length|add:1|unlocalize }}; --rows: {{ sheet_rows|unlocalize }}"
          aria-label="{{ heading }} — @{{ owner_name }}">
 
     <header class="sc-mast">
@@ -21,184 +22,50 @@
             </svg>
             <span class="sc-brand__name">Theoria</span>
         </span>
-        <span class="sc-catalogued">
-            <span class="sc-label">{% translate "Catalogued" context "share card" %}</span>
-            <span class="sc-mono">{{ catalogued|date:"d·m·Y" }}</span>
-        </span>
+        <h1 class="sc-kind">{{ heading }}</h1>
     </header>
-
-    {% comment %} Who and what: the heading (the kind's name), the owner's plate,
-       the fixed line and the owner's own note. Placed per kind by the CSS; on
-       Liked the heading sits inside the red slab. {% endcomment %}
-    {% if kind != "liked" %}
-    <h1 class="sc-heading">{{ heading }}</h1>
-    {% endif %}
 
     <div class="sc-owner">
         <span class="sc-disc" aria-hidden="true">{{ owner_name|slice:":1"|upper }}</span>
         <span class="sc-owner__text">
             <span class="sc-handle">@{{ owner_name }}</span>
-            <span class="sc-owner__meta">{% blocktranslate trimmed with month=owner_since|date:"M" year=owner_since|date:"Y" context "share card" %}Member since {{ month }} <span class="sc-mono">{{ year }}</span>{% endblocktranslate %}</span>
-            <span class="sc-owner__meta sc-owner__counts">
-                {% if stats.movies %}<span><span class="sc-mono">{{ stats.movies|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=stats.movies %}movie{% plural %}movies{% endblocktranslate %}</span>{% endif %}
-                {% if stats.shows %}<span><span class="sc-mono">{{ stats.shows|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=stats.shows %}TV show{% plural %}TV shows{% endblocktranslate %}</span>{% endif %}
-            </span>
+            <span class="sc-owner__since">{% blocktranslate trimmed with month=owner_since|date:"M" year=owner_since|date:"Y" context "share card" %}Member since {{ month }} <span class="sc-mono">{{ year }}</span>{% endblocktranslate %}</span>
         </span>
     </div>
 
-    <div class="sc-words">
-        <p class="sc-line">{{ fixed_line }}</p>
-        {% if note %}<blockquote class="sc-note">{{ note }}</blockquote>{% endif %}
-    </div>
+    {% if note %}<blockquote class="sc-note">{{ note }}</blockquote>{% endif %}
 
-    {% if kind == "top" %}
-    {% comment %} THE CANON. The yellow field is the rank column itself: one
-       unbroken strip of numerals running the length of the list. #1 takes two
-       rows' height. {% endcomment %}
-    <ol class="sc-canon">
-        {% for f in frames %}
-        <li class="sc-rank{% if forloop.first %} is-lead{% endif %}">
-            <span class="sc-rank__no" aria-hidden="true">{{ f.number|stringformat:"02d" }}</span>
-            {% include "core/share/_card_poster.html" with f=f only %}
-            <span class="sc-rank__text">
-                <span class="sc-rank__title">{{ f.title }}</span>
-                <span class="sc-rank__sub sc-mono">
-                    {% if f.is_show %}{{ f.year_span|default:"—" }} · {% translate "TV show" %}{% else %}{% if f.year %}{{ f.year|stringformat:"d" }}{% else %}—{% endif %}{% if f.runtime_hours or f.runtime_rest %} · {% include "core/share/_card_duration.html" with h=f.runtime_hours m=f.runtime_rest only %}{% endif %}{% endif %}
-                </span>
-                {% if f.rating %}
-                <span class="sc-meter" style="--pct: {{ f.rating_pct|stringformat:"d" }}%">
-                    <span class="sc-label">IMDb</span>
-                    <span class="sc-meter__track" aria-hidden="true"><span class="sc-meter__fill"></span></span>
-                    <span class="sc-meter__value sc-mono">{{ f.rating|floatformat:"1u" }}</span>
-                </span>
-                {% endif %}
-            </span>
-        </li>
-        {% endfor %}
-    </ol>
-    {% if more %}
-    <p class="sc-more">{% blocktranslate trimmed with n=more|stringformat:"d" context "share card" %}+{{ n }} more ranked{% endblocktranslate %}</p>
-    {% endif %}
-
-    <div class="sc-stats">
-        {% if stats.avg_imdb %}
-        <div class="sc-stat sc-stat--meter">
-            <span class="sc-label">{% translate "Avg. IMDb" context "share card" %}</span>
-            <span class="sc-stat__value sc-mono">{{ stats.avg_imdb|floatformat:"1u" }}</span>
-            <span class="sc-stat__meter" style="--pct: {% widthratio stats.avg_imdb 10 100 %}%" aria-hidden="true"><span></span></span>
-        </div>
-        {% endif %}
-        {% if stats.year_min %}
-        <div class="sc-stat">
-            <span class="sc-label">{% translate "Release years" %}</span>
-            <span class="sc-stat__value sc-mono">{% if stats.year_min == stats.year_max %}{{ stats.year_min|stringformat:"d" }}{% else %}{{ stats.year_min|stringformat:"d" }}–{{ stats.year_max|stringformat:"d" }}{% endif %}</span>
-        </div>
-        {% endif %}
-        {% if stats.runtime_minutes %}
-        <div class="sc-stat">
-            <span class="sc-label">{% translate "Total runtime" %}</span>
-            <span class="sc-stat__value sc-mono">{% include "core/share/_card_duration.html" with h=stats.runtime_hours m=stats.runtime_rest only %}</span>
-        </div>
-        {% endif %}
-    </div>
-
-    {% elif kind == "liked" %}
-    {% comment %} THE CONTACT SHEET. The red field is the header: the kind's
-       name and how many titles it holds. Below, the sheet four frames wide,
-       each frame numbered on its edge as a contact print is; a list longer
-       than the sheet spends its last frame on "+N more", a shorter one leaves
-       frames unexposed. {% endcomment %}
-    {% comment %} A long translated name ("Понравившиеся") takes the slab's
-       full width on a line of its own, the count above it, rather than
-       shrinking to a caption beside the number. {% endcomment %}
-    <div class="sc-slab{% if heading|length > 8 %} is-long{% endif %}">
-        <h1 class="sc-heading">{{ heading }}</h1>
-        <span class="sc-slab__count sc-mono">{{ stats.total|stringformat:"d" }}</span>
-    </div>
-
-    <div class="sc-sheet-room">
-    <ol class="sc-sheet" style="--sheet-rows: {{ sheet_rows|unlocalize }}">
-        {% for f in frames %}
-        <li class="sc-frame">{% include "core/share/_card_poster.html" with f=f number=f.number only %}</li>
-        {% endfor %}
-        {% if more %}
-        <li class="sc-frame is-more">
-            <span class="sc-print">
-                <span class="sc-frame__more-n sc-mono">+{{ more|stringformat:"d" }}</span>
-                <span class="sc-label">{% translate "more" context "share card" %}</span>
-            </span>
-        </li>
-        {% endif %}
-        {% for n in blank_frames %}
-        <li class="sc-frame is-blank" aria-hidden="true">
-            <span class="sc-print"><span class="sc-print__no sc-mono">{{ n|stringformat:"02d" }}</span></span>
-        </li>
-        {% endfor %}
-    </ol>
-    </div>
-
-    <div class="sc-stats">
-        {% if stats.genre %}
-        <div class="sc-stat">
-            <span class="sc-label">{% translate "Top genre" context "share card" %}</span>
-            <span class="sc-stat__value sc-stat__value--word" style="--word-length: {{ stats.genre.name|length|unlocalize }}">{{ stats.genre.name }}</span>
-            <span class="sc-stat__sub sc-mono">{% blocktranslate trimmed with pct=stats.genre.pct|stringformat:"d" %}{{ pct }}% of the list{% endblocktranslate %}</span>
-        </div>
-        {% endif %}
-        {% if stats.avg_imdb %}
-        <div class="sc-stat sc-stat--meter">
-            <span class="sc-label">{% translate "Avg. IMDb" context "share card" %}</span>
-            <span class="sc-stat__value sc-mono">{{ stats.avg_imdb|floatformat:"1u" }}</span>
-            <span class="sc-stat__meter" style="--pct: {% widthratio stats.avg_imdb 10 100 %}%" aria-hidden="true"><span></span></span>
-        </div>
-        {% endif %}
-        {% if stats.decades|length > 1 %}
-        <ol class="sc-decades{% if stats.decades|length > 6 %} is-dense{% endif %}" aria-label="{% translate "By decade" %}">
-            {% for d in stats.decades %}
-            <li class="sc-decade">
-                <span class="sc-decade__col" style="--pct: {{ d.pct|stringformat:"d" }}%">
-                    <span class="sc-decade__count sc-mono">{{ d.count|stringformat:"d" }}</span>
-                    <span class="sc-decade__bar" aria-hidden="true"></span>
-                </span>
-                <span class="sc-decade__label sc-mono">{% blocktranslate trimmed with d=d.decade|stringformat:"d"|slice:"2:" context "share card" %}’{{ d }}s{% endblocktranslate %}</span>
+    <div class="sc-shelf">
+        {% if kind == "top" %}
+        {% comment %} The canon: #1 large with its numeral beside it, the rest in
+           a row beneath, each under its number. {% endcomment %}
+        <ol class="sc-canon">
+            {% for f in frames %}
+            <li class="sc-rank{% if forloop.first %} is-lead{% endif %}">
+                <span class="sc-rank__no" aria-hidden="true">{{ f.number|stringformat:"02d" }}</span>
+                {% include "core/share/_card_poster.html" with f=f only %}
             </li>
+            {% endfor %}
+        </ol>
+
+        {% elif kind == "liked" %}
+        {% comment %} The contact sheet: prints edge to edge in even rows. {% endcomment %}
+        <ol class="sc-sheet">
+            {% for f in frames %}
+            <li class="sc-frame">{% include "core/share/_card_poster.html" with f=f only %}</li>
+            {% endfor %}
+        </ol>
+
+        {% else %}
+        {% comment %} The queue: the next title largest, the rest waiting smaller
+           behind it and running off the card's edge. {% endcomment %}
+        <ol class="sc-reel">
+            {% for f in frames %}
+            <li class="sc-reel__frame{% if forloop.first %} is-next{% endif %}">{% include "core/share/_card_poster.html" with f=f only %}</li>
             {% endfor %}
         </ol>
         {% endif %}
     </div>
-
-    {% else %}
-    {% comment %} THE QUEUE. The lime field is the measurement this list exists
-       for: how long it would take to watch. Below it, the reel runs off the
-       card's edge, the next title first and largest. {% endcomment %}
-    <div class="sc-slab">
-        {% if stats.runtime_minutes %}
-        <span class="sc-slab__figure sc-mono">{% include "core/share/_card_duration.html" with h=stats.runtime_hours m=stats.runtime_rest only %}</span>
-        <span class="sc-slab__caption">{% translate "of movies still to watch" context "share card" %}</span>
-        {% elif stats.episodes %}
-        <span class="sc-slab__figure sc-mono">{{ stats.episodes|stringformat:"d" }}</span>
-        <span class="sc-slab__caption">{% translate "episodes still to watch" context "share card" %}</span>
-        {% else %}
-        <span class="sc-slab__figure sc-mono">{{ stats.total|stringformat:"d" }}</span>
-        <span class="sc-slab__caption">{% translate "saved to watch" context "share card" %}</span>
-        {% endif %}
-        {% if stats.runtime_minutes and stats.shows %}
-        <span class="sc-slab__also sc-mono">{% blocktranslate trimmed count n=stats.shows context "share card" %}+ {{ n }} TV show{% plural %}+ {{ n }} TV shows{% endblocktranslate %}{% if stats.episodes %} · {% blocktranslate trimmed with shown=stats.episodes|stringformat:"d" count n=stats.episodes context "share card" %}{{ shown }} episode{% plural %}{{ shown }} episodes{% endblocktranslate %}{% endif %}</span>
-        {% endif %}
-    </div>
-
-    <ol class="sc-reel">
-        {% for f in frames %}
-        <li class="sc-reel__frame{% if forloop.first %} is-next{% endif %}">
-            <span class="sc-reel__tag">{% if forloop.first %}<span class="sc-label">{% translate "Next" context "share card" %}</span>{% else %}<span class="sc-mono">{{ f.number|stringformat:"02d" }}</span>{% endif %}</span>
-            {% include "core/share/_card_poster.html" with f=f only %}
-        </li>
-        {% endfor %}
-    </ol>
-    {% if more %}
-    <p class="sc-more">{% blocktranslate trimmed with n=more|stringformat:"d" context "share card" %}+{{ n }} more in the queue{% endblocktranslate %}</p>
-    {% endif %}
-    {% endif %}
 
     <footer class="sc-foot">
         <span class="sc-foot__url sc-mono">{{ printed_url }}</span>

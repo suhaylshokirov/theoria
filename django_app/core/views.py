@@ -6,8 +6,7 @@ from django.conf import settings
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
-from django.utils import timezone
-from django.utils.translation import gettext, gettext_lazy as _, pgettext
+from django.utils.translation import gettext, gettext_lazy as _
 from django.templatetags.static import static
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -361,48 +360,33 @@ def shared_page(request, token):
 # (width, height) in CSS px, which the capture writes 1:1 as image pixels.
 CARD_FORMATS = {"story": (1080, 1920), "wide": (1600, 900)}
 CARD_THEMES = ("ink", "paper")
-# How many titles each card has room for. Liked is a contact sheet four
-# frames wide (three rows on a Story, two on a Wide); Top is always its first
-# five; Watch later's reel shows what fits before it runs off the edge.
+# How many posters each card shows. Top is always its first five; Liked is a
+# contact sheet (3 × 3 on a Story, 4 × 2 on a Wide); Watch later's reel shows
+# the next title and the two after it, the last running off the edge.
 CARD_SLOTS = {
     (Collection.TOP, "story"): 5,
     (Collection.TOP, "wide"): 5,
-    (Collection.LIKED, "story"): 12,
+    (Collection.LIKED, "story"): 9,
     (Collection.LIKED, "wide"): 8,
     (Collection.WATCH_LATER, "story"): 3,
-    (Collection.WATCH_LATER, "wide"): 7,
+    (Collection.WATCH_LATER, "wide"): 3,
 }
-CARD_SHEET_COLUMNS = 4
-
-
-def _card_copy():
-    """Stored kind -> (heading, the fixed line). The card is posted by its
-    owner, so the line speaks in the first person, unlike the public page."""
-    return {
-        Collection.TOP: (gettext("Top"), pgettext("share card", "My canon, best first.")),
-        Collection.LIKED: (gettext("Liked"), pgettext("share card", "Everything I liked, on one sheet.")),
-        Collection.WATCH_LATER: (gettext("Watch later"), pgettext("share card", "Saved for free evenings.")),
-    }
+CARD_SHEET_COLUMNS = {"story": 3, "wide": 4}
 
 
 def _card_frame(row, number):
     """One title as the card draws it: plain values, so the template never
-    reaches back into a model."""
+    reaches back into a model. The title and year only show on a title plate,
+    when there is no poster."""
     title = row.content
     is_show = row.content_type == CollectionItem.SERIES
     date = title.first_air_date if is_show else title.release_date
-    runtime = 0 if is_show else (title.runtime or 0)
-    rating = float(title.imdb_rating) if title.imdb_rating is not None else None
     return {
         "number": number,
         "title": row.title,
         "is_show": is_show,
         "year": date.year if date else None,
         "year_span": getattr(title, "year_span", None) if is_show else None,
-        "runtime_hours": runtime // 60,
-        "runtime_rest": runtime % 60,
-        "rating": rating,
-        "rating_pct": round(rating * 10) if rating is not None else 0,
         "poster": tmdb_image(title.poster_path, "w500"),
     }
 
@@ -425,22 +409,10 @@ def shared_card(request, token):
 
     collection = shared.collection
     kind = collection.kind
-    heading, fixed_line = _card_copy()[kind]
-    slots = CARD_SLOTS[(kind, fmt)]
-    items = shared.items
-    frames = [_card_frame(row, i) for i, row in enumerate(items[:slots], start=1)]
-    more = max(len(items) - slots, 0)
-    sheet_rows = 0
-    blank_frames = []
-    if kind == Collection.LIKED:
-        if more:
-            # The sheet's last frame says "+N more" instead of a poster.
-            frames = frames[:-1]
-            more += 1
-        filled = len(frames) + (1 if more else 0)
-        sheet_rows = -(-filled // CARD_SHEET_COLUMNS)
-        # Unexposed frames finish the last row, numbered on as a sheet is.
-        blank_frames = list(range(filled + 1, sheet_rows * CARD_SHEET_COLUMNS + 1))
+    heading = _share_kind_copy()[kind][1]
+    items = shared.items[:CARD_SLOTS[(kind, fmt)]]
+    frames = [_card_frame(row, i) for i, row in enumerate(items, start=1)]
+    columns = CARD_SHEET_COLUMNS[fmt]
 
     width, height = CARD_FORMATS[fmt]
     owner = shared.owner
@@ -451,16 +423,11 @@ def shared_card(request, token):
         "width": width,
         "height": height,
         "heading": heading,
-        "fixed_line": fixed_line,
         "note": collection.share_note,
         "owner_name": owner.username,
         "owner_since": owner.date_joined,
-        "stats": shared.stats,
         "frames": frames,
-        "more": more,
-        "sheet_rows": sheet_rows,
-        "blank_frames": blank_frames,
-        "catalogued": timezone.localdate(),
+        "sheet_rows": max(1, -(-len(frames) // columns)),
         # Printed without the scheme: it is read off an image and typed.
         "printed_url": f"{request.get_host()}{sharing.share_path(collection.share_token)}".rstrip("/"),
     }

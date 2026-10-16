@@ -512,8 +512,8 @@ def test_card_ranks_top_and_draws_plates_for_missing_posters(owner):
     assert html.count("sc-plate__title") == 2          # Movie 2 and Show 3
     for rank in ("01", "02", "03"):
         assert f'sc-rank__no" aria-hidden="true">{rank}<' in html
-    # 175 + 154 minutes, units set small against the digits
-    assert '5<span class="sc-unit">h</span></span> <span class="sc-dur">29<span class="sc-unit">m</span>' in html
+    # Only the people, the posters, the note and the link: no measurements.
+    assert "IMDb" not in html and "9.2" not in html
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
@@ -523,15 +523,16 @@ def test_liked_card_fills_the_contact_sheet(owner):
     many = [_row(_movie(i, 1990 + i, 100, 7.0), "movie", i) for i in range(1, 14)]
     with _hydrate_with(many):
         html = _card(collection.share_token, format="story").content.decode()
-    # 13 titles on a 12-frame sheet: 11 prints, the 12th frame says "+2".
-    assert html.count('class="sc-frame"') == 11
-    assert ">+2<" in html
+    # A Story sheet is 3 × 3: nine prints of the thirteen, and no count.
+    assert html.count('class="sc-frame"') == 9
+    assert "--rows: 3" in html
+    assert "more" not in html
     cache.clear()                   # the list is cached by updated_at
     with _hydrate_with(many[:5]):
         html = _card(collection.share_token, format="wide").content.decode()
-    # 5 titles on a 4-wide sheet: the second row is finished with blank frames.
+    # A Wide sheet is 4 across: five prints make two rows.
     assert html.count('class="sc-frame"') == 5
-    assert html.count("sc-frame is-blank") == 3
+    assert "--rows: 2" in html
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
