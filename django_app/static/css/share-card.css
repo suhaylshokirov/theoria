@@ -52,7 +52,8 @@
   --pad-x: 88px;
   --pad-y: 88px;
   --t-brand: 34px;
-  --t-kind: 26px;
+  --t-kind: 30px;
+  --kind-tile: 72px;
   --t-handle: 48px;
   --t-since: 30px;
   --t-note: 46px;
@@ -96,7 +97,8 @@
   --pad-x: 64px;
   --pad-y: 60px;
   --t-brand: 24px;
-  --t-kind: 18px;
+  --t-kind: 20px;
+  --kind-tile: 48px;
   --t-handle: 32px;
   --t-since: 21px;
   --t-note: 32px;
@@ -133,7 +135,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding-bottom: 28px;
+  padding-bottom: 24px;
   border-bottom: 1px solid var(--c-rule-strong);
 }
 
@@ -156,11 +158,34 @@
   flex: none;
 }
 
-/* The collection's name, as a shelf label with its colour tick. */
+/* The collection: its icon on a tile, as /me's section headers draw it,
+   then its name. The tile is dark in both themes so the yellow star and the
+   lime bookmark read as clearly on Paper as on Ink. */
 .sc-kind {
   display: inline-flex;
   align-items: center;
-  gap: 0.6em;
+  gap: 18px;
+  min-width: 0;
+}
+
+.sc-kind__icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--kind-tile);
+  height: var(--kind-tile);
+  border-radius: 6px;
+  background: #1b1b1f;
+}
+
+.sc-kind__icon svg {
+  width: 58%;
+  height: 58%;
+  fill: var(--c-field);
+}
+
+.sc-kind__name {
   font-family: var(--f-display);
   font-weight: 700;
   font-stretch: 78%;
@@ -170,13 +195,6 @@
   text-transform: uppercase;
   white-space: nowrap;
   color: var(--c-ink);
-}
-
-.sc-kind::before {
-  content: "";
-  width: 0.62em;
-  height: 0.62em;
-  background: var(--c-tick);
 }
 
 /* --- Who shared it --------------------------------------------------------- */
@@ -236,7 +254,7 @@
   color: var(--c-ink);
 }
 
-/* --- The owner's note: their own words, set as a quotation ---------------- */
+/* --- The collection's line: one sentence in the owner's voice -------------- */
 
 .sc-note {
   display: -webkit-box;
@@ -253,15 +271,6 @@
   color: var(--c-ink);
   overflow-wrap: break-word;
   text-wrap: balance;
-  quotes: "“" "”";
-}
-
-.sc-note::before { content: open-quote; }
-.sc-note::after { content: close-quote; }
-
-:lang(ru) .sc-note,
-:lang(uz) .sc-note {
-  quotes: "«" "»";
 }
 
 /* --- The posters ----------------------------------------------------------- */

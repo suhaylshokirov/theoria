@@ -6,7 +6,7 @@ from django.conf import settings
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme, urlencode
-from django.utils.translation import gettext, gettext_lazy as _
+from django.utils.translation import gettext, gettext_lazy as _, pgettext
 from django.templatetags.static import static
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -375,6 +375,17 @@ CARD_SLOTS = {
 CARD_SHEET_COLUMNS = {"story": 2, "wide": 4}
 
 
+def _card_lines():
+    """Stored kind -> the card's one line, in the owner's voice. The card
+    carries no note of the owner's own (a product call, 2026-10-16): every
+    card of a kind says the same thing, so it always reads right."""
+    return {
+        Collection.TOP: pgettext("share card", "My best, in order."),
+        Collection.LIKED: pgettext("share card", "Good taste, documented."),
+        Collection.WATCH_LATER: pgettext("share card", "Next on my list."),
+    }
+
+
 def _card_frame(row, number):
     """One title as the card draws it: plain values, so the template never
     reaches back into a model. The title and year only show on a title plate,
@@ -424,7 +435,7 @@ def shared_card(request, token):
         "width": width,
         "height": height,
         "heading": heading,
-        "note": collection.share_note,
+        "line": _card_lines()[kind],
         "owner_name": owner.username,
         "owner_since": owner.date_joined,
         "frames": frames,

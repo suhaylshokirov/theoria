@@ -497,7 +497,9 @@ def test_card_falls_back_to_story_ink_and_prints_the_link(owner):
         html = _card(collection.share_token, format="poster", theme="neon").content.decode()
     assert 'data-format="story" data-theme="ink"' in html
     assert f"testserver/s/{collection.share_token}<" in html      # no scheme, no slash
-    assert "Five I&#x27;d stake my taste on." in html
+    # The card carries its collection's line, never the owner's own note.
+    assert "My best, in order." in html
+    assert "stake my taste" not in html
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])

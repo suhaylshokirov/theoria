@@ -3,7 +3,7 @@
    Context comes from core.views.shared_card.
 
    Four things and nothing else: who shared it (disc, handle, member since),
-   the posters, the owner's note, and the link back. A small header says what
+   the posters, the collection's one line, and the link back. A small header says what
    it is: the wordmark and the collection's name. The posters lead; the
    card is for looking at, not for reading numbers off. Top keeps its rank
    numerals, because the order is the point of that list.
@@ -22,7 +22,15 @@
             </svg>
             <span class="sc-brand__name">Theoria</span>
         </span>
-        <h1 class="sc-kind">{{ heading }}</h1>
+{% comment %} The collection's own icon, as /me draws it: a filled glyph in
+           the collection's colour on a dark tile. Inline paths, not a CSS
+           mask, so the image capture can't drop it. {% endcomment %}
+        <span class="sc-kind">
+            <span class="sc-kind__icon" aria-hidden="true">
+                <svg viewBox="0 -960 960 960" focusable="false">{% if kind == "top" %}<path d="m233-120 65-281L80-590l288-25 112-265 112 265 288 25-218 189 65 281-247-149-247 149Z"/>{% elif kind == "liked" %}<path d="M720-120H320v-520l280-280 50 50q7 7 11.5 19t4.5 23v14l-44 174h218q32 0 56 24t24 56v80q0 7-1.5 15t-4.5 15L794-168q-9 20-30 34t-44 14ZM240-640v520H80v-520h160Z"/>{% else %}<path d="M200-120v-640q0-33 23.5-56.5T280-840h400q33 0 56.5 23.5T760-760v640L480-240 200-120Z"/>{% endif %}</svg>
+            </span>
+            <h1 class="sc-kind__name">{{ heading }}</h1>
+        </span>
     </header>
 
     <div class="sc-owner">
@@ -33,7 +41,7 @@
         </span>
     </div>
 
-    {% if note %}<blockquote class="sc-note">{{ note }}</blockquote>{% endif %}
+    <p class="sc-note">{{ line }}</p>
 
     <div class="sc-shelf">
         {% if format == "story" %}
