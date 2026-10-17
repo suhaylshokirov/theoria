@@ -23,7 +23,6 @@
             <span class="account-section__icon account-section__icon--{{ slug }}" aria-hidden="true"></span>
             <div class="account-section__name">
                 <h2 class="display" id="account-section-{{ slug }}-title">{{ label }}</h2>
-                <span class="label account-section__count">{% blocktranslate trimmed count counter=section.count %}<span class="mono">{{ counter }}</span> movie{% plural %}<span class="mono">{{ counter }}</span> movies{% endblocktranslate %}</span>
                 {% if section.ranked and section.count > 1 %}
                 {% comment %} How Top is reordered, said once for the shelf
                    rather than drawn on every card. Pointer wording per input:

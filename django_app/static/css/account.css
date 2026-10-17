@@ -270,15 +270,6 @@
   --icon-colour: var(--mark-top);
 }
 
-.account-section__count {
-  letter-spacing: 0.18em;
-}
-
-.account-section__count .mono {
-  color: var(--ink);
-  letter-spacing: 0;
-}
-
 /* --- Grid ------------------------------------------------------------------ */
 
 /* One row, never a wrapped second one: a swipeable shelf below 1024px (the
