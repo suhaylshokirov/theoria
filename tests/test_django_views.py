@@ -756,6 +756,83 @@ def _browse_hydration_mocks(movie_mgr, series_mgr, movies=None, series=None):
     return movie_qs, series_qs
 
 
+BROWSE_GENRE_ROWS = {
+    "movie": [(28, "Action"), (878, "Science Fiction")],
+    "series": [(10759, "Action & Adventure"), (18, "Drama"), (878, "Science Fiction")],
+}
+
+
+@pytest.fixture(autouse=True)
+def _browse_genre_rows(request):
+    """browse() offers the genres of both catalogs; keep that read off the
+    warehouse. Only for the browse tests -- the list pages' tests stub their own."""
+    if "browse" not in request.node.name:
+        yield
+        return
+    with patch("movies.views.cached_reads.genre_rows", side_effect=lambda kind: BROWSE_GENRE_ROWS[kind]):
+        yield
+
+
+def test_browse_genre_choices_are_the_union_of_both_catalogs():
+    with patch("movies.views._browse_rows", return_value=[]), patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr)
+        response = client.get("/browse/")
+
+    slugs = [slug for slug, _ in response.context["genre_choices"]]
+    assert slugs == ["action", "action-adventure", "drama", "science-fiction"]
+    assert 'name="genre"' in response.content.decode()
+
+
+def test_browse_genre_applies_to_both_catalogs():
+    with patch("movies.views._browse_rows", return_value=[]) as rows_mock, patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr)
+        response = client.get("/browse/", {"genre": "science-fiction"})
+
+    rows_mock.assert_called_once_with("", "newest", {"movie": 878, "series": 878})
+    assert response.context["genre"] == "science-fiction"
+    assert "genre=science-fiction" in response.context["base_query"]
+
+
+def test_browse_genre_only_one_catalog_has_leaves_the_other_empty():
+    with patch("movies.views._browse_rows", return_value=[]) as rows_mock, patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr)
+        client.get("/browse/", {"genre": "drama"})
+
+    rows_mock.assert_called_once_with("", "newest", {"movie": None, "series": 18})
+
+
+def test_browse_unknown_genre_falls_back_to_unfiltered():
+    with patch("movies.views._browse_rows", return_value=[]) as rows_mock, patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr)
+        response = client.get("/browse/", {"genre": "nope"})
+
+    assert response.context["genre"] == ""
+    rows_mock.assert_called_once_with("", "newest", None)
+
+
+def test_browse_rows_filter_each_side_by_its_own_genre_and_empty_a_side_without_it():
+    from movies.views import _browse_rows
+
+    def sql(genre_ids):
+        # Compiled for the warehouse alias the querysets are routed to.
+        queryset = _browse_rows("", "newest", genre_ids)
+        return str(queryset.query.get_compiler("warehouse").as_sql())
+
+    both = sql({"movie": 878, "series": 10759})
+    assert "878" in both and "10759" in both and "bridge_series_genre" in both
+
+    series_only = sql({"movie": None, "series": 18})
+    assert "dim_movie" not in series_only and "bridge_series_genre" in series_only
+
+
 def test_browse_returns_200_with_context_keys():
     movie = _movie(movie_id=1, title="Browse Movie")
     show = _series(series_id=1, name="Browse Show")
@@ -772,7 +849,7 @@ def test_browse_returns_200_with_context_keys():
         response = client.get("/browse/")
 
     assert response.status_code == 200
-    rows_mock.assert_called_once_with("", "newest")
+    rows_mock.assert_called_once_with("", "newest", None)
     page_items = list(response.context["page_obj"])
     assert movie in page_items
     assert show in page_items
@@ -791,7 +868,7 @@ def test_browse_invalid_sort_falls_back_to_newest():
 
     assert response.status_code == 200
     assert response.context["sort"] == "newest"
-    rows_mock.assert_called_once_with("", "newest")
+    rows_mock.assert_called_once_with("", "newest", None)
 
 
 def test_browse_search_passes_q_through():
@@ -804,7 +881,7 @@ def test_browse_search_passes_q_through():
 
     assert response.status_code == 200
     assert response.context["q"] == "robot"
-    rows_mock.assert_called_once_with("robot", "newest")
+    rows_mock.assert_called_once_with("robot", "newest", None)
 
 
 def test_browse_ajax_request_renders_results_fragment_only():

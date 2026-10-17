@@ -2049,10 +2049,11 @@ msgstr "Koʻrib chiqish"
 
 #: movies/templates/movies/browse.html:11
 msgid ""
-"Every movie and TV show in one place. Search by name or change the order."
+"Every movie and TV show in one place. Search by name, narrow by genre, or "
+"change the order."
 msgstr ""
-"Barcha film va seriallar bir joyda. Nomi boʻyicha qidiring yoki tartibni "
-"oʻzgartiring."
+"Barcha film va seriallar bir joyda. Nomi boʻyicha qidiring, janr boʻyicha "
+"saralang yoki tartibni oʻzgartiring."
 
 #: movies/templates/movies/browse.html:25
 msgid "Search movies and shows"

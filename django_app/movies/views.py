@@ -295,8 +295,35 @@ BROWSE_SORTS = {
 }
 
 
-def _browse_rows(q, sort):
+def _browse_genres():
+    """The genre facet for /browse/: `(choices, ids_by_slug)`.
+
+    /movies/ and /tv/ each offer their own genre list, and the two overlap but
+    do not match (TMDB's TV list has "Sci-Fi & Fantasy" where movies have
+    "Science Fiction"). Browse is the whole catalog, so it offers the union:
+    one choice per slug, and `ids_by_slug[slug]` says which genre_id each side
+    means by it -- `{"movie": id or None, "series": id or None}`. A side
+    without that genre contributes nothing when the slug is picked.
+    """
+    labels = genre_labels()
+    ids_by_slug, names = {}, {}
+    for kind in ("movie", "series"):
+        for genre_id, name in cached_reads.genre_rows(kind):
+            slug = slugify(name)
+            ids_by_slug.setdefault(slug, {"movie": None, "series": None})[kind] = genre_id
+            names.setdefault(slug, name)
+    choices = [(slug, labels.get(name, name)) for slug, name in names.items()]
+    choices.sort(key=lambda choice: choice[1].lower())
+    return choices, ids_by_slug
+
+
+def _browse_rows(q, sort, genre_ids=None):
     """Every movie and show as one paginatable, database-ordered feed.
+
+    `genre_ids` is one entry of `_browse_genres()`'s `ids_by_slug` (None = no
+    genre filter). A side whose id is None is emptied rather than left
+    unfiltered, so picking a genre only one catalog has never leaks the other
+    catalog's whole list.
 
     cartoon_list() below merges Movie + Series the same conceptual way, but
     by loading every row into Python and sorting there — fine for a ~2,000
@@ -318,6 +345,15 @@ def _browse_rows(q, sort):
     movies = localize_movies(Movie.objects.using("warehouse").all())
     if q:
         movies = filter_by_title(movies, q)
+    if genre_ids is not None:
+        if genre_ids["movie"] is None:
+            movies = movies.none()
+        else:
+            # A subquery, not movies.filter(moviemetrics__genre_id=...): the
+            # join repeats a film once per (date, genre) row, and the union
+            # below cannot take .distinct() the way movie_list() does.
+            movies = movies.filter(movie_id__in=MovieMetrics.objects.using("warehouse")
+                                   .filter(genre_id=genre_ids["movie"]).values("movie_id"))
     # A translated title sorts under its translated spelling, so each side of
     # the union reads its translated column (title_i18n / name_i18n) on a
     # translated request, and the English one otherwise.
@@ -335,6 +371,11 @@ def _browse_rows(q, sort):
     series = localize_series(Series.objects.using("warehouse").all())
     if q:
         series = filter_by_series_name(series, q)
+    if genre_ids is not None:
+        if genre_ids["series"] is None:
+            series = series.none()
+        else:
+            series = series.filter(series_genres__genre_id=genre_ids["series"])
     series = series.annotate(
         kind=Value("series", output_field=CharField()),
         item_id=F("series_id"),
@@ -348,16 +389,24 @@ def _browse_rows(q, sort):
 
 
 def browse(request):
-    """Every movie and show in one place: search, sort, pagination — the
-    reader-facing merge of /movies/ and /tv/ (see _browse_rows()'s docstring
-    for why this can't be cartoon_list()'s Python-sort shape at this size).
+    """Every movie and show in one place: search, genre, sort, pagination —
+    the reader-facing merge of /movies/ and /tv/ (see _browse_rows()'s
+    docstring for why this can't be cartoon_list()'s Python-sort shape at
+    this size). The genre filter takes the same ?genre= slug as those pages
+    and applies it to both catalogs.
     """
     q = request.GET.get("q", "").strip()
     sort = request.GET.get("sort", "newest")
     if sort not in BROWSE_SORTS:
         sort = "newest"
 
-    rows = _browse_rows(q, sort)
+    genre_choices, genre_ids_by_slug = _browse_genres()
+    genre = request.GET.get("genre", "").strip()
+    if genre not in genre_ids_by_slug:
+        # Unknown slug: unfiltered, like movie_list()/series_list().
+        genre = ""
+
+    rows = _browse_rows(q, sort, genre_ids_by_slug[genre] if genre else None)
     page_obj = Paginator(rows, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
     # Only this page's ~24 rows are hydrated into real Movie/Series objects —
@@ -397,7 +446,9 @@ def browse(request):
 
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
-        "base_query": urlencode({"q": q, "sort": sort}),
+        "genre": genre,
+        "genre_choices": genre_choices,
+        "base_query": urlencode({"q": q, "sort": sort, "genre": genre}),
     }
     if _is_ajax(request):
         return render(request, "movies/_browse_results.html", context)

@@ -2066,9 +2066,11 @@ msgstr "Обзор"
 
 #: movies/templates/movies/browse.html:11
 msgid ""
-"Every movie and TV show in one place. Search by name or change the order."
+"Every movie and TV show in one place. Search by name, narrow by genre, or "
+"change the order."
 msgstr ""
-"Все фильмы и сериалы в одном месте. Ищите по названию или меняйте порядок."
+"Все фильмы и сериалы в одном месте. Ищите по названию, выбирайте жанр или "
+"меняйте порядок."
 
 #: movies/templates/movies/browse.html:25
 msgid "Search movies and shows"
