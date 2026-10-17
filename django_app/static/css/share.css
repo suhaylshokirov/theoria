@@ -263,6 +263,16 @@
   margin-top: var(--space-5);
 }
 
+/* The label is centred by the box, not by padding: min-height (below, on touch
+   and TV) stretches an <a class="btn"> and would leave the text riding high. */
+.share-cta .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  text-align: center;
+}
+
 .share-cta__login {
   display: inline-flex;
   align-items: center;
