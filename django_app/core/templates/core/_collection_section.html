@@ -12,12 +12,12 @@
    partial only lays the collection's own controls (type badge, remove, Top's
    rank and reorder arrows) over and under them.
 
-   Shelf head: title left, Share and (when there is more than one page) the
-   pager right, on one ruled row. A shelf that fits on one page gets no
-   pager at all; `is-paged` is what gives the section its two-column head. {% endcomment %}
+   Shelf head: title left, Share right, on one ruled row. The pager (only
+   when there is more than one page) closes the shelf at the bottom, after
+   the posters in reading order too. {% endcomment %}
 {% load i18n l10n %}
 {% with slug=section.slug label=section.label page_obj=section.page_obj %}
-<section class="account-section{% if section.count and page_obj.has_other_pages %} is-paged{% endif %}" id="{{ slug }}" aria-labelledby="account-section-{{ slug }}-title" data-account-section="{{ slug }}">
+<section class="account-section" id="{{ slug }}" aria-labelledby="account-section-{{ slug }}-title" data-account-section="{{ slug }}">
     <div class="account-section__head">
         <div class="account-section__title">
             <span class="account-section__icon account-section__icon--{{ slug }}" aria-hidden="true"></span>
@@ -65,10 +65,6 @@
         </button>
         {% endif %}
     </div>
-
-    {% if section.count and page_obj.has_other_pages %}
-    {% include "core/_account_pager.html" with section=section only %}
-    {% endif %}
 
     {% if section.count %}
     <details class="account-share-plain">
@@ -192,5 +188,8 @@
     </div>
     {% endif %}
 
+    {% if section.count and page_obj.has_other_pages %}
+    {% include "core/_account_pager.html" with section=section only %}
+    {% endif %}
 </section>
 {% endwith %}
