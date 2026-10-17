@@ -474,19 +474,36 @@
   color: var(--lime);
 }
 
-/* Top's reorder rail, under the card and always visible: reordering a
-   ranked list isn't a hover affordance, it's part of reading one. One
-   hairline strip per card -- a step left (a rank higher) and right at the
-   ends, the drag grip filling the middle -- so it reads as a single "this
-   has a place in the order" control rather than two loose buttons. */
+/* The rank figure doubles as the keyboard handle for reordering (a
+   button once Top has two titles). It keeps the figure's look exactly; only
+   keyboard focus shows on it, as a ring around the number. Pointers pass
+   through it -- the frame is pointer-events: none -- to the poster below. */
+button.account-card__rank {
+  padding: 0 0.04em;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+}
+
+button.account-card__rank:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 2px;
+}
+
+/* No-JS fallback: Top's step arrows under each card -- left is a rank
+   higher, the way the shelf reads. With JS the posters are dragged instead
+   and this row is never drawn. */
 .account-card__moves {
   display: flex;
-  align-items: stretch;
+  justify-content: space-between;
   height: 36px;
   margin-top: var(--space-3);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius-pill);
-  transition: border-color var(--dur-fast) var(--ease);
+}
+
+html.has-js .account-card__moves {
+  display: none;
 }
 
 .account-card__moves form {
@@ -504,7 +521,6 @@
   color: var(--ink);
   border: 0;
   border-radius: var(--radius-pill);
-  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
 
 .account-card__move svg {
@@ -522,44 +538,47 @@
   cursor: default;
 }
 
-/* The grip: six dots laid out the way the shelf moves, wide not tall.
-   touch-action: none so a finger on it drags the card instead of
-   scrolling the shelf -- everywhere else on the shelf still scrolls. */
-.account-card__grip {
-  flex: 1;
-  display: flex;
+/* "Drag posters to reorder", once per shelf beside the count instead of a
+   control on every card. A mouse drags; a finger holds first -- so each
+   input gets its own wording. Nothing to say without JS (the arrows are
+   there then). */
+.account-section__hint {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border-inline: 1px solid var(--rule);
-  color: var(--ink-muted);
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--ink-faint);
+}
+
+.account-section__hint svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.account-section__hint-coarse,
+html:not(.has-js) .account-section__hint {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .account-section__hint-fine {
+    display: none;
+  }
+
+  .account-section__hint-coarse {
+    display: inline;
+  }
+}
+
+/* A held poster is the start of a drag, so the browser's own long-press
+   (link preview, image menu, text selection) stays out of it. */
+[data-account-reorder] .account-card .poster-card,
+[data-account-reorder] .account-card .poster-card * {
+  -webkit-touch-callout: none;
   -webkit-user-select: none;
-  transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
-}
-
-.account-card__grip svg {
-  width: 20px;
-  height: 10px;
-}
-
-/* No script, no drag: the grip keeps its room so the arrows stay at the
-   rail's ends, but shows nothing to grab. */
-html:not(.has-js) .account-card__grip svg {
-  visibility: hidden;
-}
-
-html:not(.has-js) .account-card__grip {
-  cursor: default;
-}
-
-.account-card:hover .account-card__moves {
-  border-color: var(--ink-faint);
-}
-
-.account-card__grip:hover {
-  color: var(--ink);
+  user-select: none;
 }
 
 /* --- Dragging (theoria.js, Top only) ----------------------------------------
@@ -613,13 +632,23 @@ html:not(.has-js) .account-card__grip {
               0 32px 56px -16px rgba(0, 0, 0, 0.5);
 }
 
-.account-card.is-lifted .account-card__moves {
-  border-color: var(--lime-mark);
+/* Carried by keyboard: the card itself steps along the row, raised a
+   little and outlined, its rank figure counting as it goes. */
+.account-card.is-carried {
+  z-index: 2;
 }
 
-.account-card.is-lifted .account-card__grip {
-  color: var(--lime-text);
-  cursor: grabbing;
+.account-card.is-carried .poster-card {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
+  border-radius: var(--radius);
+  box-shadow: 0 24px 40px -16px rgba(0, 0, 0, 0.5);
+  transform: translateY(-6px);
+  transition: transform var(--dur) var(--ease);
+}
+
+.account-card.is-carried .account-card__frame {
+  transform: translateY(-6px);
 }
 
 /* The lifted card lands: back to flat, at the hole's spot. */

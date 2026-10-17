@@ -24,6 +24,19 @@
             <div class="account-section__name">
                 <h2 class="display" id="account-section-{{ slug }}-title">{{ label }}</h2>
                 <span class="label account-section__count">{% blocktranslate trimmed count counter=section.count %}<span class="mono">{{ counter }}</span> movie{% plural %}<span class="mono">{{ counter }}</span> movies{% endblocktranslate %}</span>
+                {% if section.ranked and section.count > 1 %}
+                {% comment %} How Top is reordered, said once for the shelf
+                   rather than drawn on every card. Pointer wording per input:
+                   a mouse drags, a finger holds first (account.css swaps
+                   them). The keyboard version is the rank buttons'
+                   description. {% endcomment %}
+                <span class="account-section__hint">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 7-4 5 4 5M16 7l4 5-4 5M4 12h16"/></svg>
+                    <span class="account-section__hint-fine">{% translate "Drag posters to reorder" %}</span>
+                    <span class="account-section__hint-coarse">{% translate "Hold a poster, then drag" %}</span>
+                </span>
+                <span class="visually-hidden" id="top-reorder-help">{% translate "Press Space to pick it up, the arrow keys to move it, Space to drop it, Escape to cancel." %}</span>
+                {% endif %}
             </div>
         </div>
 
@@ -109,21 +122,26 @@
                         </svg>
                     </button>
                 </form>
-                {% if section.ranked %}
+                {% comment %} The rank figure. With more than one title it is
+                   also the keyboard handle for reordering (theoria.js):
+                   Space picks the card up, arrows carry it, Space drops it.
+                   Pointers never hit it -- the frame lets them through to the
+                   poster, which is what a mouse or finger drags. {% endcomment %}
+                {% if section.ranked and section.count > 1 %}
+                <button type="button" class="account-card__rank" data-account-rank aria-describedby="top-reorder-help" aria-label="{% blocktranslate trimmed with title=title rank=rank %}Reorder {{ title }}, rank {{ rank }}{% endblocktranslate %}">{{ rank|stringformat:"02d" }}</button>
+                {% elif section.ranked %}
                 <span class="account-card__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>
                 {% endif %}
             </div>
 
-            {% comment %} Top's reorder rail. The shelf runs left to right in
-               rank order, so the arrows point that way: left is a rank
-               higher. The grip between them is the drag handle (theoria.js;
-               a mouse can also lift the poster itself). The arrows stay as
-               the one-tap and keyboard way to do the same thing, and are the
-               whole control without JS. {% endcomment %}
+            {% comment %} No-JS fallback only: step arrows (left is a rank
+               higher, the way the shelf reads). With JS, Top is reordered
+               by dragging the posters and these are never shown
+               (account.css, html.has-js). {% endcomment %}
             {% if section.ranked and section.count > 1 %}
             {% with higher=rank|add:"-1" lower=rank|add:"1" %}
             <div class="account-card__moves">
-                <form method="post" action="{% url 'account:move_item' section.kind item.id 'up' %}" data-account-move="up">
+                <form method="post" action="{% url 'account:move_item' section.kind item.id 'up' %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ section.self_url }}">
                     {% if rank == 1 %}
@@ -134,10 +152,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
                     </button>
                 </form>
-                <span class="account-card__grip" data-account-grip aria-hidden="true">
-                    <svg viewBox="0 0 20 10" fill="currentColor"><circle cx="4" cy="2.5" r="1.5"/><circle cx="10" cy="2.5" r="1.5"/><circle cx="16" cy="2.5" r="1.5"/><circle cx="4" cy="7.5" r="1.5"/><circle cx="10" cy="7.5" r="1.5"/><circle cx="16" cy="7.5" r="1.5"/></svg>
-                </span>
-                <form method="post" action="{% url 'account:move_item' section.kind item.id 'down' %}" data-account-move="down">
+                <form method="post" action="{% url 'account:move_item' section.kind item.id 'down' %}">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ section.self_url }}">
                     {% if rank == section.count %}

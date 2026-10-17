@@ -1953,19 +1953,29 @@
     });
 
     /* --- Top: reordering ---------------------------------------------------
-       Two ways in, one way out. The rail's arrows (plain forms, which work
-       with JS off) step a card one rank; the grip between them -- or, with a
-       mouse, the poster itself -- lifts the card to carry it anywhere along
-       the row, or onto the pager's arrows to drop it over the page edge.
-       Either way the change is posted, then the section is re-fetched like
-       any other, and a move that crosses a page edge follows the card there. */
+       Top is reordered by moving the posters themselves -- no buttons.
+         Mouse:    press a poster and drag (a press that doesn't travel is
+                   still a click through to the movie).
+         Touch:    hold a poster for a beat, then drag. A finger that moves
+                   straight away is scrolling the shelf, and a tap is a tap.
+         Keyboard: the rank figure is a button. Space picks the card up, the
+                   arrow keys carry it, Space drops it, Escape puts it back.
+       A carried card can go anywhere along the row, or onto the pager's
+       arrows to cross the page edge. The drop is posted, then the section is
+       re-fetched like any other, following the card if it changed page.
+       Without JS the old step arrows are still in the markup and are the
+       whole control; with JS they are never shown. */
     var status = document.querySelector("[data-account-status]");
     var reordering = false; // a drop is saving; the next lift waits for it
 
-    function announce(title, rank) {
+    function say(text) {
       if (!status) return;
       status.textContent = "";
-      status.textContent = t("Moved {title} to rank {rank}", { title: title, rank: rank });
+      status.textContent = text;
+    }
+
+    function announceMoved(title, rank) {
+      say(t("Moved {title} to rank {rank}", { title: title, rank: rank }));
     }
 
     function pageNumber(slug) {
@@ -1993,11 +2003,13 @@
     }
 
     // After a move: re-fetch the page the card is now on and let its rank
-    // figure settle, so the eye finds where it went.
-    function settle(slug, page, itemId, focusSelectors, pointer) {
-      load(slug, pageHref(slug, page), focusSelectors, {
+    // figure settle, so the eye finds where it went. A keyboard move hands
+    // focus back to the same card's rank button.
+    function settle(slug, page, itemId, keyboard) {
+      var mine = '[data-item-id="' + itemId + '"] [data-account-rank]';
+      load(slug, pageHref(slug, page), keyboard ? [mine] : null, {
         quiet: true,
-        noFocus: pointer,
+        noFocus: !keyboard,
         done: function (fresh) {
           reordering = false;
           var card = fresh && fresh.querySelector('[data-item-id="' + itemId + '"]');
@@ -2012,46 +2024,6 @@
       });
     }
 
-    document.addEventListener("submit", function (event) {
-      var form = event.target;
-      if (!form.matches("form[data-account-move]")) return;
-      var card = form.closest("[data-item-id]");
-      var grid = card && card.parentElement;
-      var slug = slugOf(form);
-      if (!grid || !slug || reordering) return;
-      event.preventDefault();
-      reordering = true;
-
-      var up = form.getAttribute("data-account-move") === "up";
-      var cards = shelfCards(grid);
-      var page = pageNumber(slug);
-      if (up && card === cards[0] && grid.hasAttribute("data-prev-anchor")) page -= 1;
-      if (!up && card === cards[cards.length - 1] && grid.hasAttribute("data-next-anchor")) page += 1;
-      var itemId = card.getAttribute("data-item-id");
-      var rank = parseInt(card.getAttribute("data-rank"), 10) + (up ? -1 : 1);
-
-      postForm(form.getAttribute("action"), new FormData(form))
-        .then(function () {
-          announce(card.getAttribute("data-title"), rank);
-          var mine = '[data-item-id="' + itemId + '"] ';
-          settle(slug, page, itemId, [
-            mine + '[data-account-move="' + (up ? "up" : "down") + '"] button:not(:disabled)',
-            mine + ".account-card__move:not(:disabled)",
-          ], false);
-        })
-        .catch(function () {
-          reordering = false;
-          form.submit();
-        });
-    });
-
-    // Carrying a card. Slots are the row's columns, measured once at lift
-    // in the shelf's own scroll coordinates: they never move while a card
-    // is carried, only which card sits in which, so the hole's place comes
-    // from the nearest slot rather than from neighbours mid-slide.
-    var drag = null;
-    var LIFT_AFTER = 4; // px of travel before a press becomes a drag
-
     function pad(n) {
       return n < 10 ? "0" + n : String(n);
     }
@@ -2060,21 +2032,31 @@
       return grid.getBoundingClientRect().left - grid.scrollLeft;
     }
 
+    // One carried card at a time. `mode` is "pointer" (a lifted copy
+    // follows the pointer over a dashed hole) or "key" (the card itself
+    // steps along the row).
+    var drag = null;
+    var LIFT_AFTER = 4;  // mouse: px of travel before a press becomes a drag
+    var HOLD_MS = 280;   // touch: how long a still finger waits for the lift
+    var HOLD_SLOP = 8;   // touch: px a finger may drift and still count as still
+
     function renumber() {
       shelfCards(drag.grid).forEach(function (li, i) {
         var figure = li.querySelector(".account-card__rank");
         if (figure) figure.textContent = pad(drag.firstRank + i);
         if (li === drag.card) drag.rank = drag.firstRank + i;
       });
-      var lifted = drag.ghost.querySelector(".account-card__rank");
-      if (lifted) lifted.textContent = pad(drag.rank);
+      if (drag.ghost) {
+        var lifted = drag.ghost.querySelector(".account-card__rank");
+        if (lifted) lifted.textContent = pad(drag.over ? drag.over.rank : drag.rank);
+      }
     }
 
-    // Puts the hole at `index` by moving its neighbours around it -- the
-    // hole itself is never detached, or the browser would drop the pointer
-    // capture on the press that is carrying it -- and slides each moved
-    // neighbour from where it was drawn to its new slot.
-    function moveHole(index) {
+    // Puts the carried card at `index` by moving its neighbours around it --
+    // the card itself is never detached, or the browser would drop the
+    // pointer capture (or the keyboard focus) it is holding -- and slides
+    // everything that moved from where it was drawn to its new place.
+    function moveTo(index) {
       var cards = shelfCards(drag.grid);
       var from = cards.indexOf(drag.card);
       if (index === from) return;
@@ -2088,7 +2070,7 @@
       }
       if (!reduce) {
         cards.forEach(function (li, i) {
-          if (li === drag.card) return;
+          if (li === drag.card && drag.ghost) return; // the hole: nothing to see
           li.style.transition = "none";
           li.style.transform = "";
           var dx = before[i] - li.getBoundingClientRect().left;
@@ -2103,15 +2085,19 @@
     }
 
     function setOver(target) {
+      if (target === drag.over) return;
       drag.targets.forEach(function (tgt) {
         tgt.el.classList.toggle("is-drop-over", tgt === target);
       });
       drag.over = target;
-      drag.ghost.classList.toggle("is-over-target", !!target);
-      var lifted = drag.ghost.querySelector(".account-card__rank");
-      if (lifted) lifted.textContent = pad(target ? target.rank : drag.rank);
+      if (drag.ghost) drag.ghost.classList.toggle("is-over-target", !!target);
+      renumber();
     }
 
+    // Pointer: the hole goes to the column nearest the lifted copy's centre.
+    // Columns are measured once, at lift, in the shelf's own scroll
+    // coordinates -- they never move during a drag, only which card sits in
+    // which -- so the answer doesn't jitter while neighbours are mid-slide.
     function track() {
       var ghostLeft = drag.x - drag.offsetX;
       drag.ghost.style.left = ghostLeft + "px";
@@ -2130,13 +2116,13 @@
       drag.slots.forEach(function (slot, i) {
         if (Math.abs(slot - center) < Math.abs(drag.slots[nearest] - center)) nearest = i;
       });
-      moveHole(nearest);
+      moveTo(nearest);
     }
 
     // A phone's shelf is wider than the screen: hold a card near either
     // end and the shelf scrolls under it.
     function autoScroll() {
-      if (!drag) return;
+      if (!drag || !drag.ghost) return;
       var grid = drag.grid;
       if (grid.scrollWidth > grid.clientWidth) {
         var r = grid.getBoundingClientRect();
@@ -2152,6 +2138,8 @@
       drag.frame = requestAnimationFrame(autoScroll);
     }
 
+    // The pager's arrows as drop targets, each printing the rank the card
+    // would take over that page edge: one above this page, one below it.
     function pagerTargets(section, grid, cards) {
       var targets = [];
       var first = parseInt(cards[0].getAttribute("data-rank"), 10);
@@ -2171,20 +2159,40 @@
       return targets;
     }
 
-    function lift() {
+    // What every carry starts from, whichever way it was picked up.
+    function begin(card, mode) {
+      var grid = card.parentElement;
+      var section = grid.closest("[data-account-section]");
+      var cards = shelfCards(grid);
+      drag = {
+        mode: mode,
+        card: card,
+        grid: grid,
+        section: section,
+        slug: section.getAttribute("data-account-section"),
+        from: cards.indexOf(card),
+        firstRank: parseInt(cards[0].getAttribute("data-rank"), 10),
+        rank: parseInt(card.getAttribute("data-rank"), 10),
+        targets: [],
+        over: null,
+        ghost: null,
+        lifted: false,
+      };
+      return drag;
+    }
+
+    function liftPointer() {
       var card = drag.card;
       var grid = drag.grid;
       var cards = shelfCards(grid);
       var rect = card.getBoundingClientRect();
       var left = gridLeft(grid);
 
+      clearTimeout(drag.hold);
       drag.lifted = true;
       drag.width = rect.width;
       drag.offsetX = drag.startX - rect.left;
       drag.offsetY = drag.startY - rect.top;
-      drag.from = cards.indexOf(card);
-      drag.firstRank = parseInt(cards[0].getAttribute("data-rank"), 10);
-      drag.rank = parseInt(card.getAttribute("data-rank"), 10);
       drag.slots = cards.map(function (li) {
         var r = li.getBoundingClientRect();
         return r.left - left + r.width / 2;
@@ -2205,6 +2213,8 @@
       ghost.getBoundingClientRect(); // start flat, then tilt up off the row
       ghost.classList.add("is-up");
       if (window.getSelection) window.getSelection().removeAllRanges();
+      // A held finger gets a tick on phones that have one: "you've got it".
+      if (drag.pointerType !== "mouse" && navigator.vibrate) navigator.vibrate(8);
 
       card.classList.add("is-hole");
       grid.classList.add("is-reordering");
@@ -2213,37 +2223,39 @@
       drag.frame = requestAnimationFrame(autoScroll);
     }
 
-    function clearDrag() {
-      cancelAnimationFrame(drag.frame);
-      drag.targets.forEach(function (tgt) {
+    function liftKey() {
+      drag.lifted = true;
+      drag.card.classList.add("is-carried");
+      drag.grid.classList.add("is-reordering");
+      drag.targets = pagerTargets(drag.section, drag.grid, shelfCards(drag.grid));
+    }
+
+    function clearDrag(d) {
+      cancelAnimationFrame(d.frame);
+      clearTimeout(d.hold);
+      d.targets.forEach(function (tgt) {
         tgt.el.classList.remove("is-drop-target", "is-drop-over");
         tgt.figure.remove();
       });
-      shelfCards(drag.grid).forEach(function (li) {
+      shelfCards(d.grid).forEach(function (li) {
         li.style.transition = "";
         li.style.transform = "";
       });
-      drag.card.classList.remove("is-hole");
-      drag.grid.classList.remove("is-reordering");
+      d.card.classList.remove("is-hole", "is-carried");
+      d.grid.classList.remove("is-reordering");
       document.documentElement.classList.remove("is-dragging");
-      drag.ghost.remove();
+      if (d.ghost) d.ghost.remove();
+      if (drag === d) drag = null;
     }
 
-    // The lifted card settles into the hole, then everything is put back.
-    function land(then) {
-      var current = drag;
-      var ghost = current.ghost;
-      var finish = function () {
-        drag = current;
-        clearDrag();
-        drag = null;
-        if (then) then();
-      };
-      if (reduce || current.over) {
-        finish();
+    // The lifted copy settles into the hole, then everything is put back.
+    function land(d) {
+      var ghost = d.ghost;
+      if (!ghost || reduce || d.over) {
+        clearDrag(d);
         return;
       }
-      var r = current.card.getBoundingClientRect();
+      var r = d.card.getBoundingClientRect();
       ghost.classList.remove("is-up");
       ghost.classList.add("is-landing");
       ghost.style.left = r.left + "px";
@@ -2252,28 +2264,31 @@
       var once = function () {
         if (done) return;
         done = true;
-        finish();
+        clearDrag(d);
       };
       ghost.addEventListener("transitionend", once);
       setTimeout(once, 320);
     }
 
+    // Ends a carry: puts the card back (cancelled), or saves where it is.
     function drop(cancelled) {
       var d = drag;
+      var keyboard = d.mode === "key";
       var title = d.card.getAttribute("data-title");
-      var url = d.card.getAttribute("data-place-url");
       var itemId = d.card.getAttribute("data-item-id");
+
+      if (cancelled || (!d.over && shelfCards(d.grid).indexOf(d.card) === d.from)) {
+        if (!d.over) moveTo(d.from);
+        if (keyboard) say(t("{title}, rank {rank}", { title: title, rank: d.rank }));
+        land(d);
+        return;
+      }
+
       var csrf = d.card.querySelector("[name='csrfmiddlewaretoken']");
       var body = new FormData();
       if (csrf) body.append("csrfmiddlewaretoken", csrf.value);
-
       var page = pageNumber(d.slug);
       var rank = d.rank;
-      if (cancelled) {
-        if (!d.over) moveHole(d.from);
-        land(null);
-        return;
-      }
       if (d.over) {
         body.append(d.over.key, d.over.anchor);
         page += d.over.dir;
@@ -2282,30 +2297,27 @@
       } else {
         var cards = shelfCards(d.grid);
         var at = cards.indexOf(d.card);
-        if (at === d.from) {
-          land(null);
-          return;
-        }
         if (at < cards.length - 1) body.append("before", cards[at + 1].getAttribute("data-item-id"));
         else body.append("after", cards[at - 1].getAttribute("data-item-id"));
       }
 
       reordering = true;
-      var slug = d.slug;
-      land(null);
-      postForm(url, body)
+      land(d);
+      postForm(d.card.getAttribute("data-place-url"), body)
         .then(function () {
-          announce(title, rank);
-          settle(slug, page, itemId, null, true);
+          announceMoved(title, rank);
+          settle(d.slug, page, itemId, keyboard);
         })
         .catch(function () {
           // Nothing was saved: draw the shelf as the server has it.
-          settle(slug, pageNumber(slug), null, null, true);
+          settle(d.slug, pageNumber(d.slug), itemId, keyboard);
         });
     }
 
-    // A mouse drag that started on the poster ends in a click on its link;
-    // that click is the drop, not a visit.
+    // --- Pointer (mouse drags, touch holds then drags) ---
+
+    // The release that ends a carry would land as a click on the poster's
+    // link; that click is the drop, not a visit.
     function swallowClick() {
       var swallow = function (e) {
         e.preventDefault();
@@ -2317,13 +2329,30 @@
       }, 0);
     }
 
+    function stopListening() {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onEnd);
+      window.removeEventListener("pointercancel", onEnd);
+    }
+
     function onMove(event) {
       if (!drag || event.pointerId !== drag.pointerId) return;
       drag.x = event.clientX;
       drag.y = event.clientY;
       if (!drag.lifted) {
-        if (Math.abs(drag.x - drag.startX) < LIFT_AFTER && Math.abs(drag.y - drag.startY) < LIFT_AFTER) return;
-        lift();
+        var dx = Math.abs(drag.x - drag.startX);
+        var dy = Math.abs(drag.y - drag.startY);
+        if (drag.pointerType === "mouse") {
+          if (dx < LIFT_AFTER && dy < LIFT_AFTER) return;
+          liftPointer();
+        } else {
+          // Moved before the hold finished: that's a scroll, let it be.
+          if (dx > HOLD_SLOP || dy > HOLD_SLOP) {
+            stopListening();
+            clearDrag(drag);
+          }
+          return;
+        }
       }
       event.preventDefault();
       track();
@@ -2331,11 +2360,9 @@
 
     function onEnd(event) {
       if (!drag || event.pointerId !== drag.pointerId) return;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onEnd);
-      window.removeEventListener("pointercancel", onEnd);
+      stopListening();
       if (!drag.lifted) {
-        drag = null;
+        clearDrag(drag);
         return;
       }
       swallowClick();
@@ -2344,49 +2371,45 @@
 
     document.addEventListener("pointerdown", function (event) {
       if (drag || reordering || event.button !== 0) return;
-      var grip = event.target.closest && event.target.closest("[data-account-grip]");
-      var poster = !grip && event.pointerType === "mouse" &&
-        event.target.closest && event.target.closest(".account-card.is-ranked .poster-card");
-      var handle = grip || poster;
-      if (!handle) return;
-      var card = handle.closest("[data-item-id]");
+      var poster = event.target.closest && event.target.closest(".account-card.is-ranked .poster-card");
+      var card = poster && poster.closest("[data-item-id]");
       var grid = card && card.parentElement;
       if (!grid || !grid.hasAttribute("data-account-reorder")) return;
-      var section = grid.closest("[data-account-section]");
 
-      drag = {
-        card: card,
-        grid: grid,
-        section: section,
-        slug: section.getAttribute("data-account-section"),
-        pointerId: event.pointerId,
-        fromPoster: !!poster,
-        startX: event.clientX,
-        startY: event.clientY,
-        x: event.clientX,
-        y: event.clientY,
-        lifted: false,
-        targets: [],
-        over: null,
-      };
-      if (grip) event.preventDefault(); // no text selection, no scroll start
-      try {
-        handle.setPointerCapture(event.pointerId);
-      } catch (e) {}
+      var d = begin(card, "pointer");
+      d.pointerId = event.pointerId;
+      d.pointerType = event.pointerType;
+      d.startX = d.x = event.clientX;
+      d.startY = d.y = event.clientY;
+      if (event.pointerType !== "mouse") {
+        d.hold = setTimeout(function () {
+          if (drag === d && !d.lifted) liftPointer();
+        }, HOLD_MS);
+      }
+      // No setPointerCapture here: capturing on the poster's wrapper would
+      // retarget the release, so a plain click would never reach the link.
+      // Window listeners already follow a mouse anywhere, and a touch stays
+      // with the element it started on.
       window.addEventListener("pointermove", onMove, { passive: false });
       window.addEventListener("pointerup", onEnd);
       window.addEventListener("pointercancel", onEnd);
     });
 
-    // Escape puts a carried card back where it was picked up.
-    document.addEventListener("keydown", function (event) {
-      if (event.key !== "Escape" || !drag || !drag.lifted) return;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onEnd);
-      window.removeEventListener("pointercancel", onEnd);
-      // The button is still down: the release that follows is no click.
-      window.addEventListener("pointerup", swallowClick, { once: true });
-      drop(true);
+    // Once a held card has lifted, the finger moves the card, not the page.
+    // (Pointer events can't stop a scroll; only a non-passive touchmove
+    // can, and only before the scroll has begun -- which a still hold
+    // guarantees.)
+    document.addEventListener("touchmove", function (event) {
+      if (drag && drag.lifted && drag.mode === "pointer") event.preventDefault();
+    }, { passive: false });
+
+    // A long press on a link or image opens the browser's own menu; while a
+    // card is held, that press belongs to the drag.
+    document.addEventListener("contextmenu", function (event) {
+      if (drag && drag.mode === "pointer" && drag.pointerType !== "mouse" &&
+          event.target.closest && event.target.closest("[data-account-reorder]")) {
+        event.preventDefault();
+      }
     });
 
     // A poster is a link and an image: without this the browser starts its
@@ -2394,6 +2417,75 @@
     document.addEventListener("dragstart", function (event) {
       if (event.target.closest && event.target.closest("[data-account-reorder] .account-card")) {
         event.preventDefault();
+      }
+    });
+
+    // --- Keyboard (the rank figure is the handle) ---
+
+    document.addEventListener("keydown", function (event) {
+      var key = event.key;
+
+      // Escape puts a pointer-carried card back where it was picked up.
+      if (drag && drag.lifted && drag.mode === "pointer") {
+        if (key !== "Escape") return;
+        stopListening();
+        // The button is still down: the release that follows is no click.
+        window.addEventListener("pointerup", swallowClick, { once: true });
+        drop(true);
+        return;
+      }
+
+      var handle = event.target.closest && event.target.closest("[data-account-rank]");
+      if (!handle) return;
+      var card = handle.closest("[data-item-id]");
+      var grid = card && card.parentElement;
+      if (!grid || !grid.hasAttribute("data-account-reorder")) return;
+      var pick = key === " " || key === "Enter";
+
+      if (!drag) {
+        if (!pick || reordering) return;
+        event.preventDefault();
+        begin(card, "key");
+        liftKey();
+        say(t("{title}, rank {rank}", { title: card.getAttribute("data-title"), rank: drag.rank }));
+        return;
+      }
+      if (drag.mode !== "key" || drag.card !== card) return;
+
+      var back = key === "ArrowLeft" || key === "ArrowUp";
+      var forward = key === "ArrowRight" || key === "ArrowDown";
+      if (pick || key === "Escape" || key === "Tab") {
+        if (key !== "Tab") event.preventDefault();
+        drop(key === "Escape" || key === "Tab");
+        return;
+      }
+      if (!back && !forward) return;
+      event.preventDefault();
+
+      var cards = shelfCards(grid);
+      var at = cards.indexOf(card);
+      var edge = drag.targets.filter(function (tgt) {
+        return tgt.dir === (back ? -1 : 1);
+      })[0];
+      if ((back && at === 0) || (forward && at === cards.length - 1)) {
+        // Off the end of this page: one more step crosses the page edge.
+        if (edge) {
+          setOver(edge);
+          drop(false);
+        }
+        return;
+      }
+      moveTo(at + (back ? -1 : 1));
+      handle.scrollIntoView({ block: "nearest", inline: "nearest" });
+      say(t("{title}, rank {rank}", { title: card.getAttribute("data-title"), rank: drag.rank }));
+    });
+
+    // Focus leaving a picked-up card puts it back.
+    document.addEventListener("focusout", function (event) {
+      if (!drag || drag.mode !== "key" || reordering) return;
+      if (event.target.closest && event.target.closest("[data-item-id]") === drag.card &&
+          !(event.relatedTarget && drag.card.contains(event.relatedTarget))) {
+        drop(true);
       }
     });
   }

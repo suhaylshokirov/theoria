@@ -396,8 +396,13 @@ def test_account_top_section_renders_move_buttons():
             response = client.get(reverse("profile"))
 
         content = response.content.decode()
+        # Dragging is the control: one hint for the shelf, and each rank
+        # figure is the keyboard handle. The arrows stay as the no-JS path.
+        assert "Drag posters to reorder" in content
+        assert 'aria-label="Reorder Top Movie 2, rank 2">02</button>' in content
+        assert 'id="top-reorder-help"' in content
         assert "account-card__moves" in content
-        assert "data-account-grip" in content
+        assert "data-account-grip" not in content
         assert "Rank 1:" in content
         assert "Rank 3:" in content
         # First item overall can't move up, last item overall can't move down.

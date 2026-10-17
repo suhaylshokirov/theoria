@@ -64,6 +64,8 @@ def js_strings(request):
             "Resend wait": _("{label} ({seconds}s)"),
             # Announced after a Top card is dragged or stepped to a new rank.
             "Moved {title} to rank {rank}": _("Moved {title} to rank {rank}"),
+            # Read out at each step while a Top card is carried by keyboard.
+            "{title}, rank {rank}": _("{title}, rank {rank}"),
             # Magnitude suffixes for the analytics axes: billions, millions,
             # thousands. Russian/Uzbek abbreviate these differently ("млрд").
             "compact B": _("B"),

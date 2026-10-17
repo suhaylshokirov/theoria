@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-16 13:29+0000\n"
+"POT-Creation-Date: 2026-10-17 11:36+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -275,7 +275,7 @@ msgstr "Цифры для дотошных."
 #: analytics/templates/analytics/dashboard.html:401
 #: analytics/templates/analytics/dashboard.html:444
 #: analytics/templates/analytics/dashboard.html:469
-#: core/context_processors.py:74 movies/templates/movies/_person_header.html:36
+#: core/context_processors.py:76 movies/templates/movies/_person_header.html:36
 #: movies/templates/movies/_studio_header.html:33
 #: movies/templates/movies/home.html:84
 #: movies/templates/movies/movie_list.html:4
@@ -289,7 +289,7 @@ msgstr "Фильмы"
 #: analytics/templates/analytics/dashboard.html:522
 #: analytics/templates/analytics/dashboard.html:550
 #: analytics/templates/analytics/dashboard.html:577
-#: core/context_processors.py:75 movies/templates/movies/_person_header.html:46
+#: core/context_processors.py:77 movies/templates/movies/_person_header.html:46
 msgid "Shows"
 msgstr "Сериалы"
 
@@ -312,7 +312,7 @@ msgid "Median return on budget"
 msgstr "Медианная окупаемость бюджета"
 
 #: analytics/templates/analytics/dashboard.html:40
-#: core/context_processors.py:88
+#: core/context_processors.py:90
 msgid "Not in English"
 msgstr "Не на английском"
 
@@ -645,7 +645,7 @@ msgid "Decade"
 msgstr "Десятилетие"
 
 #: analytics/templates/analytics/dashboard.html:286
-#: core/context_processors.py:79
+#: core/context_processors.py:81
 msgid "Median minutes"
 msgstr "Медиана, мин"
 
@@ -834,7 +834,7 @@ msgstr ""
 "закрытые сериалы не приукрашивают поздние сезоны."
 
 #: analytics/templates/analytics/dashboard.html:522
-#: core/context_processors.py:89 movies/templates/movies/_season_kpis.html:23
+#: core/context_processors.py:91 movies/templates/movies/_season_kpis.html:23
 #: movies/templates/movies/_season_picker.html:26
 #: movies/templates/movies/_season_table.html:20
 #: movies/templates/movies/_season_table.html:27
@@ -890,15 +890,15 @@ msgid "No networks loaded yet. Run the pipeline to fill the warehouse."
 msgstr ""
 "Каналы ещё не загружены. Запустите конвейер, чтобы наполнить хранилище."
 
-#: analytics/templatetags/dash_format.py:25 core/context_processors.py:69
+#: analytics/templatetags/dash_format.py:25 core/context_processors.py:71
 msgid "B"
 msgstr " млрд"
 
-#: analytics/templatetags/dash_format.py:27 core/context_processors.py:70
+#: analytics/templatetags/dash_format.py:27 core/context_processors.py:72
 msgid "M"
 msgstr " млн"
 
-#: analytics/templatetags/dash_format.py:29 core/context_processors.py:71
+#: analytics/templatetags/dash_format.py:29 core/context_processors.py:73
 msgid "K"
 msgstr " тыс."
 
@@ -1034,31 +1034,36 @@ msgstr "{label} ({seconds} с)"
 msgid "Moved {title} to rank {rank}"
 msgstr "«{title}» теперь на {rank}-м месте"
 
-#: core/context_processors.py:76
+#: core/context_processors.py:68
+#, python-brace-format
+msgid "{title}, rank {rank}"
+msgstr "«{title}», {rank}-е место"
+
+#: core/context_processors.py:78
 #, python-brace-format
 msgid "Movies: {count}"
 msgstr "Фильмов: {count}"
 
-#: core/context_processors.py:77
+#: core/context_processors.py:79
 #, python-brace-format
 msgid "Shows: {count}"
 msgstr "Сериалов: {count}"
 
-#: core/context_processors.py:78
+#: core/context_processors.py:80
 msgid "Median"
 msgstr "Медиана"
 
-#: core/context_processors.py:80 movies/templates/movies/movie_detail.html:162
+#: core/context_processors.py:82 movies/templates/movies/movie_detail.html:162
 #: movies/templates/movies/series_detail.html:170
 msgid "IMDb rating"
 msgstr "Рейтинг IMDb"
 
-#: core/context_processors.py:81 movies/templates/movies/movie_detail.html:119
+#: core/context_processors.py:83 movies/templates/movies/movie_detail.html:119
 #: movies/templates/movies/movie_detail.html:176
 msgid "Budget"
 msgstr "Бюджет"
 
-#: core/context_processors.py:82 movies/templates/movies/_studio_header.html:45
+#: core/context_processors.py:84 movies/templates/movies/_studio_header.html:45
 #: movies/templates/movies/movie_detail.html:123
 #: movies/templates/movies/movie_detail.html:177
 #: movies/templates/movies/movie_list.html:37
@@ -1068,33 +1073,33 @@ msgstr "Бюджет"
 msgid "Revenue"
 msgstr "Сборы"
 
-#: core/context_processors.py:83
+#: core/context_processors.py:85
 msgid "Break-even"
 msgstr "Порог окупаемости"
 
-#: core/context_processors.py:84
+#: core/context_processors.py:86
 msgid "5× budget"
 msgstr "5× бюджета"
 
-#: core/context_processors.py:85
+#: core/context_processors.py:87
 msgid "Under 1×"
 msgstr "Меньше 1×"
 
-#: core/context_processors.py:86
+#: core/context_processors.py:88
 msgid "5× or more"
 msgstr "5× и больше"
 
-#: core/context_processors.py:87 movies/templates/movies/home.html:231
+#: core/context_processors.py:89 movies/templates/movies/home.html:231
 #, python-brace-format
 msgid "{decade}s"
 msgstr "{decade}-е"
 
-#: core/context_processors.py:90
+#: core/context_processors.py:92
 #, python-brace-format
 msgid "Season {n}"
 msgstr "Сезон {n}"
 
-#: core/context_processors.py:91
+#: core/context_processors.py:93
 msgid "vs season 1"
 msgstr "к 1-му сезону"
 
@@ -1195,83 +1200,102 @@ msgstr[1] "<span class=\"mono\">%(counter)s</span> фильма"
 msgstr[2] "<span class=\"mono\">%(counter)s</span> фильмов"
 msgstr[3] "<span class=\"mono\">%(counter)s</span> фильма"
 
-#: core/templates/core/_collection_section.html:46
-#: core/templates/core/_collection_section.html:53
-#: core/templates/core/_collection_section.html:64
+#: core/templates/core/_collection_section.html:37
+msgid "Drag posters to reorder"
+msgstr "Перетаскивайте постеры, чтобы менять порядок"
+
+#: core/templates/core/_collection_section.html:38
+msgid "Hold a poster, then drag"
+msgstr "Удерживайте постер и перетащите"
+
+#: core/templates/core/_collection_section.html:40
+msgid ""
+"Press Space to pick it up, the arrow keys to move it, Space to drop it, "
+"Escape to cancel."
+msgstr "Пробел — взять, стрелки — переместить, пробел — отпустить, Escape — отменить."
+
+#: core/templates/core/_collection_section.html:60
+#: core/templates/core/_collection_section.html:67
+#: core/templates/core/_collection_section.html:78
 msgctxt "share sheet"
 msgid "Share"
 msgstr "Поделиться"
 
-#: core/templates/core/_collection_section.html:49
+#: core/templates/core/_collection_section.html:63
 #, python-format
 msgid "Share %(label)s — add a movie first"
 msgstr "Поделиться: %(label)s — сначала добавьте фильм"
 
-#: core/templates/core/_collection_section.html:66
+#: core/templates/core/_collection_section.html:80
 msgid "Link to this list"
 msgstr "Ссылка на этот список"
 
-#: core/templates/core/_collection_section.html:72
+#: core/templates/core/_collection_section.html:86
 #: core/templates/core/share/_sheet.html:135
 #: core/templates/core/share/_sheet.html:144
 msgid "Stop sharing"
 msgstr "Закрыть доступ"
 
-#: core/templates/core/_collection_section.html:79
+#: core/templates/core/_collection_section.html:93
 msgid "Add a line (optional)"
 msgstr "Подпись (необязательно)"
 
-#: core/templates/core/_collection_section.html:81
+#: core/templates/core/_collection_section.html:95
 msgid "Create link"
 msgstr "Создать ссылку"
 
-#: core/templates/core/_collection_section.html:92
+#: core/templates/core/_collection_section.html:106
 #: core/templates/core/share/page.html:145
 #, python-format
 msgid "Rank %(rank)s:"
 msgstr "Место %(rank)s:"
 
-#: core/templates/core/_collection_section.html:105
+#: core/templates/core/_collection_section.html:119
 #: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "Movie"
 msgstr "Фильм"
 
-#: core/templates/core/_collection_section.html:105
+#: core/templates/core/_collection_section.html:119
 #: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "TV show"
 msgstr "Сериал"
 
-#: core/templates/core/_collection_section.html:109
+#: core/templates/core/_collection_section.html:123
 #, python-format
 msgid "Remove %(title)s from %(label)s"
 msgstr "Убрать «%(title)s» из раздела «%(label)s»"
 
-#: core/templates/core/_collection_section.html:134
+#: core/templates/core/_collection_section.html:136
+#, python-format
+msgid "Reorder %(title)s, rank %(rank)s"
+msgstr "Изменить место «%(title)s», сейчас %(rank)s-е"
+
+#: core/templates/core/_collection_section.html:154
 #, python-format
 msgid "%(title)s is ranked first"
 msgstr "«%(title)s» уже на первом месте"
 
-#: core/templates/core/_collection_section.html:136
-#: core/templates/core/_collection_section.html:150
+#: core/templates/core/_collection_section.html:156
+#: core/templates/core/_collection_section.html:167
 #, python-format
 msgid "Move %(title)s to rank %(rank)s"
 msgstr "Переместить «%(title)s» на %(rank)s-е место"
 
-#: core/templates/core/_collection_section.html:148
+#: core/templates/core/_collection_section.html:165
 #, python-format
 msgid "%(title)s is ranked last"
 msgstr "«%(title)s» уже на последнем месте"
 
-#: core/templates/core/_collection_section.html:172
+#: core/templates/core/_collection_section.html:189
 msgid "Add to Top"
 msgstr "Добавить в топ"
 
-#: core/templates/core/_collection_section.html:172
+#: core/templates/core/_collection_section.html:189
 #, python-format
 msgid "at rank %(rank)s"
 msgstr "на месте %(rank)s"
 
-#: core/templates/core/_collection_section.html:174
+#: core/templates/core/_collection_section.html:191
 msgid "Empty slot"
 msgstr "Свободное место"
 
