@@ -4665,21 +4665,97 @@ main,
     min-width: 0;
   }
 
-  .toolbar form { width: 100%; }
-  .toolbar .field { flex: 1 1 160px; }
-
-  /* Four fixed-width labels in one unwrapping row is the one place the
-     segmented control can genuinely overflow a narrow sheet — the buttons
-     have to keep working without JS, so this stays flex-wrap rather than a
-     <select>. */
-  .segmented {
-    flex-wrap: wrap;
-    width: 100%;
+  /* The filter bar on a phone (every page with search + filters: Browse,
+     Movies, TV, Cartoons, People, Studios, and the filmography on a person or
+     studio). A slim bar, not a stack of slabs: every control is 36px, search
+     takes the full row, and the sort/filter strips are only as wide as their
+     labels, so a strip and a dropdown share a row when they fit (Browse: sort
+     + genre) instead of each claiming the whole width. The text inside an
+     input keeps its size -- Safari zooms the page into a focused field under
+     16px -- so the height comes out of the padding, not the type. */
+  .toolbar {
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
   }
 
-  .segmented label {
+  .toolbar form {
+    width: 100%;
+    gap: var(--space-2);
+  }
+
+  .toolbar .field {
+    flex: 1 1 9rem;
+    min-height: 36px;
+  }
+
+  .toolbar .field:has(input[type="search"]) {
+    flex-basis: 100%;
+  }
+
+  /* min-height: 0 lifts the coarse-pointer 44px floor, which would otherwise
+     hold these taller than the 36px field. */
+  .toolbar .field input[type="search"],
+  .toolbar .field select,
+  .toolbar .field .menu-trigger {
+    min-height: 0;
+    padding-block: var(--space-2);
+  }
+
+  /* A native <select> inside a .field would otherwise size to its longest
+     option and leave the chevron stranded mid-row. */
+  .toolbar .field select {
     flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* The filter menu is a button, not a field, so Safari has no reason to zoom
+     on it and it can sit at the toolbar's own 14px. */
+  .toolbar .field .menu-trigger {
+    font-size: var(--text-sm);
+  }
+
+  /* A strip is as wide as its labels, never wider than the row. When four
+     long labels (Russian "Любой пол / Женский / Мужской / Небинарный" at 320px)
+     still do not fit, the row does not wrap -- a pill that wraps its labels
+     reads as broken -- it scrolls sideways, fading the edge that has more. It
+     stays radios, so it works without JS. */
+  .segmented {
+    flex: 0 1 auto;
+    width: auto;
+    max-width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .segmented::-webkit-scrollbar { display: none; }
+
+  /* initSegmentedScroll() sets this while options sit past the right edge. */
+  .segmented.has-more {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
+  }
+
+  /* 34px plus the hairline is the same 36px as a .field. */
+  .segmented label {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
     text-align: center;
+    padding-block: var(--space-1);
+    padding-inline: var(--space-4);
+  }
+}
+
+/* Narrow phones: Cyrillic and Uzbek labels at 360px and below are the tightest
+   case, so trade a little tracking and padding for fitting without scrolling. */
+@media (max-width: 399px) {
+  .segmented label {
+    letter-spacing: 0.04em;
+    padding-inline: var(--space-1);
   }
 }
 

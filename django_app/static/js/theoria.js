@@ -672,6 +672,28 @@
      a bubbling `change` event, so initLiveFilter() re-fetches exactly as it
      does for the native control. */
 
+  /* A .segmented strip wider than its toolbar scrolls sideways on a phone
+     (theoria.css) instead of wrapping its labels. Two cues keep that from being
+     a surprise: the selected option is brought into view on load, and a
+     `has-more` class marks a strip with options past its right edge so CSS can
+     fade that edge. Scrolls the strip itself, never the page. */
+  function initSegmentedScroll() {
+    document.querySelectorAll(".segmented").forEach(function (strip) {
+      function sync() {
+        var more = strip.scrollWidth - strip.clientWidth - strip.scrollLeft > 2;
+        strip.classList.toggle("has-more", more);
+      }
+      var current = strip.querySelector("input:checked + label");
+      if (current && strip.scrollWidth > strip.clientWidth) {
+        var over = current.getBoundingClientRect().right - strip.getBoundingClientRect().right;
+        if (over > 0) strip.scrollLeft += over + 16;
+      }
+      sync();
+      strip.addEventListener("scroll", sync, { passive: true });
+      window.addEventListener("resize", sync);
+    });
+  }
+
   function initFilterMenu() {
     document.querySelectorAll("select[data-menu]").forEach(buildFilterMenu);
   }
@@ -2583,6 +2605,7 @@
     initPagedSections();
     initSeasonPicker();
     initFilterMenu();
+    initSegmentedScroll();
     initLiveFilter();
     initBioToggle();
     initVideoEmbeds();

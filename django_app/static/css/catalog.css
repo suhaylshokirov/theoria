@@ -8,49 +8,15 @@
 /* --- Small screens ---------------------------------------------------------
    The sheet header leaves a --space-9 gap before the toolbar, which on a phone
    is a fifth of the first screen spent on nothing. Tighten it so the search
-   field is visible without scrolling, and let each control take the full row
-   so a thumb has a wide target. */
+   field is visible without scrolling. The toolbar's own phone layout is
+   theoria.css's, shared with People and Studios. */
 @media (max-width: 720px) {
   .page-catalog .sheet-head + .sheet-section {
     margin-top: var(--space-6);
   }
-
-  .page-catalog .toolbar,
-  .page-catalog .toolbar form {
-    width: 100%;
-  }
-
-  .page-catalog .toolbar form > .field,
-  .page-catalog .toolbar form > .segmented {
-    flex: 1 1 100%;
-  }
-
-  /* Four segments (Newest, Rated, Revenue, A-Z) share the row equally rather
-     than hugging their labels, so none is a sliver. */
-  .page-catalog .segmented label {
-    flex: 1 1 auto;
-    text-align: center;
-    padding-inline: var(--space-3);
-  }
-}
-
-/* A phone must never be able to push the page sideways: narrow Uzbek and
-   Russian labels at 360px are the tightest case. */
-@media (max-width: 399px) {
-  .page-catalog .segmented label {
-    letter-spacing: 0.06em;
-    padding-inline: var(--space-2);
-  }
 }
 
 @media (pointer: coarse) {
-  .page-catalog .segmented label {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 44px;
-  }
-
   .page-catalog .pagination a {
     display: inline-flex;
     align-items: center;
