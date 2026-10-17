@@ -94,22 +94,25 @@
     return lang === "uz" ? "ru" : lang;
   })();
 
-  // Ratings, shares and multiples keep a dot in every language, like the server's
-  // floatformat "u" -- so a chart label and the table beside it never disagree.
-  // Only money (compact) follows the language's own decimal mark.
+  // Every decimal keeps a dot in every language, like the server (the ru/uz
+  // format modules set DECIMAL_SEPARATOR to "."), so a chart label and the
+  // table beside it never disagree.
   function dot(n, digits) {
     return n.toFixed(digits);
   }
 
+  // The language's digit grouping with a dot for the decimal mark.
   function fixed(n, digits) {
-    return n.toLocaleString(LANG, {
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    });
+    return n
+      .toLocaleString(LANG, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      })
+      .replace(",", ".");
   }
 
-  // Magnitude suffixes are translated ("B" is "млрд" in Russian) and the
-  // digits follow the language's own decimal mark. The "$" that callers
+  // Magnitude suffixes are translated ("B" is "млрд" in Russian); the digits
+  // keep the dot. The "$" that callers
   // prepend is not localized: TMDB reports money in USD, so it is a unit of
   // the data, not a formatting preference.
   function compact(value) {

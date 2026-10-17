@@ -253,7 +253,7 @@ def test_compact_money_in_english():
         assert compact_money(None) == "—"
 
 
-def test_compact_money_uses_the_translated_suffix_and_decimal_mark():
+def test_compact_money_uses_the_translated_suffix_and_a_dot():
     with translation.override("ru"):
         text = compact_money(45_411_061_972)
-    assert text.startswith("$45,4") and "млрд" in text
+    assert text.startswith("$45.4") and "млрд" in text

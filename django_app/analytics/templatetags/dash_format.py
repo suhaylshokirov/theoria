@@ -2,7 +2,7 @@
 
 `compact_money` is the server-side twin of `compact()` in static/js/analytics.js,
 so a revenue figure reads the same in a table cell as on a chart axis: "$45.4B",
-"$797.3M", and in Russian "$45,4 млрд". The magnitude suffixes are the same
+"$797.3M", and in Russian "$45.4 млрд". The magnitude suffixes are the same
 translated msgids the script uses ("B", "M", "K"). The "$" is not localized --
 TMDB reports money in USD, so it is a unit of the data, not a formatting choice.
 """

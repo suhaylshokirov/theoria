@@ -333,9 +333,19 @@ def test_every_js_string_has_a_translation(lang):
 
 
 @pytest.mark.parametrize("lang", ["ru", "uz"])
+def test_decimals_use_a_dot_in_every_language(lang):
+    """Ratings, shares and money all print 7.5, never 7,5, in ru and uz."""
+    from django.template import Context, Template
+    from django.utils import translation
+    with translation.override(lang):
+        out = Template("{{ v|floatformat:1 }} {{ v|floatformat:'2g' }}").render(Context({"v": 7.5}))
+    assert out == "7.5 7.50"
+
+
+@pytest.mark.parametrize("lang", ["ru", "uz"])
 def test_machine_read_numbers_never_get_a_decimal_comma(lang):
-    """Django localizes floats in ru/uz (7,5). Displayed text may; an attribute
-    the script parses with parseFloat may not."""
+    """An attribute the script parses with parseFloat may carry neither a
+    comma nor a grouping space."""
     with _home_mocks():
         body = _get(lang, "/").content.decode()
     counts = re.findall(r'data-count="([^"]*)"', body)

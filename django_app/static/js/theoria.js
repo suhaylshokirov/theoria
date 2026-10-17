@@ -55,11 +55,12 @@
     return lang === "uz" ? "ru" : lang;
   }
 
-  // English writes 1,234.5; Russian and Uzbek write 1 234,5, so the decimal
-  // mark has to be read back the way the server printed it.
+  // English writes 1,234.5; Russian and Uzbek write 1 234.5 (a space for
+  // thousands, the same dot for decimals), so the grouping has to be read
+  // back the way the server printed it.
   function parseCell(el) {
     var raw = el.textContent.replace(/[$\s★]/g, "");
-    raw = numberLocale() === "en" ? raw.replace(/,/g, "") : raw.replace(",", ".");
+    raw = numberLocale() === "en" ? raw.replace(/,/g, "") : raw;
     var n = parseFloat(raw);
     return isNaN(n) ? null : n;
   }
@@ -125,8 +126,7 @@
 
   function format(value, decimals) {
     if (decimals > 0) {
-      // Fractional values are ratings, which keep a dot in every language
-      // (the server prints them with floatformat "u").
+      // Fractional values keep a dot in every language, as the server prints them.
       return value.toLocaleString("en", {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,

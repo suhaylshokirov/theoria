@@ -361,6 +361,10 @@ USE_I18N = True
 
 USE_THOUSAND_SEPARATOR = True
 
+# Overrides Django's ru/uz number formats so the decimal mark is a dot in every
+# language (see theoria_site/formats/).
+FORMAT_MODULE_PATH = ['theoria_site.formats']
+
 USE_TZ = True
 
 
