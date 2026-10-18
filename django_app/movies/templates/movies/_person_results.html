@@ -3,10 +3,10 @@
    swap targets — static/js/theoria.js's initLiveFilter() locates each by id
    in this response and copies its innerHTML onto the matching live element,
    so it doesn't matter that they're flat siblings here while, in
-   person_list.html, they sit in two different places in the layout
-   (#people-toolbar-meta inside .toolbar, #people-grid below it). Both
-   partials are also included directly by person_list.html for a normal page
-   load, so the live and no-JS paths render from the same source and can't
-   drift apart. {% endcomment %}
+   person_list.html, they sit in different places in the layout
+   (#people-toolbar-meta inside the filter console, #people-grid below it).
+   Both partials are also included directly by person_list.html for a normal
+   page load, so the live and no-JS paths render from the same source and
+   can't drift apart. {% endcomment %}
 {% include "movies/_person_toolbar_meta.html" %}
 {% include "movies/_person_grid.html" %}

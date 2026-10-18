@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-17 11:36+0000\n"
+"POT-Creation-Date: 2026-10-18 08:08+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: uz\n"
@@ -344,7 +344,7 @@ msgstr "Kelib chiqishi"
 
 #: analytics/templates/analytics/dashboard.html:51
 #: analytics/templates/analytics/dashboard.html:427
-#: movies/templates/movies/home.html:94 movies/views.py:629
+#: movies/templates/movies/home.html:94 movies/views.py:720
 #: templates/base.html:234
 msgid "People"
 msgstr "Odamlar"
@@ -529,6 +529,9 @@ msgstr ""
 
 #: analytics/templates/analytics/dashboard.html:174
 #: analytics/templates/analytics/dashboard.html:326
+#: movies/templates/movies/browse.html:27
+#: movies/templates/movies/movie_list.html:34
+#: movies/templates/movies/series_list.html:25
 msgid "Genre"
 msgstr "Janr"
 
@@ -1059,10 +1062,9 @@ msgstr "Byudjet"
 #: core/context_processors.py:84 movies/templates/movies/_studio_header.html:45
 #: movies/templates/movies/movie_detail.html:123
 #: movies/templates/movies/movie_detail.html:177
-#: movies/templates/movies/movie_list.html:37
 #: movies/templates/movies/person_detail.html:78
-#: movies/templates/movies/studio_detail.html:73
-#: movies/templates/movies/studio_list.html:38
+#: movies/templates/movies/studio_detail.html:73 movies/views.py:91
+#: movies/views.py:1230
 msgid "Revenue"
 msgstr "Daromad"
 
@@ -1185,108 +1187,103 @@ msgstr ""
 msgid "Find something"
 msgstr "Biror narsa toping"
 
-#: core/templates/core/_collection_section.html:27
-#, python-format
-msgid "<span class=\"mono\">%(counter)s</span> movie"
-msgid_plural "<span class=\"mono\">%(counter)s</span> movies"
-msgstr[0] "<span class=\"mono\">%(counter)s</span> ta film"
-
-#: core/templates/core/_collection_section.html:37
+#: core/templates/core/_collection_section.html:36
 msgid "Drag posters to reorder"
 msgstr "Tartibni oʻzgartirish uchun posterlarni suring"
 
-#: core/templates/core/_collection_section.html:38
+#: core/templates/core/_collection_section.html:37
 msgid "Hold a poster, then drag"
 msgstr "Posterni bosib turing, soʻng suring"
 
-#: core/templates/core/_collection_section.html:40
+#: core/templates/core/_collection_section.html:39
 msgid ""
 "Press Space to pick it up, the arrow keys to move it, Space to drop it, "
 "Escape to cancel."
-msgstr "Probel — olish, strelkalar — surish, probel — qoʻyish, Escape — bekor qilish."
+msgstr ""
+"Probel — olish, strelkalar — surish, probel — qoʻyish, Escape — bekor qilish."
 
-#: core/templates/core/_collection_section.html:60
-#: core/templates/core/_collection_section.html:67
-#: core/templates/core/_collection_section.html:78
+#: core/templates/core/_collection_section.html:59
+#: core/templates/core/_collection_section.html:66
+#: core/templates/core/_collection_section.html:73
 msgctxt "share sheet"
 msgid "Share"
 msgstr "Ulashish"
 
-#: core/templates/core/_collection_section.html:63
+#: core/templates/core/_collection_section.html:62
 #, python-format
 msgid "Share %(label)s — add a movie first"
 msgstr "%(label)s ulashish — avval film qoʻshing"
 
-#: core/templates/core/_collection_section.html:80
+#: core/templates/core/_collection_section.html:75
 msgid "Link to this list"
 msgstr "Bu roʻyxatga havola"
 
-#: core/templates/core/_collection_section.html:86
+#: core/templates/core/_collection_section.html:81
 #: core/templates/core/share/_sheet.html:135
 #: core/templates/core/share/_sheet.html:144
 msgid "Stop sharing"
 msgstr "Ulashishni toʻxtatish"
 
-#: core/templates/core/_collection_section.html:93
+#: core/templates/core/_collection_section.html:88
 msgid "Add a line (optional)"
 msgstr "Izoh qoʻshing (ixtiyoriy)"
 
-#: core/templates/core/_collection_section.html:95
+#: core/templates/core/_collection_section.html:90
 msgid "Create link"
 msgstr "Havola yaratish"
 
-#: core/templates/core/_collection_section.html:106
+#: core/templates/core/_collection_section.html:101
 #: core/templates/core/share/page.html:145
 #, python-format
 msgid "Rank %(rank)s:"
 msgstr "%(rank)s-oʻrin:"
 
-#: core/templates/core/_collection_section.html:119
+#: core/templates/core/_collection_section.html:114
 #: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "Movie"
 msgstr "Film"
 
-#: core/templates/core/_collection_section.html:119
+#: core/templates/core/_collection_section.html:114
 #: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "TV show"
 msgstr "Serial"
 
-#: core/templates/core/_collection_section.html:123
+#: core/templates/core/_collection_section.html:118
 #, python-format
 msgid "Remove %(title)s from %(label)s"
 msgstr "“%(title)s”ni “%(label)s” boʻlimidan olib tashlash"
 
-#: core/templates/core/_collection_section.html:136
+#: core/templates/core/_collection_section.html:131
 #, python-format
 msgid "Reorder %(title)s, rank %(rank)s"
 msgstr "“%(title)s” oʻrnini oʻzgartirish, hozir %(rank)s-oʻrin"
 
-#: core/templates/core/_collection_section.html:154
+#: core/templates/core/_collection_section.html:149
 #, python-format
 msgid "%(title)s is ranked first"
 msgstr "“%(title)s” allaqachon birinchi oʻrinda"
 
-#: core/templates/core/_collection_section.html:156
-#: core/templates/core/_collection_section.html:167
+#: core/templates/core/_collection_section.html:151
+#: core/templates/core/_collection_section.html:162
 #, python-format
 msgid "Move %(title)s to rank %(rank)s"
 msgstr "“%(title)s”ni %(rank)s-oʻringa koʻchirish"
 
-#: core/templates/core/_collection_section.html:165
+#: core/templates/core/_collection_section.html:160
 #, python-format
 msgid "%(title)s is ranked last"
 msgstr "“%(title)s” allaqachon oxirgi oʻrinda"
 
-#: core/templates/core/_collection_section.html:189
+#: core/templates/core/_collection_section.html:184
 msgid "Add to Top"
 msgstr "Topga qoʻshish"
 
-#: core/templates/core/_collection_section.html:189
+#: core/templates/core/_collection_section.html:184
 #, python-format
 msgid "at rank %(rank)s"
 msgstr "%(rank)s-oʻrinda"
 
-#: core/templates/core/_collection_section.html:191
+#: core/templates/core/_collection_section.html:186
 msgid "Empty slot"
 msgstr "Boʻsh oʻrin"
 
@@ -1771,6 +1768,20 @@ msgstr "epizodlar"
 msgid "Episodes for this season haven't been catalogued yet."
 msgstr "Bu faslning epizodlari hali katalogga kiritilmagan."
 
+#: movies/templates/movies/_finder_search.html:17
+msgid "Clear search"
+msgstr "Qidiruvni tozalash"
+
+#: movies/templates/movies/_finder_search.html:20
+msgid "Reset"
+msgstr "Tozalash"
+
+#: movies/templates/movies/_finder_search.html:21
+#: movies/templates/movies/person_detail.html:82
+#: movies/templates/movies/studio_detail.html:77
+msgid "Apply"
+msgstr "Qoʻllash"
+
 #: movies/templates/movies/_movie_card.html:15
 #: movies/templates/movies/_series_card.html:17
 #: movies/templates/movies/movie_detail.html:35
@@ -1860,19 +1871,22 @@ msgstr "Vafot etgan sana"
 msgid "Born in"
 msgstr "Tugʻilgan joyi"
 
-#: movies/templates/movies/_person_toolbar_meta.html:12
+#: movies/templates/movies/_person_toolbar_meta.html:13
 msgid "Filter people by credit"
 msgstr "Odamlarni faoliyat turi boʻyicha saralash"
 
-#: movies/templates/movies/_person_toolbar_meta.html:13
+#: movies/templates/movies/_person_toolbar_meta.html:14
+#: movies/templates/movies/person_list.html:32
 msgid "All"
 msgstr "Hammasi"
 
-#: movies/templates/movies/_person_toolbar_meta.html:14 movies/vocab.py:24
+#: movies/templates/movies/_person_toolbar_meta.html:15
+#: movies/templates/movies/person_list.html:32 movies/vocab.py:24
 msgid "Acting"
 msgstr "Aktyorlik"
 
-#: movies/templates/movies/_person_toolbar_meta.html:15 movies/vocab.py:25
+#: movies/templates/movies/_person_toolbar_meta.html:16
+#: movies/templates/movies/person_list.html:32 movies/vocab.py:25
 msgid "Directing"
 msgstr "Rejissyorlik"
 
@@ -2011,8 +2025,8 @@ msgstr ""
 "Studiyalar hali yuklanmagan. Katalogni toʻldirish uchun jarayonni ishga "
 "tushiring."
 
-#: movies/templates/movies/_studio_header.html:41 movies/views.py:1280
-#: movies/views.py:1653
+#: movies/templates/movies/_studio_header.html:41 movies/views.py:1378
+#: movies/views.py:1751
 msgid "Active"
 msgstr "Faol faoliyat"
 
@@ -2055,64 +2069,45 @@ msgstr ""
 "Barcha film va seriallar bir joyda. Nomi boʻyicha qidiring, janr boʻyicha "
 "saralang yoki tartibni oʻzgartiring."
 
-#: movies/templates/movies/browse.html:25
+#: movies/templates/movies/browse.html:22
 msgid "Search movies and shows"
 msgstr "Film va seriallarni qidirish"
 
-#: movies/templates/movies/browse.html:25
+#: movies/templates/movies/browse.html:22
 msgid "Search movies and shows by title"
 msgstr "Film va seriallarni nomi boʻyicha qidirish"
 
-#: movies/templates/movies/browse.html:28
-#: movies/templates/movies/cartoon_list.html:27
-#: movies/templates/movies/movie_list.html:31
+#: movies/templates/movies/browse.html:25
+#: movies/templates/movies/cartoon_list.html:24
+#: movies/templates/movies/movie_list.html:28
+#: movies/templates/movies/person_list.html:37
+#: movies/templates/movies/series_list.html:23
+#: movies/templates/movies/studio_list.html:24
+msgid "Sort"
+msgstr "Saralash"
+
+#: movies/templates/movies/browse.html:25
+#: movies/templates/movies/cartoon_list.html:24
+#: movies/templates/movies/movie_list.html:28
 #: movies/templates/movies/person_detail.html:72
-#: movies/templates/movies/person_list.html:33
-#: movies/templates/movies/series_list.html:27
+#: movies/templates/movies/person_list.html:37
+#: movies/templates/movies/series_list.html:23
 #: movies/templates/movies/studio_detail.html:67
-#: movies/templates/movies/studio_list.html:34
+#: movies/templates/movies/studio_list.html:24
 msgid "Order by"
 msgstr "Tartiblash"
 
-#: movies/templates/movies/browse.html:30
-#: movies/templates/movies/cartoon_list.html:29
-#: movies/templates/movies/movie_list.html:33
-#: movies/templates/movies/person_detail.html:74
-#: movies/templates/movies/series_list.html:29
-#: movies/templates/movies/studio_detail.html:69
-msgid "Newest"
-msgstr "Yangilari"
+#: movies/templates/movies/browse.html:27
+#: movies/templates/movies/movie_list.html:34
+#: movies/templates/movies/series_list.html:25
+msgid "Filter by genre"
+msgstr "Janr boʻyicha saralash"
 
-#: movies/templates/movies/browse.html:32
-#: movies/templates/movies/cartoon_list.html:31
-#: movies/templates/movies/movie_list.html:35
-#: movies/templates/movies/person_detail.html:76
-#: movies/templates/movies/series_list.html:31
-#: movies/templates/movies/studio_detail.html:71
-msgid "Rated"
-msgstr "Reyting boʻyicha"
-
-#: movies/templates/movies/browse.html:34
-#: movies/templates/movies/cartoon_list.html:33
-#: movies/templates/movies/movie_list.html:39
-#: movies/templates/movies/person_detail.html:80
-#: movies/templates/movies/person_list.html:37
-#: movies/templates/movies/series_list.html:33
-#: movies/templates/movies/studio_detail.html:75
-#: movies/templates/movies/studio_list.html:40
-msgid "A–Z"
-msgstr "A–Z"
-
-#: movies/templates/movies/browse.html:36
-#: movies/templates/movies/cartoon_list.html:35
-#: movies/templates/movies/movie_list.html:66
-#: movies/templates/movies/person_detail.html:82
-#: movies/templates/movies/person_list.html:62
-#: movies/templates/movies/series_list.html:44
-#: movies/templates/movies/studio_detail.html:77
-#: movies/templates/movies/studio_list.html:47
-msgid "Apply"
-msgstr "Qoʻllash"
+#: movies/templates/movies/browse.html:27
+#: movies/templates/movies/movie_list.html:34
+#: movies/templates/movies/series_list.html:25
+msgid "Any genre"
+msgstr "Istalgan janr"
 
 #: movies/templates/movies/cartoon_list.html:4
 #: movies/templates/movies/cartoon_list.html:11 templates/base.html:233
@@ -2127,11 +2122,11 @@ msgstr ""
 "Yosh tomoshabinlar uchun animatsion film va seriallar. Nomi boʻyicha "
 "qidiring yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
 
-#: movies/templates/movies/cartoon_list.html:24
+#: movies/templates/movies/cartoon_list.html:21
 msgid "Search cartoons"
 msgstr "Multfilmlarni qidirish"
 
-#: movies/templates/movies/cartoon_list.html:24
+#: movies/templates/movies/cartoon_list.html:21
 msgid "Search cartoons by title"
 msgstr "Multfilmlarni nomi boʻyicha qidirish"
 
@@ -2367,23 +2362,13 @@ msgstr ""
 "Ombordagi barcha filmlar. Nomi boʻyicha qidiring, janr boʻyicha toraytiring "
 "yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
 
-#: movies/templates/movies/movie_list.html:24
+#: movies/templates/movies/movie_list.html:25
 msgid "Search movies"
 msgstr "Filmlarni qidirish"
 
-#: movies/templates/movies/movie_list.html:24
+#: movies/templates/movies/movie_list.html:25
 msgid "Search movies by title"
 msgstr "Filmlarni nomi boʻyicha qidirish"
-
-#: movies/templates/movies/movie_list.html:53
-#: movies/templates/movies/series_list.html:36
-msgid "Filter by genre"
-msgstr "Janr boʻyicha saralash"
-
-#: movies/templates/movies/movie_list.html:55
-#: movies/templates/movies/series_list.html:38
-msgid "Any genre"
-msgstr "Istalgan janr"
 
 #: movies/templates/movies/person_detail.html:12
 #: movies/templates/movies/person_detail.html:88
@@ -2427,6 +2412,25 @@ msgstr "%(name)s: film va seriallarni nomi boʻyicha qidirish"
 msgid "Search %(name)s's movies by title"
 msgstr "%(name)s: filmlarni nomi boʻyicha qidirish"
 
+#: movies/templates/movies/person_detail.html:74
+#: movies/templates/movies/studio_detail.html:69 movies/views.py:89
+#: movies/views.py:223 movies/views.py:315 movies/views.py:484
+msgid "Newest"
+msgstr "Yangilari"
+
+#: movies/templates/movies/person_detail.html:76
+#: movies/templates/movies/studio_detail.html:71 movies/views.py:90
+#: movies/views.py:224 movies/views.py:316 movies/views.py:485
+msgid "Rated"
+msgstr "Reyting boʻyicha"
+
+#: movies/templates/movies/person_detail.html:80
+#: movies/templates/movies/studio_detail.html:75 movies/views.py:92
+#: movies/views.py:225 movies/views.py:317 movies/views.py:486
+#: movies/views.py:600 movies/views.py:1231
+msgid "A–Z"
+msgstr "A–Z"
+
 #: movies/templates/movies/person_list.html:13
 msgid ""
 "Search by name, filter by gender or craft, and reorder by what was measured."
@@ -2443,23 +2447,32 @@ msgstr "Ismlarni qidirish"
 msgid "Search %(title)s by name"
 msgstr "Ism boʻyicha qidirish: %(title)s"
 
-#: movies/templates/movies/person_list.html:35
-msgid "Most popular"
-msgstr "Eng mashhurlari"
+#: movies/templates/movies/person_list.html:31
+msgctxt "people filter"
+msgid "Role"
+msgstr "Faoliyat"
 
-#: movies/templates/movies/person_list.html:40
+#: movies/templates/movies/person_list.html:39
+msgid "Gender"
+msgstr "Jins"
+
+#: movies/templates/movies/person_list.html:39
 msgid "Filter by gender"
 msgstr "Jins boʻyicha saralash"
 
-#: movies/templates/movies/person_list.html:42
+#: movies/templates/movies/person_list.html:39
 msgid "Any gender"
 msgstr "Istalgan jins"
 
-#: movies/templates/movies/person_list.html:49
+#: movies/templates/movies/person_list.html:41
+msgid "Craft"
+msgstr "Kasb"
+
+#: movies/templates/movies/person_list.html:41
 msgid "Filter by craft"
 msgstr "Kasb boʻyicha saralash"
 
-#: movies/templates/movies/person_list.html:51
+#: movies/templates/movies/person_list.html:41
 msgid "Any craft"
 msgstr "Istalgan kasb"
 
@@ -2559,11 +2572,11 @@ msgstr ""
 "Ombordagi barcha seriallar. Nomi boʻyicha qidiring, janr boʻyicha "
 "toraytiring yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
 
-#: movies/templates/movies/series_list.html:22
+#: movies/templates/movies/series_list.html:20
 msgid "Search shows"
 msgstr "Seriallarni qidirish"
 
-#: movies/templates/movies/series_list.html:22
+#: movies/templates/movies/series_list.html:20
 msgid "Search TV shows by name"
 msgstr "Seriallarni nomi boʻyicha qidirish"
 
@@ -2589,46 +2602,50 @@ msgstr ""
 "Katalogdagi filmlarda koʻrsatilgan barcha ishlab chiqaruvchi kompaniyalar. "
 "Nomi boʻyicha qidiring yoki filmlar soni yoki daromad boʻyicha tartiblang."
 
-#: movies/templates/movies/studio_list.html:26
+#: movies/templates/movies/studio_list.html:21
 msgid "Search studios"
 msgstr "Studiyalarni qidirish"
 
-#: movies/templates/movies/studio_list.html:26
+#: movies/templates/movies/studio_list.html:21
 msgid "Search studios by name"
 msgstr "Studiyalarni nomi boʻyicha qidirish"
 
-#: movies/templates/movies/studio_list.html:36
-msgid "Most movies"
-msgstr "Eng koʻp filmlar"
+#: movies/views.py:599
+msgid "Most popular"
+msgstr "Eng mashhurlari"
 
-#: movies/views.py:529
+#: movies/views.py:615
 msgid "Female"
 msgstr "Ayol"
 
-#: movies/views.py:530
+#: movies/views.py:616
 msgid "Male"
 msgstr "Erkak"
 
-#: movies/views.py:531
+#: movies/views.py:617
 msgid "Non-binary"
 msgstr "Nobinar"
 
-#: movies/views.py:635
+#: movies/views.py:726
 msgctxt "people list title"
 msgid "Acting"
 msgstr "Aktyorlar"
 
-#: movies/views.py:642
+#: movies/views.py:733
 msgctxt "people list title"
 msgid "Directing"
 msgstr "Rejissyorlar"
 
-#: movies/views.py:1283
+#: movies/views.py:1229
+msgid "Most movies"
+msgstr "Eng koʻp filmlar"
+
+#: movies/views.py:1381
 #, python-format
 msgid "%(year)s–Active"
 msgstr "%(year)s – hozirgacha"
 
-#: movies/views.py:1653
+#: movies/views.py:1751
 msgid "Retired"
 msgstr "Faoliyati tugagan"
 

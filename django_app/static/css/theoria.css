@@ -52,6 +52,9 @@
      stay fixed rather than swap with --ink — in dark mode --ink turns near-
      white, which is illegible on lime. Never redefined under [data-theme]. */
   --ink-on-lime: #0b0b0b;
+  /* Secondary text on a lime fill (a caption over a value) -- fixed for the
+     same reason. 5.7:1 on --lime. */
+  --ink-on-lime-muted: #3b5410;
   /* Form errors only -- the one place a reader must act before going on.
      6.2:1 on --sheet. */
   --danger: #b91c1c;
@@ -3111,46 +3114,548 @@ html.has-js .bio-body.is-collapsed {
   }
 }
 
-/* --- Scope switch ----------------------------------------------------------
-   Sibling of .segmented, but each option is its own URL rather than a radio,
-   so it's links. Matches .segmented's condensed label treatment; the current
-   scope carries the lime because it's the one being measured. */
+/* --- Finder -----------------------------------------------------------------
+   The search + filter console on the catalog indexes (Browse, Movies, TV,
+   Cartoons, People, Studios). One line, read like a catalog card: the search
+   field first, taking whatever width is spare, because finding a name is
+   what most visits come for; then a labelled cell per facet — a small
+   caption ("Sort", "Genre") over the current choice.
 
-.scope {
+   Built to survive the three languages and every width without a special
+   case: a cell's value truncates instead of pushing the line, and choices
+   live in a panel where they wrap freely instead of in a strip that clips.
+   When the console is too narrow for one line (44rem, or 62rem for People's
+   four cells) the search takes a row of its own and the cells share the row
+   below, evenly; under 40rem the cells settle into two columns. Keyed on the
+   console's own width (container queries), not the viewport's, so it adapts
+   wherever it is placed.
+
+   Colour is state, in the site's one accent: the captions and the magnifier
+   carry lime at rest so the console reads as the page's instrument, and a
+   cell moved off its default fills solid lime -- what is shaping the grid
+   right now is visible from across the room, and is exactly what Reset (on
+   the search line) undoes.
+
+   Every cell is a native <details> of plain radios (see _facet.html), so the
+   whole console opens, chooses and submits with no JS; initFinder() in
+   theoria.js only refines it. Every colour is a theme token, so light and
+   dark need no block of their own. The filmography on a person or studio
+   page still uses .toolbar above. */
+
+.finder {
+  --finder-radius: 1.125rem;
+  container: finder / inline-size;
+  position: relative;
   display: flex;
-  gap: var(--space-4);
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: stretch;
+  margin-bottom: var(--space-7);
+  background: var(--sheet);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--finder-radius);
+  transition: border-color var(--dur-fast) var(--ease);
 }
 
-.scope a {
+/* The console's frame lights while the search line has focus, the same lime
+   edge every text field on the site takes. */
+.finder:has(.finder__search input:focus) {
+  border-color: var(--lime-mark);
+}
+
+/* Search field ----------------------------------------------------------- */
+
+.finder__search {
+  flex: 1 1 16rem;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 3.5rem;
+  padding-inline: var(--space-5) var(--space-3);
+  border-right: 1px solid var(--rule);
+}
+
+.finder__search-icon {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: var(--lime-mark);
+}
+
+/* Sheds the shared input[type=search] floor and padding: the line itself is
+   the field here, so the input only has to fill it. 1rem, a step above the
+   cells, because the search line leads. */
+.finder__search input[type="search"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  padding: 0;
+  font-size: var(--text-base);
+  caret-color: var(--lime-mark);
+}
+
+/* Undoes the global lime button. A ghost disc, ink on hover. */
+.finder__clear {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-muted);
+}
+
+.finder__clear svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.finder__clear:hover {
+  background: var(--lime-wash);
+  border-color: transparent;
+  color: var(--lime-deep);
+}
+
+.finder__clear:focus-visible {
+  border-radius: 50%;
+  outline-offset: 0;
+}
+
+.finder__clear[hidden] {
+  display: none;
+}
+
+/* Facet cells ------------------------------------------------------------ */
+
+.finder__facets {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+/* Each cell holds 13rem — as a width, not just a flex-basis, because the
+   row's own size is measured from its cells' widths; a basis alone left the
+   search field greedy and the values clipped. min-width: 0 still lets a
+   long value shorten (ellipsis) if the line ever runs short. */
+.facet {
+  position: relative;
+  flex: 0 1 auto;
+  width: 13rem;
+  min-width: 0;
+}
+
+.facet + .facet {
+  border-left: 1px solid var(--rule);
+}
+
+/* An inset tile rather than a full-bleed cell, so its hover and open fill
+   keep their own rounded corners inside the console's. */
+.facet__trigger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-4);
+  row-gap: 2px;
+  margin: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 0.75rem;
+  cursor: pointer;
+  list-style: none; /* drops the native disclosure triangle */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--dur-fast) var(--ease);
+}
+
+.facet__trigger::-webkit-details-marker {
+  display: none;
+}
+
+.facet__trigger:hover,
+.facet[open] > .facet__trigger {
+  background: var(--lime-wash);
+}
+
+.facet__trigger:focus-visible {
+  border-radius: 0.75rem;
+  outline-offset: 0;
+}
+
+.facet__label {
+  grid-column: 1;
   font-family: var(--font-label);
   font-weight: 600;
   font-stretch: 78%;
-  font-size: var(--text-2xs);
-  letter-spacing: 0.12em;
+  font-size: var(--text-3xs);
+  line-height: 1.2;
   text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--lime-text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.facet__value {
+  grid-column: 1;
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  color: var(--ink-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Moved off its default: the tile fills solid lime, text in the fixed
+   on-lime inks (they must not swap with the theme). The heavier value is the
+   non-colour cue that the cell is set. */
+.facet.is-set > .facet__trigger {
+  background: var(--lime);
+}
+
+.facet.is-set > .facet__trigger:hover,
+.facet.is-set[open] > .facet__trigger {
+  background: var(--lime-hover);
+}
+
+.facet.is-set .facet__label {
+  color: var(--ink-on-lime-muted);
+}
+
+.facet.is-set .facet__value {
+  color: var(--ink-on-lime);
+  font-weight: 700;
+}
+
+.facet.is-set .facet__chevron,
+.facet.is-set .facet__trigger:hover .facet__chevron {
+  color: var(--ink-on-lime);
+}
+
+.facet__chevron {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  width: 1rem;
+  height: 1rem;
   color: var(--ink-faint);
+  transition: transform var(--dur) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.facet__trigger:hover .facet__chevron,
+.facet[open] .facet__chevron {
+  color: var(--lime-text);
+}
+
+.facet[open] .facet__chevron {
+  transform: rotate(180deg);
+}
+
+/* The panel: the account popover's sheet — rounded, lifted, eased in —
+   hanging from its cell. A <fieldset> (radios) or a <nav> (the People Role
+   links), so the fieldset chrome is zeroed here. */
+.facet__panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: 2px;
+  min-width: max(100%, 13rem);
+  max-width: min(22rem, calc(100vw - 2 * var(--space-5)));
+  max-height: min(60vh, 24rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: var(--space-2);
+  background: var(--paper);
+  border: var(--hairline);
+  border-radius: 0.875rem;
+  box-shadow: var(--shadow-card);
+  transform-origin: top left;
+  animation: facet-in var(--dur) var(--ease);
+}
+
+/* Set by initFinder() when the panel would run past the viewport's right
+   edge: it hangs from the cell's right side instead. */
+.facet.is-flipped .facet__panel {
+  left: auto;
+  right: 0;
+  transform-origin: top right;
+}
+
+@keyframes facet-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+/* One row per choice. The radio stays in the DOM, invisible but focusable,
+   so arrow keys move through the group natively; the row draws its state from
+   it with sibling selectors (no :has(), so older engines keep every state). */
+.facet__option {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  color: var(--ink);
   text-decoration: none;
-  padding-bottom: 2px;
-  border-bottom: 2px solid transparent;
+  cursor: pointer;
 }
 
-.scope a:hover {
-  color: var(--ink);
+.facet__option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.scope a[aria-current="true"] {
-  color: var(--ink);
-  border-bottom-color: var(--lime);
+.facet__text {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: 0.625rem;
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  transition: background var(--dur-fast) var(--ease);
 }
 
-/* Wraps .scope so the People page's live filtering (static/js/theoria.js)
-   has a single element to target and swap — but the wrapper itself must not
-   become a flex item of .toolbar in its own right, or .scope stops lining up
-   the way it did as a direct sibling of the form. display: contents keeps it
-   purely addressable. */
-#people-toolbar-meta {
-  display: contents;
+/* A dot slot on every row so labels never shift when one is marked; only the
+   current choice fills it. */
+.facet__text::before {
+  content: "";
+  flex: none;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border-radius: 50%;
+  background: transparent;
+  transform: translateY(-0.05em);
+}
+
+.facet__option:hover {
+  text-decoration: none;
+}
+
+.facet__option:hover .facet__text {
+  background: var(--lime-wash);
+}
+
+.facet__option input:checked + .facet__text,
+.facet__option[aria-current="true"] .facet__text {
+  color: var(--lime-text);
+  font-weight: 600;
+}
+
+.facet__option input:checked + .facet__text::before,
+.facet__option[aria-current="true"] .facet__text::before {
+  background: var(--lime-mark);
+}
+
+.facet__option input:focus-visible + .facet__text {
+  outline: 2px solid var(--lime-mark);
+  outline-offset: -2px;
+}
+
+/* The links in the Role panel carry the focus ring on their own row. */
+a.facet__option:focus-visible {
+  outline: none;
+}
+
+a.facet__option:focus-visible .facet__text {
+  outline: 2px solid var(--lime-mark);
+  outline-offset: -2px;
+}
+
+/* Reset, on the search line ------------------------------------------------
+   The lime-outlined chip the header's Sign in uses: an action, not a fill.
+   No JS: always shown (it is a plain link to the bare index). With JS:
+   shown only while initFinder() marks the form .is-dirty, gated on has-js so
+   it never flashes in before the script runs. */
+.finder__reset {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--lime-mark);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--lime-text);
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+
+.finder__reset:hover {
+  background: var(--lime-wash);
+  color: var(--lime-deep);
+  text-decoration: none;
+}
+
+.finder__reset:focus-visible {
+  border-radius: var(--radius-pill);
+}
+
+html.has-js .finder:not(.is-dirty) .finder__reset {
+  display: none;
+}
+
+/* No-JS only (html.has-js hides .apply-btn): the last item on the line. */
+.finder .apply-btn {
+  flex: none;
+  padding-block: var(--space-2);
+}
+
+/* Two rows: search above, cells below ----------------------------------------
+   Same rules at two widths: a console too narrow for the search plus one or
+   two cells, and People's, whose four cells need more. The cells then share
+   their row evenly instead of each holding 13rem. */
+@container finder (max-width: 44rem) {
+  .finder__search {
+    flex-basis: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .finder__facets {
+    flex: 1 1 100%;
+  }
+
+  .facet {
+    flex: 1 1 0;
+    width: auto;
+  }
+}
+
+@container finder (max-width: 62rem) {
+  .finder:has(.facet:nth-child(3)) .finder__search {
+    flex-basis: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .finder:has(.facet:nth-child(3)) .finder__facets {
+    flex: 1 1 100%;
+  }
+
+  .finder:has(.facet:nth-child(3)) .facet {
+    flex: 1 1 0;
+    width: auto;
+  }
+}
+
+/* Narrow console: two even columns ------------------------------------------
+   Every cell gets half the row, so a long Cyrillic value shortens instead of
+   breaking the layout. A cell is no longer the panel's anchor here: the
+   panel hangs under the whole console at its full width, its choices in two
+   columns where they fit. */
+@container finder (max-width: 40rem) {
+  .finder__facets {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .facet {
+    position: static;
+  }
+
+  .facet + .facet {
+    border-left: none;
+  }
+
+  .finder__facets > :nth-child(even) {
+    border-left: 1px solid var(--rule);
+  }
+
+  .finder__facets > :nth-child(n + 3) {
+    border-top: 1px solid var(--rule);
+  }
+
+  /* An odd cell out (one facet; People's Role/Sort/Gender/Craft is even)
+     takes the whole last row rather than leaving half of it empty. */
+  .facet:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+
+  .facet__panel,
+  .facet.is-flipped .facet__panel {
+    left: 0;
+    right: 0;
+    min-width: 0;
+    max-width: none;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
+    align-content: start;
+    transform-origin: top center;
+  }
+}
+
+/* Touch: 44px rows in a panel, and the clear disc grows to a fingertip. */
+@media (pointer: coarse) {
+  .facet__text {
+    padding-block: var(--space-4);
+  }
+
+  .finder__clear {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .finder__reset {
+    min-height: 2.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .facet__panel {
+    animation: none;
+  }
+
+  .facet__chevron {
+    transition: none;
+  }
+}
+
+/* TV: the console is the remote's way into the page, so its targets are sized
+   for the sofa. Only html.is-tv keys this; a TV's media queries still see the
+   whole screen. */
+html.is-tv .finder {
+  margin-bottom: var(--space-8);
+}
+
+html.is-tv .finder__search {
+  min-height: 4.25rem;
+}
+
+html.is-tv .finder__search input[type="search"] {
+  font-size: var(--text-md);
+}
+
+html.is-tv .facet__trigger {
+  padding: var(--space-4) var(--space-5);
+}
+
+html.is-tv .facet__label {
+  font-size: var(--text-2xs);
+}
+
+html.is-tv .facet__value,
+html.is-tv .facet__text {
+  font-size: var(--text-md);
+}
+
+html.is-tv .finder__reset {
+  min-height: 2.75rem;
+  font-size: var(--text-2xs);
 }
 
 /* --- Credit list (movie detail, crew) ---------------------------------------
@@ -4665,9 +5170,9 @@ main,
     min-width: 0;
   }
 
-  /* The filter bar on a phone (every page with search + filters: Browse,
-     Movies, TV, Cartoons, People, Studios, and the filmography on a person or
-     studio). A slim bar, not a stack of slabs: every control is 36px, search
+  /* The filter bar on a phone (the pages still on .toolbar: the filmography
+     on a person or studio; the catalog indexes use .finder, which adapts to
+     its own width). A slim bar, not a stack of slabs: every control is 36px, search
      takes the full row, and the sort/filter strips are only as wide as their
      labels, so a strip and a dropdown share a row when they fit (Browse: sort
      + genre) instead of each claiming the whole width. The text inside an

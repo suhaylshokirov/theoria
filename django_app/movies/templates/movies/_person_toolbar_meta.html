@@ -1,16 +1,16 @@
 {% load i18n %}
-{% comment %} The scope nav, sitting inside .toolbar as a flex sibling of the
-   filter form. Its own partial (rather than folded into person_list.html
-   directly) because static/js/theoria.js's initLiveFilter() swaps it
-   independently of #people-grid below — see _person_results.html, the
-   AJAX-only template that concatenates this with _person_grid.html.
-   #people-toolbar-meta is `display: contents` in theoria.css so this wrapper
-   doesn't disturb .toolbar's flex layout; it exists purely so the live-filter
-   swap has an element to target. {% endcomment %}
-<div id="people-toolbar-meta">
-    <nav class="scope" aria-label="{% translate "Filter people by credit" %}">
-        <a href="{% url 'movies:person_list' %}?{{ base_query }}"{% if scope == "all" %} aria-current="true"{% endif %}>{% translate "All" %}</a>
-        <a href="{% url 'movies:actor_list' %}?{{ base_query }}"{% if scope == "acting" %} aria-current="true"{% endif %}>{% translate "Acting" %}</a>
-        <a href="{% url 'movies:director_list' %}?{{ base_query }}"{% if scope == "directing" %} aria-current="true"{% endif %}>{% translate "Directing" %}</a>
-    </nav>
-</div>
+{% comment %} The Role cell's panel in person_list.html's filter console: All,
+   Acting and Directing. Actors and directors are not separate tables, they
+   are the people holding an Acting or Directing credit, so this switches
+   between three URLs over one index rather than filtering by a radio — links,
+   each carrying the current search and filters.
+
+   Its own partial because static/js/theoria.js's initLiveFilter() swaps it
+   (by id) whenever a filter changes, so the links keep up with the filters —
+   see _person_results.html, the AJAX-only template that concatenates this
+   with the count and _person_grid.html. {% endcomment %}
+<nav class="facet__panel" id="people-toolbar-meta" aria-label="{% translate "Filter people by credit" %}">
+    <a class="facet__option" href="{% url 'movies:person_list' %}?{{ base_query }}"{% if scope == "all" %} aria-current="true"{% endif %}><span class="facet__text">{% translate "All" %}</span></a>
+    <a class="facet__option" href="{% url 'movies:actor_list' %}?{{ base_query }}"{% if scope == "acting" %} aria-current="true"{% endif %}><span class="facet__text">{% translate "Acting" %}</span></a>
+    <a class="facet__option" href="{% url 'movies:director_list' %}?{{ base_query }}"{% if scope == "directing" %} aria-current="true"{% endif %}><span class="facet__text">{% translate "Directing" %}</span></a>
+</nav>

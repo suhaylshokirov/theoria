@@ -12,36 +12,19 @@
 {% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
 
 <section class="sheet-section">
-    <div class="toolbar">
-        {% comment %} Same live-filter contract as movie_list.html — see its
-           docstring. Plain GET form underneath, so it still works with no
-           JS — see _series_results.html's docstring. {% endcomment %}
-        <form method="get" action="{% url 'movies:series_list' %}" data-live-filter data-live-targets="#series-grid">
-            <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search shows" %}" aria-label="{% translate "Search TV shows by name" %}">
-            </div>
-            {% comment %} No Revenue segment — TV has no money measures. {% endcomment %}
-            <fieldset class="segmented">
-                <legend class="visually-hidden">{% translate "Order by" %}</legend>
-                <input type="radio" name="sort" id="sort-first-air" value="first_air" {% if sort == "first_air" %}checked{% endif %}>
-                <label for="sort-first-air">{% translate "Newest" %}</label>
-                <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
-                <label for="sort-rating">{% translate "Rated" %}</label>
-                <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
-                <label for="sort-name">{% translate "A–Z" %}</label>
-            </fieldset>
-            <div class="field">
-                <label for="series-genre" class="visually-hidden">{% translate "Filter by genre" %}</label>
-                <select name="genre" id="series-genre" data-menu>
-                    <option value="">{% translate "Any genre" %}</option>
-                    {% for slug, name in genre_choices %}
-                    <option value="{{ slug }}" {% if genre == slug %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
-        </form>
-    </div>
+    {% comment %} Same filter console and live-filter contract as
+       movie_list.html — see its docstring. No Revenue sort: TV has no money
+       measures. {% endcomment %}
+    <form class="finder" method="get" action="{% url 'movies:series_list' %}" data-finder data-live-filter data-live-targets="#series-grid">
+        {% translate "Search shows" as placeholder %}{% translate "Search TV shows by name" as search_label %}
+        {% url 'movies:series_list' as reset_url %}{% include "movies/_finder_search.html" with q=q placeholder=placeholder label=search_label reset_url=reset_url only %}
+        <div class="finder__facets">
+            {% translate "Sort" as label %}{% translate "Order by" as legend %}
+            {% include "movies/_facet.html" with label=label legend=legend name="sort" choices=sort_choices current=sort only %}
+            {% translate "Genre" as label %}{% translate "Filter by genre" as legend %}{% translate "Any genre" as any_label %}
+            {% include "movies/_facet.html" with label=label legend=legend name="genre" choices=genre_choices current=genre any_label=any_label only %}
+        </div>
+    </form>
 
     {% include "movies/_series_grid.html" %}
 </section>

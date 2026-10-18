@@ -83,6 +83,15 @@ MOVIE_SORTS = {
     "title": F("title").asc(),
 }
 
+# The Sort cell's choices on each catalog index's filter console, in display
+# order; the first is the default. Keys must match the *_SORTS dicts.
+MOVIE_SORT_CHOICES = [
+    ("release", gettext_lazy("Newest")),
+    ("rating", gettext_lazy("Rated")),
+    ("revenue", gettext_lazy("Revenue")),
+    ("title", gettext_lazy("A–Z")),
+]
+
 # cartoon_list() has no field of its own to test — there's no certification
 # or audience column in the warehouse (TMDB doesn't publish one at the
 # /movie or /tv endpoints this catalog ingests). "Children's cartoons" is
@@ -190,6 +199,7 @@ def movie_list(request):
         "page_obj": page_obj, "q": q, "sort": sort,
         "genre": genre,
         "genre_choices": genre_choices,
+        "sort_choices": MOVIE_SORT_CHOICES,
         "base_query": urlencode({"q": q, "sort": sort, "genre": genre}),
     }
     # See _person_list()'s identical branch: static/js/theoria.js's
@@ -208,6 +218,12 @@ SERIES_SORTS = {
     "rating": F("imdb_rating").desc(nulls_last=True),
     "name": F("name").asc(),
 }
+
+SERIES_SORT_CHOICES = [
+    ("first_air", gettext_lazy("Newest")),
+    ("rating", gettext_lazy("Rated")),
+    ("name", gettext_lazy("A–Z")),
+]
 
 
 def series_list(request):
@@ -259,6 +275,7 @@ def series_list(request):
         "page_obj": page_obj, "q": q, "sort": sort,
         "genre": genre,
         "genre_choices": genre_choices,
+        "sort_choices": SERIES_SORT_CHOICES,
         "base_query": urlencode({"q": q, "sort": sort, "genre": genre}),
     }
     if _is_ajax(request):
@@ -293,6 +310,12 @@ BROWSE_SORTS = {
     "rating": (F("rating").desc(nulls_last=True), "kind", "item_id"),
     "title": ("sort_title_lower", "kind", "item_id"),
 }
+
+BROWSE_SORT_CHOICES = [
+    ("newest", gettext_lazy("Newest")),
+    ("rating", gettext_lazy("Rated")),
+    ("title", gettext_lazy("A–Z")),
+]
 
 
 def _browse_genres():
@@ -448,6 +471,7 @@ def browse(request):
         "page_obj": page_obj, "q": q, "sort": sort,
         "genre": genre,
         "genre_choices": genre_choices,
+        "sort_choices": BROWSE_SORT_CHOICES,
         "base_query": urlencode({"q": q, "sort": sort, "genre": genre}),
     }
     if _is_ajax(request):
@@ -456,6 +480,11 @@ def browse(request):
 
 
 CARTOON_SORTS = ("newest", "rating", "title")
+CARTOON_SORT_CHOICES = [
+    ("newest", gettext_lazy("Newest")),
+    ("rating", gettext_lazy("Rated")),
+    ("title", gettext_lazy("A–Z")),
+]
 
 
 def _cartoon_newest_key(item):
@@ -552,6 +581,7 @@ def cartoon_list(request):
 
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
+        "sort_choices": CARTOON_SORT_CHOICES,
         "base_query": urlencode({"q": q, "sort": sort}),
     }
     if _is_ajax(request):
@@ -564,6 +594,11 @@ PERSON_SORTS = {
     "popularity": F("popularity").desc(nulls_last=True),
     "name": F("name").asc(),
 }
+
+PERSON_SORT_CHOICES = [
+    ("popularity", gettext_lazy("Most popular")),
+    ("name", gettext_lazy("A–Z")),
+]
 
 # The one profile that always leads every people index (Jessica Alba, TMDB
 # person 56731), whatever the sort. Filters and search still apply — she can't
@@ -638,6 +673,11 @@ def _person_list(request, people, list_title, scope):
         "known_for": known_for,
         "gender_choices": GENDER_LABELS,
         "known_for_choices": DEPARTMENT_ORDER,
+        # (value, label) pairs for the console's Craft cell: the department
+        # name stays the English value the query compares, only the label is
+        # translated.
+        "craft_choices": [(name, gettext(name)) for name in DEPARTMENT_ORDER],
+        "sort_choices": PERSON_SORT_CHOICES,
         "list_title": list_title,
         "scope": scope,
         "detail_url_name": "movies:person_detail",
@@ -1185,6 +1225,12 @@ STUDIO_SORTS = {
     "name": F("name").asc(),
 }
 
+STUDIO_SORT_CHOICES = [
+    ("film_count", gettext_lazy("Most movies")),
+    ("revenue", gettext_lazy("Revenue")),
+    ("name", gettext_lazy("A–Z")),
+]
+
 
 def studio_list(request):
     """Browsable studio index: logo grid + name search + sort + pagination —
@@ -1217,6 +1263,7 @@ def studio_list(request):
     page_obj = Paginator(companies, STUDIOS_PER_PAGE).get_page(request.GET.get("page"))
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
+        "sort_choices": STUDIO_SORT_CHOICES,
         "base_query": urlencode({"q": q, "sort": sort}),
     }
     # See _person_list()'s identical branch: static/js/theoria.js's

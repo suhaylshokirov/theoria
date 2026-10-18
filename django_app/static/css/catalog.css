@@ -1,6 +1,7 @@
 /* Catalog pages: /browse/, /movies/, /tv/, /cartoons/.
-   They share one shape (sheet header, a toolbar of search + sort + maybe
-   genre, a poster grid, a pager), so one stylesheet adapts all four. Every
+   They share one shape (sheet header, a search + sort + maybe genre bar —
+   the .finder console — a poster
+   grid, a pager), so one stylesheet adapts all four. Every
    rule is scoped by body.page-catalog so it can't reach another page. The
    shared cards, grid and controls are theoria.css's; this only retunes them
    where these four pages' toolbar and pager need it. */

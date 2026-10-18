@@ -14,56 +14,35 @@
 {% include "movies/_sheet_header.html" with title=list_title sub=sheet_sub only %}
 
 <section class="sheet-section">
-    <div class="toolbar">
-        {% comment %} data-live-filter + data-live-targets: static/js/theoria.js's
-           initLiveFilter() re-fetches and swaps just these two regions as the
-           fields below change, so results update without an Apply click or a
-           full page reload. Plain GET form underneath, so it still works with
-           no JS — see _person_results.html's docstring. {% endcomment %}
-        <form method="get" action="" data-live-filter data-live-targets="#people-toolbar-meta, #people-grid">
-            <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search names" %}" aria-label="{% blocktranslate trimmed with title=list_title|lower %}Search {{ title }} by name{% endblocktranslate %}">
-            </div>
-            {% comment %} Radio segments rather than a <select>: few, fixed options, so
-               showing them is more useful than hiding them (matches movie_list's
-               sort control). Still a plain form control — works without JS. {% endcomment %}
-            <fieldset class="segmented">
-                <legend class="visually-hidden">{% translate "Order by" %}</legend>
-                <input type="radio" name="sort" id="sort-popularity" value="popularity" {% if sort == "popularity" %}checked{% endif %}>
-                <label for="sort-popularity">{% translate "Most popular" %}</label>
-                <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
-                <label for="sort-name">{% translate "A–Z" %}</label>
-            </fieldset>
-            <fieldset class="segmented">
-                <legend class="visually-hidden">{% translate "Filter by gender" %}</legend>
-                <input type="radio" name="gender" id="gender-all" value="" {% if not gender %}checked{% endif %}>
-                <label for="gender-all">{% translate "Any gender" %}</label>
-                {% for value, label in gender_choices.items %}
-                <input type="radio" name="gender" id="gender-{{ value }}" value="{{ value }}" {% if gender == value %}checked{% endif %}>
-                <label for="gender-{{ value }}">{{ label }}</label>
-                {% endfor %}
-            </fieldset>
-            <div class="field">
-                <label for="known-for" class="visually-hidden">{% translate "Filter by craft" %}</label>
-                <select name="known_for" id="known-for">
-                    <option value="">{% translate "Any craft" %}</option>
-                    {% for choice in known_for_choices %}
-                    <option value="{{ choice }}" {% if known_for == choice %}selected{% endif %}>{% translate choice %}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            {% comment %} Redundant once JS is live-filtering on every change — hidden
-               via the html.has-js CSS gate (see base.html) rather than removed, so a
-               no-JS visitor, who gets no auto-submit on a radio/select change, still
-               has a way to apply anything but the search box. {% endcomment %}
-            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
-        </form>
-        {% comment %} Actors and directors are no longer separate tables — they're the
-           people holding an Acting or Directing credit. So this is a scope
-           switch over one index, not three different indexes. Plain links
-           rather than the radio `.segmented` control because each scope is
-           its own URL. {% endcomment %}
-        {% include "movies/_person_toolbar_meta.html" %}
+    {% comment %} Same filter console and live-filter contract as
+       movie_list.html — see its docstring. The Role cell comes first because
+       it picks the index itself: All, Acting and Directing are three URLs
+       (the people holding that credit), so its panel is links, not radios,
+       and it is never part of Reset. Its links carry the current filters,
+       which is why initLiveFilter() swaps #people-toolbar-meta (the panel)
+       along with the grid — see _person_results.html. {% endcomment %}
+    <form class="finder" method="get" action="" data-finder data-live-filter data-live-targets="#people-toolbar-meta, #people-grid">
+        {% translate "Search names" as placeholder %}{% blocktranslate trimmed with title=list_title|lower asvar search_label %}Search {{ title }} by name{% endblocktranslate %}
+        {% include "movies/_finder_search.html" with q=q placeholder=placeholder label=search_label reset_url=request.path only %}
+        <div class="finder__facets">
+            <details class="facet{% if scope != "all" %} is-set{% endif %}" data-facet>
+                <summary class="facet__trigger">
+                    <span class="facet__label">{% translate "Role" context "people filter" %}</span>
+                    <span class="facet__value">{% if scope == "acting" %}{% translate "Acting" %}{% elif scope == "directing" %}{% translate "Directing" %}{% else %}{% translate "All" %}{% endif %}</span>
+                    <svg class="facet__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </summary>
+                {% include "movies/_person_toolbar_meta.html" %}
+            </details>
+            {% translate "Sort" as label %}{% translate "Order by" as legend %}
+            {% include "movies/_facet.html" with label=label legend=legend name="sort" choices=sort_choices current=sort only %}
+            {% translate "Gender" as label %}{% translate "Filter by gender" as legend %}{% translate "Any gender" as any_label %}
+            {% include "movies/_facet.html" with label=label legend=legend name="gender" choices=gender_choices.items current=gender any_label=any_label only %}
+            {% translate "Craft" as label %}{% translate "Filter by craft" as legend %}{% translate "Any craft" as any_label %}
+            {% include "movies/_facet.html" with label=label legend=legend name="known_for" choices=craft_choices current=known_for any_label=any_label only %}
+        </div>
+    </form>
+
+    {% include "movies/_person_toolbar_meta.html" %}
     </div>
 
     {% include "movies/_person_grid.html" %}

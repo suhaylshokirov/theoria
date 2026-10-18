@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-17 11:36+0000\n"
+"POT-Creation-Date: 2026-10-18 08:08+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -342,7 +342,7 @@ msgstr "Происхождение"
 
 #: analytics/templates/analytics/dashboard.html:51
 #: analytics/templates/analytics/dashboard.html:427
-#: movies/templates/movies/home.html:94 movies/views.py:629
+#: movies/templates/movies/home.html:94 movies/views.py:720
 #: templates/base.html:234
 msgid "People"
 msgstr "Люди"
@@ -540,6 +540,9 @@ msgstr ""
 
 #: analytics/templates/analytics/dashboard.html:174
 #: analytics/templates/analytics/dashboard.html:326
+#: movies/templates/movies/browse.html:27
+#: movies/templates/movies/movie_list.html:34
+#: movies/templates/movies/series_list.html:25
 msgid "Genre"
 msgstr "Жанр"
 
@@ -1066,10 +1069,9 @@ msgstr "Бюджет"
 #: core/context_processors.py:84 movies/templates/movies/_studio_header.html:45
 #: movies/templates/movies/movie_detail.html:123
 #: movies/templates/movies/movie_detail.html:177
-#: movies/templates/movies/movie_list.html:37
 #: movies/templates/movies/person_detail.html:78
-#: movies/templates/movies/studio_detail.html:73
-#: movies/templates/movies/studio_list.html:38
+#: movies/templates/movies/studio_detail.html:73 movies/views.py:91
+#: movies/views.py:1230
 msgid "Revenue"
 msgstr "Сборы"
 
@@ -1191,111 +1193,103 @@ msgstr ""
 msgid "Find something"
 msgstr "Найти что-нибудь"
 
-#: core/templates/core/_collection_section.html:27
-#, python-format
-msgid "<span class=\"mono\">%(counter)s</span> movie"
-msgid_plural "<span class=\"mono\">%(counter)s</span> movies"
-msgstr[0] "<span class=\"mono\">%(counter)s</span> фильм"
-msgstr[1] "<span class=\"mono\">%(counter)s</span> фильма"
-msgstr[2] "<span class=\"mono\">%(counter)s</span> фильмов"
-msgstr[3] "<span class=\"mono\">%(counter)s</span> фильма"
-
-#: core/templates/core/_collection_section.html:37
+#: core/templates/core/_collection_section.html:36
 msgid "Drag posters to reorder"
 msgstr "Перетаскивайте постеры, чтобы менять порядок"
 
-#: core/templates/core/_collection_section.html:38
+#: core/templates/core/_collection_section.html:37
 msgid "Hold a poster, then drag"
 msgstr "Удерживайте постер и перетащите"
 
-#: core/templates/core/_collection_section.html:40
+#: core/templates/core/_collection_section.html:39
 msgid ""
 "Press Space to pick it up, the arrow keys to move it, Space to drop it, "
 "Escape to cancel."
-msgstr "Пробел — взять, стрелки — переместить, пробел — отпустить, Escape — отменить."
+msgstr ""
+"Пробел — взять, стрелки — переместить, пробел — отпустить, Escape — отменить."
 
-#: core/templates/core/_collection_section.html:60
-#: core/templates/core/_collection_section.html:67
-#: core/templates/core/_collection_section.html:78
+#: core/templates/core/_collection_section.html:59
+#: core/templates/core/_collection_section.html:66
+#: core/templates/core/_collection_section.html:73
 msgctxt "share sheet"
 msgid "Share"
 msgstr "Поделиться"
 
-#: core/templates/core/_collection_section.html:63
+#: core/templates/core/_collection_section.html:62
 #, python-format
 msgid "Share %(label)s — add a movie first"
 msgstr "Поделиться: %(label)s — сначала добавьте фильм"
 
-#: core/templates/core/_collection_section.html:80
+#: core/templates/core/_collection_section.html:75
 msgid "Link to this list"
 msgstr "Ссылка на этот список"
 
-#: core/templates/core/_collection_section.html:86
+#: core/templates/core/_collection_section.html:81
 #: core/templates/core/share/_sheet.html:135
 #: core/templates/core/share/_sheet.html:144
 msgid "Stop sharing"
 msgstr "Закрыть доступ"
 
-#: core/templates/core/_collection_section.html:93
+#: core/templates/core/_collection_section.html:88
 msgid "Add a line (optional)"
 msgstr "Подпись (необязательно)"
 
-#: core/templates/core/_collection_section.html:95
+#: core/templates/core/_collection_section.html:90
 msgid "Create link"
 msgstr "Создать ссылку"
 
-#: core/templates/core/_collection_section.html:106
+#: core/templates/core/_collection_section.html:101
 #: core/templates/core/share/page.html:145
 #, python-format
 msgid "Rank %(rank)s:"
 msgstr "Место %(rank)s:"
 
-#: core/templates/core/_collection_section.html:119
+#: core/templates/core/_collection_section.html:114
 #: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "Movie"
 msgstr "Фильм"
 
-#: core/templates/core/_collection_section.html:119
+#: core/templates/core/_collection_section.html:114
 #: core/templates/core/share/page.html:154 templates/base.html:277
 msgid "TV show"
 msgstr "Сериал"
 
-#: core/templates/core/_collection_section.html:123
+#: core/templates/core/_collection_section.html:118
 #, python-format
 msgid "Remove %(title)s from %(label)s"
 msgstr "Убрать «%(title)s» из раздела «%(label)s»"
 
-#: core/templates/core/_collection_section.html:136
+#: core/templates/core/_collection_section.html:131
 #, python-format
 msgid "Reorder %(title)s, rank %(rank)s"
 msgstr "Изменить место «%(title)s», сейчас %(rank)s-е"
 
-#: core/templates/core/_collection_section.html:154
+#: core/templates/core/_collection_section.html:149
 #, python-format
 msgid "%(title)s is ranked first"
 msgstr "«%(title)s» уже на первом месте"
 
-#: core/templates/core/_collection_section.html:156
-#: core/templates/core/_collection_section.html:167
+#: core/templates/core/_collection_section.html:151
+#: core/templates/core/_collection_section.html:162
 #, python-format
 msgid "Move %(title)s to rank %(rank)s"
 msgstr "Переместить «%(title)s» на %(rank)s-е место"
 
-#: core/templates/core/_collection_section.html:165
+#: core/templates/core/_collection_section.html:160
 #, python-format
 msgid "%(title)s is ranked last"
 msgstr "«%(title)s» уже на последнем месте"
 
-#: core/templates/core/_collection_section.html:189
+#: core/templates/core/_collection_section.html:184
 msgid "Add to Top"
 msgstr "Добавить в топ"
 
-#: core/templates/core/_collection_section.html:189
+#: core/templates/core/_collection_section.html:184
 #, python-format
 msgid "at rank %(rank)s"
 msgstr "на месте %(rank)s"
 
-#: core/templates/core/_collection_section.html:191
+#: core/templates/core/_collection_section.html:186
 msgid "Empty slot"
 msgstr "Свободное место"
 
@@ -1783,6 +1777,20 @@ msgstr "серии"
 msgid "Episodes for this season haven't been catalogued yet."
 msgstr "Серии этого сезона ещё не внесены в каталог."
 
+#: movies/templates/movies/_finder_search.html:17
+msgid "Clear search"
+msgstr "Очистить поиск"
+
+#: movies/templates/movies/_finder_search.html:20
+msgid "Reset"
+msgstr "Сбросить"
+
+#: movies/templates/movies/_finder_search.html:21
+#: movies/templates/movies/person_detail.html:82
+#: movies/templates/movies/studio_detail.html:77
+msgid "Apply"
+msgstr "Применить"
+
 #: movies/templates/movies/_movie_card.html:15
 #: movies/templates/movies/_series_card.html:17
 #: movies/templates/movies/movie_detail.html:35
@@ -1869,19 +1877,22 @@ msgstr "Дата смерти"
 msgid "Born in"
 msgstr "Место рождения"
 
-#: movies/templates/movies/_person_toolbar_meta.html:12
+#: movies/templates/movies/_person_toolbar_meta.html:13
 msgid "Filter people by credit"
 msgstr "Фильтр людей по виду работы"
 
-#: movies/templates/movies/_person_toolbar_meta.html:13
+#: movies/templates/movies/_person_toolbar_meta.html:14
+#: movies/templates/movies/person_list.html:32
 msgid "All"
 msgstr "Все"
 
-#: movies/templates/movies/_person_toolbar_meta.html:14 movies/vocab.py:24
+#: movies/templates/movies/_person_toolbar_meta.html:15
+#: movies/templates/movies/person_list.html:32 movies/vocab.py:24
 msgid "Acting"
 msgstr "Актёрская игра"
 
-#: movies/templates/movies/_person_toolbar_meta.html:15 movies/vocab.py:25
+#: movies/templates/movies/_person_toolbar_meta.html:16
+#: movies/templates/movies/person_list.html:32 movies/vocab.py:25
 msgid "Directing"
 msgstr "Режиссура"
 
@@ -2025,8 +2036,8 @@ msgstr "Студий по запросу «%(q)s» нет."
 msgid "No studios loaded yet. Run the pipeline to fill the catalog."
 msgstr "Студии ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
 
-#: movies/templates/movies/_studio_header.html:41 movies/views.py:1280
-#: movies/views.py:1653
+#: movies/templates/movies/_studio_header.html:41 movies/views.py:1378
+#: movies/views.py:1751
 msgid "Active"
 msgstr "Активная карьера"
 
@@ -2072,64 +2083,45 @@ msgstr ""
 "Все фильмы и сериалы в одном месте. Ищите по названию, выбирайте жанр или "
 "меняйте порядок."
 
-#: movies/templates/movies/browse.html:25
+#: movies/templates/movies/browse.html:22
 msgid "Search movies and shows"
 msgstr "Поиск фильмов и сериалов"
 
-#: movies/templates/movies/browse.html:25
+#: movies/templates/movies/browse.html:22
 msgid "Search movies and shows by title"
 msgstr "Поиск фильмов и сериалов по названию"
 
-#: movies/templates/movies/browse.html:28
-#: movies/templates/movies/cartoon_list.html:27
-#: movies/templates/movies/movie_list.html:31
+#: movies/templates/movies/browse.html:25
+#: movies/templates/movies/cartoon_list.html:24
+#: movies/templates/movies/movie_list.html:28
+#: movies/templates/movies/person_list.html:37
+#: movies/templates/movies/series_list.html:23
+#: movies/templates/movies/studio_list.html:24
+msgid "Sort"
+msgstr "Сортировка"
+
+#: movies/templates/movies/browse.html:25
+#: movies/templates/movies/cartoon_list.html:24
+#: movies/templates/movies/movie_list.html:28
 #: movies/templates/movies/person_detail.html:72
-#: movies/templates/movies/person_list.html:33
-#: movies/templates/movies/series_list.html:27
+#: movies/templates/movies/person_list.html:37
+#: movies/templates/movies/series_list.html:23
 #: movies/templates/movies/studio_detail.html:67
-#: movies/templates/movies/studio_list.html:34
+#: movies/templates/movies/studio_list.html:24
 msgid "Order by"
 msgstr "Сортировка"
 
-#: movies/templates/movies/browse.html:30
-#: movies/templates/movies/cartoon_list.html:29
-#: movies/templates/movies/movie_list.html:33
-#: movies/templates/movies/person_detail.html:74
-#: movies/templates/movies/series_list.html:29
-#: movies/templates/movies/studio_detail.html:69
-msgid "Newest"
-msgstr "Новые"
+#: movies/templates/movies/browse.html:27
+#: movies/templates/movies/movie_list.html:34
+#: movies/templates/movies/series_list.html:25
+msgid "Filter by genre"
+msgstr "Фильтр по жанру"
 
-#: movies/templates/movies/browse.html:32
-#: movies/templates/movies/cartoon_list.html:31
-#: movies/templates/movies/movie_list.html:35
-#: movies/templates/movies/person_detail.html:76
-#: movies/templates/movies/series_list.html:31
-#: movies/templates/movies/studio_detail.html:71
-msgid "Rated"
-msgstr "По рейтингу"
-
-#: movies/templates/movies/browse.html:34
-#: movies/templates/movies/cartoon_list.html:33
-#: movies/templates/movies/movie_list.html:39
-#: movies/templates/movies/person_detail.html:80
-#: movies/templates/movies/person_list.html:37
-#: movies/templates/movies/series_list.html:33
-#: movies/templates/movies/studio_detail.html:75
-#: movies/templates/movies/studio_list.html:40
-msgid "A–Z"
-msgstr "А–Я"
-
-#: movies/templates/movies/browse.html:36
-#: movies/templates/movies/cartoon_list.html:35
-#: movies/templates/movies/movie_list.html:66
-#: movies/templates/movies/person_detail.html:82
-#: movies/templates/movies/person_list.html:62
-#: movies/templates/movies/series_list.html:44
-#: movies/templates/movies/studio_detail.html:77
-#: movies/templates/movies/studio_list.html:47
-msgid "Apply"
-msgstr "Применить"
+#: movies/templates/movies/browse.html:27
+#: movies/templates/movies/movie_list.html:34
+#: movies/templates/movies/series_list.html:25
+msgid "Any genre"
+msgstr "Любой жанр"
 
 #: movies/templates/movies/cartoon_list.html:4
 #: movies/templates/movies/cartoon_list.html:11 templates/base.html:233
@@ -2144,11 +2136,11 @@ msgstr ""
 "Анимационные фильмы и сериалы для юных зрителей. Ищите по названию или "
 "меняйте порядок по измеряемым показателям."
 
-#: movies/templates/movies/cartoon_list.html:24
+#: movies/templates/movies/cartoon_list.html:21
 msgid "Search cartoons"
 msgstr "Поиск мультфильмов"
 
-#: movies/templates/movies/cartoon_list.html:24
+#: movies/templates/movies/cartoon_list.html:21
 msgid "Search cartoons by title"
 msgstr "Поиск мультфильмов по названию"
 
@@ -2389,23 +2381,13 @@ msgstr ""
 "Все фильмы, что есть в хранилище. Ищите по названию, выбирайте жанр или "
 "меняйте порядок по измеряемым показателям."
 
-#: movies/templates/movies/movie_list.html:24
+#: movies/templates/movies/movie_list.html:25
 msgid "Search movies"
 msgstr "Поиск фильмов"
 
-#: movies/templates/movies/movie_list.html:24
+#: movies/templates/movies/movie_list.html:25
 msgid "Search movies by title"
 msgstr "Поиск фильмов по названию"
-
-#: movies/templates/movies/movie_list.html:53
-#: movies/templates/movies/series_list.html:36
-msgid "Filter by genre"
-msgstr "Фильтр по жанру"
-
-#: movies/templates/movies/movie_list.html:55
-#: movies/templates/movies/series_list.html:38
-msgid "Any genre"
-msgstr "Любой жанр"
 
 #: movies/templates/movies/person_detail.html:12
 #: movies/templates/movies/person_detail.html:88
@@ -2452,6 +2434,25 @@ msgstr "Поиск по названию среди фильмов и сериа
 msgid "Search %(name)s's movies by title"
 msgstr "Поиск по названию среди фильмов: %(name)s"
 
+#: movies/templates/movies/person_detail.html:74
+#: movies/templates/movies/studio_detail.html:69 movies/views.py:89
+#: movies/views.py:223 movies/views.py:315 movies/views.py:484
+msgid "Newest"
+msgstr "Новые"
+
+#: movies/templates/movies/person_detail.html:76
+#: movies/templates/movies/studio_detail.html:71 movies/views.py:90
+#: movies/views.py:224 movies/views.py:316 movies/views.py:485
+msgid "Rated"
+msgstr "По рейтингу"
+
+#: movies/templates/movies/person_detail.html:80
+#: movies/templates/movies/studio_detail.html:75 movies/views.py:92
+#: movies/views.py:225 movies/views.py:317 movies/views.py:486
+#: movies/views.py:600 movies/views.py:1231
+msgid "A–Z"
+msgstr "А–Я"
+
 #: movies/templates/movies/person_list.html:13
 msgid ""
 "Search by name, filter by gender or craft, and reorder by what was measured."
@@ -2468,23 +2469,32 @@ msgstr "Поиск по именам"
 msgid "Search %(title)s by name"
 msgstr "Поиск по имени: %(title)s"
 
-#: movies/templates/movies/person_list.html:35
-msgid "Most popular"
-msgstr "Самые популярные"
+#: movies/templates/movies/person_list.html:31
+msgctxt "people filter"
+msgid "Role"
+msgstr "Работа"
 
-#: movies/templates/movies/person_list.html:40
+#: movies/templates/movies/person_list.html:39
+msgid "Gender"
+msgstr "Пол"
+
+#: movies/templates/movies/person_list.html:39
 msgid "Filter by gender"
 msgstr "Фильтр по полу"
 
-#: movies/templates/movies/person_list.html:42
+#: movies/templates/movies/person_list.html:39
 msgid "Any gender"
 msgstr "Любой пол"
 
-#: movies/templates/movies/person_list.html:49
+#: movies/templates/movies/person_list.html:41
+msgid "Craft"
+msgstr "Профессия"
+
+#: movies/templates/movies/person_list.html:41
 msgid "Filter by craft"
 msgstr "Фильтр по профессии"
 
-#: movies/templates/movies/person_list.html:51
+#: movies/templates/movies/person_list.html:41
 msgid "Any craft"
 msgstr "Любая профессия"
 
@@ -2590,11 +2600,11 @@ msgstr ""
 "Все сериалы, что есть в хранилище. Ищите по названию, выбирайте жанр или "
 "меняйте порядок по измеряемым показателям."
 
-#: movies/templates/movies/series_list.html:22
+#: movies/templates/movies/series_list.html:20
 msgid "Search shows"
 msgstr "Поиск сериалов"
 
-#: movies/templates/movies/series_list.html:22
+#: movies/templates/movies/series_list.html:20
 msgid "Search TV shows by name"
 msgstr "Поиск сериалов по названию"
 
@@ -2623,46 +2633,50 @@ msgstr ""
 "Все продюсерские компании, указанные в титрах фильмов каталога. Ищите по "
 "названию или меняйте порядок по количеству фильмов или сборам."
 
-#: movies/templates/movies/studio_list.html:26
+#: movies/templates/movies/studio_list.html:21
 msgid "Search studios"
 msgstr "Поиск студий"
 
-#: movies/templates/movies/studio_list.html:26
+#: movies/templates/movies/studio_list.html:21
 msgid "Search studios by name"
 msgstr "Поиск студий по названию"
 
-#: movies/templates/movies/studio_list.html:36
-msgid "Most movies"
-msgstr "Больше всего фильмов"
+#: movies/views.py:599
+msgid "Most popular"
+msgstr "Самые популярные"
 
-#: movies/views.py:529
+#: movies/views.py:615
 msgid "Female"
 msgstr "Женский"
 
-#: movies/views.py:530
+#: movies/views.py:616
 msgid "Male"
 msgstr "Мужской"
 
-#: movies/views.py:531
+#: movies/views.py:617
 msgid "Non-binary"
 msgstr "Небинарный"
 
-#: movies/views.py:635
+#: movies/views.py:726
 msgctxt "people list title"
 msgid "Acting"
 msgstr "Актёры"
 
-#: movies/views.py:642
+#: movies/views.py:733
 msgctxt "people list title"
 msgid "Directing"
 msgstr "Режиссёры"
 
-#: movies/views.py:1283
+#: movies/views.py:1229
+msgid "Most movies"
+msgstr "Больше всего фильмов"
+
+#: movies/views.py:1381
 #, python-format
 msgid "%(year)s–Active"
 msgstr "%(year)s – н. в."
 
-#: movies/views.py:1653
+#: movies/views.py:1751
 msgid "Retired"
 msgstr "Карьера окончена"
 

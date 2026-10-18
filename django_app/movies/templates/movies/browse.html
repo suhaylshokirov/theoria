@@ -12,36 +12,21 @@
 {% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
 
 <section class="sheet-section">
-    <div class="toolbar">
-        {% comment %} Same live-filter contract as movie_list.html/cartoon_list.html —
-           see their docstrings. Plain GET form underneath, so it still works
-           with no JS — see _browse_results.html's docstring. The genre list is
-           the union of /movies/'s and /tv/'s, and a pick applies to both. {% endcomment %}
-        <form method="get" action="{% url 'movies:browse' %}" data-live-filter data-live-targets="#browse-grid">
-            <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search movies and shows" %}" aria-label="{% translate "Search movies and shows by title" %}">
-            </div>
-            <fieldset class="segmented">
-                <legend class="visually-hidden">{% translate "Order by" %}</legend>
-                <input type="radio" name="sort" id="sort-newest" value="newest" {% if sort == "newest" %}checked{% endif %}>
-                <label for="sort-newest">{% translate "Newest" %}</label>
-                <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
-                <label for="sort-rating">{% translate "Rated" %}</label>
-                <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
-                <label for="sort-title">{% translate "A–Z" %}</label>
-            </fieldset>
-            <div class="field">
-                <label for="browse-genre" class="visually-hidden">{% translate "Filter by genre" %}</label>
-                <select name="genre" id="browse-genre" data-menu>
-                    <option value="">{% translate "Any genre" %}</option>
-                    {% for slug, name in genre_choices %}
-                    <option value="{{ slug }}" {% if genre == slug %}selected{% endif %}>{{ name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
-        </form>
-    </div>
+    {% comment %} Same filter console and live-filter contract as
+       movie_list.html — see its docstring. Plain GET form underneath, so it
+       still works with no JS — see _browse_results.html's docstring. The
+       genre list is the union of /movies/'s and /tv/'s, and a pick applies to
+       both. {% endcomment %}
+    <form class="finder" method="get" action="{% url 'movies:browse' %}" data-finder data-live-filter data-live-targets="#browse-grid">
+        {% translate "Search movies and shows" as placeholder %}{% translate "Search movies and shows by title" as search_label %}
+        {% url 'movies:browse' as reset_url %}{% include "movies/_finder_search.html" with q=q placeholder=placeholder label=search_label reset_url=reset_url only %}
+        <div class="finder__facets">
+            {% translate "Sort" as label %}{% translate "Order by" as legend %}
+            {% include "movies/_facet.html" with label=label legend=legend name="sort" choices=sort_choices current=sort only %}
+            {% translate "Genre" as label %}{% translate "Filter by genre" as legend %}{% translate "Any genre" as any_label %}
+            {% include "movies/_facet.html" with label=label legend=legend name="genre" choices=genre_choices current=genre any_label=any_label only %}
+        </div>
+    </form>
 
     {% include "movies/_browse_grid.html" %}
 </section>

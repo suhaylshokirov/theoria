@@ -694,6 +694,162 @@
     });
   }
 
+  /* --- Filter console -------------------------------------------------------
+     The search + filter console on the catalog indexes (.finder, see
+     movie_list.html). Each cell is a native <details> of radios, so it already
+     opens, chooses and submits with no JS. This adds what <details> lacks:
+     one cell open at a time; closing on a pick, an outside click, Escape or
+     focus leaving; the value line and lime fill following the choice; a clear
+     button on the search line; and Reset, shown only while something is set
+     and done in place. The live filter
+     (initLiveFilter) still does the fetching — every change here reaches it
+     as an ordinary form event. */
+  function initFinder() {
+    document.querySelectorAll("[data-finder]").forEach(function (form) {
+      var facets = Array.prototype.slice.call(form.querySelectorAll("[data-facet]"));
+      var search = form.querySelector('input[type="search"]');
+      var clear = form.querySelector("[data-finder-clear]");
+      var reset = form.querySelector("[data-finder-reset]");
+
+      function radios(facet) {
+        return facet.querySelectorAll('input[type="radio"]');
+      }
+
+      // The first radio is the default (see _facet.html). A cell with no
+      // radios — People's Role links — keeps the server's mark.
+      function isSet(facet) {
+        var group = radios(facet);
+        return group.length > 0 && !group[0].checked;
+      }
+
+      function sync() {
+        facets.forEach(function (facet) {
+          if (!radios(facet).length) return;
+          var checked = facet.querySelector("input:checked + .facet__text");
+          var value = facet.querySelector("[data-facet-value]");
+          if (checked && value) value.textContent = checked.textContent;
+          facet.classList.toggle("is-set", isSet(facet));
+        });
+        var dirty = (search && search.value.trim() !== "") || facets.some(isSet);
+        // Reset shows only while this is set (theoria.css).
+        form.classList.toggle("is-dirty", dirty);
+        if (clear) clear.hidden = !search || search.value === "";
+      }
+
+      function submit() {
+        if (form.requestSubmit) form.requestSubmit();
+        else form.dispatchEvent(new Event("submit", { cancelable: true }));
+      }
+
+      function close(facet, focusTrigger) {
+        if (!facet.open) return;
+        facet.open = false;
+        if (focusTrigger) facet.querySelector("summary").focus();
+      }
+
+      facets.forEach(function (facet) {
+        var panel = facet.querySelector(".facet__panel");
+
+        facet.addEventListener("toggle", function () {
+          if (!facet.open) return;
+          facets.forEach(function (other) {
+            if (other !== facet) other.open = false;
+          });
+          // Hang the panel from the cell's right side if it would run off
+          // the screen; measured fresh each time, since widths change.
+          facet.classList.remove("is-flipped");
+          if (panel && panel.getBoundingClientRect().right > window.innerWidth - 8) {
+            facet.classList.add("is-flipped");
+          }
+          // Straight to the current choice, so a keyboard reader lands where
+          // they are and a long list (18 genres) opens scrolled to it.
+          var current = facet.querySelector("input:checked") ||
+            facet.querySelector('[aria-current="true"]');
+          if (current) {
+            requestAnimationFrame(function () {
+              (current.closest(".facet__option") || current).scrollIntoView({ block: "nearest" });
+              current.focus({ preventScroll: true });
+            });
+          }
+        });
+
+        // A pointer pick closes the panel; arrow keys only move the choice
+        // (they fire click too, but with detail 0), so a keyboard reader can
+        // walk the list and watch the grid follow before leaving it.
+        facet.addEventListener("click", function (e) {
+          if (e.detail > 0 && e.target.closest(".facet__option")) {
+            requestAnimationFrame(function () {
+              close(facet, false);
+            });
+          }
+        });
+
+        facet.addEventListener("keydown", function (e) {
+          if (!facet.open) return;
+          if (e.key === "Escape") {
+            e.preventDefault();
+            close(facet, true);
+          } else if (e.key === "Enter" && e.target.type === "radio") {
+            // Enter confirms the choice the arrows already made, instead of
+            // submitting the form.
+            e.preventDefault();
+            close(facet, true);
+          }
+        });
+
+        facet.addEventListener("focusout", function (e) {
+          if (facet.open && e.relatedTarget && !facet.contains(e.relatedTarget)) {
+            facet.open = false;
+          }
+        });
+      });
+
+      document.addEventListener("pointerdown", function (e) {
+        facets.forEach(function (facet) {
+          if (facet.open && !facet.contains(e.target)) facet.open = false;
+        });
+      }, true);
+
+      form.addEventListener("change", sync);
+      if (search) search.addEventListener("input", sync);
+
+      if (clear && search) {
+        clear.addEventListener("click", function () {
+          search.value = "";
+          sync();
+          search.focus();
+          submit();
+        });
+      }
+
+      if (reset) {
+        reset.addEventListener("click", function (e) {
+          e.preventDefault();
+          if (search) search.value = "";
+          facets.forEach(function (facet) {
+            var group = radios(facet);
+            if (group.length) group[0].checked = true;
+            facet.open = false;
+          });
+          sync();
+          if (search) search.focus();
+          submit();
+        });
+      }
+
+      // A back/forward-cache restore can bring the page back with a panel
+      // open, or with field values the browser restored after render.
+      window.addEventListener("pageshow", function () {
+        facets.forEach(function (facet) {
+          facet.open = false;
+        });
+        sync();
+      });
+
+      sync();
+    });
+  }
+
   function initFilterMenu() {
     document.querySelectorAll("select[data-menu]").forEach(buildFilterMenu);
   }
@@ -2604,6 +2760,7 @@
     initAssistant();
     initPagedSections();
     initSeasonPicker();
+    initFinder();
     initFilterMenu();
     initSegmentedScroll();
     initLiveFilter();

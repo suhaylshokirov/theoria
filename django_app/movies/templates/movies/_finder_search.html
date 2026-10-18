@@ -1,0 +1,21 @@
+{% load i18n %}
+{% comment %} The search field of the .finder console (see theoria.css):
+   first on the line, taking the spare width, because finding a name is what
+   most visits come for. It also carries the console's two actions:
+
+   * Clear — a JS nicety: initFinder() reveals it while the field has text.
+   * Reset — a plain link to the bare index (reset_url), so it works with no
+     JS, where it is always shown. With JS, initFinder() resets in place, and
+     theoria.css shows it only while the form is .is-dirty (something typed
+     or set), so it never flashes in before the script runs.
+
+   Apply is the no-JS submit; html.has-js hides it. {% endcomment %}
+<div class="finder__search">
+    <svg class="finder__search-icon" viewBox="0 -960 960 960" aria-hidden="true" focusable="false"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg>
+    <input type="search" name="q" value="{{ q }}" placeholder="{{ placeholder }}" aria-label="{{ label }}" autocomplete="off" spellcheck="false" enterkeyhint="search">
+    <button type="button" class="finder__clear" data-finder-clear aria-label="{% translate "Clear search" %}" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <a class="finder__reset" href="{{ reset_url }}" data-finder-reset>{% translate "Reset" %}</a>
+    <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
+</div>

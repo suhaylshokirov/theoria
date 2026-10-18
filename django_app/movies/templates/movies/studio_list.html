@@ -14,36 +14,16 @@
 {% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
 
 <section class="sheet-section">
-    <div class="toolbar">
-        {% comment %} data-live-filter + data-live-targets: static/js/theoria.js's
-           initLiveFilter() re-fetches and swaps just this region as the fields
-           below change, so results update without an Apply click or a full
-           page reload. Plain GET form underneath, so it still works with no
-           JS — see _studio_results.html's docstring. {% endcomment %}
-        <form method="get" action="" data-live-filter data-live-targets="#studios-grid">
-            <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search studios" %}" aria-label="{% translate "Search studios by name" %}">
-            </div>
-            {% comment %} Radio segments rather than a <select>: few, fixed options, so
-               showing them is more useful than hiding them (matches movie_list's
-               and person_list's sort control). Still a plain form control —
-               works without JS. {% endcomment %}
-            <fieldset class="segmented">
-                <legend class="visually-hidden">{% translate "Order by" %}</legend>
-                <input type="radio" name="sort" id="sort-film_count" value="film_count" {% if sort == "film_count" %}checked{% endif %}>
-                <label for="sort-film_count">{% translate "Most movies" %}</label>
-                <input type="radio" name="sort" id="sort-revenue" value="revenue" {% if sort == "revenue" %}checked{% endif %}>
-                <label for="sort-revenue">{% translate "Revenue" %}</label>
-                <input type="radio" name="sort" id="sort-name" value="name" {% if sort == "name" %}checked{% endif %}>
-                <label for="sort-name">{% translate "A–Z" %}</label>
-            </fieldset>
-            {% comment %} Redundant once JS is live-filtering on every change — hidden
-               via the html.has-js CSS gate (see base.html) rather than removed, so a
-               no-JS visitor, who gets no auto-submit on a radio change, still has a
-               way to apply anything but the search box. {% endcomment %}
-            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
-        </form>
-    </div>
+    {% comment %} Same filter console and live-filter contract as
+       movie_list.html — see its docstring. {% endcomment %}
+    <form class="finder" method="get" action="" data-finder data-live-filter data-live-targets="#studios-grid">
+        {% translate "Search studios" as placeholder %}{% translate "Search studios by name" as search_label %}
+        {% url 'movies:studio_list' as reset_url %}{% include "movies/_finder_search.html" with q=q placeholder=placeholder label=search_label reset_url=reset_url only %}
+        <div class="finder__facets">
+            {% translate "Sort" as label %}{% translate "Order by" as legend %}
+            {% include "movies/_facet.html" with label=label legend=legend name="sort" choices=sort_choices current=sort only %}
+        </div>
+    </form>
 
     {% include "movies/_studio_grid.html" %}
 </section>

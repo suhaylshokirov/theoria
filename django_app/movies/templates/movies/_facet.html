@@ -1,0 +1,29 @@
+{% comment %} One labelled cell of the .finder console: a caption ("Sort",
+   "Genre"), the current choice under it, and a panel of every choice.
+
+   A native <details> holding plain radios, so it opens, closes and submits
+   with no JS at all; initFinder() (theoria.js) only adds what <details>
+   lacks — closing on a choice, an outside click or Escape, keeping one cell
+   open at a time, and rewriting the value line as the choice changes.
+
+   with: label, legend (the radio group's accessible name), name (the GET
+   param), choices ((value, text) pairs), current, and any_label for a filter
+   whose default is "no filter" (rendered as a leading value="" choice). With
+   no any_label the first choice is the default. .is-set marks a cell moved
+   off its default — the same test Reset undoes. {% endcomment %}
+<details class="facet{% if any_label %}{% if current %} is-set{% endif %}{% else %}{% for value, text in choices %}{% if forloop.first and value != current %} is-set{% endif %}{% endfor %}{% endif %}" data-facet>
+    <summary class="facet__trigger">
+        <span class="facet__label">{{ label }}</span>
+        <span class="facet__value" data-facet-value>{% if any_label and not current %}{{ any_label }}{% else %}{% for value, text in choices %}{% if value == current %}{{ text }}{% endif %}{% endfor %}{% endif %}</span>
+        <svg class="facet__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </summary>
+    <fieldset class="facet__panel">
+        <legend class="visually-hidden">{{ legend }}</legend>
+        {% if any_label %}
+        <label class="facet__option"><input type="radio" name="{{ name }}" value=""{% if not current %} checked{% endif %}><span class="facet__text">{{ any_label }}</span></label>
+        {% endif %}
+        {% for value, text in choices %}
+        <label class="facet__option"><input type="radio" name="{{ name }}" value="{{ value }}"{% if value == current %} checked{% endif %}><span class="facet__text">{{ text }}</span></label>
+        {% endfor %}
+    </fieldset>
+</details>

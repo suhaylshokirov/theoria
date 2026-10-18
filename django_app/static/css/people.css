@@ -1,7 +1,7 @@
 /* Theoria — People and Studios (lists and record pages).
    Loads after theoria.css and only adjusts what the foundation leaves wrong
-   on these pages: the record headers, the stat row, the bio toggle and the
-   scope switch. Scoped by .page-people / .page-studios so nothing leaks. */
+   on these pages: the record headers, the stat row and the bio toggle.
+   Scoped by .page-people / .page-studios so nothing leaks. */
 
 /* The stat row wraps on narrow screens, and the shared 3rem gap applies to
    rows as well as columns, so a wrapped row left a canyon between stats.
@@ -89,19 +89,6 @@
   .page-people .bio-toggle {
     min-height: 44px;
   }
-
-  /* The scope switch is a row of text links; a fingertip needs a 44px band. */
-  .page-people .scope {
-    gap: var(--space-2);
-    flex-wrap: wrap;
-  }
-
-  .page-people .scope a {
-    display: inline-flex;
-    align-items: center;
-    min-height: 44px;
-    padding-inline: var(--space-3);
-  }
 }
 
 /* --- TV -------------------------------------------------------------------- */
@@ -133,16 +120,6 @@ html.is-tv .page-studios .stats {
 html.is-tv .page-people .bio-toggle {
   font-size: var(--text-2xs);
   padding: var(--space-4) var(--space-6);
-}
-
-html.is-tv .page-people .scope a {
-  font-size: var(--text-xs);
-  padding: var(--space-2) var(--space-3);
-}
-
-html.is-tv .page-people .scope a:focus-visible {
-  color: var(--lime-text);
-  border-bottom-color: var(--lime-mark);
 }
 
 /* The 960x540 TV gets the phone-ish hamburger layout; keep the stacked

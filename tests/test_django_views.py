@@ -309,10 +309,11 @@ def test_movie_list_filters_by_genre():
     qs.distinct.assert_called_once()
     assert response.context["genre"] == "horror"
     assert response.context["genre_choices"] == [("horror", "Horror")]
-    # The genre <select> carries data-menu so initFilterMenu() (theoria.js)
-    # upgrades it to a compact in-page dropdown on mobile, where the native
-    # picker opens a full-screen list.
-    assert 'id="movie-genre" data-menu' in response.content.decode()
+    # Genre is a cell of the filter console: radios in a <details>, the
+    # chosen one checked and its name on the cell's value line.
+    content = response.content.decode()
+    assert '<input type="radio" name="genre" value="horror" checked>' in content
+    assert 'class="facet is-set"' in content
 
 
 def test_movie_list_unknown_genre_falls_back_to_unfiltered():
@@ -544,7 +545,7 @@ def test_series_list_filters_by_genre():
     qs.filter.assert_called_once_with(series_genres__genre_id=27)
     assert response.context["genre"] == "drama"
     assert response.context["genre_choices"] == [("drama", "Drama")]
-    assert 'id="series-genre" data-menu' in response.content.decode()
+    assert '<input type="radio" name="genre" value="drama" checked>' in response.content.decode()
 
 
 def test_series_list_unknown_genre_falls_back_to_unfiltered():

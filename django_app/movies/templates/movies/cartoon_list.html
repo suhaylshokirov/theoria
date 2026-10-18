@@ -12,28 +12,18 @@
 {% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
 
 <section class="sheet-section">
-    <div class="toolbar">
-        {% comment %} Same live-filter contract as movie_list.html/series_list.html —
-           see their docstrings. Plain GET form underneath, so it still works
-           with no JS — see _cartoon_results.html's docstring. No genre field:
-           this catalog is already one fixed genre facet, filtered server-side
-           in cartoon_list(). {% endcomment %}
-        <form method="get" action="{% url 'movies:cartoon_list' %}" data-live-filter data-live-targets="#cartoons-grid">
-            <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search cartoons" %}" aria-label="{% translate "Search cartoons by title" %}">
-            </div>
-            <fieldset class="segmented">
-                <legend class="visually-hidden">{% translate "Order by" %}</legend>
-                <input type="radio" name="sort" id="sort-newest" value="newest" {% if sort == "newest" %}checked{% endif %}>
-                <label for="sort-newest">{% translate "Newest" %}</label>
-                <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
-                <label for="sort-rating">{% translate "Rated" %}</label>
-                <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
-                <label for="sort-title">{% translate "A–Z" %}</label>
-            </fieldset>
-            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
-        </form>
-    </div>
+    {% comment %} Same filter console and live-filter contract as
+       movie_list.html — see its docstring. No genre cell: this catalog is
+       already one fixed genre facet, filtered server-side in
+       cartoon_list(). {% endcomment %}
+    <form class="finder" method="get" action="{% url 'movies:cartoon_list' %}" data-finder data-live-filter data-live-targets="#cartoons-grid">
+        {% translate "Search cartoons" as placeholder %}{% translate "Search cartoons by title" as search_label %}
+        {% url 'movies:cartoon_list' as reset_url %}{% include "movies/_finder_search.html" with q=q placeholder=placeholder label=search_label reset_url=reset_url only %}
+        <div class="finder__facets">
+            {% translate "Sort" as label %}{% translate "Order by" as legend %}
+            {% include "movies/_facet.html" with label=label legend=legend name="sort" choices=sort_choices current=sort only %}
+        </div>
+    </form>
 
     {% include "movies/_cartoon_grid.html" %}
 </section>

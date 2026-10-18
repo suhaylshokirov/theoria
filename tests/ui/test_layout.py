@@ -206,8 +206,9 @@ TV_FOCUS = """() => {
   const ring = cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 2;
   const img = e.closest('.poster-card') && e.querySelector('.poster,.headshot,.logo,.placeholder');
   const lift = !!img && getComputedStyle(img).boxShadow !== 'none';
-  // A text field shows focus by lighting its frame (.field / header search).
-  const field = e.matches('input, select') && !!e.closest('.field, .header-search__field');
+  // A text field shows focus by lighting its frame (.field / header search /
+  // the filter console's search line).
+  const field = e.matches('input, select') && !!e.closest('.field, .header-search__field, .finder__search');
   // The home page's own tiles (wall) lift and frame themselves.
   const own = getComputedStyle(e).boxShadow !== 'none' || getComputedStyle(e).transform !== 'none';
   return {tv: document.documentElement.classList.contains('is-tv'), ok: ring || lift || field || own,
