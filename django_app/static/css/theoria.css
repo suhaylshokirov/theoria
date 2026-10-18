@@ -1541,23 +1541,7 @@ td[data-meter] .meter-fill {
   transition: width var(--dur-slow) var(--ease);
 }
 
-/* --- Toolbar & controls ----------------------------------------------------- */
-
-.toolbar {
-  display: flex;
-  gap: var(--space-5);
-  align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  margin-bottom: var(--space-6);
-}
-
-.toolbar form {
-  display: flex;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  align-items: center;
-}
+/* --- Fields & controls ------------------------------------------------------ */
 
 .field {
   display: flex;
@@ -1677,12 +1661,11 @@ input[type="email"]:focus {
   outline: none;
 }
 
-/* Filter menu — the JS-built replacement for a long <select> in a toolbar
-   (see initFilterMenu() in theoria.js). The native <select> picker opens a
-   full-screen OS list on a phone; this keeps the choices to a short scroll
-   inside the page. Additive: no rule above is touched, and with JS off the
-   real <select> is what renders. Every value is a theme token, so the panel
-   follows light/dark with no dark-mode block of its own. */
+/* Dropdown menu — a trigger + a short scrolling panel of options. Built for
+   the old toolbar's genre filter (since replaced by the .finder console);
+   the signed-in header menu below is what uses it now. Every value is a
+   theme token, so the panel follows light/dark with no dark-mode block of
+   its own. */
 .menu {
   position: relative;
   flex: 1 1 auto;
@@ -1793,7 +1776,7 @@ input[type="email"]:focus {
 /* The signed-in header menu (Task 95) reuses .menu/.menu-trigger/.menu-panel
    wholesale -- built for the filter dropdown, but already generic enough to
    host an account menu with only these additions. Two of .menu's own defaults
-   are toolbar-specific and have to be overridden rather than inherited: its
+   came from the toolbar and have to be overridden rather than inherited: its
    flex:1 1 auto (meant to fill a .field row next to a search input) would
    otherwise stretch this item across the nav bar, and vertically fill the
    mobile menu's open column since flex-grow tracks whichever axis
@@ -2206,7 +2189,7 @@ button,
               border-color var(--dur-fast) var(--ease);
 }
 
-/* The People filter form's Apply button — redundant once JS is live-filtering
+/* The filter console's Apply button — redundant once JS is live-filtering
    on every change (see initLiveFilter() in theoria.js). Gated on html.has-js
    the same way as the mobile nav toggle above: without it, a radio or select
    change has no auto-submit, so the button is the only way to apply one. */
@@ -2220,55 +2203,6 @@ button:hover,
   border-color: var(--lime-hover);
   color: var(--ink-on-lime);
   text-decoration: none;
-}
-
-/* Segmented sort control — replaces a bare <select>. Radio inputs so it
-   works with no JS and submits with the form. Rendered as a <fieldset>, so
-   the browser's default fieldset chrome has to be zeroed out. */
-.segmented {
-  display: flex;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
-  min-width: 0; /* fieldsets default to min-content; without this it won't shrink */
-}
-
-.segmented input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.segmented label {
-  font-family: var(--font-label);
-  font-weight: 600;
-  font-stretch: 78%;
-  font-size: var(--text-3xs);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--ink-muted);
-  padding: var(--space-3) var(--space-4);
-  cursor: pointer;
-  border-right: 1px solid var(--rule);
-  transition: background var(--dur-fast) var(--ease),
-              color var(--dur-fast) var(--ease);
-  white-space: nowrap;
-}
-
-.segmented label:last-of-type { border-right: none; }
-
-.segmented label:hover { background: var(--sheet); }
-
-.segmented input:checked + label {
-  background: var(--lime);
-  color: var(--ink-on-lime);
-}
-
-.segmented input:focus-visible + label {
-  outline: 2px solid var(--lime-mark);
-  outline-offset: -2px;
 }
 
 /* --- Season picker (show page episodes, Task 88) ----------------------------
@@ -3116,7 +3050,8 @@ html.has-js .bio-body.is-collapsed {
 
 /* --- Finder -----------------------------------------------------------------
    The search + filter console on the catalog indexes (Browse, Movies, TV,
-   Cartoons, People, Studios). One line, read like a catalog card: the search
+   Cartoons, People, Studios) and the filmography on a person or studio
+   page. One line, read like a catalog card: the search
    field first, taking whatever width is spare, because finding a name is
    what most visits come for; then a labelled cell per facet — a small
    caption ("Sort", "Genre") over the current choice.
@@ -3139,8 +3074,7 @@ html.has-js .bio-body.is-collapsed {
    Every cell is a native <details> of plain radios (see _facet.html), so the
    whole console opens, chooses and submits with no JS; initFinder() in
    theoria.js only refines it. Every colour is a theme token, so light and
-   dark need no block of their own. The filmography on a person or studio
-   page still uses .toolbar above. */
+   dark need no block of their own. */
 
 .finder {
   --finder-radius: 1.125rem;
@@ -5168,99 +5102,6 @@ main,
   input[type="text"],
   input[type="search"] {
     min-width: 0;
-  }
-
-  /* The filter bar on a phone (the pages still on .toolbar: the filmography
-     on a person or studio; the catalog indexes use .finder, which adapts to
-     its own width). A slim bar, not a stack of slabs: every control is 36px, search
-     takes the full row, and the sort/filter strips are only as wide as their
-     labels, so a strip and a dropdown share a row when they fit (Browse: sort
-     + genre) instead of each claiming the whole width. The text inside an
-     input keeps its size -- Safari zooms the page into a focused field under
-     16px -- so the height comes out of the padding, not the type. */
-  .toolbar {
-    gap: var(--space-3);
-    margin-bottom: var(--space-4);
-  }
-
-  .toolbar form {
-    width: 100%;
-    gap: var(--space-2);
-  }
-
-  .toolbar .field {
-    flex: 1 1 9rem;
-    min-height: 36px;
-  }
-
-  .toolbar .field:has(input[type="search"]) {
-    flex-basis: 100%;
-  }
-
-  /* min-height: 0 lifts the coarse-pointer 44px floor, which would otherwise
-     hold these taller than the 36px field. */
-  .toolbar .field input[type="search"],
-  .toolbar .field select,
-  .toolbar .field .menu-trigger {
-    min-height: 0;
-    padding-block: var(--space-2);
-  }
-
-  /* A native <select> inside a .field would otherwise size to its longest
-     option and leave the chevron stranded mid-row. */
-  .toolbar .field select {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  /* The filter menu is a button, not a field, so Safari has no reason to zoom
-     on it and it can sit at the toolbar's own 14px. */
-  .toolbar .field .menu-trigger {
-    font-size: var(--text-sm);
-  }
-
-  /* A strip is as wide as its labels, never wider than the row. When four
-     long labels (Russian "Любой пол / Женский / Мужской / Небинарный" at 320px)
-     still do not fit, the row does not wrap -- a pill that wraps its labels
-     reads as broken -- it scrolls sideways, fading the edge that has more. It
-     stays radios, so it works without JS. */
-  .segmented {
-    flex: 0 1 auto;
-    width: auto;
-    max-width: 100%;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .segmented::-webkit-scrollbar { display: none; }
-
-  /* initSegmentedScroll() sets this while options sit past the right edge. */
-  .segmented.has-more {
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 2rem), transparent);
-  }
-
-  /* 34px plus the hairline is the same 36px as a .field. */
-  .segmented label {
-    flex: 0 0 auto;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 34px;
-    text-align: center;
-    padding-block: var(--space-1);
-    padding-inline: var(--space-4);
-  }
-}
-
-/* Narrow phones: Cyrillic and Uzbek labels at 360px and below are the tightest
-   case, so trade a little tracking and padding for fitting without scrolling. */
-@media (max-width: 399px) {
-  .segmented label {
-    letter-spacing: 0.04em;
-    padding-inline: var(--space-1);
   }
 }
 

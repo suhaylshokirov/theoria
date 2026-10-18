@@ -397,10 +397,10 @@
        [data-live-filter]   the form itself; a plain GET form underneath.
        data-live-targets    comma-separated CSS selectors, each an id also
                              present in the AJAX response, swapped by
-                             innerHTML. Two rather than one because the
-                             People page's scope nav and result count sit
-                             inside .toolbar while the grid and pager sit
-                             below it — see movies/_person_results.html. */
+                             innerHTML. Two rather than one on People,
+                             whose Role panel sits inside the filter console
+                             while the grid and pager sit below it — see
+                             movies/_person_results.html. */
 
   function initLiveFilter() {
     var form = document.querySelector("[data-live-filter]");
@@ -660,40 +660,6 @@
     if (checked) show(checked.value);
   }
 
-  /* --- Filter menu -----------------------------------------------------
-     A <select data-menu> in a toolbar becomes a compact in-page dropdown.
-     The native <select> picker on a phone opens a full-screen OS list, and
-     the genre filter has 18 options — the whole viewport, as reported.
-
-     Progressive enhancement: the <select> stays in the DOM as the value
-     store (hidden, so it still submits with the form) and as the no-JS
-     control. This builds a trigger button + a short, scrollable listbox
-     beside it, and mirrors every change back onto the <select> — including
-     a bubbling `change` event, so initLiveFilter() re-fetches exactly as it
-     does for the native control. */
-
-  /* A .segmented strip wider than its toolbar scrolls sideways on a phone
-     (theoria.css) instead of wrapping its labels. Two cues keep that from being
-     a surprise: the selected option is brought into view on load, and a
-     `has-more` class marks a strip with options past its right edge so CSS can
-     fade that edge. Scrolls the strip itself, never the page. */
-  function initSegmentedScroll() {
-    document.querySelectorAll(".segmented").forEach(function (strip) {
-      function sync() {
-        var more = strip.scrollWidth - strip.clientWidth - strip.scrollLeft > 2;
-        strip.classList.toggle("has-more", more);
-      }
-      var current = strip.querySelector("input:checked + label");
-      if (current && strip.scrollWidth > strip.clientWidth) {
-        var over = current.getBoundingClientRect().right - strip.getBoundingClientRect().right;
-        if (over > 0) strip.scrollLeft += over + 16;
-      }
-      sync();
-      strip.addEventListener("scroll", sync, { passive: true });
-      window.addEventListener("resize", sync);
-    });
-  }
-
   /* --- Filter console -------------------------------------------------------
      The search + filter console on the catalog indexes (.finder, see
      movie_list.html). Each cell is a native <details> of radios, so it already
@@ -848,159 +814,6 @@
 
       sync();
     });
-  }
-
-  function initFilterMenu() {
-    document.querySelectorAll("select[data-menu]").forEach(buildFilterMenu);
-  }
-
-  function buildFilterMenu(select) {
-    var options = Array.prototype.slice.call(select.options);
-    if (!options.length) return;
-
-    var labelText =
-      select.getAttribute("aria-label") ||
-      (select.labels && select.labels[0] && select.labels[0].textContent) ||
-      t("Filter");
-
-    var wrap = document.createElement("div");
-    wrap.className = "menu";
-
-    var trigger = document.createElement("button");
-    trigger.type = "button";
-    trigger.className = "menu-trigger";
-    trigger.setAttribute("aria-haspopup", "listbox");
-    trigger.setAttribute("aria-expanded", "false");
-    trigger.setAttribute("aria-label", labelText.trim());
-    var labelEl = document.createElement("span");
-    labelEl.className = "menu-label";
-    trigger.appendChild(labelEl);
-
-    var panel = document.createElement("div");
-    panel.className = "menu-panel";
-    panel.setAttribute("role", "listbox");
-    panel.hidden = true;
-
-    var optionEls = options.map(function (opt, i) {
-      var el = document.createElement("button");
-      el.type = "button";
-      el.className = "menu-option";
-      el.setAttribute("role", "option");
-      el.dataset.value = opt.value;
-      el.textContent = opt.textContent;
-      el.tabIndex = -1;
-      el.addEventListener("click", function () {
-        choose(i);
-        close(true);
-      });
-      panel.appendChild(el);
-      return el;
-    });
-
-    function syncFromSelect() {
-      var i = select.selectedIndex < 0 ? 0 : select.selectedIndex;
-      labelEl.textContent = options[i].textContent;
-      optionEls.forEach(function (el, j) {
-        el.setAttribute("aria-selected", j === i ? "true" : "false");
-      });
-    }
-
-    function choose(i) {
-      if (select.selectedIndex !== i) {
-        select.selectedIndex = i;
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-      syncFromSelect();
-    }
-
-    var open = false;
-
-    function setOpen(next) {
-      open = next;
-      panel.hidden = !next;
-      trigger.setAttribute("aria-expanded", next ? "true" : "false");
-    }
-
-    function currentOption() {
-      var i = select.selectedIndex < 0 ? 0 : select.selectedIndex;
-      return optionEls[i];
-    }
-
-    function openMenu() {
-      if (open) return;
-      setOpen(true);
-      var current = currentOption();
-      // Focus on the next frame: the panel has just been un-hidden, and
-      // focusing an element in the same tick it stops being display:none is
-      // unreliable across engines. Jump straight to the current choice rather
-      // than scrolling the list from the top.
-      requestAnimationFrame(function () {
-        current.scrollIntoView({ block: "nearest" });
-        current.focus();
-      });
-      document.addEventListener("pointerdown", onOutside, true);
-    }
-
-    function close(focusTrigger) {
-      if (!open) return;
-      setOpen(false);
-      document.removeEventListener("pointerdown", onOutside, true);
-      if (focusTrigger) trigger.focus();
-    }
-
-    function onOutside(e) {
-      if (!wrap.contains(e.target)) close(false);
-    }
-
-    trigger.addEventListener("click", function () {
-      if (open) close(true);
-      else openMenu();
-    });
-
-    trigger.addEventListener("keydown", function (e) {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        openMenu();
-      }
-    });
-
-    panel.addEventListener("keydown", function (e) {
-      var els = optionEls;
-      // Fall back to the current choice when focus hasn't landed on an option
-      // yet (e.g. the very first arrow key right after opening).
-      var idx = els.indexOf(document.activeElement);
-      if (idx < 0) idx = select.selectedIndex < 0 ? 0 : select.selectedIndex;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        (els[idx + 1] || els[0]).focus();
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        (els[idx - 1] || els[els.length - 1]).focus();
-      } else if (e.key === "Home") {
-        e.preventDefault();
-        els[0].focus();
-      } else if (e.key === "End") {
-        e.preventDefault();
-        els[els.length - 1].focus();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        close(true);
-      } else if (e.key === "Tab") {
-        close(false);
-      }
-    });
-
-    // A back/forward-cache restore can bring the page back with the menu open.
-    window.addEventListener("pageshow", function () {
-      close(false);
-    });
-
-    select.hidden = true;
-    select.parentNode.insertBefore(wrap, select);
-    wrap.appendChild(trigger);
-    wrap.appendChild(panel);
-    wrap.appendChild(select);
-    syncFromSelect();
   }
 
   /* --- Film guide ---------------------------------------------------------- */
@@ -1674,10 +1487,8 @@
      <a href="/me/"> with the dropdown panel already in the DOM, hidden --
      so with no JS it is simply a link to the reader page, no enhancement
      required. With JS on, the trigger's click is redirected into opening the
-     panel instead of navigating. Deliberately not built on initFilterMenu's
-     buildFilterMenu(): that one *constructs* its trigger/panel from a
-     <select> it is replacing; this one only wires up markup base.html has
-     already rendered. */
+     panel instead of navigating. It only wires up markup base.html has
+     already rendered; nothing is constructed here. */
   function initAccountMenu() {
     document.querySelectorAll("[data-account-menu]").forEach(function (wrap) {
       var trigger = wrap.querySelector("[data-account-trigger]");
@@ -1759,7 +1570,7 @@
       });
 
       // A back/forward-cache restore can bring the page back with the panel
-      // open, same reasoning as initFilterMenu's pageshow listener.
+      // open, same reasoning as initFinder's pageshow listener.
       window.addEventListener("pageshow", function () {
         close();
       });
@@ -2761,8 +2572,6 @@
     initPagedSections();
     initSeasonPicker();
     initFinder();
-    initFilterMenu();
-    initSegmentedScroll();
     initLiveFilter();
     initBioToggle();
     initVideoEmbeds();

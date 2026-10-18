@@ -50,31 +50,20 @@
 {% endif %}
 
 <section class="sheet-section">
-    <div class="toolbar">
-        {% comment %} Same live-filter contract as movie_list.html, scoped to this
-           studio's films. data-live-targets only names the grid below — the
-           stats block above is this studio's whole output and never changes
-           as the filmography is filtered. Sits above the section-head so the
-           "Filmography" label stays right against the grid it names, instead
-           of the toolbar wedging itself between the two. {% endcomment %}
-        <form method="get" action="" data-live-filter data-live-targets="#studio-movies-grid">
-            <div class="field">
-                <input type="search" name="q" value="{{ q }}" placeholder="{% translate "Search this filmography" %}" aria-label="{% blocktranslate trimmed with name=company.name %}Search {{ name }}'s movies by title{% endblocktranslate %}">
-            </div>
-            <fieldset class="segmented">
-                <legend class="visually-hidden">{% translate "Order by" %}</legend>
-                <input type="radio" name="sort" id="sort-release" value="release" {% if sort == "release" %}checked{% endif %}>
-                <label for="sort-release">{% translate "Newest" %}</label>
-                <input type="radio" name="sort" id="sort-rating" value="rating" {% if sort == "rating" %}checked{% endif %}>
-                <label for="sort-rating">{% translate "Rated" %}</label>
-                <input type="radio" name="sort" id="sort-revenue" value="revenue" {% if sort == "revenue" %}checked{% endif %}>
-                <label for="sort-revenue">{% translate "Revenue" %}</label>
-                <input type="radio" name="sort" id="sort-title" value="title" {% if sort == "title" %}checked{% endif %}>
-                <label for="sort-title">{% translate "A–Z" %}</label>
-            </fieldset>
-            <button type="submit" class="apply-btn">{% translate "Apply" %}</button>
-        </form>
-    </div>
+    {% comment %} The same filter console as the catalog indexes (.finder in
+       theoria.css, see movie_list.html), scoped to this studio's films.
+       data-live-targets only names the grid below — the stats block above is
+       this studio's whole output and never changes as the filmography is
+       filtered. Sits above the section-head so the "Filmography" label stays
+       right against the grid it names. {% endcomment %}
+    <form class="finder" method="get" action="" data-finder data-live-filter data-live-targets="#studio-movies-grid">
+        {% translate "Search this filmography" as placeholder %}{% blocktranslate trimmed with name=company.name asvar search_label %}Search {{ name }}'s movies by title{% endblocktranslate %}
+        {% include "movies/_finder_search.html" with q=q placeholder=placeholder label=search_label reset_url=request.path only %}
+        <div class="finder__facets">
+            {% translate "Sort" as label %}{% translate "Order by" as legend %}
+            {% include "movies/_facet.html" with label=label legend=legend name="sort" choices=sort_choices current=sort only %}
+        </div>
+    </form>
 
     <div class="section-head">
         <h2>{% translate "Filmography" %}</h2>

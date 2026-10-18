@@ -34,33 +34,8 @@ html.is-tv .page-catalog .sheet-head + .sheet-section {
   margin-top: var(--space-7);
 }
 
-html.is-tv .page-catalog .toolbar {
-  gap: var(--space-4);
-  margin-bottom: var(--space-7);
-}
-
-html.is-tv .page-catalog .toolbar form {
-  gap: var(--space-4);
-}
-
-html.is-tv .page-catalog .field input[type="search"],
-html.is-tv .page-catalog .field select,
-html.is-tv .page-catalog .field > button {
-  min-height: 52px;
-  font-size: var(--text-md);
-}
-
-html.is-tv .page-catalog .segmented label {
-  display: flex;
-  align-items: center;
-  min-height: 50px;
-  padding-inline: var(--space-5);
-  font-size: var(--text-xs);
-}
-
-/* Remote users never have a hover, so an apply button hidden behind has-js
-   stays hidden (the radios auto-submit); nothing to add there. The pager is
-   the other way down the catalog, so it gets target-sized links. */
+/* The filter console sizes itself for TV in theoria.css. The pager is the
+   other way down the catalog, so it gets target-sized links. */
 html.is-tv .page-catalog .pagination {
   gap: var(--space-5);
 }
@@ -76,12 +51,4 @@ html.is-tv .page-catalog .pagination a {
 html.is-tv .page-catalog .empty {
   font-size: var(--text-md);
   padding: var(--space-8) var(--space-6);
-}
-
-/* The genre dropdown is a .menu-trigger once JS swaps the <select> out; it
-   would otherwise be shorter than the search field and segmented strip beside
-   it. */
-html.is-tv .page-catalog .toolbar .menu-trigger {
-  min-height: 52px;
-  font-size: var(--text-md);
 }

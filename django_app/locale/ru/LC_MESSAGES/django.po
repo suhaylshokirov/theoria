@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-18 08:08+0000\n"
+"POT-Creation-Date: 2026-10-18 08:19+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: ru\n"
@@ -1068,9 +1068,7 @@ msgstr "Бюджет"
 
 #: core/context_processors.py:84 movies/templates/movies/_studio_header.html:45
 #: movies/templates/movies/movie_detail.html:123
-#: movies/templates/movies/movie_detail.html:177
-#: movies/templates/movies/person_detail.html:78
-#: movies/templates/movies/studio_detail.html:73 movies/views.py:91
+#: movies/templates/movies/movie_detail.html:177 movies/views.py:91
 #: movies/views.py:1230
 msgid "Revenue"
 msgstr "Сборы"
@@ -1786,8 +1784,6 @@ msgid "Reset"
 msgstr "Сбросить"
 
 #: movies/templates/movies/_finder_search.html:21
-#: movies/templates/movies/person_detail.html:82
-#: movies/templates/movies/studio_detail.html:77
 msgid "Apply"
 msgstr "Применить"
 
@@ -2017,8 +2013,8 @@ msgstr "Логотип: %(name)s"
 #: movies/templates/movies/_studio_card.html:34
 #: movies/templates/movies/director_detail.html:18
 #: movies/templates/movies/person_detail.html:12
-#: movies/templates/movies/person_detail.html:88
-#: movies/templates/movies/studio_detail.html:83
+#: movies/templates/movies/person_detail.html:78
+#: movies/templates/movies/studio_detail.html:72
 #, python-format
 msgid "%(n)s movie"
 msgid_plural "%(n)s movies"
@@ -2036,8 +2032,8 @@ msgstr "Студий по запросу «%(q)s» нет."
 msgid "No studios loaded yet. Run the pipeline to fill the catalog."
 msgstr "Студии ещё не загружены. Запустите конвейер, чтобы наполнить каталог."
 
-#: movies/templates/movies/_studio_header.html:41 movies/views.py:1378
-#: movies/views.py:1751
+#: movies/templates/movies/_studio_header.html:41 movies/views.py:1379
+#: movies/views.py:1753
 msgid "Active"
 msgstr "Активная карьера"
 
@@ -2052,8 +2048,8 @@ msgstr "Смотреть %(kind)s: %(name)s"
 
 #: movies/templates/movies/actor_detail.html:17
 #: movies/templates/movies/director_detail.html:17
-#: movies/templates/movies/person_detail.html:87
-#: movies/templates/movies/studio_detail.html:82
+#: movies/templates/movies/person_detail.html:77
+#: movies/templates/movies/studio_detail.html:71
 msgid "Filmography"
 msgstr "Фильмография"
 
@@ -2094,8 +2090,10 @@ msgstr "Поиск фильмов и сериалов по названию"
 #: movies/templates/movies/browse.html:25
 #: movies/templates/movies/cartoon_list.html:24
 #: movies/templates/movies/movie_list.html:28
+#: movies/templates/movies/person_detail.html:71
 #: movies/templates/movies/person_list.html:37
 #: movies/templates/movies/series_list.html:23
+#: movies/templates/movies/studio_detail.html:65
 #: movies/templates/movies/studio_list.html:24
 msgid "Sort"
 msgstr "Сортировка"
@@ -2103,10 +2101,10 @@ msgstr "Сортировка"
 #: movies/templates/movies/browse.html:25
 #: movies/templates/movies/cartoon_list.html:24
 #: movies/templates/movies/movie_list.html:28
-#: movies/templates/movies/person_detail.html:72
+#: movies/templates/movies/person_detail.html:71
 #: movies/templates/movies/person_list.html:37
 #: movies/templates/movies/series_list.html:23
-#: movies/templates/movies/studio_detail.html:67
+#: movies/templates/movies/studio_detail.html:65
 #: movies/templates/movies/studio_list.html:24
 msgid "Order by"
 msgstr "Сортировка"
@@ -2390,7 +2388,7 @@ msgid "Search movies by title"
 msgstr "Поиск фильмов по названию"
 
 #: movies/templates/movies/person_detail.html:12
-#: movies/templates/movies/person_detail.html:88
+#: movies/templates/movies/person_detail.html:78
 #, python-format
 msgid "%(n)s show"
 msgid_plural "%(n)s shows"
@@ -2418,40 +2416,21 @@ msgstr "На других сайтах"
 msgid "Official site"
 msgstr "Официальный сайт"
 
-#: movies/templates/movies/person_detail.html:69
-#: movies/templates/movies/studio_detail.html:64
+#: movies/templates/movies/person_detail.html:68
+#: movies/templates/movies/studio_detail.html:62
 msgid "Search this filmography"
 msgstr "Поиск по этой фильмографии"
 
-#: movies/templates/movies/person_detail.html:69
+#: movies/templates/movies/person_detail.html:68
 #, python-format
 msgid "Search %(name)s's movies and shows by title"
 msgstr "Поиск по названию среди фильмов и сериалов: %(name)s"
 
-#: movies/templates/movies/person_detail.html:69
-#: movies/templates/movies/studio_detail.html:64
+#: movies/templates/movies/person_detail.html:68
+#: movies/templates/movies/studio_detail.html:62
 #, python-format
 msgid "Search %(name)s's movies by title"
 msgstr "Поиск по названию среди фильмов: %(name)s"
-
-#: movies/templates/movies/person_detail.html:74
-#: movies/templates/movies/studio_detail.html:69 movies/views.py:89
-#: movies/views.py:223 movies/views.py:315 movies/views.py:484
-msgid "Newest"
-msgstr "Новые"
-
-#: movies/templates/movies/person_detail.html:76
-#: movies/templates/movies/studio_detail.html:71 movies/views.py:90
-#: movies/views.py:224 movies/views.py:316 movies/views.py:485
-msgid "Rated"
-msgstr "По рейтингу"
-
-#: movies/templates/movies/person_detail.html:80
-#: movies/templates/movies/studio_detail.html:75 movies/views.py:92
-#: movies/views.py:225 movies/views.py:317 movies/views.py:486
-#: movies/views.py:600 movies/views.py:1231
-msgid "A–Z"
-msgstr "А–Я"
 
 #: movies/templates/movies/person_list.html:13
 msgid ""
@@ -2641,6 +2620,21 @@ msgstr "Поиск студий"
 msgid "Search studios by name"
 msgstr "Поиск студий по названию"
 
+#: movies/views.py:89 movies/views.py:223 movies/views.py:315
+#: movies/views.py:484
+msgid "Newest"
+msgstr "Новые"
+
+#: movies/views.py:90 movies/views.py:224 movies/views.py:316
+#: movies/views.py:485
+msgid "Rated"
+msgstr "По рейтингу"
+
+#: movies/views.py:92 movies/views.py:225 movies/views.py:317
+#: movies/views.py:486 movies/views.py:600 movies/views.py:1231
+msgid "A–Z"
+msgstr "А–Я"
+
 #: movies/views.py:599
 msgid "Most popular"
 msgstr "Самые популярные"
@@ -2671,12 +2665,12 @@ msgstr "Режиссёры"
 msgid "Most movies"
 msgstr "Больше всего фильмов"
 
-#: movies/views.py:1381
+#: movies/views.py:1382
 #, python-format
 msgid "%(year)s–Active"
 msgstr "%(year)s – н. в."
 
-#: movies/views.py:1751
+#: movies/views.py:1753
 msgid "Retired"
 msgstr "Карьера окончена"
 
