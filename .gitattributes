@@ -1,0 +1,4 @@
+# Both pipeline workflows append one line to this log and push. When their runs
+# overlap, the rebase sees two different lines added at the same end-of-file
+# spot and stops; union keeps both, which is always the right resolution here.
+ops/refresh-history.md merge=union

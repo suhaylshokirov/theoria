@@ -95,6 +95,8 @@ jobs:
           # whatever landed meanwhile and retry rather than lose the line.
           for attempt in 1 2 3 4 5; do
             git pull --rebase --quiet && git push && exit 0
+            # A half-finished rebase would make every later pull fail too.
+            git rebase --abort 2>/dev/null || true
             echo "push attempt $attempt failed; retrying in $((attempt * 10))s"
             sleep $((attempt * 10))
           done
