@@ -452,7 +452,8 @@ without it `settings.py` refuses to boot rather than silently point Django at Ve
 filesystem), `DJANGO_SECRET_KEY` (a fresh one — not the local development key), `EMAIL_HOST` +
 `EMAIL_HOST_USER`/`EMAIL_HOST_PASSWORD`/`EMAIL_PORT`/`EMAIL_USE_TLS` (a real SMTP provider — sign-up
 codes have nowhere to go without one) and `DEFAULT_FROM_EMAIL`, optionally `GEMINI_API_KEY` for the
-assistant, optionally `DJANGO_ALLOWED_HOSTS` for a custom domain, and `REDIS_URL` (a `rediss://` URL
+assistant, `DJANGO_ALLOWED_HOSTS` for the custom domain (`theoria.uz,www.theoria.uz`; plain config, not a
+secret), and `REDIS_URL` (a `rediss://` URL
 in the same region as the function; without it the site still works but caches per process only).
 The GitHub Actions secret of the same name lets the nightly publish the data version and warm the cache. No TMDB or AWS credentials:
 the site never calls either, and `config.py` no longer demands them of a process that doesn't.
@@ -461,6 +462,35 @@ Settings adapt on their own via the platform's own `VERCEL` variable — `DEBUG`
 `ALLOWED_HOSTS` picks up `.vercel.app` (so preview URLs work without being listed in advance),
 secure cookies and the proxy SSL header switch on, the warehouse connection is held open across
 requests, and `/admin/` is not routed at all rather than 500-ing on a public URL.
+
+**Custom domain: `theoria.uz`.** Registered through UzCloud (the `.uz` registry is UZINFOCOM) and served
+by Vercel. DNS lives in UzCloud's DNS hosting (their DNSmanager panel), delegated to `ns3.uzcloud.uz` and
+`ns4.uzcloud.uz`:
+
+| Record | Name | Value |
+|---|---|---|
+| `A` | `theoria.uz` | `76.76.21.21` |
+| `CNAME` | `www` | `cname.vercel-dns.com.` |
+
+`theoria.uz` is the primary host. In Vercel, `www.theoria.uz` and the default `*.vercel.app` project
+domain both 308-redirect to it (path and query kept), so there is one canonical URL. Vercel also lists
+newer address ranges (`216.198.79.1`, `64.29.17.1`) as preferred; the records above are the older, still
+supported pair and need no change.
+
+Things that were not obvious when this was set up:
+
+- **The DNS zone is not created for you.** Ordering DNS hosting gives you a panel, not a zone; create
+  `theoria.uz` there yourself, as a master zone.
+- **Check what the panel auto-generates.** It added `NS` records named `ns1.ns4.uzcloud.uz` and
+  `ns2.ns4.uzcloud.uz`, which do not exist (change them to `ns3`/`ns4.uzcloud.uz`), plus `MX` records for a
+  `mail.` host that does not exist, and a `www` `A` record that has to go before the `CNAME` can be added.
+- **`ns3` replicates from `ns4`, slowly.** A new zone answered `REFUSED` on `ns3` for about six days until
+  UzCloud support added it. Resolvers fall back to the other nameserver, so the site stayed up, but there was
+  no redundancy. Check each nameserver directly, not through a public resolver, which hides this.
+- **Changing `DJANGO_ALLOWED_HOSTS` needs a redeploy** to take effect; a Redeploy of the latest build is
+  enough. Without the domain in it, Django answers `400` on the custom host.
+- **Sessions and the language cookie are per host**, so moving between `www`, the `vercel.app` address and
+  the apex starts a fresh session.
 
 > Running locally with `DJANGO_DEBUG=False` requires `python manage.py collectstatic` first.
 > Production uses `ManifestStaticFilesStorage`, which resolves every asset through a manifest

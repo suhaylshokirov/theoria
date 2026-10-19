@@ -39,6 +39,11 @@ Schema changes need the *reverse* order of the Django habit: apply the DDL to Ne
 loader **before** deploying the code that reads it, since Django never migrates the warehouse.
 `vercel.json`'s `ignoreCommand` stops the nightly `ops/refresh-history.md` commit from redeploying
 the site every night — Vercel does not honour `[skip ci]`. See `docs/architecture.md` §4.4.
+**Domain:** `theoria.uz` (UzCloud-registered, DNS hosted there: apex `A` → `76.76.21.21`, `www` `CNAME` →
+`cname.vercel-dns.com.`) is the canonical host; `www` and the `*.vercel.app` domain 308-redirect to it at
+Vercel. `DJANGO_ALLOWED_HOSTS=theoria.uz,www.theoria.uz` (plain config) feeds both `ALLOWED_HOSTS` and
+`CSRF_TRUSTED_ORIGINS`, and needs a redeploy to take effect. Check both nameservers (`ns3`/`ns4.uzcloud.uz`)
+directly when touching the zone — a public resolver hides one refusing. See README §5.
 
 **Translations:** the interface ships in en/ru/uz (`django_app/locale/`, Task 92). Edit the `.po`, then
 `python manage.py makemessages -l ru -l uz --no-obsolete` and `compilemessages` from `django_app/`; **commit the

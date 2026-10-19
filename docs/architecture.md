@@ -657,6 +657,20 @@ cookies and `SECURE_PROXY_SSL_HEADER` switch on, `CONN_MAX_AGE` holds the Neon c
 requests on a warm instance, and `/admin/` is not routed — it has nothing to administer and no
 database to authenticate against, so the alternative is a guaranteed 500 on a public URL.
 
+**The custom domain adds hosts, not branches.** `theoria.uz` is registered at UzCloud and its DNS is
+hosted there, pointing at Vercel with an apex `A` record and a `www` `CNAME`. Keeping DNS at the registrar
+rather than handing the nameservers to Vercel was a choice, not an accident: the DNS hosting was already
+paid for and the two records never change. The cost is that the zone has two servers (`ns3`, `ns4`) and
+the second one replicates from the first on UzCloud's schedule — a new zone was `REFUSED` by `ns3` for days
+while resolvers quietly fell back to `ns4`, which is why a redundancy check has to query each nameserver
+directly. Django learns the hostnames from `DJANGO_ALLOWED_HOSTS` (additive to the `.vercel.app` wildcard),
+and `CSRF_TRUSTED_ORIGINS` is derived from the same list, so one variable covers both host validation and
+form posts. One host is canonical: `www.theoria.uz` and the default `*.vercel.app` domain 308-redirect to
+`theoria.uz` at Vercel's edge, before Django runs, so no application code knows about the redirect. Because
+cookies are per host, the redirect also keeps a visitor's session and language choice on a single origin.
+HSTS is still unset (`settings.py`); unlike `vercel.app`, `theoria.uz` is not preloaded, so enabling it is
+now a real, deliberate decision, best started with a short `max-age`.
+
 **The first deploy failed on an assumption nothing local could expose.** `manage.py` lives in
 `django_app/`, so running anything through it puts that directory on `sys.path` and
 `theoria_site.settings` imports — every local path, tests included, inherits that for free. The
