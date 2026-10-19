@@ -11,8 +11,10 @@ the Russian biography, and Task 134 reads it.
 **Reads every `bronze/person_details/` partition, not just one date** — for the
 same reason `transform_people_details` does: `ingest_people()` writes a person
 once, into whichever partition first discovered them, so the cumulative set is
-spread across all of history. The result is written to the given date's Silver
-partition so the loader still reads one dated file.
+spread across all of history. Only each person's newest file is read
+(`etl.person_detail_files`), so a backfilled person's pre-Task-93 copy is never
+downloaded. The result is written to the given date's Silver partition so the
+loader still reads one dated file.
 
 **Backfill is not possible from Bronze.** Everyone enriched before Task 93 has a
 `person_details` file with no `translations` key. Such a payload yields zero rows
@@ -31,7 +33,7 @@ person_translations columns:
     name       string  — null for any language outside NAME_LANGUAGES, and where TMDB has none
     biography  string  — null where TMDB has none; a language with neither is not written
 
-Dedup key: (person_id, lang), a later partition winning. Rows with a null
+Dedup key: (person_id, lang); the newest file per person is the only one read. Rows with a null
 person_id are dropped with a warning, never silently.
 
 Idempotent: running twice for the same date overwrites the same key.
@@ -53,24 +55,13 @@ import pandas as pd
 
 import config
 from etl import s3_utils
+from etl.person_detail_files import read_latest_person_details
 from etl.translations import select_translations
 
 logger = logging.getLogger(__name__)
 
 _FIELDS = ("name", "biography")
 _COLUMNS = ["person_id", "lang", *_FIELDS]
-
-
-def _list_all_bronze_keys(bucket: str) -> list[str]:
-    """Every .json key under bronze/person_details/, across all ingestion_dates."""
-    client = s3_utils.get_s3_client()
-    keys: list[str] = []
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=bucket, Prefix="bronze/person_details/"):
-        for obj in page.get("Contents", []):
-            if obj["Key"].endswith(".json"):
-                keys.append(obj["Key"])
-    return keys
 
 
 def _extract_translation_rows(raw: dict[str, Any]) -> list[dict[str, Any]] | None:
@@ -97,10 +88,15 @@ def _cast_translation_types(df: pd.DataFrame) -> pd.DataFrame:
 def transform_people_translations(
     ingestion_date: dt.date | None = None,
     bucket: str | None = None,
+    payloads: list[tuple[str, Any, Exception | None]] | None = None,
 ) -> str:
-    """Read every Bronze person-detail JSON -> write one Silver Parquet.
+    """Read each person's newest Bronze detail JSON -> write one Silver Parquet.
 
     Returns the s3:// URI of the person_translations Parquet.
+
+    `payloads` is an already-downloaded `read_latest_person_details()` result,
+    shared with `transform_people_details` in the nightly; omitted, this reads
+    them itself.
 
     Raises FileNotFoundError if no Bronze person-detail files exist at all.
     Raises RuntimeError if every file fails to parse.
@@ -113,17 +109,18 @@ def transform_people_translations(
     t0 = time.monotonic()
     logger.info("Starting Silver people-translations transform for date=%s", ingestion_date)
 
-    keys = _list_all_bronze_keys(bucket)
-    if not keys:
+    if payloads is None:
+        payloads = read_latest_person_details(bucket)
+    if not payloads:
         raise FileNotFoundError(
             "No Bronze person-detail files found under bronze/person_details/"
         )
-    logger.info("Found %d Bronze person JSON file(s) across all partitions", len(keys))
+    logger.info("Read %d Bronze person JSON file(s), one per person", len(payloads))
 
     rows: list[dict[str, Any]] = []
     missing_key = 0
     errors = 0
-    for key, raw, read_err in s3_utils.read_json_objects(bucket, keys):
+    for key, raw, read_err in payloads:
         try:
             if read_err is not None:
                 raise read_err
@@ -136,7 +133,7 @@ def transform_people_translations(
             errors += 1
             logger.error("Failed to read/extract %s: %s", key, exc)
 
-    if not rows and errors == len(keys):
+    if not rows and errors == len(payloads):
         raise RuntimeError(
             "Every Bronze person-detail file failed to parse — aborting."
         )
@@ -146,12 +143,12 @@ def transform_people_translations(
             "%d of %d Bronze person payload(s) had no `translations` key — enriched "
             "before Task 93; they gain a Russian name and biography only via "
             "`etl.bronze.backfill_person_translations` (run nightly, capped).",
-            missing_key, len(keys),
+            missing_key, len(payloads),
         )
 
     df = _cast_translation_types(pd.DataFrame(rows, columns=_COLUMNS))
     before = len(df)
-    # A later partition wins if the same person was somehow enriched twice.
+    # Keys are one per person, but a payload's own id could still collide.
     df = df.drop_duplicates(subset=["person_id", "lang"], keep="last")
     if before - len(df):
         logger.info(

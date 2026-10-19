@@ -22,8 +22,11 @@ reasoning as transform_companies.py: a person's bio / birthday / place of
 birth essentially never change, so ingest_people() only ever writes a *new*
 person's file, into whatever partition first discovered them. The cumulative
 enriched set is spread across every partition, and this transform sweeps all
-of them. The result is written to the given date's Silver partition so the
-warehouse loader still reads one dated file like every other source.
+of them — but only each person's newest file (`etl.person_detail_files`): the
+translation backfill re-fetches people into later partitions, and the
+superseded copies are never downloaded. The result is written to the given
+date's Silver partition so the warehouse loader still reads one dated file like
+every other source.
 
 Date handling: `birthday` / `deathday` are parsed with `errors="coerce"`, so
 a value TMDB somehow returns in a non-ISO shape becomes null (logged with a
@@ -52,20 +55,9 @@ import pandas as pd
 
 import config
 from etl import s3_utils
+from etl.person_detail_files import read_latest_person_details
 
 logger = logging.getLogger(__name__)
-
-
-def _list_all_bronze_keys(bucket: str) -> list[str]:
-    """Every .json key under bronze/person_details/, across all ingestion_dates."""
-    client = s3_utils.get_s3_client()
-    keys: list[str] = []
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=bucket, Prefix="bronze/person_details/"):
-        for obj in page.get("Contents", []):
-            if obj["Key"].endswith(".json"):
-                keys.append(obj["Key"])
-    return keys
 
 
 def _extract_detail_row(raw: dict[str, Any]) -> dict[str, Any]:
@@ -138,10 +130,15 @@ def _cast_alias_types(df: pd.DataFrame) -> pd.DataFrame:
 def transform_people_details(
     ingestion_date: dt.date | None = None,
     bucket: str | None = None,
+    payloads: list[tuple[str, Any, Exception | None]] | None = None,
 ) -> tuple[str, str]:
-    """Read every Bronze person-detail JSON -> write two Silver Parquet files.
+    """Read each person's newest Bronze detail JSON -> write two Silver Parquet files.
 
     Returns (person_details_uri, person_aliases_uri).
+
+    `payloads` is an already-downloaded `read_latest_person_details()` result,
+    so the nightly can share one read with `transform_people_translations`;
+    omitted, this reads them itself.
 
     Raises FileNotFoundError if no Bronze person-detail files exist at all.
     Raises RuntimeError if every file fails to parse.
@@ -154,17 +151,18 @@ def transform_people_details(
     t0 = time.monotonic()
     logger.info("Starting Silver people-details transform for date=%s", ingestion_date)
 
-    keys = _list_all_bronze_keys(bucket)
-    if not keys:
+    if payloads is None:
+        payloads = read_latest_person_details(bucket)
+    if not payloads:
         raise FileNotFoundError(
             "No Bronze person-detail files found under bronze/person_details/"
         )
-    logger.info("Found %d Bronze person JSON file(s) across all partitions", len(keys))
+    logger.info("Read %d Bronze person JSON file(s), one per person", len(payloads))
 
     detail_rows: list[dict[str, Any]] = []
     alias_rows: list[dict[str, Any]] = []
     errors = 0
-    for key, raw, read_err in s3_utils.read_json_objects(bucket, keys):
+    for key, raw, read_err in payloads:
         try:
             if read_err is not None:
                 raise read_err
@@ -174,14 +172,14 @@ def transform_people_details(
             errors += 1
             logger.error("Failed to read/extract %s: %s", key, exc)
 
-    if not detail_rows and errors == len(keys):
+    if not detail_rows and errors == len(payloads):
         raise RuntimeError(
             "Every Bronze person-detail file failed to parse — aborting."
         )
 
     details = _cast_detail_types(pd.DataFrame(detail_rows, columns=_DETAIL_COLUMNS))
     before = len(details)
-    # A later partition wins if the same person was somehow enriched twice.
+    # Keys are one per person, but a payload's own id could still collide.
     details = details.drop_duplicates(subset=["person_id"], keep="last")
     if before - len(details):
         logger.info("Dropped %d duplicate person_id row(s)", before - len(details))

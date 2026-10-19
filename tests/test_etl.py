@@ -6258,10 +6258,66 @@ def test_transform_people_details_sweeps_every_bronze_partition():
     assert set(details["person_id"]) == {31, 2}
 
 
+def test_transform_people_details_never_downloads_a_superseded_file():
+    """A re-fetched person has two Bronze files; only the newest is read."""
+    payloads = {
+        "bronze/person_details/ingestion_date=2026-05-01/31.json": _person_payload(31, biography="Old."),
+        "bronze/person_details/ingestion_date=2026-06-22/31.json": _person_payload(31, biography="New."),
+        "bronze/person_details/ingestion_date=2026-05-01/2.json": _person_payload(2),
+    }
+    mock_s3 = _make_s3_mock_with_files(payloads)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_people_details(
+            ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake"
+        )
+
+    fetched = {c.kwargs["Key"] for c in mock_s3.get_object.call_args_list}
+    assert "bronze/person_details/ingestion_date=2026-05-01/31.json" not in fetched
+    assert len(fetched) == 2
+    details = pd.read_parquet(io.BytesIO(
+        {c[1]["Key"]: c[1]["Body"] for c in mock_s3.put_object.call_args_list}
+        ["silver/person_details/ingestion_date=2026-06-22/person_details.parquet"]
+    )).set_index("person_id")
+    assert details.loc[31, "biography"] == "New."
+
+
+def test_transform_people_details_uses_payloads_it_is_given():
+    mock_s3 = _make_s3_mock_with_files({})
+    given = [("bronze/person_details/ingestion_date=2026-06-22/31.json", _person_payload(31), None)]
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        transform_people_details(
+            ingestion_date=dt.date(2026, 6, 22), bucket="theoria-datalake", payloads=given
+        )
+
+    mock_s3.get_paginator.assert_not_called()
+    mock_s3.get_object.assert_not_called()
+
+
+def test_latest_person_detail_files_keeps_the_newest_per_person():
+    from etl.person_detail_files import latest_person_detail_files
+
+    listing = {
+        "bronze/person_details/ingestion_date=2026-10-01/2.json": None,
+        "bronze/person_details/ingestion_date=2026-08-01/2.json": None,
+        "bronze/person_details/ingestion_date=2026-08-01/1.json": None,
+        "bronze/person_details/notes.txt": None,
+    }
+    mock_s3 = _make_s3_mock_with_files(listing)
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        latest = latest_person_detail_files("theoria-datalake")
+
+    assert latest == {
+        1: (dt.date(2026, 8, 1), "bronze/person_details/ingestion_date=2026-08-01/1.json"),
+        2: (dt.date(2026, 10, 1), "bronze/person_details/ingestion_date=2026-10-01/2.json"),
+    }
+
+
 def test_transform_people_details_drops_null_person_id(caplog):
     payloads = {
-        "bronze/person_details/ingestion_date=2026-06-22/good.json": _person_payload(5),
-        "bronze/person_details/ingestion_date=2026-06-22/bad.json": _person_payload(5, id=None),
+        "bronze/person_details/ingestion_date=2026-06-22/5.json": _person_payload(5),
+        "bronze/person_details/ingestion_date=2026-06-22/6.json": _person_payload(5, id=None),
     }
     mock_s3 = _make_s3_mock_with_files(payloads)
 

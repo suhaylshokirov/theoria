@@ -61,6 +61,7 @@ from etl.bronze.refresh_series import refresh_series
 from etl.data_version import publish_data_version
 from etl.gold.build_gold_datasets import build_gold_datasets
 from etl.gold.build_metrics_snapshot import build_metrics_snapshot
+from etl.person_detail_files import read_latest_person_details
 from etl.silver.transform_companies import transform_companies
 from etl.silver.transform_country_translations import transform_country_translations
 from etl.silver.transform_credits_bridge import transform_credits_bridge
@@ -188,8 +189,11 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
     transform_series_videos(ingestion_date=ingestion_date)
     transform_series_translations(ingestion_date=ingestion_date)
     transform_people(ingestion_date=ingestion_date, with_tv=True)
-    transform_people_details(ingestion_date=ingestion_date)
-    transform_people_translations(ingestion_date=ingestion_date)
+    # Both sweeps read the same newest-file-per-person set: download it once.
+    person_payloads = read_latest_person_details(config.S3_BUCKET)
+    transform_people_details(ingestion_date=ingestion_date, payloads=person_payloads)
+    transform_people_translations(ingestion_date=ingestion_date, payloads=person_payloads)
+    del person_payloads
     transform_genres(ingestion_date=ingestion_date, with_tv=True)
     transform_genre_translations(ingestion_date=ingestion_date, with_tv=True)
     transform_country_translations(ingestion_date=ingestion_date)

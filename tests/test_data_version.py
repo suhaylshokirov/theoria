@@ -213,6 +213,17 @@ def test_refresh_runs_a_capped_person_backfill_before_the_people_silver():
     )
 
 
+def test_refresh_reads_person_details_once_for_both_people_sweeps():
+    with patch.object(config, "require_etl"):
+        parent = _run(run_refresh, lambda _p: run_refresh.run_refresh(ingestion_date=DATE))
+    names = _refresh_names(parent)
+    assert names.count("read_latest_person_details") == 1
+    assert names.index("backfill_person_translations") < names.index("read_latest_person_details")
+    shared = parent.read_latest_person_details.return_value
+    assert parent.transform_people_details.call_args.kwargs["payloads"] is shared
+    assert parent.transform_people_translations.call_args.kwargs["payloads"] is shared
+
+
 def test_a_failing_person_backfill_does_not_stop_the_refresh():
     def runner(parent):
         parent.backfill_person_translations.side_effect = RuntimeError("TMDB is down")

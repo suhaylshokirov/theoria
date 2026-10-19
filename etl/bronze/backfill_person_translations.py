@@ -41,13 +41,12 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import logging
-import re
 
 from sqlalchemy import text
 
 import config
-from etl import s3_utils
 from etl.bronze.ingest_people import ingest_people
+from etl.person_detail_files import latest_person_detail_files
 
 logger = logging.getLogger(__name__)
 
@@ -58,33 +57,12 @@ DEFAULT_CUTOVER = dt.date(2026, 9, 25)
 
 _DEFAULT_MAX_NEW = 5000
 
-_KEY_RE = re.compile(
-    r"bronze/person_details/ingestion_date=(\d{4}-\d{2}-\d{2})/(\d+)\.json$"
-)
-
-
-def _latest_partition_by_person(bucket: str) -> dict[int, dt.date]:
-    """{person_id: newest ingestion_date holding that person's detail file}."""
-    client = s3_utils.get_s3_client()
-    latest: dict[int, dt.date] = {}
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=bucket, Prefix="bronze/person_details/"):
-        for obj in page.get("Contents", []):
-            match = _KEY_RE.search(obj["Key"])
-            if match is None:
-                continue
-            day = dt.date.fromisoformat(match.group(1))
-            person_id = int(match.group(2))
-            if person_id not in latest or day > latest[person_id]:
-                latest[person_id] = day
-    return latest
-
 
 def stale_person_ids(bucket: str, before: dt.date = DEFAULT_CUTOVER) -> set[int]:
     """Person ids whose newest Bronze file predates `before` (no translations)."""
     return {
         person_id
-        for person_id, day in _latest_partition_by_person(bucket).items()
+        for person_id, (day, _key) in latest_person_detail_files(bucket).items()
         if day < before
     }
 

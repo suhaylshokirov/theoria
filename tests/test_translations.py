@@ -386,7 +386,7 @@ def test_extract_person_rows_omits_a_language_with_no_name_and_no_biography():
     assert rows == []
 
 
-def test_transform_people_translations_reads_every_partition_later_wins():
+def test_transform_people_translations_reads_only_the_newest_file_per_person():
     payloads = {
         "bronze/person_details/ingestion_date=2026-09-01/31.json":
             _person_with_translations(31, _entry("ru", "RU", biography="Старая")),
@@ -404,6 +404,8 @@ def test_transform_people_translations_reads_every_partition_later_wins():
     df = _parquet_from_last_put(mock_s3).set_index("person_id")
     assert len(df) == 2
     assert df.loc[31, "biography"] == "Новая"
+    fetched = {c.kwargs["Key"] for c in mock_s3.get_object.call_args_list}
+    assert "bronze/person_details/ingestion_date=2026-09-01/31.json" not in fetched
 
 
 def test_transform_people_translations_pre_task_93_people_yield_zero_rows_and_one_warning(caplog):
