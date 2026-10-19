@@ -41,6 +41,7 @@ import time
 
 import config
 from etl import s3_utils
+from etl.parallel_fetch import fetch_each
 from etl.tmdb_client import TMDBClient
 from etl.translations import trim_translations
 
@@ -57,8 +58,9 @@ def ingest_series_details(
 ) -> tuple[list[int], list[int]]:
     """Fetch full detail records for each series_id and write them to Bronze S3.
 
-    Each series is written before the next is fetched so a mid-run failure
-    never discards already-completed work. Failures are logged with the
+    Each series is written as soon as it is fetched (several at once, see
+    `etl.parallel_fetch`) so a mid-run failure never discards already-completed
+    work. Failures are logged with the
     specific series_id so callers can retry only the failed subset.
 
     Returns (succeeded_ids, failed_ids).
@@ -77,28 +79,19 @@ def ingest_series_details(
         "Starting series-details ingestion: %d series, date=%s", total, ingestion_date
     )
 
-    succeeded: list[int] = []
-    failed: list[int] = []
-
-    for series_id in series_ids:
-        try:
-            payload = trim_translations(
-                client.get_series_details(
-                    series_id, append_to_response=_APPEND_TO_RESPONSE
-                )
+    def _fetch_one(series_id: int) -> None:
+        payload = trim_translations(
+            client.get_series_details(
+                series_id, append_to_response=_APPEND_TO_RESPONSE
             )
+        )
 
-            key = s3_utils.build_path(
-                "bronze", "series_details", ingestion_date, f"{series_id}.json"
-            )
-            s3_utils.write_json(config.S3_BUCKET, key, payload)
+        key = s3_utils.build_path(
+            "bronze", "series_details", ingestion_date, f"{series_id}.json"
+        )
+        s3_utils.write_json(config.S3_BUCKET, key, payload)
 
-            succeeded.append(series_id)
-            logger.debug("series_id=%d written to Bronze", series_id)
-
-        except Exception as exc:
-            failed.append(series_id)
-            logger.error("series_id=%d failed, skipping: %s", series_id, exc)
+    succeeded, failed = fetch_each(series_ids, _fetch_one, label="series_id")
 
     elapsed = time.monotonic() - t0
     logger.info(

@@ -26,6 +26,7 @@ import datetime as dt
 import io
 import json
 import logging
+import threading
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
@@ -60,6 +61,9 @@ _CLIENT_CONFIG = Config(
 # credential lookups). Never built at import time so importing this module
 # stays cheap and side-effect free.
 _s3_client = None
+# Bronze ingests write from a thread pool (etl.parallel_fetch), so the first
+# calls can arrive together; building a boto3 client concurrently is not safe.
+_s3_client_lock = threading.Lock()
 
 
 def get_s3_client():
@@ -76,14 +80,16 @@ def get_s3_client():
     """
     global _s3_client
     if _s3_client is None:
-        config.require_etl()
-        _s3_client = boto3.client(
-            "s3",
-            aws_access_key_id=config.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY,
-            region_name=config.AWS_REGION,
-            config=_CLIENT_CONFIG,
-        )
+        with _s3_client_lock:
+            if _s3_client is None:
+                config.require_etl()
+                _s3_client = boto3.client(
+                    "s3",
+                    aws_access_key_id=config.AWS_ACCESS_KEY_ID,
+                    aws_secret_access_key=config.AWS_SECRET_ACCESS_KEY,
+                    region_name=config.AWS_REGION,
+                    config=_CLIENT_CONFIG,
+                )
     return _s3_client
 
 

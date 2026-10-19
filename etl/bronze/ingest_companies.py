@@ -38,6 +38,7 @@ import time
 
 import config
 from etl import s3_utils
+from etl.parallel_fetch import fetch_each
 from etl.tmdb_client import TMDBClient
 
 logger = logging.getLogger(__name__)
@@ -82,8 +83,9 @@ def ingest_companies(
     alone — see the module docstring for why studios are treated differently
     from films here.
 
-    Each company is written before the next is fetched so a mid-run failure
-    never discards already-completed work. Returns (succeeded_ids, failed_ids);
+    Each company is written as soon as it is fetched (several at once, see
+    `etl.parallel_fetch`) so a mid-run failure never discards already-completed
+    work. Returns (succeeded_ids, failed_ids);
     company_ids skipped as already-enriched appear in neither list.
 
     Idempotent: re-running with the same company_id and ingestion_date writes
@@ -110,24 +112,15 @@ def ingest_companies(
         len(requested), skipped, len(to_fetch), ingestion_date,
     )
 
-    succeeded: list[int] = []
-    failed: list[int] = []
+    def _fetch_one(company_id: int) -> None:
+        payload = client.get_company_details(company_id)
 
-    for company_id in to_fetch:
-        try:
-            payload = client.get_company_details(company_id)
+        key = s3_utils.build_path(
+            "bronze", "company_details", ingestion_date, f"{company_id}.json"
+        )
+        s3_utils.write_json(config.S3_BUCKET, key, payload)
 
-            key = s3_utils.build_path(
-                "bronze", "company_details", ingestion_date, f"{company_id}.json"
-            )
-            s3_utils.write_json(config.S3_BUCKET, key, payload)
-
-            succeeded.append(company_id)
-            logger.debug("company_id=%d written to Bronze", company_id)
-
-        except Exception as exc:
-            failed.append(company_id)
-            logger.error("company_id=%d failed, skipping: %s", company_id, exc)
+    succeeded, failed = fetch_each(to_fetch, _fetch_one, label="company_id")
 
     elapsed = time.monotonic() - t0
     logger.info(

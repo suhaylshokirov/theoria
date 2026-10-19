@@ -76,6 +76,11 @@ def _optional(name: str, default: str) -> str:
 TMDB_API_KEY = _require("TMDB_API_KEY", role="etl")
 TMDB_BASE_URL = _optional("TMDB_BASE_URL", "https://api.themoviedb.org/3")
 TMDB_IMAGE_BASE_URL = _optional("TMDB_IMAGE_BASE_URL", "https://image.tmdb.org/t/p")
+# How many ids each Bronze ingest fetches from TMDB at once (etl.parallel_fetch).
+# Each id is one GET plus an S3 write to another continent, so serially the
+# runner spends most of its time waiting; 8 at ~0.5 s per id is ~16 req/s,
+# well under TMDB's ~50 req/s ceiling. 1 restores the old one-at-a-time loop.
+TMDB_FETCH_WORKERS = int(_optional("TMDB_FETCH_WORKERS", "8"))
 
 # --- AWS / S3 --------------------------------------------------------------
 AWS_ACCESS_KEY_ID = _require("AWS_ACCESS_KEY_ID", role="etl")
@@ -170,9 +175,9 @@ TV_SEASONS_INCLUDE_SPECIALS = _optional("TV_SEASONS_INCLUDE_SPECIALS", "False").
 # Task 134). Every person enriched before 2026-09-24 has no translations block,
 # so no Russian name or biography; the nightly re-fetches this many of them per
 # run, most popular first, until none are left (then it is a no-op listing).
-# The backlog measured 88,882 people on 2026-10-13. 6000 calls ~ 23 min at TMDB's
-# ~4.35 req/s, so it fills in ~15 nights and the nightly (40-75 min against a
-# 150 min timeout) keeps ~50 min of headroom. 0 turns the nightly batch off.
+# The backlog measured 88,882 people on 2026-10-13. 6000 calls took 42 min one
+# at a time (2026-10-19); with TMDB_FETCH_WORKERS in parallel it is a few
+# minutes, and the backlog fills in ~15 nights. 0 turns the nightly batch off.
 PERSON_TRANSLATION_BACKFILL_MAX_NEW = int(_optional("PERSON_TRANSLATION_BACKFILL_MAX_NEW", "6000"))
 
 # --- IMDb datasets -----------------------------------------------------------

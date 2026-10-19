@@ -22,6 +22,7 @@ import time
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
 
 import config
 
@@ -66,7 +67,13 @@ class TMDBClient:
         self.backoff_factor = backoff_factor
         self.timeout = timeout
         # Reuse one Session across calls: connection pooling + fewer handshakes.
-        self.session = session or requests.Session()
+        # The pool must hold one connection per fetch worker (etl.parallel_fetch),
+        # or urllib3 discards the extras and every call re-handshakes.
+        if session is None:
+            session = requests.Session()
+            pool = max(10, config.TMDB_FETCH_WORKERS)
+            session.mount("https://", HTTPAdapter(pool_connections=pool, pool_maxsize=pool))
+        self.session = session
 
     # -- core request ------------------------------------------------------
     def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -38,3 +38,16 @@ def _isolated_cache():
         cache.clear()
         yield
         cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _serial_tmdb_fetches(monkeypatch):
+    """Run Bronze per-id fetches one at a time in tests.
+
+    Many ingest tests hand the TMDB mock a list of payloads in call order; a
+    thread pool would consume that list in whatever order threads finish. The
+    parallel path has its own tests in test_parallel_fetch.py.
+    """
+    import config
+
+    monkeypatch.setattr(config, "TMDB_FETCH_WORKERS", 1)

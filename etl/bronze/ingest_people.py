@@ -34,7 +34,7 @@ carries the Russian *name*.
 
 **New here (companies had no cap): `max_new`.** `dim_person` holds ~35,782
 people with a photo — far more than one nightly job's ~90-minute budget can
-fetch at TMDB's ~4.35 req/s. Callers pass person_ids *already in priority
+fetch, even `config.TMDB_FETCH_WORKERS` at a time. Callers pass person_ids *already in priority
 order* (billed cast + directors/writers first — see run_pipeline's
 _extract_person_ids); `max_new` truncates the still-to-fetch list so a large
 backfill self-completes over several nights instead of blowing the budget in
@@ -57,6 +57,7 @@ import time
 
 import config
 from etl import s3_utils
+from etl.parallel_fetch import fetch_each
 from etl.tmdb_client import TMDBClient
 from etl.translations import trim_translations
 
@@ -110,8 +111,9 @@ def ingest_people(
     the caller has already sorted by fetch priority — are truncated to
     `max_new` before any API call is made.
 
-    Each person is written before the next is fetched so a mid-run failure
-    never discards already-completed work. Returns (succeeded_ids, failed_ids);
+    Each person is written as soon as it is fetched (several at once, see
+    `etl.parallel_fetch`) so a mid-run failure never discards already-completed
+    work. Returns (succeeded_ids, failed_ids);
     person_ids skipped as already-enriched or trimmed past `max_new` appear in
     neither list.
 
@@ -142,26 +144,17 @@ def ingest_people(
         len(requested), already, len(to_fetch), max_new, deferred, ingestion_date,
     )
 
-    succeeded: list[int] = []
-    failed: list[int] = []
+    def _fetch_one(person_id: int) -> None:
+        payload = trim_translations(
+            client.get_person_details(person_id, append_to_response="translations")
+        )
 
-    for person_id in to_fetch:
-        try:
-            payload = trim_translations(
-                client.get_person_details(person_id, append_to_response="translations")
-            )
+        key = s3_utils.build_path(
+            "bronze", "person_details", ingestion_date, f"{person_id}.json"
+        )
+        s3_utils.write_json(config.S3_BUCKET, key, payload)
 
-            key = s3_utils.build_path(
-                "bronze", "person_details", ingestion_date, f"{person_id}.json"
-            )
-            s3_utils.write_json(config.S3_BUCKET, key, payload)
-
-            succeeded.append(person_id)
-            logger.debug("person_id=%d written to Bronze", person_id)
-
-        except Exception as exc:
-            failed.append(person_id)
-            logger.error("person_id=%d failed, skipping: %s", person_id, exc)
+    succeeded, failed = fetch_each(to_fetch, _fetch_one, label="person_id")
 
     elapsed = time.monotonic() - t0
     logger.info(

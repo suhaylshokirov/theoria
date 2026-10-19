@@ -30,6 +30,7 @@ import time
 
 import config
 from etl import s3_utils
+from etl.parallel_fetch import fetch_each
 from etl.tmdb_client import TMDBClient
 from etl.translations import trim_translations
 
@@ -43,8 +44,9 @@ def ingest_movie_details(
 ) -> tuple[list[int], list[int]]:
     """Fetch full detail records for each movie_id and write them to Bronze S3.
 
-    Each movie is written before the next is fetched so a mid-run failure
-    never discards already-completed work. Failures are logged with the
+    Each movie is written as soon as it is fetched (several at once, see
+    `etl.parallel_fetch`) so a mid-run failure never discards already-completed
+    work. Failures are logged with the
     specific movie_id so callers can retry only the failed subset.
 
     Returns (succeeded_ids, failed_ids).
@@ -63,28 +65,19 @@ def ingest_movie_details(
         "Starting movie-details ingestion: %d movie(s), date=%s", total, ingestion_date
     )
 
-    succeeded: list[int] = []
-    failed: list[int] = []
-
-    for movie_id in movie_ids:
-        try:
-            payload = trim_translations(
-                client.get_movie_details(
-                    movie_id, append_to_response="videos,translations"
-                )
+    def _fetch_one(movie_id: int) -> None:
+        payload = trim_translations(
+            client.get_movie_details(
+                movie_id, append_to_response="videos,translations"
             )
+        )
 
-            key = s3_utils.build_path(
-                "bronze", "movie_details", ingestion_date, f"{movie_id}.json"
-            )
-            s3_utils.write_json(config.S3_BUCKET, key, payload)
+        key = s3_utils.build_path(
+            "bronze", "movie_details", ingestion_date, f"{movie_id}.json"
+        )
+        s3_utils.write_json(config.S3_BUCKET, key, payload)
 
-            succeeded.append(movie_id)
-            logger.debug("movie_id=%d written to Bronze", movie_id)
-
-        except Exception as exc:
-            failed.append(movie_id)
-            logger.error("movie_id=%d failed, skipping: %s", movie_id, exc)
+    succeeded, failed = fetch_each(movie_ids, _fetch_one, label="movie_id")
 
     elapsed = time.monotonic() - t0
     logger.info(

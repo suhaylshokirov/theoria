@@ -65,7 +65,7 @@ def refresh_series(
     """Re-fetch the detail payload for known series and write it to Bronze S3.
 
     ``series_ids`` defaults to every id in ``dim_series``. Each show is written
-    before the next is fetched (``ingest_series_details``'s contract), so a
+    as soon as it is fetched (``ingest_series_details``'s contract), so a
     mid-run failure never discards completed work. Failures are logged with the
     specific series_id so callers can retry only the failed subset.
 

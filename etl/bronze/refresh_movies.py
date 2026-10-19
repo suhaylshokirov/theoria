@@ -42,6 +42,7 @@ from sqlalchemy.engine import Engine
 
 import config
 from etl import s3_utils
+from etl.parallel_fetch import fetch_each
 from etl.tmdb_client import TMDBClient
 from etl.translations import trim_translations
 from warehouse.db import get_engine
@@ -105,8 +106,8 @@ def refresh_movies(
     """Re-fetch details + credits for known films and write them to Bronze S3.
 
     ``movie_ids`` defaults to every id in ``dim_movie``. Each film is written
-    (both files) before the next is fetched, so a mid-run failure never
-    discards completed work. Failures are logged with the specific movie_id so
+    (both files) as soon as it is fetched, several at once (see
+    ``etl.parallel_fetch``), so a mid-run failure never discards completed work. Failures are logged with the specific movie_id so
     callers can retry only the failed subset.
 
     Returns ``(succeeded_ids, failed_ids)``.
@@ -128,31 +129,22 @@ def refresh_movies(
         total, ingestion_date,
     )
 
-    succeeded: list[int] = []
-    failed: list[int] = []
+    def _refresh_one(movie_id: int) -> None:
+        payload = client.get_movie_details(
+            movie_id, append_to_response="credits,videos,translations"
+        )
+        details, credits = _split_payload(movie_id, payload)
 
-    for movie_id in movie_ids:
-        try:
-            payload = client.get_movie_details(
-                movie_id, append_to_response="credits,videos,translations"
-            )
-            details, credits = _split_payload(movie_id, payload)
+        details_key = s3_utils.build_path(
+            "bronze", "movie_details", ingestion_date, f"{movie_id}.json"
+        )
+        credits_key = s3_utils.build_path(
+            "bronze", "credits", ingestion_date, f"{movie_id}.json"
+        )
+        s3_utils.write_json(config.S3_BUCKET, details_key, details)
+        s3_utils.write_json(config.S3_BUCKET, credits_key, credits)
 
-            details_key = s3_utils.build_path(
-                "bronze", "movie_details", ingestion_date, f"{movie_id}.json"
-            )
-            credits_key = s3_utils.build_path(
-                "bronze", "credits", ingestion_date, f"{movie_id}.json"
-            )
-            s3_utils.write_json(config.S3_BUCKET, details_key, details)
-            s3_utils.write_json(config.S3_BUCKET, credits_key, credits)
-
-            succeeded.append(movie_id)
-            logger.debug("movie_id=%d refreshed (details + credits)", movie_id)
-
-        except Exception as exc:
-            failed.append(movie_id)
-            logger.error("movie_id=%d refresh failed, skipping: %s", movie_id, exc)
+    succeeded, failed = fetch_each(movie_ids, _refresh_one, label="movie_id")
 
     elapsed = time.monotonic() - t0
     logger.info(

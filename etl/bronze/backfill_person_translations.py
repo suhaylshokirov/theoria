@@ -20,7 +20,8 @@ last one stopped; running it twice in a row fetches nothing the second time.
 reader is most likely to open. Popularity is read from `dim_person`; a person
 the warehouse does not know sorts last, by id.
 
-**Cost.** One TMDB call per person at ~4.35 req/s (~5,000 people in ~20 min),
+**Cost.** One TMDB call per person (6,000 took 42 min one at a time; with
+`config.TMDB_FETCH_WORKERS` in parallel, a few minutes),
 no new dependency and no schema change. `--max-new` bounds a run the same way
 `ingest_people()` bounds the nightly. The next nightly load turns the new Bronze
 files into rows (`transform_people_translations` → `load_person_translation`).
