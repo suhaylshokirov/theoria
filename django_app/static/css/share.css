@@ -1,6 +1,8 @@
-/* Theoria — a shared collection ("/s/<token>/"). A reader's list, opened by
-   link: owner plate, the list's name with its fixed line and the owner's
-   note, a band of real measurements, then the same poster grid /me/ uses.
+/* Theoria — a shared collection ("/s/<token>/") and a reader's public
+   profile ("/users/<name>/"). A reader's list, opened by link: owner plate,
+   the list's name with its fixed line and the owner's note, a band of real
+   measurements, then the same poster grid /me/ uses. The profile reuses the
+   hero and CTA and stacks one short shelf per shared list (last section).
 
    Loaded after account.css, whose plate, grid, card frame and pager it
    reuses unchanged; this file only ADDS what this page alone needs. Every
@@ -101,6 +103,17 @@
   overflow-wrap: anywhere;
 }
 
+a.share-hero__handle {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--rule-strong);
+}
+
+a.share-hero__handle:hover {
+  color: var(--lime-text);
+  text-decoration-color: currentColor;
+}
+
 .share-hero__count {
   display: inline-flex;
   flex-wrap: wrap;
@@ -126,7 +139,8 @@
 
 /* The owner's own words, set apart from the fixed line by size and weight —
    a quotation, so it carries quotation marks rather than a coloured edge. */
-.share-hero__note {
+.share-hero__note,
+.profile-shelf__note {
   max-width: 34em;
   margin: var(--space-5) 0 0;
   font-family: var(--font-display);
@@ -139,8 +153,10 @@
   quotes: "“" "”" "«" "»";
 }
 
-.share-hero__note::before { content: open-quote; }
-.share-hero__note::after { content: close-quote; }
+.share-hero__note::before,
+.profile-shelf__note::before { content: open-quote; }
+.share-hero__note::after,
+.profile-shelf__note::after { content: close-quote; }
 
 /* --- Measurements -------------------------------------------------------------- */
 
@@ -287,6 +303,93 @@
   color: var(--lime-text);
 }
 
+/* --- Public profile ------------------------------------------------------------ */
+
+/* One shelf per shared list. It is the /me/ shelf (ruled head, icon, five
+   posters across) with a link out where /me/ has Share: the page shows a
+   taste of each list and the list's own page shows the rest. */
+.share-hero + .profile-shelf,
+.share-hero + .profile-empty {
+  margin-top: var(--space-8);
+}
+
+.profile-shelf__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-6);
+}
+
+.profile-shelf__count {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.profile-shelf__count .mono {
+  color: var(--ink);
+}
+
+.profile-shelf__open {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.profile-shelf__open svg {
+  width: 16px;
+  height: 16px;
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.profile-shelf__open:hover {
+  color: var(--lime-text);
+}
+
+.profile-shelf__open:hover svg {
+  transform: translateX(3px);
+}
+
+.profile-shelf__line {
+  margin: var(--space-4) 0 0;
+  color: var(--ink-muted);
+}
+
+.profile-shelf__note {
+  font-size: var(--text-base, 1rem);
+}
+
+/* A profile with nothing shared yet: a plain statement, not a decorated
+   empty state -- the page is still the person. */
+.profile-empty {
+  padding-bottom: var(--space-4);
+}
+
+.profile-empty__lead {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: var(--text-lg);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.profile-empty__text {
+  max-width: 34em;
+  margin: var(--space-3) 0 0;
+  color: var(--ink-muted);
+}
+
 /* --- Phones -------------------------------------------------------------------- */
 
 @media (max-width: 767px) {
@@ -338,10 +441,15 @@
   .share-cta .btn {
     min-height: 48px;
   }
+
+  .profile-shelf__open {
+    min-height: 48px;
+  }
 }
 
 html.is-tv .share-cta .btn,
 html.is-tv .share-owner__manage,
+html.is-tv .profile-shelf__open,
 html.is-tv .share-cta__login {
   min-height: 3.25rem;
 }

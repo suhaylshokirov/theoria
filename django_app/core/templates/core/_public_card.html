@@ -1,0 +1,24 @@
+{% comment %} One poster in a read-only list: the share page's grid and the
+   profile's shelves. Params (pass with `only`):
+     item   : a hydrated collection row (content_type, content).
+     rank   : 1-based position, shown only when `ranked`.
+     ranked : the list is Top, so the rank is printed on the poster.
+     plain  : render the card without its link (a signed-out reader -- movie
+              and show pages are behind sign-in).
+   The grid, card and frame are account.css's; the badge sits on the poster
+   exactly as it does on /me/. {% endcomment %}
+{% load i18n %}
+<li class="account-card{% if ranked %} is-ranked{% endif %}">
+    {% if ranked %}<span class="visually-hidden">{% blocktranslate trimmed with rank=rank %}Rank {{ rank }}:{% endblocktranslate %}</span>{% endif %}
+
+    {% if item.content_type == "movie" %}
+    {% include "movies/_movie_card.html" with movie=item.content plain=plain only %}
+    {% else %}
+    {% include "movies/_series_card.html" with series=item.content plain=plain only %}
+    {% endif %}
+
+    <div class="account-card__frame">
+        <span class="account-card__type label">{% if item.content_type == "movie" %}{% translate "Movie" %}{% else %}{% translate "TV show" %}{% endif %}</span>
+        {% if ranked %}<span class="account-card__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>{% endif %}
+    </div>
+</li>

@@ -52,7 +52,7 @@
            translated one shrinks onto one line instead of breaking. {% endcomment %}
         <h1 class="display share-hero__title" id="share-title" style="--name-length: {{ label|length }}">{{ label }}<span class="visually-hidden"> — @{{ owner_name }}</span></h1>
         <p class="share-hero__by">
-            <span class="share-hero__handle mono">@{{ owner_name }}</span>
+            <a class="share-hero__handle mono" href="{% url 'public_profile' username=owner_name %}">@{{ owner_name }}</a>
             <span class="share-hero__dot" aria-hidden="true"></span>
             <span>{% blocktranslate trimmed with joined=owner_since|date:"M Y" %}Member since {{ joined }}{% endblocktranslate %}</span>
             <span class="share-hero__dot" aria-hidden="true"></span>
@@ -139,20 +139,7 @@
     <ol class="account-grid">
         {% for item in page_obj %}
         {% with rank=page_obj.start_index|add:forloop.counter0 %}
-        <li class="account-card{% if ranked %} is-ranked{% endif %}">
-            {% if ranked %}<span class="visually-hidden">{% blocktranslate trimmed with rank=rank %}Rank {{ rank }}:{% endblocktranslate %}</span>{% endif %}
-
-            {% if item.content_type == "movie" %}
-            {% include "movies/_movie_card.html" with movie=item.content plain=cards_plain only %}
-            {% else %}
-            {% include "movies/_series_card.html" with series=item.content plain=cards_plain only %}
-            {% endif %}
-
-            <div class="account-card__frame">
-                <span class="account-card__type label">{% if item.content_type == "movie" %}{% translate "Movie" %}{% else %}{% translate "TV show" %}{% endif %}</span>
-                {% if ranked %}<span class="account-card__rank" aria-hidden="true">{{ rank|stringformat:"02d" }}</span>{% endif %}
-            </div>
-        </li>
+        {% include "core/_public_card.html" with item=item rank=rank ranked=ranked plain=cards_plain only %}
         {% endwith %}
         {% endfor %}
     </ol>
@@ -187,14 +174,7 @@
 </section>
 
 {% if not request.user.is_authenticated %}
-<aside class="share-cta" aria-labelledby="share-cta-title">
-    <h2 class="share-cta__title" id="share-cta-title">{% translate "Make your own list on Theoria" %}</h2>
-    <p class="share-cta__copy">{% translate "Like, save and rank movies and TV shows, and share the list with a link." %}</p>
-    <div class="share-cta__actions">
-        <a class="btn" href="{% url 'accounts:signup' %}">{% translate "Create an account" %}</a>
-        <a class="share-cta__login" href="{% url 'accounts:login' %}">{% translate "Sign in" %}</a>
-    </div>
-</aside>
+{% include "core/_join_cta.html" %}
 {% endif %}
 {% endblock %}
 

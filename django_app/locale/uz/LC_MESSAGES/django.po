@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-18 08:19+0000\n"
+"POT-Creation-Date: 2026-10-23 13:24+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: uz\n"
@@ -83,7 +83,7 @@ msgstr "Kirish — Theoria"
 
 #: accounts/templates/accounts/login.html:18
 #: accounts/templates/accounts/signup.html:44
-#: core/templates/core/share/page.html:197 templates/base.html:179
+#: core/templates/core/_join_cta.html:11 templates/base.html:179
 #: templates/base.html:255
 msgid "Sign in"
 msgstr "Kirish"
@@ -1101,7 +1101,7 @@ msgstr "1-faslga nisbatan"
 msgid "Keep the note to %(max)d characters."
 msgstr "Izoh %(max)d belgidan oshmasin."
 
-#: core/sharing.py:73 core/views.py:179
+#: core/sharing.py:73 core/views.py:180
 msgid "Unknown collection."
 msgstr "Nomaʼlum toʻplam."
 
@@ -1123,7 +1123,7 @@ msgid "%(label)s pages"
 msgstr "%(label)s: sahifalar"
 
 #: core/templates/core/_account_pager.html:18
-#: core/templates/core/share/page.html:164
+#: core/templates/core/share/page.html:151
 #, python-format
 msgid "Showing %(start)s–%(end)s of %(total)s"
 msgstr "%(total)s tadan %(start)s–%(end)s koʻrsatilmoqda"
@@ -1231,18 +1231,18 @@ msgid "Create link"
 msgstr "Havola yaratish"
 
 #: core/templates/core/_collection_section.html:101
-#: core/templates/core/share/page.html:145
+#: core/templates/core/_public_card.html:13
 #, python-format
 msgid "Rank %(rank)s:"
 msgstr "%(rank)s-oʻrin:"
 
 #: core/templates/core/_collection_section.html:114
-#: core/templates/core/share/page.html:154 templates/base.html:277
+#: core/templates/core/_public_card.html:22 templates/base.html:277
 msgid "Movie"
 msgstr "Film"
 
 #: core/templates/core/_collection_section.html:114
-#: core/templates/core/share/page.html:154 templates/base.html:277
+#: core/templates/core/_public_card.html:22 templates/base.html:277
 msgid "TV show"
 msgstr "Serial"
 
@@ -1285,28 +1285,115 @@ msgstr "%(rank)s-oʻrinda"
 msgid "Empty slot"
 msgstr "Boʻsh oʻrin"
 
+#: core/templates/core/_join_cta.html:7
+msgid "Make your own list on Theoria"
+msgstr "Theoriada oʻz roʻyxatingizni yarating"
+
+#: core/templates/core/_join_cta.html:8
+msgid ""
+"Like, save and rank movies and TV shows, and share the list with a link."
+msgstr ""
+"Film va seriallarni yoqtiring, saqlang, reyting bering va roʻyxatni havola "
+"orqali ulashing."
+
+#: core/templates/core/_join_cta.html:10
+msgid "Create an account"
+msgstr "Hisob yaratish"
+
 #: core/templates/core/account.html:4
 msgid "Your account — Theoria"
 msgstr "Hisobingiz — Theoria"
 
-#: core/templates/core/account.html:34 core/templates/core/share/page.html:59
+#: core/templates/core/account.html:34 core/templates/core/profile.html:44
+#: core/templates/core/share/page.html:59
 #, python-format
 msgid "Member since %(joined)s"
 msgstr "%(joined)s dan beri biz bilan"
 
-#: core/templates/core/account.html:57 templates/base.html:202
+#: core/templates/core/account.html:54 core/templates/core/profile.html:101
+msgid "Public profile"
+msgstr "Ommaviy profil"
+
+#: core/templates/core/account.html:64 templates/base.html:202
 #: templates/base.html:248
 msgid "Sign out"
 msgstr "Chiqish"
 
-#: core/templates/core/account.html:62
+#: core/templates/core/account.html:69
 msgid "Your collections"
 msgstr "Toʻplamlaringiz"
 
-#: core/templates/core/account.html:84
+#: core/templates/core/account.html:91
 #, python-format
 msgid "Account · %(username)s"
 msgstr "Hisob · %(username)s"
+
+#: core/templates/core/profile.html:14
+#, python-format
+msgid "Movies and TV shows @%(name)s shares on Theoria."
+msgstr "@%(name)s Theoria’da ulashgan filmlar va seriallar."
+
+#: core/templates/core/profile.html:29
+#
+msgid "Your public profile"
+msgstr "Ommaviy profilingiz"
+
+#: core/templates/core/profile.html:30
+#
+msgid "This is your public profile."
+msgstr "Bu sizning ommaviy profilingiz."
+
+#: core/templates/core/profile.html:31 core/templates/core/share/page.html:40
+msgid "Manage"
+msgstr "Boshqarish"
+
+#: core/templates/core/profile.html:47
+#, python-format
+msgctxt "profile"
+msgid "<span class=\"mono\">%(counter)s</span> shared list"
+msgid_plural "<span class=\"mono\">%(counter)s</span> shared lists"
+msgstr[0] "<span class=\"mono\">%(counter)s</span> ta ulashilgan roʻyxat"
+
+#: core/templates/core/profile.html:61 core/templates/core/share/page.html:62
+msgctxt "share stats"
+msgid "movie"
+msgid_plural "movies"
+msgstr[0] "film"
+
+#: core/templates/core/profile.html:62 core/templates/core/share/page.html:63
+msgctxt "share stats"
+msgid "TV show"
+msgid_plural "TV shows"
+msgstr[0] "serial"
+
+#: core/templates/core/profile.html:67
+#, python-format
+msgctxt "profile"
+msgid "See all %(n)s"
+msgstr "Hammasi: %(n)s"
+
+#: core/templates/core/profile.html:67
+msgctxt "profile"
+msgid "Open list"
+msgstr "Roʻyxatni ochish"
+
+#: core/templates/core/profile.html:86
+#
+msgid "Shared lists"
+msgstr "Ulashilgan roʻyxatlar"
+
+#: core/templates/core/profile.html:88
+msgid "None of your lists are public yet."
+msgstr "Roʻyxatlaringizdan hech biri hali ommaviy emas."
+
+#: core/templates/core/profile.html:89
+msgid "Open a list on your account and choose Share, then make a link. It shows up here too."
+msgstr "Hisobingizda roʻyxatni oching, «Ulashish»ni bosing va havola yarating — roʻyxat bu yerda ham paydo boʻladi."
+
+#: core/templates/core/profile.html:91
+#, python-format
+msgid "@%(name)s hasn’t shared any lists yet."
+msgstr "@%(name)s hali hech qanday roʻyxat ulashmagan."
 
 #: core/templates/core/share/_card.html:42
 #, python-format
@@ -1446,13 +1533,9 @@ msgid "Only you can see this list."
 msgstr "Bu roʻyxatni faqat siz koʻra olasiz."
 
 #: core/templates/core/share/_sheet.html:103
-msgid ""
-"Make a link anyone can open, without an account. It shows this list as it is "
-"now and as you change it, never your email. You can turn it off at any time."
-msgstr ""
-"Hisobsiz ham ochish mumkin boʻlgan havola yarating. U roʻyxatni hozirgi "
-"holida va oʻzgartirgan sari koʻrsatadi, elektron pochtangizni hech qachon. "
-"Uni istalgan vaqtda oʻchirishingiz mumkin."
+#
+msgid "Make a link anyone can open, without an account. It shows this list as it is now and as you change it, never your email, and the list also appears on your public profile. You can turn it off at any time."
+msgstr "Hisobsiz ham ochish mumkin boʻlgan havola yarating. U roʻyxatni hozirgi holida va oʻzgartirgan sari koʻrsatadi, elektron pochtangizni hech qachon. Roʻyxat ommaviy profilingizda ham koʻrinadi. Uni istalgan vaqtda oʻchirishingiz mumkin."
 
 #: core/templates/core/share/_sheet.html:106
 msgid "Make a link"
@@ -1485,9 +1568,9 @@ msgstr ""
 "koʻradi."
 
 #: core/templates/core/share/_sheet.html:143
-msgid "The link stops working. Anyone who has it will see that it has gone."
-msgstr ""
-"Havola ishlamay qoladi. Unga ega boʻlganlar uning oʻchirilganini koʻradi."
+#
+msgid "The link stops working and the list leaves your public profile. Anyone who has the link will see that it has gone."
+msgstr "Havola ishlamay qoladi va roʻyxat ommaviy profilingizdan olib tashlanadi. Havolaga ega boʻlganlar uning oʻchirilganini koʻradi."
 
 #: core/templates/core/share/_sheet.html:144
 msgid "Make a new link"
@@ -1524,22 +1607,6 @@ msgstr "Ommaviy havolangiz"
 #: core/templates/core/share/page.html:39
 msgid "This is your public link."
 msgstr "Bu sizning ommaviy havolangiz."
-
-#: core/templates/core/share/page.html:40
-msgid "Manage"
-msgstr "Boshqarish"
-
-#: core/templates/core/share/page.html:62
-msgctxt "share stats"
-msgid "movie"
-msgid_plural "movies"
-msgstr[0] "film"
-
-#: core/templates/core/share/page.html:63
-msgctxt "share stats"
-msgid "TV show"
-msgid_plural "TV shows"
-msgstr[0] "serial"
 
 #: core/templates/core/share/page.html:64
 msgid "Nothing yet"
@@ -1587,108 +1654,93 @@ msgstr "Chiqqan yillar"
 msgid "By decade"
 msgstr "Oʻn yilliklar boʻyicha"
 
-#: core/templates/core/share/page.html:163
+#: core/templates/core/share/page.html:150
 msgid "Pages"
 msgstr "Sahifalar"
 
-#: core/templates/core/share/page.html:167
+#: core/templates/core/share/page.html:154
 msgid "Previous page"
 msgstr "Oldingi sahifa"
 
-#: core/templates/core/share/page.html:179
+#: core/templates/core/share/page.html:166
 msgid "Next page"
 msgstr "Keyingi sahifa"
 
-#: core/templates/core/share/page.html:187
+#: core/templates/core/share/page.html:174
 msgid "Nothing in this list right now."
 msgstr "Bu roʻyxatda hozircha hech narsa yoʻq."
 
-#: core/templates/core/share/page.html:193
-msgid "Make your own list on Theoria"
-msgstr "Theoriada oʻz roʻyxatingizni yarating"
-
-#: core/templates/core/share/page.html:194
-msgid ""
-"Like, save and rank movies and TV shows, and share the list with a link."
-msgstr ""
-"Film va seriallarni yoqtiring, saqlang, reyting bering va roʻyxatni havola "
-"orqali ulashing."
-
-#: core/templates/core/share/page.html:196
-msgid "Create an account"
-msgstr "Hisob yaratish"
-
-#: core/templates/core/share/page.html:203
+#: core/templates/core/share/page.html:183
 msgid "Shared collection"
 msgstr "Ulashilgan toʻplam"
 
-#: core/views.py:40 core/views.py:307
+#: core/views.py:41 core/views.py:312
 #: movies/templates/movies/_collection_actions.html:8
 msgid "Liked"
 msgstr "Yoqqanlar"
 
-#: core/views.py:41 core/views.py:310
+#: core/views.py:42 core/views.py:315
 #: movies/templates/movies/_collection_actions.html:14
 #: movies/templates/movies/_collection_actions.html:16
 msgid "Watch later"
 msgstr "Keyin koʻrish"
 
-#: core/views.py:42 core/views.py:304
+#: core/views.py:43 core/views.py:309
 msgid "Top"
 msgstr "Top"
 
-#: core/views.py:208
+#: core/views.py:209
 msgid "That collection could not be found."
 msgstr "Bunday toʻplam topilmadi."
 
-#: core/views.py:223 core/views.py:242
+#: core/views.py:224 core/views.py:243
 msgid "That collection item could not be moved."
 msgstr "Toʻplam elementini koʻchirib boʻlmadi."
 
-#: core/views.py:269
+#: core/views.py:270
 msgid "Too many share changes — please try again in a few minutes."
 msgstr ""
 "Ulashish sozlamalari juda koʻp oʻzgartirildi — bir necha daqiqadan keyin "
 "qayta urinib koʻring."
 
-#: core/views.py:285
+#: core/views.py:286
 msgid "Unknown share action."
 msgstr "Nomaʼlum ulashish amali."
 
-#: core/views.py:304
+#: core/views.py:309
 msgid "Picked by hand and ranked in order."
 msgstr "Qoʻlda tanlangan va tartib bilan joylashtirilgan."
 
-#: core/views.py:307
+#: core/views.py:312
 msgid "Everything they liked, newest first."
 msgstr "Yoqqan hamma narsa, eng yangisi birinchi."
 
-#: core/views.py:310
+#: core/views.py:315
 msgid "Saved for a free evening."
 msgstr "Boʻsh kech uchun saqlangan."
 
-#: core/views.py:426
+#: core/views.py:479
 msgctxt "share card"
 msgid "My best, in order."
 msgstr "Eng yaxshilarim, tartib bilan."
 
-#: core/views.py:427
+#: core/views.py:480
 msgctxt "share card"
 msgid "Good taste, documented."
 msgstr "Yaxshi did, hujjatlangan."
 
-#: core/views.py:428
+#: core/views.py:481
 msgctxt "share card"
 msgid "Next on my list."
 msgstr "Roʻyxatimdagi navbatdagilar."
 
-#: core/views.py:586
+#: core/views.py:639
 #, python-format
 msgctxt "share card"
 msgid "Member since %(month)s %(year)s"
 msgstr "%(month)s %(year)s dan beri biz bilan"
 
-#: core/views.py:590
+#: core/views.py:643
 msgctxt "share card"
 msgid "more"
 msgstr "yana"

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% load static i18n %}
+
+{% comment %} A reader's public page (/users/<username>/), open without an
+   account. Context comes from core.views.public_profile. The owner is a
+   handle and a join date -- never an email -- and each shelf is a list they
+   chose to share, a row of it with the rest one link away. Hero, grid, cards
+   and the sign-up invitation are the share page's (account.css, share.css);
+   a signed-out reader's cards carry no link, since movie and show pages are
+   behind sign-in. {% endcomment %}
+
+{% block title %}@{{ owner_name }} — Theoria{% endblock %}
+{% block description %}{% blocktranslate trimmed with name=owner_name %}Movies and TV shows @{{ name }} shares on Theoria.{% endblocktranslate %}{% endblock %}
+{% block body_class %}page-share page-profile{% endblock %}
+
+{% block extra_head %}
+<meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="profile">
+<meta property="og:site_name" content="Theoria">
+<meta property="og:title" content="@{{ owner_name }}">
+<meta property="og:url" content="{{ og_url }}">
+<link rel="stylesheet" href="{% static 'css/account.css' %}">
+<link rel="stylesheet" href="{% static 'css/share.css' %}">
+{% endblock %}
+
+{% block content %}
+{% if is_owner %}
+<aside class="share-owner" aria-label="{% translate "Your public profile" %}">
+    <p class="share-owner__text">{% translate "This is your public profile." %}</p>
+    <a class="share-owner__manage" href="{% url 'profile' %}">{% translate "Manage" %}</a>
+</aside>
+{% endif %}
+
+<header class="share-hero" aria-labelledby="profile-title">
+    <div class="account-plate" aria-hidden="true">
+        <span class="account-plate__initial">{{ owner_name|slice:":1"|upper }}</span>
+    </div>
+
+    <div class="share-hero__id">
+        <span class="share-hero__bar" aria-hidden="true"></span>
+        <h1 class="display share-hero__title" id="profile-title" style="--name-length: {{ owner_name|length }}">{{ owner_name }}</h1>
+        <p class="share-hero__by">
+            <span>{% blocktranslate trimmed with joined=owner_since|date:"M Y" %}Member since {{ joined }}{% endblocktranslate %}</span>
+            {% if shelves %}
+            <span class="share-hero__dot" aria-hidden="true"></span>
+            <span>{% blocktranslate trimmed count counter=shelves|length context "profile" %}<span class="mono">{{ counter }}</span> shared list{% plural %}<span class="mono">{{ counter }}</span> shared lists{% endblocktranslate %}</span>
+            {% endif %}
+        </p>
+    </div>
+</header>
+
+{% for shelf in shelves %}
+<section class="account-section profile-shelf" aria-labelledby="profile-{{ shelf.slug }}-title">
+    <div class="account-section__head profile-shelf__head">
+        <div class="account-section__title">
+            <span class="account-section__icon account-section__icon--{{ shelf.slug }}" aria-hidden="true"></span>
+            <div class="account-section__name">
+                <h2 class="display" id="profile-{{ shelf.slug }}-title">{{ shelf.label }}</h2>
+                <span class="profile-shelf__count">
+                    {% if shelf.stats.movies %}<span><span class="mono">{{ shelf.stats.movies|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=shelf.stats.movies context "share stats" %}movie{% plural %}movies{% endblocktranslate %}</span>{% endif %}
+                    {% if shelf.stats.shows %}<span><span class="mono">{{ shelf.stats.shows|stringformat:"d" }}</span> {% blocktranslate trimmed count counter=shelf.stats.shows context "share stats" %}TV show{% plural %}TV shows{% endblocktranslate %}</span>{% endif %}
+                </span>
+            </div>
+        </div>
+        <a class="profile-shelf__open" href="{{ shelf.url }}">
+            <span>{% if shelf.more %}{% blocktranslate trimmed with n=shelf.stats.total|stringformat:"d" context "profile" %}See all {{ n }}{% endblocktranslate %}{% else %}{% translate "Open list" context "profile" %}{% endif %}</span>
+            <span class="visually-hidden"> — {{ shelf.label }}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </a>
+    </div>
+
+    {% if shelf.has_note %}
+    <blockquote class="profile-shelf__note">{{ shelf.line }}</blockquote>
+    {% else %}
+    <p class="profile-shelf__line">{{ shelf.line }}</p>
+    {% endif %}
+
+    <ol class="account-grid">
+        {% for item in shelf.items %}
+        {% include "core/_public_card.html" with item=item rank=forloop.counter ranked=shelf.ranked plain=cards_plain only %}
+        {% endfor %}
+    </ol>
+</section>
+{% empty %}
+<section class="profile-empty" aria-label="{% translate "Shared lists" %}">
+    {% if is_owner %}
+    <p class="profile-empty__lead">{% translate "None of your lists are public yet." %}</p>
+    <p class="profile-empty__text">{% translate "Open a list on your account and choose Share, then make a link. It shows up here too." %}</p>
+    {% else %}
+    <p class="profile-empty__lead">{% blocktranslate trimmed with name=owner_name %}@{{ name }} hasn’t shared any lists yet.{% endblocktranslate %}</p>
+    {% endif %}
+</section>
+{% endfor %}
+
+{% if not request.user.is_authenticated %}
+{% include "core/_join_cta.html" %}
+{% endif %}
+{% endblock %}
+
+{% block footer_meta %}{% translate "Public profile" %}{% endblock %}

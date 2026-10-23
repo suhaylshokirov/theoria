@@ -154,6 +154,23 @@
   color: var(--ink);
 }
 
+/* Public profile: the quiet sibling of the two pills around it -- a .chip
+   (the sheet-2 fill, lime wash on hover) at the same height, so it reads as
+   "look at this", not a third action to take. */
+.account-public {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 var(--space-5);
+  white-space: nowrap;
+}
+
+.account-public svg {
+  width: 16px;
+  height: 16px;
+}
+
 .account-signout-form {
   margin: 0;
 }

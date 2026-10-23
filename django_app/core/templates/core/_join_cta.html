@@ -1,0 +1,12 @@
+{% comment %} The way in, for a signed-out reader at the foot of a public page
+   (a shared list, a profile): a hairline and a sentence -- the page is the
+   point, this is just the invitation. Styles are share.css's. {% endcomment %}
+{% load i18n %}
+<aside class="share-cta" aria-labelledby="share-cta-title">
+    <h2 class="share-cta__title" id="share-cta-title">{% translate "Make your own list on Theoria" %}</h2>
+    <p class="share-cta__copy">{% translate "Like, save and rank movies and TV shows, and share the list with a link." %}</p>
+    <div class="share-cta__actions">
+        <a class="btn" href="{% url 'accounts:signup' %}">{% translate "Create an account" %}</a>
+        <a class="share-cta__login" href="{% url 'accounts:login' %}">{% translate "Sign in" %}</a>
+    </div>
+</aside>

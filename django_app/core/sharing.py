@@ -159,6 +159,13 @@ def shared_collection(token) -> SharedCollection | None:
     collection = _live(token)
     if collection is None:
         return None
+    return _hydrated(collection)
+
+
+def _hydrated(collection: Collection) -> SharedCollection:
+    """A live collection with its titles read through the cache (see
+    `shared_collection`, which documents the key)."""
+    token = collection.share_token
 
     def build():
         # Queried by id, not through `collection.items`: that would stamp every
@@ -174,6 +181,23 @@ def shared_collection(token) -> SharedCollection | None:
     return SharedCollection(
         collection=collection, owner=collection.user, items=items, stats=stats
     )
+
+
+# The order a public profile lists them in: the hand-ranked one leads.
+PROFILE_KIND_ORDER = (Collection.TOP, Collection.LIKED, Collection.WATCH_LATER)
+
+
+def public_collections(user) -> list[SharedCollection]:
+    """The lists this user has switched sharing on for -- what their public
+    profile (`/users/<username>/`) shows, in `PROFILE_KIND_ORDER`. A list
+    that is private, was stopped, or has nothing left in it is left out, so
+    "Stop sharing" takes it off the profile as well as killing its link."""
+    live = Collection.objects.select_related("user").filter(
+        user=user, share_token__isnull=False, shared_at__isnull=False
+    )
+    by_kind = {c.kind: c for c in live}
+    shared = (_hydrated(by_kind[kind]) for kind in PROFILE_KIND_ORDER if kind in by_kind)
+    return [s for s in shared if s.stats["total"]]
 
 
 def own_collection(user, kind) -> SharedCollection | None:

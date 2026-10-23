@@ -785,3 +785,111 @@ def test_og_font_fallback_is_picked_per_string():
     assert og.face_file("body", "Café — 2025") == "Archivo-Medium.ttf"
     assert og.face_file("display", "ПОНРАВИЛОСЬ") == "RobotoFlex-ExpandedExtraBold.ttf"
     assert og.face_file("mono", "oʻzbek") == "RobotoFlex-Medium.ttf"
+
+
+# --- the public profile (/users/<username>/) --------------------------------------
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_profile_needs_no_login_shows_shared_lists_and_hides_the_email(owner):
+    collection = _shared_top(owner)
+    _collection(owner, Collection.LIKED, ids=(1,))          # never shared
+    with _hydrate_with(_top_rows()):
+        response = Client().get("/users/share_owner/")
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert _EMAIL not in html and "example.com" not in html
+    assert 'id="profile-title"' in html and ">share_owner<" in html
+    assert "Five I&#x27;d stake my taste on." in html or "Five I'd stake my taste on." in html
+    assert f'href="/s/{collection.share_token}/"' in html   # the way into the whole list
+    assert 'account-section__icon--top' in html
+    assert 'account-section__icon--liked' not in html       # a private list stays private
+    assert '<meta name="robots" content="noindex, nofollow">' in html
+    assert "noindex" in response["X-Robots-Tag"]
+    # Signed out: the invitation, no owner strip, no links into gated pages.
+    assert "Make your own list on Theoria" in html
+    assert "This is your public profile" not in html
+    assert "/movies/movie-1/" not in html and "card-static" in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_profile_is_case_insensitive_and_redirects_to_the_stored_casing(owner):
+    response = Client().get("/users/SHARE_owner/")
+    assert response.status_code == 302
+    assert response["Location"] == "/users/share_owner/"
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_profile_unknown_inactive_and_malformed_names_are_404(owner):
+    assert Client().get("/users/nobody_here/").status_code == 404
+    assert Client().get("/users/ab/").status_code == 404
+    assert Client().get("/users/has-a-dash/").status_code == 404
+    assert Client().get("/users/%00/").status_code == 404
+    assert Client().get("/users/").status_code == 404             # no directory of handles
+    owner.is_active = False
+    owner.save(update_fields=["is_active"])
+    assert Client().get("/users/share_owner/").status_code == 404
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_profile_with_nothing_shared_says_so(owner):
+    _collection(owner, Collection.TOP)                            # exists, never shared
+    html = Client().get("/users/share_owner/").content.decode()
+    assert "hasn’t shared any lists yet" in html
+    assert "account-section__icon" not in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_stopping_a_share_takes_the_list_off_the_profile(owner):
+    _shared_top(owner)
+    with _hydrate_with(_top_rows()):
+        assert "account-section__icon--top" in Client().get("/users/share_owner/").content.decode()
+    sharing.disable_share(owner, "top")
+    html = Client().get("/users/share_owner/").content.decode()
+    assert "account-section__icon--top" not in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_profile_shelf_is_a_taste_of_the_list_not_the_whole_of_it(owner):
+    _collection(owner, Collection.TOP, ids=range(1, 9))
+    sharing.enable_share(owner, "top")
+    rows = [_row(_movie(i, 2000 + i, 100, 7.0), "movie", i) for i in range(1, 9)]
+    with _hydrate_with(rows):
+        html = Client().get("/users/share_owner/").content.decode()
+    assert html.count('class="account-card is-ranked"') == 5
+    assert "See all 8" in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_owner_sees_the_manage_strip_on_their_own_profile(owner):
+    _shared_top(owner)
+    client = Client()
+    client.force_login(owner)
+    with _hydrate_with(_top_rows()):
+        html = client.get("/users/share_owner/").content.decode()
+    assert "This is your public profile" in html
+    assert 'href="/me/"' in html
+    assert "Make your own list on Theoria" not in html
+    assert _EMAIL not in html
+    assert 'href="/movies/movie-1/"' in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_profile_renders_in_russian_from_the_viewers_cookie(owner):
+    _shared_top(owner)
+    client = Client()
+    client.cookies["django_language"] = "ru"
+    with _hydrate_with(_top_rows()):
+        html = client.get("/users/share_owner/").content.decode()
+    assert '<html lang="ru">' in html
+    assert "Топ" in html
+
+
+@override_settings(ALLOWED_HOSTS=["testserver"])
+def test_me_and_the_share_page_link_to_the_profile(owner):
+    collection = _shared_top(owner)
+    client = Client()
+    client.force_login(owner)
+    assert 'href="/users/share_owner/"' in client.get("/me/").content.decode()
+    with _hydrate_with(_top_rows()):
+        html = Client().get(f"/s/{collection.share_token}/").content.decode()
+    assert 'href="/users/share_owner/"' in html

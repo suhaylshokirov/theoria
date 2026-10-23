@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.conf import settings
@@ -295,6 +296,10 @@ def share_collection(request, kind):
 # Four rows of the widest grid (the same 5 columns /me/ uses).
 SHARE_ITEMS_PER_PAGE = 20
 
+# A profile shelf is a taste of the list -- one row of the widest grid. The
+# whole list is one click away on its own share page.
+PROFILE_SHELF_ITEMS = 5
+
 
 def _share_kind_copy():
     """Stored kind -> (the /me/ anchor to manage it, heading, the fixed line
@@ -343,6 +348,56 @@ def _shared_or_gone(request, token):
             return None, _private_headers(render(request, "core/share/gone.html", status=410))
         raise Http404("No such shared collection.")
     return shared, None
+
+
+def public_profile(request, username):
+    """`/users/<username>/`: a reader's public page, open to anyone.
+
+    Shows a handle, a join date and a shelf for each list the owner has
+    switched sharing on for (core.sharing.public_collections) -- nothing is
+    public until they do that, and stopping a list takes it off here too.
+    Never the email. The name is matched case-insensitively; a different
+    casing redirects to the stored one so each profile has a single URL.
+
+    Kept out of search indexes like the share pages: a handle is a person.
+    """
+    # No username is longer than the column, and Postgres refuses a NUL byte
+    # in a query string outright (a 500), so neither reaches the lookup.
+    owner = None
+    if len(username) <= 30 and "\x00" not in username:
+        owner = get_user_model().objects.filter(username__iexact=username, is_active=True).first()
+    if owner is None:
+        raise Http404("No such profile.")
+    if owner.username != username:
+        return redirect("public_profile", username=owner.username)
+
+    copy = _share_kind_copy()
+    shelves = []
+    for shared in sharing.public_collections(owner):
+        collection = shared.collection
+        slug, label, fixed_line = copy[collection.kind]
+        shelves.append({
+            "slug": slug,
+            "label": label,
+            "line": collection.share_note or fixed_line,
+            "has_note": bool(collection.share_note),
+            "ranked": collection.kind == Collection.TOP,
+            "stats": shared.stats,
+            "items": shared.items[:PROFILE_SHELF_ITEMS],
+            "more": max(shared.stats["total"] - PROFILE_SHELF_ITEMS, 0),
+            "url": sharing.share_path(collection.share_token),
+        })
+
+    response = render(request, "core/profile.html", {
+        "owner_name": owner.username,
+        "owner_since": owner.date_joined,
+        "shelves": shelves,
+        "is_owner": request.user.is_authenticated and request.user.pk == owner.pk,
+        "cards_plain": not request.user.is_authenticated,
+        "og_url": request.build_absolute_uri(request.path),
+    })
+    response["X-Robots-Tag"] = "noindex, nofollow"
+    return response
 
 
 def shared_page(request, token):

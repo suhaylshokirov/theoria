@@ -50,6 +50,12 @@ urlpatterns = [
     # (the username's own reserved slot -- see the accounts.User username
     # blocklist), not as belonging to the accounts app's own URL space.
     path('me/', core_views.account, name='profile'),
+    # A reader's public page. Any non-slash segment routes, not just what the
+    # signup rule allows (accounts.models.validate_username_characters): an
+    # account made in the admin or shell can bypass that rule, and /me/ links
+    # here, so a strict pattern would 500 it. An unknown name is a 404 from
+    # the view. There is no /users/ index: handles are not meant to be browsed.
+    path('users/<str:username>/', core_views.public_profile, name='public_profile'),
     path('', include('movies.urls')),
 ]
 
