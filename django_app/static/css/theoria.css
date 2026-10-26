@@ -48,6 +48,10 @@
   --lime-mark: #65a30d;
   --lime-deep: #365314;
   --lime-hover: #93d128;
+  /* LinkedIn's brand blue, for its icon only. The dark value is the same hue,
+     a touch more saturated, so the tile stays vivid on near-black (4:1+). */
+  --linkedin: #0a66c2;
+  --dark-linkedin: #1479e0;
   /* Lime's fill is equally bright in both themes, so text printed on it must
      stay fixed rather than swap with --ink — in dark mode --ink turns near-
      white, which is illegible on lime. Never redefined under [data-theme]. */
@@ -234,6 +238,7 @@
   --lime-mark: var(--dark-lime-mark);
   --lime-deep: var(--dark-lime-deep);
   --lime-hover: var(--dark-lime-hover);
+  --linkedin: var(--dark-linkedin);
   --danger: var(--dark-danger);
   --chart-wash: var(--dark-chart-wash);
   --rank-1: var(--dark-rank-1);
@@ -260,6 +265,7 @@
     --lime-mark: var(--dark-lime-mark);
     --lime-deep: var(--dark-lime-deep);
     --lime-hover: var(--dark-lime-hover);
+    --linkedin: var(--dark-linkedin);
     --danger: var(--dark-danger);
     --chart-wash: var(--dark-chart-wash);
     --rank-1: var(--dark-rank-1);
@@ -1032,7 +1038,7 @@ main.container {
   flex-wrap: wrap;
   gap: var(--space-4) var(--space-7);
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   margin-top: var(--space-6);
   padding-top: var(--space-5);
   border-top: var(--hairline);
@@ -1051,20 +1057,29 @@ main.container {
 .colophon-group {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-2) var(--space-4);
+  align-items: flex-start;
+  gap: 0 var(--space-4);
+}
+
+/* The label and each link share one line box (same line-height and block
+   padding), so the label sits on the same centre line as the icon and name
+   instead of riding above them. */
+.colophon-group__label,
+.colophon-link {
+  line-height: 1.25rem;
+  padding-block: var(--space-2);
 }
 
 .colophon-group__label {
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  color: var(--ink-faint);
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
 }
 
 .colophon-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
+  gap: 0 var(--space-5);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1076,8 +1091,6 @@ main.container {
   gap: var(--space-2);
   color: var(--ink-muted);
   text-decoration: none;
-  /* A fingertip-sized target without growing the visible row. */
-  padding-block: var(--space-2);
 }
 
 .colophon-link:hover,
@@ -1091,6 +1104,7 @@ main.container {
 }
 
 .colophon-link__icon {
+  color: var(--linkedin);
   width: 1rem;
   height: 1rem;
   flex: none;
