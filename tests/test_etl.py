@@ -4177,6 +4177,28 @@ def test_load_dim_season_upserts_and_quarantines_unknown_series(monkeypatch):
     assert "ingestion_date" not in params[0]  # dim_season carries none
 
 
+def test_load_dim_season_deletes_rows_superseded_by_a_new_season_id(monkeypatch):
+    """TMDB re-creating a season under a new id must not hit the (series, number) unique index."""
+    import etl.warehouse_loader.load_dimensions as load_dimensions_module
+    monkeypatch.setattr(
+        load_dimensions_module, "_existing_ids", lambda session, table, pk_col: {1396}
+    )
+    mock_session = MagicMock()
+
+    load_dim_season(mock_session, _wh_seasons_df())
+
+    delete_call, upsert_call = mock_session.execute.call_args_list
+    (stmt, params), _ = delete_call
+    assert "DELETE FROM dim_season" in str(stmt)
+    assert "s.season_id <> n.season_id" in str(stmt)
+    assert params == {
+        "series_ids": [1396, 1396],
+        "season_numbers": [1, 2],
+        "season_ids": [3572, 3573],
+    }
+    assert "INSERT INTO dim_season" in str(upsert_call[0][0])  # delete runs first
+
+
 def test_load_dim_episode_replaces_by_series_and_quarantines(monkeypatch):
     import etl.warehouse_loader.load_dimensions as load_dimensions_module
     monkeypatch.setattr(

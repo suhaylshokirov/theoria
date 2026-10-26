@@ -572,6 +572,12 @@ def load_dim_season(
     way its episode list is not — see 22_episodes.sql. A season row whose
     series_id has no dim_series row is quarantined, never dropped (the standing
     rule). Returns (count, rejects).
+
+    TMDB occasionally re-creates a season under a new season_id (SpongeBob's
+    placeholder seasons 18-20, 2026-10-26). The upsert keys on season_id, so the
+    new row would collide with the old one on the (series_id, season_number)
+    unique index and fail the whole load. The superseded rows are deleted first;
+    nothing references season_id, so there is nothing to cascade.
     """
     valid_series_ids = _existing_ids(session, "dim_series", "series_id")
 
@@ -591,9 +597,29 @@ def load_dim_season(
         row["series_id"] = int(series_id)
         rows.append({k: (None if pd.isna(v) else v) for k, v in row.items()})
 
+    superseded = 0
+    if rows:
+        superseded = session.execute(
+            text(
+                "DELETE FROM dim_season s"
+                " USING unnest(CAST(:series_ids AS integer[]),"
+                " CAST(:season_numbers AS integer[]),"
+                " CAST(:season_ids AS integer[]))"
+                " AS n(series_id, season_number, season_id)"
+                " WHERE s.series_id = n.series_id"
+                " AND s.season_number = n.season_number"
+                " AND s.season_id <> n.season_id"
+            ),
+            {
+                "series_ids": [r["series_id"] for r in rows],
+                "season_numbers": [int(r["season_number"]) for r in rows],
+                "season_ids": [r["season_id"] for r in rows],
+            },
+        ).rowcount
     count = _upsert(session, "dim_season", ["season_id"], _DIM_SEASON_COLS, rows)
     logger.info(
-        "dim_season: upserted %d row(s), rejected %d row(s)", count, len(rejects)
+        "dim_season: upserted %d row(s), replaced %d renumbered row(s), rejected %d row(s)",
+        count, superseded, len(rejects),
     )
     return count, rejects
 
