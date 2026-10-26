@@ -3323,4 +3323,4 @@ msgstr "Автор"
 
 #: templates/base.html
 msgid "Contributors"
-msgstr "Участники"
+msgstr "Контрибутеры"
