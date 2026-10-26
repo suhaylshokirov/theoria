@@ -3312,3 +3312,15 @@ msgstr "Назовите настроение, жанр или сколько у
 #: templates/base.html:510
 msgid "Get a film pick"
 msgstr "Подобрать фильм"
+
+#: templates/base.html
+msgid "Tashkent 2026"
+msgstr "Ташкент 2026"
+
+#: templates/base.html
+msgid "Author"
+msgstr "Автор"
+
+#: templates/base.html
+msgid "Contributors"
+msgstr "Участники"

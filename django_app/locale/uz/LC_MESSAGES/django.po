@@ -3280,3 +3280,15 @@ msgstr "Kayfiyatingizni, janrni yoki qancha vaqtingiz borligini ayting."
 #: templates/base.html:510
 msgid "Get a film pick"
 msgstr "Film tanlash"
+
+#: templates/base.html
+msgid "Tashkent 2026"
+msgstr "Toshkent 2026"
+
+#: templates/base.html
+msgid "Author"
+msgstr "Muallif"
+
+#: templates/base.html
+msgid "Contributors"
+msgstr "Ishtirokchilar"
