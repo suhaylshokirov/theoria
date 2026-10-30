@@ -1,6 +1,7 @@
 # Theoria — Claude Code Project Memory
 
-A movie analytics platform (mini IMDb + analytics) built to learn real Data Engineering:
+A movie and TV analytics platform (mini IMDb + analytics), live at `theoria.uz` with real readers. It began as a
+Data Engineering learning project; it is now run as a product that has to keep working as it grows:
 `TMDB API → S3 Data Lake (Bronze/Silver/Gold) → PostgreSQL warehouse (star schema) → Django UI`
 
 ---
@@ -150,8 +151,12 @@ theoria/
 **Stack:** Python, SQL, PostgreSQL, AWS S3, Django + Django Templates
 `requests`, `pandas`, `pyarrow`, `boto3`, `SQLAlchemy`, `psycopg2-binary`, `python-dotenv`, `pytest`
 
-**Explicit non-goals:** No Spark, Kafka, Snowflake, Redshift, Lambda, Terraform, Kubernetes.
-This is a single-machine DE learning project, not an infra project.
+**Scale posture:** no tool is ruled out on principle (the old "single-machine, no Spark/Kafka/Airflow/
+Snowflake/Terraform/Kubernetes" non-goal is retired), and none is adopted before a *measured* limit calls for
+it. Design new work so it keeps scaling: stateless request path, idempotent partitioned stages, nothing that
+only works because the catalogue is small. Known ceilings and their planned replacements — Neon's 512 MB free
+tier (78% on 2026-10-30), the single-runner nightly refresh, in-memory pandas, cron-as-orchestrator, the
+IMDb/TMDB non-commercial terms — are in `docs/architecture.md` §11 and README *Scale and growth*.
 
 **Data flow:**
 ```

@@ -20,7 +20,7 @@ Theoria is a movie and TV analytics platform: a mini IMDb with analytics, fed by
 TMDB → S3 data lake → PostgreSQL star-schema pipeline and read through a Django front end. It exists so
 readers can browse a curated archive of films and shows and see them *measured* — ratings, revenue,
 decades, genres, franchises, who worked with whom. Success is a reader finding and enjoying titles;
-the engineering behind it (a data-engineering learning project) is not the product's job to show off.
+the engineering behind it is not the product's job to show off.
 
 ## Positioning
 
@@ -54,7 +54,8 @@ that even time axis.
 - Never surface internal implementation names (table/column names, `.sql` filenames, surrogate keys,
   query or script names) in any user-facing string.
 - The in-page AI assistant is off-limits: leave `assistant/` and its helpers alone.
-- Non-goals: Spark, Kafka, Snowflake, Redshift, Lambda, Terraform, Kubernetes.
+- Scale: a live product with real readers. Infrastructure is added when a measured limit calls for it,
+  never ruled out on principle (`docs/architecture.md` §11).
 - Genuinely undecided: nothing recorded.
 
 ## Brand Commitments

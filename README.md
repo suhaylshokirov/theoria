@@ -5,6 +5,11 @@ three-layer S3 data lake, a dimensional PostgreSQL warehouse, and a Django front
 it in English, Russian and Uzbek. Every layer is idempotent, quality-gated, and rebuildable from
 immutable raw data.
 
+Theoria started as a single-machine exercise in data engineering. It is now a live product with
+real readers at [theoria.uz](https://theoria.uz), and the architecture is run and documented as
+one that has to keep working as the catalogue and the readership grow — see
+[*Scale and growth*](#scale-and-growth).
+
 ```
 TMDB API  →  Bronze (raw JSON)  →  Silver (typed Parquet)  →  Gold (aggregates)  →  PostgreSQL  →  Django
                         S3 data lake, partitioned by ingestion_date                  star schema
@@ -165,7 +170,7 @@ people whose details have been fetched with translations so far.
 
 ### Caching and staleness
 
-The warehouse is small, nightly-updated and read-only, which makes caching it unusually safe: the
+The warehouse is nightly-updated and read-only, which makes caching it unusually safe: the
 only thing that can make a cached value wrong is a new load, and the pipeline knows exactly when
 that happens. So the site never *invalidates* anything.
 
@@ -561,11 +566,40 @@ tests/                    ETL, data quality, translation, account and view tests
 docs/architecture.md      design decisions and their evidence
 ```
 
-## Scope and non-goals
+## Scale and growth
 
-Theoria runs on one machine on purpose. There is no Spark, Kafka, Airflow, Snowflake, Lambda,
-Terraform or Kubernetes, and adding them is explicitly out of scope. The goal is the *shape* of a
-production analytics stack — layered storage, dimensional modelling, idempotent loads, quality
-gates, incremental processing — at a scale where every stage can be read, run and debugged end to
-end. The engineering decisions are documented as if the infrastructure were there; the
-infrastructure isn't, and that is the trade being made.
+Theoria used to describe itself as single-machine on purpose, with Spark, Airflow, Snowflake and
+the like ruled out for good. That stance belonged to a practice project. Theoria now has a public
+domain, real readers and their accounts, and an unattended nightly pipeline, so the question is no
+longer "how small can this stay" but "what breaks first as it grows, and what replaces it then".
+No tool is ruled out on principle any more. Each one comes in when a measured limit calls for it,
+not before.
+
+**Already built to grow.** These hold at many times the current size without a redesign:
+
+- **The site has no state of its own.** It runs as a Vercel function that keeps nothing between
+  requests. Accounts and sessions live in their own database, cached reads in Redis, and the
+  warehouse is read-only to it. Heavier traffic means more function instances, not a bigger server.
+- **The cache never has to be invalidated.** Keys are tied to the data version, so cache
+  correctness doesn't depend on traffic, the number of pages or how many people can deploy.
+- **Every pipeline stage is idempotent and partitioned by `ingestion_date`.** A stage can be
+  re-run, run for one day, or split up and run in parallel without changing the result.
+- **The lake can rebuild the warehouse.** Bronze is immutable and Silver and Gold are rebuilt
+  from it, so moving the warehouse to another database means replaying files, not migrating
+  hand-edited state.
+- **The star schema and its `.sql` queries don't depend on Postgres.** Moving to a columnar
+  warehouse would mean a new loader target and different SQL details, not a new data model.
+
+**The current ceilings.** Each limit is listed with how close Theoria is to it and the change it
+would trigger:
+
+| Limit | Where it stands | What happens when it binds |
+|---|---|---|
+| **Warehouse storage**: Neon's free tier caps a project at 512 MB | **401 MB (78%)** on 2026-10-30, up from 231 MB right after the last cleanup on 2026-09-23. `dim_person` (131 MB) and `fact_series_credit` (113 MB) are the largest tables. Dropping unused tables and indexes has already been done twice, so there is little left to cut | Move to a paid Neon plan. That also ends scale-to-zero, so first visits no longer wait for the database to wake up |
+| **Nightly refresh**: every title is re-fetched each night on one GitHub-hosted runner, with a 150-minute job timeout | The run takes time in proportion to the catalogue, at about 16 requests a second (8 concurrent requests, well under TMDB's ~50 per second) | Refresh in tiers: recent and popular titles nightly, the long tail weekly. Then split the run into parallel jobs, one per id range, which works because the stages are idempotent |
+| **Transforms**: Silver and Gold run in pandas, fully in memory, on that same runner | They fit comfortably today | Process one partition at a time first. If that isn't enough, move to an engine that works on data larger than memory (DuckDB or Polars) before considering a cluster such as Spark |
+| **Orchestration**: two cron workflows plus `run_pipeline` / `run_refresh` as the scheduler | Enough for two linear pipelines | A real orchestrator (Airflow, Dagster) once there are pipelines that depend on each other, stages that need retrying on their own, or backfills that take longer than a single job can run |
+| **Data licences**: the IMDb datasets are for personal and non-commercial use, and TMDB's API terms treat commercial use separately | Theoria is non-commercial | Any commercial use (ads, paid tiers) needs licensing settled *before* launch, not after |
+
+The engineering decisions behind each of these, with the measurements, are in
+[`docs/architecture.md`](docs/architecture.md) §11.

@@ -17,12 +17,14 @@ It is deliberately not the only document that touches history, but it is the one
 
 ## 1. Goal
 
-Theoria is a single-machine data engineering project that mimics a real analytics stack, end to
-end, without any of the distributed-systems infrastructure (Spark, Kafka, Kubernetes, Terraform)
-that a production version would eventually need. The constraint is deliberate: the point is to
-practice the *shape* of a DE pipeline — bronze/silver/gold layering, a dimensional warehouse,
-idempotent loads, data quality gates — on a scale where every stage can be read, run, and debugged
-by one person on a laptop.
+Theoria began as a single-machine data engineering project that copied the *shape* of a real
+analytics stack: bronze/silver/gold layering, a dimensional warehouse, idempotent loads and data
+quality gates, at a size one person could read, run and debug on a laptop. That is no longer the
+goal. Theoria is a live product with real readers at `theoria.uz`, so the goal now is a stack that
+keeps working as the catalogue and the readership grow. The patterns stay the same, because they
+were always the ones a larger system would use. What has changed is the posture: distributed
+infrastructure is no longer ruled out on principle, and each new piece is adopted when a measured
+limit calls for it (§11).
 
 ## 2. End-to-end data flow
 
@@ -354,8 +356,8 @@ HTTP GET and a join on `imdb_id` — zero per-movie API calls, no new secret, no
 dependency. Measured before any code was written: **1,211 of 1,215 films match (99.7%)** — the
 four misses are two films with no `imdb_id` and two whose id sits below IMDb's ≥5-vote
 publication floor. This made the new ratings path *cheaper* than the TMDB one it replaced.
-(The IMDb datasets are licensed for personal and non-commercial use only, which this
-learning project is.)
+(The IMDb datasets are licensed for personal and non-commercial use only. Theoria is
+non-commercial, and that has to be settled before any commercial use — see §11.)
 
 **Why a long table beat two more columns.** The obvious alternative was
 `fact_movie_metrics.imdb_rating` / `.imdb_vote_count`. But `fact_movie_metrics` is at
@@ -555,9 +557,9 @@ refresh re-fetches every film rather than trusting a feed that omits the point.
 **Why Neon + GitHub Actions and not an AWS-native scheduler.** `config.py` already reads a single
 `DATABASE_URL` and every stage is already idempotent per `ingestion_date`, so moving the
 warehouse to a managed Postgres and running the existing scripts on a cron is an environment
-change plus two YAML files — no new infrastructure, which keeps faith with §11's non-goals. ECS
-Fargate + EventBridge, or self-hosted Airflow, would buy orchestration this project does not need
-at this size. One operational wrinkle: GitHub silently disables scheduled workflows on a public
+change plus two YAML files, with no new infrastructure. ECS Fargate + EventBridge, or
+self-hosted Airflow, would buy orchestration two linear pipelines don't need yet. §11 lists what
+would change that. One operational wrinkle: GitHub silently disables scheduled workflows on a public
 repo after 60 days without repository activity, so each run appends a line to
 `ops/refresh-history.md` and commits it — the commit is the activity that keeps the schedule
 alive.
@@ -1157,12 +1159,55 @@ actually drawn, check the sheet on 320-430 px phones, and check `/s/<token>/` fo
 They write to the site under test (a private collection gets its link), so point them at a scratch
 site, not production.
 
-## 11. Explicit non-goals
+## 11. Scale: what binds first, and what replaces it
 
-No Spark, Kafka, Snowflake, Redshift, Lambda, Terraform, or Kubernetes. This project intentionally
-stays single-machine: the pipeline processes a few hundred to a couple thousand movies per run,
-values in the hundreds-of-megabytes-to-low-gigabytes range that fit comfortably in pandas
-DataFrames. The architecture patterns (layered lake, star schema, idempotent upserts,
-watermark-based incremental loads, quarantine-based data quality) are the same ones a distributed
-version would use — swapping pandas for Spark and a single Postgres instance for
-Redshift/Snowflake would be a scaling exercise, not a redesign.
+Until October 2026 this section was called "Explicit non-goals" and ruled out Spark, Kafka,
+Snowflake, Redshift, Lambda, Terraform and Kubernetes for good, on the grounds that the project
+was meant to stay single-machine. That reasoning held for a practice project. It doesn't hold for
+a site with a public domain, real readers and accounts, and a pipeline that runs unattended every
+night. The rule now: **no tool is ruled out on principle, and none is adopted before a measured
+limit calls for it.** Adding infrastructure early is still a cost (more to operate, more to pay
+for, more that can break at 03:12 UTC), so the burden of proof is on the new piece, but proving it
+is now possible.
+
+The patterns already in place are the ones a larger system would use: a layered lake, a star
+schema, idempotent upserts, watermark-based incremental loads and quarantine-based data quality.
+Swapping pandas for a different engine, or a single Postgres for a columnar warehouse, is a
+scaling exercise rather than a redesign. That was true before. What changes is that the swap is
+now planned for, not ruled out.
+
+**What already scales.** The read path keeps no state of its own. The Vercel function keeps
+nothing between requests (§4.4), accounts and sessions live in a separate database, and the cache
+is keyed by the data version, so it never needs invalidating whatever the traffic (§4.5). Every
+pipeline stage is idempotent per `ingestion_date` partition (§4), which is exactly what lets a
+run be split across parallel workers later. And because Bronze is immutable, the warehouse can be
+rebuilt anywhere from the lake (§2.2).
+
+**What binds first, measured 2026-10-30:**
+
+1. **Warehouse storage.** Neon's free tier caps a project at 512 MB. The warehouse is at
+   **401 MB (78%)**, up from 231 MB right after `25_drop_unused_indexes.sql` on 2026-09-23. The
+   two biggest tables are `dim_person` (131 MB) and `fact_series_credit` (113 MB). Dead weight has
+   already been cut twice (§3.3, `23`/`25`/`26`), so the next step is a paid plan, not another
+   cleanup. The paid plan also ends forced scale-to-zero, the cold start in §4.4.
+2. **Nightly refresh time.** `run_refresh` re-fetches every title (§4.2) on one GitHub-hosted
+   runner, with a 150-minute job timeout, so run time grows in proportion to the catalogue. The
+   fetch already runs 8 requests at a time (~16 req/s against TMDB's ~50 req/s ceiling). The
+   next steps, in order: refresh in tiers (recent and popular titles nightly, the long tail
+   weekly), then split the run into parallel matrix jobs by id range. Both are safe because the
+   stages are idempotent.
+3. **Transform memory.** Silver and Gold build each dataset as an in-memory pandas DataFrame.
+   That fits easily today. When it stops fitting, process one partition at a time first, then move
+   to an engine that handles data larger than memory (DuckDB or Polars). A cluster engine such as
+   Spark comes after both of those, not before.
+4. **Orchestration.** Two cron workflows calling `run_pipeline` and `run_refresh` are enough for
+   two linear pipelines. A real orchestrator (Airflow, Dagster) becomes worth its operating cost
+   once there are pipelines that depend on each other, stages that need retrying on their own, or
+   backfills that take longer than a single job can run.
+5. **Data licensing.** The IMDb datasets are personal and non-commercial only (§3.8), and TMDB's
+   API terms treat commercial use separately. Theoria is non-commercial, so this doesn't bind
+   today. But it is the one ceiling that has to be settled *before* it is reached, since any ads
+   or paid features would break the terms on day one.
+
+Kafka and streaming have no use case yet. The source data changes daily and readers see it daily,
+so batch is the honest fit until something real-time appears on the product side.
