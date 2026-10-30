@@ -1,7 +1,9 @@
 # Theoria — Claude Code Project Memory
 
-A movie and TV analytics platform (mini IMDb + analytics), live at `theoria.uz` with real readers. It began as a
-Data Engineering learning project; it is now run as a product that has to keep working as it grows:
+A movie and TV platform for people who take their taste in cinema seriously, live at `theoria.uz` with real
+readers: browse movies, shows, cartoons, people and studios; keep Liked / Top / Watch later collections and share
+them publicly; dig deeper on every title page and the analytics page. Product framing lives in `PRODUCT.md`. It
+began as a Data Engineering learning project; it is now run as a product that has to keep working as it grows:
 `TMDB API → S3 Data Lake (Bronze/Silver/Gold) → PostgreSQL warehouse (star schema) → Django UI`
 
 ---

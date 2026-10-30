@@ -1,9 +1,15 @@
 # Theoria
 
-**A movie and TV analytics platform built on a real data engineering stack** — TMDB ingestion, a
-three-layer S3 data lake, a dimensional PostgreSQL warehouse, and a Django front end that reads
-it in English, Russian and Uzbek. Every layer is idempotent, quality-gated, and rebuildable from
-immutable raw data.
+**Theoria is a movie and TV platform for people who take their taste in cinema seriously.**
+Browse movies, TV shows, cartoons, the people who make them and the studios behind them. Keep what
+you love, rank your favourites, line up what to watch next, and share any of it publicly with a
+single link. Every movie and show page holds everything you might want to know about it, and a
+dedicated analytics page lets you explore the whole catalogue by decade, genre, money and more.
+
+Under the hood it runs on a real data engineering stack: TMDB ingestion, a three-layer S3 data
+lake, a dimensional PostgreSQL warehouse refreshed every night, and a Django front end in English,
+Russian and Uzbek. Every layer is idempotent, quality-gated, and rebuildable from immutable raw
+data.
 
 Theoria started as a single-machine exercise in data engineering. It is now a live product with
 real readers at [theoria.uz](https://theoria.uz), and the architecture is run and documented as

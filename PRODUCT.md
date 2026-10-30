@@ -8,28 +8,32 @@ web
 
 ## Users
 
-Movie and TV enthusiasts: people who browse the catalog, look up a film, a show or a person, and want
-ratings, trailers, credits and numbers in context. They read the site in English, Russian or Uzbek (the
-language is a cookie, not a URL prefix), on desktop and on phones. Signed-in readers keep saved
-collections (Like, Watch later, Top). The primary job is discovery: land, find a title or person, and
-come away with a richer picture than a bare listing gives.
+People who take their taste in cinema seriously. They browse movies, shows, cartoons, people and
+studios, find what they like, and keep it: what they love (Liked), what they rank highest (Top, an
+ordered list) and what they mean to watch next (Watch later). Any collection can be shared publicly
+with a single link, so a reader's taste is something they can show, not just store. A smaller group
+are movie nerds who want to dig further: every title page holds everything worth knowing about it,
+and the analytics page is built for them. Readers use English, Russian or Uzbek (the language is a
+cookie, not a URL prefix), on desktop and on phones.
 
 ## Product Purpose
 
-Theoria is a movie and TV analytics platform: a mini IMDb with analytics, fed by a real
-TMDB → S3 data lake → PostgreSQL star-schema pipeline and read through a Django front end. It exists so
-readers can browse a curated archive of films and shows and see them *measured* — ratings, revenue,
-decades, genres, franchises, who worked with whom. Success is a reader finding and enjoying titles;
-the engineering behind it is not the product's job to show off.
+Theoria is a movie and TV platform for people who take their taste in cinema seriously: explore
+everything, collect what matters to you, share it with anyone. Browsing gets a reader in, collections
+are what they come back for, and the detail pages and analytics serve the readers who want to go
+deeper. It is fed by a real TMDB → S3 data lake → PostgreSQL star-schema pipeline refreshed nightly and
+read through a Django front end, but the engineering is not the product's job to show off. Success is a
+reader finding titles they care about and building a collection worth sharing.
 
 ## Positioning
 
-An archive with a measuring instrument pointed at it. The corpus is deliberate, not incidental
-(roughly 200 movies per decade from the 1970s on, plus a rolling window of recent releases, and shows
-discovered one first-air year at a time), and it sits in its own warehouse, so analytics — decade and
-genre charts, revenue, rating comparisons, collaboration, collections — are a first-class way to browse
-rather than a bolt-on. A neighbouring site that ranks "whatever is trending" cannot truthfully offer
-that even time axis.
+A platform built around a reader's taste, not a listing site and not a dashboard. Internally, the
+reference point is a leaner IMDb, and the direction is away from it: new features should give readers
+more ways to express and share their taste, not just more facts to look up. Never use the IMDb
+comparison in user-facing copy. The catalogue is deliberate, not incidental (roughly 200 movies per
+decade from the 1970s on, plus a rolling window of recent releases, and shows discovered one first-air
+year at a time), which is what makes the analytics page and decade and genre browsing honest. A site
+that ranks "whatever is trending" cannot offer that even time axis.
 
 ## Operating Context
 
