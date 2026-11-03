@@ -36,6 +36,7 @@ date is safe — which is what makes unattended nightly scheduling sound.
 Usage:
     python -m scripts.run_refresh
     python -m scripts.run_refresh --date 2026-07-29
+    python -m scripts.run_refresh --movie-ids 345115 914434 779056
 """
 
 from __future__ import annotations
@@ -91,8 +92,16 @@ from scripts.run_pipeline import (
 logger = logging.getLogger(__name__)
 
 
-def run_refresh(ingestion_date: dt.date | None = None) -> None:
-    """Refresh every film and series in the warehouse for a single ingestion_date."""
+def run_refresh(
+    ingestion_date: dt.date | None = None,
+    extra_movie_ids: list[int] | None = None,
+) -> None:
+    """Refresh every film and series in the warehouse for a single ingestion_date.
+
+    ``extra_movie_ids`` adds hand-picked TMDB films that are not in the
+    warehouse yet to the film set; they flow through every stage below like any
+    other film, and the nightly refresh keeps them current afterwards.
+    """
     # Fail on a missing TMDB/AWS secret now, not 4 minutes into ingestion.
     config.require_etl()
 
@@ -107,7 +116,9 @@ def run_refresh(ingestion_date: dt.date | None = None) -> None:
     # the refresh already makes (append_to_response), so they cost none.
     ingest_genres(ingestion_date=ingestion_date, with_tv=True, with_translations=True)
     ingest_countries(ingestion_date=ingestion_date)
-    succeeded, failed = refresh_movies(ingestion_date=ingestion_date)
+    succeeded, failed = refresh_movies(
+        ingestion_date=ingestion_date, extra_movie_ids=extra_movie_ids
+    )
     logger.info(
         "Bronze refresh: %d film(s) refreshed, %d failed", len(succeeded), len(failed)
     )
@@ -251,6 +262,14 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Ingestion date (YYYY-MM-DD). Defaults to today.",
     )
+    parser.add_argument(
+        "--movie-ids",
+        type=int,
+        nargs="+",
+        default=None,
+        metavar="ID",
+        help="TMDB film ids to add to the warehouse alongside the films already in it.",
+    )
     return parser.parse_args()
 
 
@@ -259,4 +278,4 @@ if __name__ == "__main__":
 
     setup_logging("run_refresh")
     args = _parse_args()
-    run_refresh(ingestion_date=args.date)
+    run_refresh(ingestion_date=args.date, extra_movie_ids=args.movie_ids)

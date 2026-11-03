@@ -102,10 +102,14 @@ def refresh_movies(
     ingestion_date: dt.date | None = None,
     client: TMDBClient | None = None,
     engine: Engine | None = None,
+    extra_movie_ids: list[int] | None = None,
 ) -> tuple[list[int], list[int]]:
     """Re-fetch details + credits for known films and write them to Bronze S3.
 
-    ``movie_ids`` defaults to every id in ``dim_movie``. Each film is written
+    ``movie_ids`` defaults to every id in ``dim_movie``. ``extra_movie_ids`` are
+    added to that default set (ignored when ``movie_ids`` is given), which is how
+    a hand-picked film not yet in the warehouse gets in: it is fetched like any
+    other, and once loaded the nightly refresh keeps it fresh. Each film is written
     (both files) as soon as it is fetched, several at once (see
     ``etl.parallel_fetch``), so a mid-run failure never discards completed work. Failures are logged with the specific movie_id so
     callers can retry only the failed subset.
@@ -121,6 +125,8 @@ def refresh_movies(
         client = TMDBClient()
     if movie_ids is None:
         movie_ids = _movie_ids_from_warehouse(engine or get_engine())
+        if extra_movie_ids:
+            movie_ids = sorted(set(movie_ids) | set(extra_movie_ids))
 
     t0 = time.monotonic()
     total = len(movie_ids)

@@ -5643,6 +5643,31 @@ def test_refresh_movies_defaults_ids_to_dim_movie():
     assert queried == [551, 550]  # order preserved from the SELECT
 
 
+def test_refresh_movies_extra_ids_join_the_warehouse_set():
+    """extra_movie_ids add films not yet in dim_movie; ids already there are not fetched twice."""
+    mock_conn = MagicMock()
+    mock_conn.execute.return_value.scalars.return_value.all.return_value = [550, 551]
+    mock_engine = MagicMock()
+    mock_engine.connect.return_value.__enter__.return_value = mock_conn
+
+    mock_client = MagicMock()
+    mock_client.get_movie_details.side_effect = lambda mid, **_: _refresh_payload(mid)
+    mock_s3 = MagicMock()
+    mock_s3.put_object.return_value = {}
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        succeeded, failed = refresh_movies(
+            ingestion_date=dt.date(2026, 7, 29),
+            client=mock_client,
+            engine=mock_engine,
+            extra_movie_ids=[345115, 551],
+        )
+
+    assert failed == []
+    assert sorted(succeeded) == [550, 551, 345115]
+    assert mock_client.get_movie_details.call_count == 3
+
+
 def test_refresh_movies_continues_after_a_failed_film():
     """A failed film is recorded, writes nothing partial, and does not abort the run."""
     mock_client = MagicMock()
