@@ -489,11 +489,30 @@ html.has-js .reel__tabs {
   color: var(--ink-muted);
 }
 
+/* Same title voice as every other movie card (.poster-card .card-title):
+   body face, semibold, 1.3 leading. */
 .rank__title {
   color: var(--ink);
+  font-family: var(--font-body);
+  font-weight: 600;
+  line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The rating sits on IMDb yellow, the same chip fill as the IMDb mark on every
+   other card, with black figures for contrast. */
+.rank__rating {
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #f5c518;
+  color: #000;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 /* --- 4. Decades chart ---------------------------------------------------------- */

@@ -159,7 +159,7 @@
                 </span>
                 <span class="rank__meta">
                     <span class="rank__title">{{ movie.display_title }}</span>
-                    {% if movie.imdb_rating %}<span class="mono">{{ movie.imdb_rating|floatformat:1 }}</span>{% endif %}
+                    {% if movie.imdb_rating %}<span class="mono rank__rating">{{ movie.imdb_rating|floatformat:1 }}</span>{% endif %}
                 </span>
             </a>
         </li>
