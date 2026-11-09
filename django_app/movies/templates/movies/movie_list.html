@@ -30,7 +30,7 @@
                page — there was a /genres/ index once (removed 2026-08-14, see
                CLAUDE.md). {% endcomment %}
             {% translate "Genre" as label %}{% translate "Filter by genre" as legend %}{% translate "Any genre" as any_label %}
-            {% include "movies/_facet.html" with label=label legend=legend name="genre" choices=genre_choices current=genre any_label=any_label only %}
+            {% include "movies/_facet.html" with label=label legend=legend name="genre" choices=genre_choices selected=genres multiple=True any_label=any_label only %}
         </div>
     </form>
 

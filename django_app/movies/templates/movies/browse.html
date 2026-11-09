@@ -24,7 +24,7 @@
             {% translate "Sort" as label %}{% translate "Order by" as legend %}
             {% include "movies/_facet.html" with label=label legend=legend name="sort" choices=sort_choices current=sort only %}
             {% translate "Genre" as label %}{% translate "Filter by genre" as legend %}{% translate "Any genre" as any_label %}
-            {% include "movies/_facet.html" with label=label legend=legend name="genre" choices=genre_choices current=genre any_label=any_label only %}
+            {% include "movies/_facet.html" with label=label legend=legend name="genre" choices=genre_choices selected=genres multiple=True any_label=any_label only %}
         </div>
     </form>
 

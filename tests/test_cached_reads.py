@@ -303,7 +303,7 @@ def test_movie_and_series_lists_read_genre_choices_from_the_cache():
     assert first.status_code == second.status_code == third.status_code == 200
     assert genre_mgr.using.call_count == 1
     assert first.context["genre_choices"] == [("action", "Action"), ("drama", "Drama")]
-    assert third.context["genre"] == "drama"  # the cached rows still resolve slug -> id
+    assert third.context["genres"] == ["drama"]  # the cached rows still resolve slug -> id
 
 
 def test_genre_urls_stay_english_in_every_language():

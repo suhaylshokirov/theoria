@@ -663,7 +663,9 @@
   /* --- Filter console -------------------------------------------------------
      The search + filter console on the catalog indexes (.finder, see
      movie_list.html). Each cell is a native <details> of radios, so it already
-     opens, chooses and submits with no JS. This adds what <details> lacks:
+     opens, chooses and submits with no JS. A multi-select cell (Genre,
+     data-facet-multi) holds checkboxes instead and stays open while several
+     are ticked. This adds what <details> lacks:
      one cell open at a time; closing on a pick, an outside click, Escape or
      focus leaving; the value line and lime fill following the choice; a clear
      button on the search line; and Reset, shown only while something is set
@@ -678,22 +680,49 @@
       var reset = form.querySelector("[data-finder-reset]");
 
       function radios(facet) {
-        return facet.querySelectorAll('input[type="radio"]');
+        return facet.querySelectorAll('input[type="radio"], input[type="checkbox"]');
       }
 
-      // The first radio is the default (see _facet.html). A cell with no
-      // radios — People's Role links — keeps the server's mark.
+      function isMulti(facet) {
+        return facet.hasAttribute("data-facet-multi");
+      }
+
+      // The first radio is the default (see _facet.html); a multi-select
+      // cell is set while anything in it is ticked. A cell with no inputs —
+      // People's Role links — keeps the server's mark.
       function isSet(facet) {
         var group = radios(facet);
+        if (isMulti(facet)) return facet.querySelector("input:checked") !== null;
         return group.length > 0 && !group[0].checked;
+      }
+
+      // The value line of a multi-select cell: one .facet__pick per ticked
+      // choice (CSS draws the commas), or the "any" wording when none is.
+      function writeMulti(facet, value) {
+        var ticked = facet.querySelectorAll("input:checked + .facet__text");
+        value.textContent = "";
+        if (!ticked.length) {
+          value.textContent = facet.getAttribute("data-facet-any") || "";
+          return;
+        }
+        Array.prototype.forEach.call(ticked, function (text) {
+          var pick = document.createElement("span");
+          pick.className = "facet__pick";
+          pick.textContent = text.textContent;
+          value.appendChild(pick);
+        });
       }
 
       function sync() {
         facets.forEach(function (facet) {
           if (!radios(facet).length) return;
-          var checked = facet.querySelector("input:checked + .facet__text");
           var value = facet.querySelector("[data-facet-value]");
-          if (checked && value) value.textContent = checked.textContent;
+          if (isMulti(facet)) {
+            if (value) writeMulti(facet, value);
+          } else {
+            var checked = facet.querySelector("input:checked + .facet__text");
+            if (checked && value) value.textContent = checked.textContent;
+          }
           facet.classList.toggle("is-set", isSet(facet));
         });
         var dirty = (search && search.value.trim() !== "") || facets.some(isSet);
@@ -741,9 +770,11 @@
 
         // A pointer pick closes the panel; arrow keys only move the choice
         // (they fire click too, but with detail 0), so a keyboard reader can
-        // walk the list and watch the grid follow before leaving it.
+        // walk the list and watch the grid follow before leaving it. A
+        // multi-select panel stays open: it is for ticking several in a row,
+        // and closes on an outside click, Escape or Enter like the rest.
         facet.addEventListener("click", function (e) {
-          if (e.detail > 0 && e.target.closest(".facet__option")) {
+          if (!isMulti(facet) && e.detail > 0 && e.target.closest(".facet__option")) {
             requestAnimationFrame(function () {
               close(facet, false);
             });
@@ -755,9 +786,9 @@
           if (e.key === "Escape") {
             e.preventDefault();
             close(facet, true);
-          } else if (e.key === "Enter" && e.target.type === "radio") {
-            // Enter confirms the choice the arrows already made, instead of
-            // submitting the form.
+          } else if (e.key === "Enter" && (e.target.type === "radio" || e.target.type === "checkbox")) {
+            // Enter confirms the choice already made, instead of submitting
+            // the form.
             e.preventDefault();
             close(facet, true);
           }
@@ -794,7 +825,13 @@
           if (search) search.value = "";
           facets.forEach(function (facet) {
             var group = radios(facet);
-            if (group.length) group[0].checked = true;
+            if (isMulti(facet)) {
+              Array.prototype.forEach.call(group, function (input) {
+                input.checked = false;
+              });
+            } else if (group.length) {
+              group[0].checked = true;
+            }
             facet.open = false;
           });
           sync();

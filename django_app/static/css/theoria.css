@@ -3484,6 +3484,45 @@ html.has-js .bio-body.is-collapsed {
   background: var(--lime-mark);
 }
 
+/* Multi-select cell (Genre): the dot slot becomes a tick box, so the panel
+   reads as "pick any" rather than "pick one". Ticked, the box fills with the
+   measurement lime and the tick is cut out of it (mask), so the tick shows
+   the panel paper in either theme without a second colour to keep in step. */
+.facet--multi .facet__text::before {
+  box-sizing: border-box;
+  width: 0.9375rem;
+  height: 0.9375rem;
+  border: 1.5px solid var(--ink-faint);
+  border-radius: 0.25rem;
+  transform: translateY(0.15em);
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+
+.facet--multi .facet__option:hover .facet__text::before {
+  border-color: var(--ink-muted);
+}
+
+.facet--multi .facet__option input:checked + .facet__text::before {
+  background: var(--lime-mark);
+  border-color: var(--lime-mark);
+  -webkit-mask:
+    linear-gradient(#000 0 0),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.8 8.4l2.7 2.7 5.7-5.9' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / 100% 100% no-repeat;
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.8 8.4l2.7 2.7 5.7-5.9' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / 100% 100% no-repeat;
+  mask-composite: exclude;
+}
+
+/* The value line of a multi-select cell: one span per ticked choice, the
+   commas drawn between them so the markup stays plain text. */
+.facet__pick + .facet__pick::before {
+  content: ", ";
+}
+
 .facet__option input:focus-visible + .facet__text {
   outline: 2px solid var(--lime-mark);
   outline-offset: -2px;
@@ -3624,6 +3663,45 @@ html.has-js .finder:not(.is-dirty) .finder__reset {
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr));
     align-content: start;
     transform-origin: top center;
+  }
+
+  /* The multi-select panel stays open while the reader ticks, so on a phone
+     it must not bury the results it is filtering. Its choices flow as
+     compact chips (a few words each, wrapped) instead of one tall column
+     of rows, and it stops at under half the screen and scrolls from there. */
+  .facet--multi .facet__panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    max-height: min(45vh, 19rem);
+    padding: var(--space-3);
+  }
+
+  .facet--multi .facet__option {
+    flex: 0 0 auto;
+    max-width: 100%;
+  }
+
+  .facet--multi .facet__text {
+    gap: var(--space-2);
+    align-items: center;
+    min-height: 2.5rem;
+    padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .facet--multi .facet__text::before {
+    transform: none;
+  }
+
+  /* Ticked: the lime wash and edge carry it, and the weight stays put so
+     the chips don't reflow as they are picked. */
+  .facet--multi .facet__option input:checked + .facet__text {
+    background: var(--lime-wash);
+    border-color: var(--lime-mark);
+    font-weight: inherit;
   }
 }
 

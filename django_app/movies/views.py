@@ -130,6 +130,47 @@ def home(request):
 WALL_ROW = 24
 
 
+def _selected_genres(request, known_slugs):
+    """The ?genre= slugs a request names, as an ordered list without repeats.
+
+    The genre facet is multi-select (?genre=drama&genre=crime) and a title
+    must carry *every* ticked genre -- films are tagged with several, and
+    "Comedy + Romance" is how a reader asks for romcoms, where an either/or
+    match would just return both genres whole. An unknown slug is dropped
+    silently, the same posture sort/gender/known_for take, so a stale link
+    never 404s or empties the grid.
+    """
+    picked = []
+    for slug in request.GET.getlist("genre"):
+        slug = slug.strip()
+        if slug in known_slugs and slug not in picked:
+            picked.append(slug)
+    return picked
+
+
+def _in_genre(queryset, id_field, link_model, genre_id):
+    """`queryset` narrowed to the rows that carry `genre_id`.
+
+    `link_model` is where that membership lives -- fact_movie_metrics for
+    films, bridge_series_genre for shows. Called once per ticked genre, so a
+    title has to be in every one. A subquery, not queryset.filter(<reverse
+    relation>__genre_id=...): both link models make their parent id the
+    primary key (the warehouse tables have no single-column key of their own),
+    which makes Django treat the reverse relation as single-valued and reuse
+    one join across chained filters -- "genre = 18 AND genre = 80" on one row,
+    which matches nothing. It also keeps a film from repeating once per
+    (release date, genre) row of fact_movie_metrics, which a join would do and
+    which Browse's UNION could not de-duplicate.
+    """
+    members = link_model.objects.using("warehouse").filter(genre_id=genre_id).values(id_field)
+    return queryset.filter(**{id_field + "__in": members})
+
+
+def _filter_query(q, sort, genres):
+    """The params the pager must carry to the next page, urlencoded."""
+    return urlencode([("q", q), ("sort", sort)] + [("genre", slug) for slug in genres])
+
+
 def movie_list(request):
     """Browsable movie catalog: poster grid + title search + sort + pagination.
 
@@ -163,24 +204,13 @@ def movie_list(request):
     if labels:
         genre_choices.sort(key=lambda choice: choice[1].lower())
 
-    genre = request.GET.get("genre", "").strip()
-    if genre not in genre_slugs:
-        # Silent fallback to unfiltered on an unknown slug, the same posture
-        # sort/gender/known_for already take elsewhere in this file — not a
-        # 404, and not an empty grid.
-        genre = ""
+    genres = _selected_genres(request, genre_slugs)
 
     movies = localize_movies(Movie.objects.using("warehouse").all())
     if q:
         movies = filter_by_title(movies, q)
-    if genre:
-        # fact_movie_metrics' PK is (movie_id, date_id, genre_id) and
-        # date_id is derived from the *release* date — so a film whose
-        # release date moved between ingestions keeps both rows. Two films
-        # in the catalog do (Avatar Aang: The Last Airbender, The Odyssey —
-        # 7 duplicate (movie, genre) pairs), and without this they would
-        # render twice in the grid and be counted twice by the paginator.
-        movies = movies.filter(moviemetrics__genre_id=genre_slugs[genre]).distinct()
+    for slug in genres:
+        movies = _in_genre(movies, "movie_id", MovieMetrics, genre_slugs[slug])
     # Annotated unconditionally, not only when sort == "rating" — the cards
     # display this figure too, so it must exist whether or not the list is
     # being sorted by it (Task 68). MOVIE_SORTS["rating"] points at the same
@@ -197,10 +227,10 @@ def movie_list(request):
     # _pager.html's docstring.
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
-        "genre": genre,
+        "genres": genres,
         "genre_choices": genre_choices,
         "sort_choices": MOVIE_SORT_CHOICES,
-        "base_query": urlencode({"q": q, "sort": sort, "genre": genre}),
+        "base_query": _filter_query(q, sort, genres),
     }
     # See _person_list()'s identical branch: static/js/theoria.js's
     # initLiveFilter() re-requests this URL with this header on every filter
@@ -250,15 +280,13 @@ def series_list(request):
     if labels:
         genre_choices.sort(key=lambda choice: choice[1].lower())
 
-    genre = request.GET.get("genre", "").strip()
-    if genre not in genre_slugs:
-        genre = ""
+    genres = _selected_genres(request, genre_slugs)
 
     series = localize_series(Series.objects.using("warehouse").all())
     if q:
         series = filter_by_series_name(series, q)
-    if genre:
-        series = series.filter(series_genres__genre_id=genre_slugs[genre])
+    for slug in genres:
+        series = _in_genre(series, "series_id", SeriesGenre, genre_slugs[slug])
     # Annotated unconditionally, same reasoning as movie_list()'s imdb_rating:
     # the cards display this figure too, so it must exist whichever sort is
     # active.
@@ -273,10 +301,10 @@ def series_list(request):
 
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
-        "genre": genre,
+        "genres": genres,
         "genre_choices": genre_choices,
         "sort_choices": SERIES_SORT_CHOICES,
-        "base_query": urlencode({"q": q, "sort": sort, "genre": genre}),
+        "base_query": _filter_query(q, sort, genres),
     }
     if _is_ajax(request):
         return render(request, "movies/_series_results.html", context)
@@ -343,8 +371,9 @@ def _browse_genres():
 def _browse_rows(q, sort, genre_ids=None):
     """Every movie and show as one paginatable, database-ordered feed.
 
-    `genre_ids` is one entry of `_browse_genres()`'s `ids_by_slug` (None = no
-    genre filter). A side whose id is None is emptied rather than left
+    `genre_ids` is a list of `_browse_genres()`'s `ids_by_slug` entries, one
+    per ticked genre (None or empty = no genre filter); a title must carry
+    every one. A side with no id for any of them is emptied rather than left
     unfiltered, so picking a genre only one catalog has never leaks the other
     catalog's whole list.
 
@@ -368,15 +397,12 @@ def _browse_rows(q, sort, genre_ids=None):
     movies = localize_movies(Movie.objects.using("warehouse").all())
     if q:
         movies = filter_by_title(movies, q)
-    if genre_ids is not None:
-        if genre_ids["movie"] is None:
+    if genre_ids:
+        if any(ids["movie"] is None for ids in genre_ids):
             movies = movies.none()
         else:
-            # A subquery, not movies.filter(moviemetrics__genre_id=...): the
-            # join repeats a film once per (date, genre) row, and the union
-            # below cannot take .distinct() the way movie_list() does.
-            movies = movies.filter(movie_id__in=MovieMetrics.objects.using("warehouse")
-                                   .filter(genre_id=genre_ids["movie"]).values("movie_id"))
+            for ids in genre_ids:
+                movies = _in_genre(movies, "movie_id", MovieMetrics, ids["movie"])
     # A translated title sorts under its translated spelling, so each side of
     # the union reads its translated column (title_i18n / name_i18n) on a
     # translated request, and the English one otherwise.
@@ -394,11 +420,12 @@ def _browse_rows(q, sort, genre_ids=None):
     series = localize_series(Series.objects.using("warehouse").all())
     if q:
         series = filter_by_series_name(series, q)
-    if genre_ids is not None:
-        if genre_ids["series"] is None:
+    if genre_ids:
+        if any(ids["series"] is None for ids in genre_ids):
             series = series.none()
         else:
-            series = series.filter(series_genres__genre_id=genre_ids["series"])
+            for ids in genre_ids:
+                series = _in_genre(series, "series_id", SeriesGenre, ids["series"])
     series = series.annotate(
         kind=Value("series", output_field=CharField()),
         item_id=F("series_id"),
@@ -415,8 +442,8 @@ def browse(request):
     """Every movie and show in one place: search, genre, sort, pagination —
     the reader-facing merge of /movies/ and /tv/ (see _browse_rows()'s
     docstring for why this can't be cartoon_list()'s Python-sort shape at
-    this size). The genre filter takes the same ?genre= slug as those pages
-    and applies it to both catalogs.
+    this size). The genre filter takes the same ?genre= slugs as those pages
+    and applies them to both catalogs.
     """
     q = request.GET.get("q", "").strip()
     sort = request.GET.get("sort", "newest")
@@ -424,12 +451,9 @@ def browse(request):
         sort = "newest"
 
     genre_choices, genre_ids_by_slug = _browse_genres()
-    genre = request.GET.get("genre", "").strip()
-    if genre not in genre_ids_by_slug:
-        # Unknown slug: unfiltered, like movie_list()/series_list().
-        genre = ""
+    genres = _selected_genres(request, genre_ids_by_slug)
 
-    rows = _browse_rows(q, sort, genre_ids_by_slug[genre] if genre else None)
+    rows = _browse_rows(q, sort, [genre_ids_by_slug[slug] for slug in genres])
     page_obj = Paginator(rows, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
     # Only this page's ~24 rows are hydrated into real Movie/Series objects —
@@ -469,20 +493,21 @@ def browse(request):
 
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
-        "genre": genre,
+        "genres": genres,
         "genre_choices": genre_choices,
         "sort_choices": BROWSE_SORT_CHOICES,
-        "base_query": urlencode({"q": q, "sort": sort, "genre": genre}),
+        "base_query": _filter_query(q, sort, genres),
     }
     if _is_ajax(request):
         return render(request, "movies/_browse_results.html", context)
     return render(request, "movies/browse.html", context)
 
 
-CARTOON_SORTS = ("newest", "rating", "title")
+CARTOON_SORTS = ("newest", "rating", "revenue", "title")
 CARTOON_SORT_CHOICES = [
     ("newest", gettext_lazy("Newest")),
     ("rating", gettext_lazy("Rated")),
+    ("revenue", gettext_lazy("Revenue")),
     ("title", gettext_lazy("A–Z")),
 ]
 
@@ -502,20 +527,51 @@ def _cartoon_rating_key(item):
     return (0, -float(item.imdb_rating))
 
 
+def _cartoon_revenue_key(item):
+    """Biggest box office first. Only movies have revenue (TV has no money
+    measures), so shows -- and films with no figure -- follow the ranked
+    movies, the same nulls-last posture MOVIE_SORTS["revenue"] takes."""
+    revenue = item.revenue if item.kind == "movie" else None
+    if revenue is None:
+        return (1, 0)
+    return (0, -revenue)
+
+
+def _cartoon_genres():
+    """The genre facet for /cartoons/: `(choices, ids_by_slug)`, the shape of
+    _browse_genres() cut down to the genres a cartoon can carry."""
+    choices, ids_by_slug = _browse_genres()
+    present = cached_reads.cartoon_genre_ids(
+        CARTOON_ANIMATION_GENRE_ID, CARTOON_MOVIE_AUDIENCE_GENRE_ID,
+        CARTOON_SERIES_AUDIENCE_GENRE_IDS,
+    )
+    offered = [
+        (slug, label) for slug, label in choices
+        if ids_by_slug[slug]["movie"] in present["movie"]
+        or ids_by_slug[slug]["series"] in present["series"]
+    ]
+    return offered, ids_by_slug
+
+
 def cartoon_list(request):
     """Browsable cartoon catalog: animated movies and shows made for younger
     viewers (see the CARTOON_* constants above), merged into one feed since a
     cartoon reader browses movies and shows as one shelf, not two catalogs —
     unlike /movies/ and /tv/, which stay genuinely separate schemas.
 
-    No genre picker: the facet this page filters on already *is* a fixed
-    genre pair, so offering a single-option "Animation" dropdown back on top
-    of it would be a choice of one.
+    The Genre cell is the same multi-select /browse/ has, offering only the
+    genres cartoons actually carry. Animation and Family/Kids are not among
+    them: they are what makes a title a cartoon here, so ticking one would
+    filter nothing.
     """
     q = request.GET.get("q", "").strip()
     sort = request.GET.get("sort", "newest")
     if sort not in CARTOON_SORTS:
         sort = "newest"
+
+    genre_choices, genre_ids_by_slug = _cartoon_genres()
+    genres = _selected_genres(request, {slug for slug, _ in genre_choices})
+    genre_ids = [genre_ids_by_slug[slug] for slug in genres]
 
     # Two Exists() subqueries, not two chained .filter(moviemetrics__...)
     # calls: MovieMetrics.movie (like SeriesGenre.series below) carries
@@ -537,6 +593,14 @@ def cartoon_list(request):
     )
     if q:
         movies = filter_by_title(movies, q)
+    # A side with no id for one of the ticked genres is emptied, as in
+    # /browse/ (_browse_rows()).
+    if genre_ids:
+        if any(ids["movie"] is None for ids in genre_ids):
+            movies = movies.none()
+        else:
+            for ids in genre_ids:
+                movies = _in_genre(movies, "movie_id", MovieMetrics, ids["movie"])
     movies = movies.annotate(
         imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
     )
@@ -553,6 +617,12 @@ def cartoon_list(request):
     )
     if q:
         series = filter_by_series_name(series, q)
+    if genre_ids:
+        if any(ids["series"] is None for ids in genre_ids):
+            series = series.none()
+        else:
+            for ids in genre_ids:
+                series = _in_genre(series, "series_id", SeriesGenre, ids["series"])
     series = series.annotate(
         imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb"))
     )
@@ -574,6 +644,11 @@ def cartoon_list(request):
         items.sort(key=lambda item: item.sort_title.lower())
     elif sort == "rating":
         items.sort(key=_cartoon_rating_key)
+    elif sort == "revenue":
+        # Every show ties at "no revenue", so order the ties newest-first
+        # (a stable sort keeps that) instead of leaving them to the database.
+        items.sort(key=_cartoon_newest_key)
+        items.sort(key=_cartoon_revenue_key)
     else:
         items.sort(key=_cartoon_newest_key)
 
@@ -581,8 +656,10 @@ def cartoon_list(request):
 
     context = {
         "page_obj": page_obj, "q": q, "sort": sort,
+        "genres": genres,
+        "genre_choices": genre_choices,
         "sort_choices": CARTOON_SORT_CHOICES,
-        "base_query": urlencode({"q": q, "sort": sort}),
+        "base_query": _filter_query(q, sort, genres),
     }
     if _is_ajax(request):
         return render(request, "movies/_cartoon_results.html", context)

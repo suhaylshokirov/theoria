@@ -285,6 +285,18 @@ def test_movie_list_ajax_request_renders_results_fragment_only():
     assert "<!DOCTYPE" not in content
 
 
+def _genre_filters(qs, id_field):
+    """The genre ids a list view narrowed `qs` to, in call order. Each ticked
+    genre is one `<id_field>__in=<subquery>` filter (see _in_genre()), so the
+    id is read back out of the subquery's compiled parameters."""
+    ids = []
+    for call in qs.filter.call_args_list:
+        assert list(call.kwargs) == [id_field + "__in"]
+        _, params = call.kwargs[id_field + "__in"].query.get_compiler("warehouse").as_sql()
+        ids.append(params[0])
+    return ids
+
+
 def test_movie_list_filters_by_genre():
     """?genre= narrows the catalog via fact_movie_metrics (Task 70) — there is
     no bridge table for genre, so the filter joins the fact table directly and
@@ -305,15 +317,15 @@ def test_movie_list_filters_by_genre():
         response = client.get("/movies/", {"genre": "horror"})
 
     assert response.status_code == 200
-    qs.filter.assert_called_once_with(moviemetrics__genre_id=27)
-    qs.distinct.assert_called_once()
-    assert response.context["genre"] == "horror"
+    assert _genre_filters(qs, "movie_id") == [27]
+    assert response.context["genres"] == ["horror"]
     assert response.context["genre_choices"] == [("horror", "Horror")]
-    # Genre is a cell of the filter console: radios in a <details>, the
-    # chosen one checked and its name on the cell's value line.
+    # Genre is a multi-select cell of the filter console: checkboxes in a
+    # <details>, the ticked one checked and its name on the cell's value line.
     content = response.content.decode()
-    assert '<input type="radio" name="genre" value="horror" checked>' in content
-    assert 'class="facet is-set"' in content
+    assert '<input type="checkbox" name="genre" value="horror" checked>' in content
+    assert 'class="facet facet--multi is-set"' in content
+    assert '<span class="facet__pick">Horror</span>' in content
 
 
 def test_movie_list_unknown_genre_falls_back_to_unfiltered():
@@ -335,10 +347,8 @@ def test_movie_list_unknown_genre_falls_back_to_unfiltered():
         response = client.get("/movies/", {"genre": "nonsense"})
 
     assert response.status_code == 200
-    for _, kwargs in qs.filter.call_args_list:
-        assert "moviemetrics__genre_id" not in kwargs
-    qs.distinct.assert_not_called()
-    assert response.context["genre"] == ""
+    assert _genre_filters(qs, "movie_id") == []
+    assert response.context["genres"] == []
 
 
 def test_movie_list_genre_composes_with_revenue_sort():
@@ -362,8 +372,7 @@ def test_movie_list_genre_composes_with_revenue_sort():
         response = client.get("/movies/", {"genre": "action", "sort": "revenue"})
 
     assert response.status_code == 200
-    qs.filter.assert_called_once_with(moviemetrics__genre_id=28)
-    qs.distinct.assert_called_once()
+    assert _genre_filters(qs, "movie_id") == [28]
     (_, kwargs), = qs.annotate.call_args_list
     assert isinstance(kwargs["imdb_rating"], Max)
     assert kwargs["imdb_rating"].filter == Q(movierating__source="imdb")
@@ -371,6 +380,90 @@ def test_movie_list_genre_composes_with_revenue_sort():
     assert order_expr.expression.name == "revenue"
     assert tiebreaker == "movie_id"  # unique last key, so pages never overlap
     assert response.context["sort"] == "revenue"
+
+
+def test_movie_list_several_genres_must_all_match():
+    """Ticking more than one genre narrows to films carrying every one of
+    them: one membership subquery per genre. Repeats and unknown slugs are
+    dropped."""
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Horror"), (35, "Comedy")]
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.distinct.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+
+        response = client.get("/movies/?genre=horror&genre=nonsense&genre=comedy&genre=horror")
+
+    assert _genre_filters(qs, "movie_id") == [27, 35]
+    assert response.context["genres"] == ["horror", "comedy"]
+    assert "genre=horror&genre=comedy" in response.context["base_query"]
+    content = response.content.decode()
+    assert '<input type="checkbox" name="genre" value="horror" checked>' in content
+    assert '<input type="checkbox" name="genre" value="comedy" checked>' in content
+    # The value line names both, in the catalogue's own order.
+    assert '<span class="facet__pick">Horror</span><span class="facet__pick">Comedy</span>' in content
+
+
+def test_movie_list_old_single_genre_link_still_works():
+    """?genre=horror, as every existing chip and bookmark writes it, is just a
+    selection of one."""
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Horror")]
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.distinct.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+
+        response = client.get("/movies/?genre=horror")
+
+    assert response.context["genres"] == ["horror"]
+
+
+def test_movie_list_empty_result_with_genres_says_the_filter_is_too_tight():
+    """Not "no movies loaded yet. Run the pipeline" -- the catalog is fine, the
+    ticked genres just have nothing in common."""
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Horror"), (35, "Comedy")]
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+
+        content = client.get("/movies/?genre=horror&genre=comedy").content.decode()
+
+    assert "No movies match this filter" in content
+    assert "Run the pipeline" not in content
+
+
+def test_movie_list_genre_cell_is_unticked_by_default():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Horror")]
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.distinct.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+
+        content = client.get("/movies/").content.decode()
+
+    assert '<input type="checkbox" name="genre" value="horror">' in content
+    assert "Any genre" in content
+    assert "facet--multi is-set" not in content
 
 
 def test_movie_list_genre_survives_pagination():
@@ -542,10 +635,32 @@ def test_series_list_filters_by_genre():
         response = client.get("/tv/", {"genre": "drama"})
 
     assert response.status_code == 200
-    qs.filter.assert_called_once_with(series_genres__genre_id=27)
-    assert response.context["genre"] == "drama"
+    assert _genre_filters(qs, "series_id") == [27]
+    assert response.context["genres"] == ["drama"]
     assert response.context["genre_choices"] == [("drama", "Drama")]
-    assert '<input type="radio" name="genre" value="drama" checked>' in response.content.decode()
+    assert '<input type="checkbox" name="genre" value="drama" checked>' in response.content.decode()
+
+
+def test_series_list_several_genres_must_all_match():
+    """One membership subquery per ticked genre, so a show must carry every
+    one."""
+    show = _series()
+
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(18, "Drama"), (80, "Crime")]
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = [show]
+
+        response = client.get("/tv/?genre=crime&genre=drama")
+
+    assert _genre_filters(qs, "series_id") == [80, 18]
+    assert response.context["genres"] == ["crime", "drama"]
+    assert "genre=crime&genre=drama" in response.context["base_query"]
 
 
 def test_series_list_unknown_genre_falls_back_to_unfiltered():
@@ -564,9 +679,8 @@ def test_series_list_unknown_genre_falls_back_to_unfiltered():
         response = client.get("/tv/", {"genre": "nonsense"})
 
     assert response.status_code == 200
-    for _, kwargs in qs.filter.call_args_list:
-        assert "series_genres__genre_id" not in kwargs
-    assert response.context["genre"] == ""
+    assert _genre_filters(qs, "series_id") == []
+    assert response.context["genres"] == []
 
 
 def test_series_list_genre_composes_with_name_sort():
@@ -586,7 +700,7 @@ def test_series_list_genre_composes_with_name_sort():
         response = client.get("/tv/", {"genre": "comedy", "sort": "name"})
 
     assert response.status_code == 200
-    qs.filter.assert_called_once_with(series_genres__genre_id=28)
+    assert _genre_filters(qs, "series_id") == [28]
     (order_expr, tiebreaker), _ = qs.order_by.call_args
     assert order_expr.expression.name == "name"
     assert tiebreaker == "series_id"  # unique last key, so pages never overlap
@@ -664,6 +778,86 @@ def test_cartoon_list_search_filters_movies_by_title_and_series_by_name():
     assert_title_search(movie_qs.filter, "title", "robot")
     assert_title_search(series_qs.filter, "name", "robot")
     assert response.context["q"] == "robot"
+
+
+def test_cartoon_list_offers_only_the_genres_a_cartoon_can_carry():
+    """Animation and Family/Kids are what make a title a cartoon here, and a
+    genre no cartoon has can only return an empty page: neither is a choice."""
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        _cartoon_mocks(movie_mgr, series_mgr)
+        response = client.get("/cartoons/")
+
+    slugs = [slug for slug, _ in response.context["genre_choices"]]
+    assert slugs == ["comedy", "sci-fi-fantasy", "science-fiction"]
+    assert response.context["genres"] == []
+    content = response.content.decode()
+    assert '<input type="checkbox" name="genre" value="comedy">' in content
+    assert "Any genre" in content
+
+
+def test_cartoon_list_several_genres_must_all_match_on_both_sides():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        movie_qs, series_qs = _cartoon_mocks(movie_mgr, series_mgr)
+        response = client.get("/cartoons/?genre=comedy&genre=nonsense&genre=comedy")
+
+    assert response.context["genres"] == ["comedy"]
+    assert [list(c.kwargs) for c in movie_qs.filter.call_args_list] == [["movie_id__in"]]
+    assert [list(c.kwargs) for c in series_qs.filter.call_args_list] == [["series_id__in"]]
+    assert "genre=comedy" in response.context["base_query"]
+    assert '<input type="checkbox" name="genre" value="comedy" checked>' in response.content.decode()
+
+
+def test_cartoon_list_genre_only_one_catalog_has_empties_the_other():
+    """Sci-Fi & Fantasy is a TV genre: ticking it leaves no movie, rather than
+    ignoring the tick for movies and listing them all."""
+    show = _series(series_id=1, name="Fantasy Show")
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        movie_qs, series_qs = _cartoon_mocks(movie_mgr, series_mgr, series=[show])
+        movie_qs.none.return_value.annotate.return_value = []
+        response = client.get("/cartoons/", {"genre": "sci-fi-fantasy"})
+
+    movie_qs.none.assert_called_once()
+    series_qs.none.assert_not_called()
+    assert list(response.context["page_obj"]) == [show]
+
+
+def test_cartoon_list_empty_result_with_genres_says_the_filter_is_too_tight():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        _cartoon_mocks(movie_mgr, series_mgr)
+        content = client.get("/cartoons/?genre=comedy").content.decode()
+
+    assert "No cartoons match this filter" in content
+    assert "Run the pipeline" not in content
+
+
+def test_cartoon_list_sort_by_revenue_puts_biggest_box_office_first_then_shows():
+    small = _movie(movie_id=1, title="Small Movie")
+    small.revenue = 5_000
+    big = _movie(movie_id=2, title="Big Movie")
+    big.revenue = 90_000
+    none = _movie(movie_id=3, title="No Figure Movie")
+    none.revenue = None
+    show = _series(series_id=1, name="Some Show")
+
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        _cartoon_mocks(movie_mgr, series_mgr, movies=[small, none, big], series=[show])
+        response = client.get("/cartoons/", {"sort": "revenue"})
+
+    assert response.context["sort"] == "revenue"
+    # The ranked movies, then everything without a figure (newest first).
+    assert list(response.context["page_obj"]) == [big, small, none, show]
+    assert "sort=revenue" in response.context["base_query"]
+    assert ("revenue", "Revenue") in [(v, str(t)) for v, t in response.context["sort_choices"]]
 
 
 def test_cartoon_list_uses_exists_subqueries_not_chained_filter():
@@ -793,8 +987,8 @@ def test_browse_genre_applies_to_both_catalogs():
         _browse_hydration_mocks(movie_mgr, series_mgr)
         response = client.get("/browse/", {"genre": "science-fiction"})
 
-    rows_mock.assert_called_once_with("", "newest", {"movie": 878, "series": 878})
-    assert response.context["genre"] == "science-fiction"
+    rows_mock.assert_called_once_with("", "newest", [{"movie": 878, "series": 878}])
+    assert response.context["genres"] == ["science-fiction"]
     assert "genre=science-fiction" in response.context["base_query"]
 
 
@@ -805,7 +999,7 @@ def test_browse_genre_only_one_catalog_has_leaves_the_other_empty():
         _browse_hydration_mocks(movie_mgr, series_mgr)
         client.get("/browse/", {"genre": "drama"})
 
-    rows_mock.assert_called_once_with("", "newest", {"movie": None, "series": 18})
+    rows_mock.assert_called_once_with("", "newest", [{"movie": None, "series": 18}])
 
 
 def test_browse_unknown_genre_falls_back_to_unfiltered():
@@ -815,8 +1009,8 @@ def test_browse_unknown_genre_falls_back_to_unfiltered():
         _browse_hydration_mocks(movie_mgr, series_mgr)
         response = client.get("/browse/", {"genre": "nope"})
 
-    assert response.context["genre"] == ""
-    rows_mock.assert_called_once_with("", "newest", None)
+    assert response.context["genres"] == []
+    rows_mock.assert_called_once_with("", "newest", [])
 
 
 def test_browse_rows_filter_each_side_by_its_own_genre_and_empty_a_side_without_it():
@@ -827,11 +1021,36 @@ def test_browse_rows_filter_each_side_by_its_own_genre_and_empty_a_side_without_
         queryset = _browse_rows("", "newest", genre_ids)
         return str(queryset.query.get_compiler("warehouse").as_sql())
 
-    both = sql({"movie": 878, "series": 10759})
+    both = sql([{"movie": 878, "series": 10759}])
     assert "878" in both and "10759" in both and "bridge_series_genre" in both
 
-    series_only = sql({"movie": None, "series": 18})
+    series_only = sql([{"movie": None, "series": 18}])
     assert "dim_movie" not in series_only and "bridge_series_genre" in series_only
+
+    # Several ticked genres: a title must carry every one, so each is its own
+    # condition; a single genre missing from a side empties that side.
+    all_of = sql([{"movie": 878, "series": 10759}, {"movie": 28, "series": 18}])
+    assert "878" in all_of and "28" in all_of and "10759" in all_of and "18" in all_of
+    one_missing = sql([{"movie": 878, "series": 10759}, {"movie": None, "series": 18}])
+    assert "dim_movie" not in one_missing and "bridge_series_genre" in one_missing
+
+
+def test_browse_several_genres_are_all_passed_through_in_order_without_repeats():
+    with patch("movies.views._browse_rows", return_value=[]) as rows_mock, patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr)
+        response = client.get("/browse/?genre=science-fiction&genre=nope&genre=action&genre=science-fiction")
+
+    rows_mock.assert_called_once_with(
+        "", "newest",
+        [{"movie": 878, "series": 878}, {"movie": 28, "series": None}],
+    )
+    assert response.context["genres"] == ["science-fiction", "action"]
+    assert "genre=science-fiction&genre=action" in response.context["base_query"]
+    content = response.content.decode()
+    assert content.count('<span class="facet__pick">') == 2
+    assert 'class="facet facet--multi is-set"' in content
 
 
 def test_browse_returns_200_with_context_keys():
@@ -850,7 +1069,7 @@ def test_browse_returns_200_with_context_keys():
         response = client.get("/browse/")
 
     assert response.status_code == 200
-    rows_mock.assert_called_once_with("", "newest", None)
+    rows_mock.assert_called_once_with("", "newest", [])
     page_items = list(response.context["page_obj"])
     assert movie in page_items
     assert show in page_items
@@ -869,7 +1088,7 @@ def test_browse_invalid_sort_falls_back_to_newest():
 
     assert response.status_code == 200
     assert response.context["sort"] == "newest"
-    rows_mock.assert_called_once_with("", "newest", None)
+    rows_mock.assert_called_once_with("", "newest", [])
 
 
 def test_browse_search_passes_q_through():
@@ -882,7 +1101,7 @@ def test_browse_search_passes_q_through():
 
     assert response.status_code == 200
     assert response.context["q"] == "robot"
-    rows_mock.assert_called_once_with("robot", "newest", None)
+    rows_mock.assert_called_once_with("robot", "newest", [])
 
 
 def test_browse_ajax_request_renders_results_fragment_only():

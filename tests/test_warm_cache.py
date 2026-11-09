@@ -85,7 +85,8 @@ def test_job_list_covers_every_cached_read_the_site_has():
     labels = [label for label, _ in warm_cache.warm_jobs()]
     assert labels == [
         "home_stats", "home_mosaic", "home_shelves", "dashboard_rows",
-        "genre_rows[movie]", "genre_rows[series]", "genre_labels", "country_labels",
+        "genre_rows[movie]", "genre_rows[series]", "cartoon_genre_ids", "genre_labels",
+        "country_labels",
     ]
 
 

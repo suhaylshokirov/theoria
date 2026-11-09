@@ -8,20 +8,22 @@
 {% block extra_head %}<link rel="stylesheet" href="{% static 'css/catalog.css' %}">{% endblock %}
 
 {% block content %}
-{% translate "Cartoons" as sheet_title %}{% translate "Animated movies and shows made for younger viewers. Search by name or reorder by what was measured." as sheet_sub %}
+{% translate "Cartoons" as sheet_title %}{% translate "Animated movies and shows made for younger viewers. Search by name, narrow by genre, or reorder by what was measured." as sheet_sub %}
 {% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
 
 <section class="sheet-section">
     {% comment %} Same filter console and live-filter contract as
-       movie_list.html — see its docstring. No genre cell: this catalog is
-       already one fixed genre facet, filtered server-side in
-       cartoon_list(). {% endcomment %}
+       movie_list.html — see its docstring. The Genre cell is the multi-select
+       /browse/ has, offering only the genres a cartoon carries (Animation
+       and Family are what make it a cartoon, so they are not choices). {% endcomment %}
     <form class="finder" method="get" action="{% url 'movies:cartoon_list' %}" data-finder data-live-filter data-live-targets="#cartoons-grid">
         {% translate "Search cartoons" as placeholder %}{% translate "Search cartoons by title" as search_label %}
         {% url 'movies:cartoon_list' as reset_url %}{% include "movies/_finder_search.html" with q=q placeholder=placeholder label=search_label reset_url=reset_url only %}
         <div class="finder__facets">
             {% translate "Sort" as label %}{% translate "Order by" as legend %}
             {% include "movies/_facet.html" with label=label legend=legend name="sort" choices=sort_choices current=sort only %}
+            {% translate "Genre" as label %}{% translate "Filter by genre" as legend %}{% translate "Any genre" as any_label %}
+            {% include "movies/_facet.html" with label=label legend=legend name="genre" choices=genre_choices selected=genres multiple=True any_label=any_label only %}
         </div>
     </form>
 

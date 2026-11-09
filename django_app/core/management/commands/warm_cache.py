@@ -35,7 +35,7 @@ import config
 from analytics import cached_reads as analytics_reads
 from core import datacache
 from movies import cached_reads as movie_reads
-from movies import i18n
+from movies import i18n, views
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,9 @@ def warm_jobs():
         ("dashboard_rows", analytics_reads.dashboard_rows),
         ("genre_rows[movie]", lambda: movie_reads.genre_rows("movie")),
         ("genre_rows[series]", lambda: movie_reads.genre_rows("series")),
+        ("cartoon_genre_ids", lambda: movie_reads.cartoon_genre_ids(
+            views.CARTOON_ANIMATION_GENRE_ID, views.CARTOON_MOVIE_AUDIENCE_GENRE_ID,
+            views.CARTOON_SERIES_AUDIENCE_GENRE_IDS)),
         ("genre_labels", i18n.genre_labels),
         ("country_labels", i18n.country_labels),
     ]

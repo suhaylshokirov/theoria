@@ -51,3 +51,31 @@ def _serial_tmdb_fetches(monkeypatch):
     import config
 
     monkeypatch.setattr(config, "TMDB_FETCH_WORKERS", 1)
+
+
+CARTOON_TEST_GENRE_ROWS = {
+    "movie": [(16, "Animation"), (35, "Comedy"), (10751, "Family"), (878, "Science Fiction")],
+    "series": [(16, "Animation"), (35, "Comedy"), (10751, "Family"), (10762, "Kids"),
+               (10765, "Sci-Fi & Fantasy")],
+}
+# The genres some cartoon carries, besides the Animation + Family/Kids pair
+# that defines one (see cached_reads.build_cartoon_genre_ids): Kids is part of
+# that pair, so it is not offered although TV has it.
+CARTOON_TEST_PRESENT_IDS = {"movie": [35, 878], "series": [35, 10765]}
+
+
+@pytest.fixture(autouse=True)
+def _cartoon_genre_lists(request):
+    """/cartoons/ offers a genre cell, which reads the genre lists of both
+    catalogs and which genres cartoons carry. Keep those reads off the
+    warehouse for every cartoon test."""
+    if "cartoon" not in request.node.name:
+        yield
+        return
+    from unittest.mock import patch
+
+    with patch("movies.views.cached_reads.genre_rows",
+               side_effect=lambda kind: CARTOON_TEST_GENRE_ROWS[kind]), patch(
+        "movies.views.cached_reads.cartoon_genre_ids", return_value=CARTOON_TEST_PRESENT_IDS
+    ):
+        yield

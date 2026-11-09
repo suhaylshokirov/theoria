@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Theoria\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-23 13:24+0000\n"
+"POT-Creation-Date: 2026-11-09 12:49+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Machine draft, needs native review\n"
 "Language-Team: uz\n"
@@ -344,7 +344,7 @@ msgstr "Kelib chiqishi"
 
 #: analytics/templates/analytics/dashboard.html:51
 #: analytics/templates/analytics/dashboard.html:427
-#: movies/templates/movies/home.html:94 movies/views.py:720
+#: movies/templates/movies/home.html:94 movies/views.py:797
 #: templates/base.html:234
 msgid "People"
 msgstr "Odamlar"
@@ -530,6 +530,7 @@ msgstr ""
 #: analytics/templates/analytics/dashboard.html:174
 #: analytics/templates/analytics/dashboard.html:326
 #: movies/templates/movies/browse.html:27
+#: movies/templates/movies/cartoon_list.html:26
 #: movies/templates/movies/movie_list.html:34
 #: movies/templates/movies/series_list.html:25
 msgid "Genre"
@@ -900,7 +901,7 @@ msgstr " mln"
 msgid "K"
 msgstr " ming"
 
-#: assistant/views.py:72 templates/base.html:404
+#: assistant/views.py:72 templates/base.html:427
 msgid "New chat"
 msgstr "Yangi chat"
 
@@ -940,8 +941,8 @@ msgstr "Video"
 msgid "Open film guide"
 msgstr "Film yordamchisini ochish"
 
-#: core/context_processors.py:31 templates/base.html:420
-#: templates/base.html:491
+#: core/context_processors.py:31 templates/base.html:443
+#: templates/base.html:514
 msgid "Close film guide"
 msgstr "Film yordamchisini yopish"
 
@@ -1062,7 +1063,7 @@ msgstr "Byudjet"
 #: core/context_processors.py:84 movies/templates/movies/_studio_header.html:45
 #: movies/templates/movies/movie_detail.html:123
 #: movies/templates/movies/movie_detail.html:177 movies/views.py:91
-#: movies/views.py:1230
+#: movies/views.py:510 movies/views.py:1307
 msgid "Revenue"
 msgstr "Daromad"
 
@@ -1333,13 +1334,13 @@ msgstr "Hisob · %(username)s"
 msgid "Movies and TV shows @%(name)s shares on Theoria."
 msgstr "@%(name)s Theoria’da ulashgan filmlar va seriallar."
 
-#: core/templates/core/profile.html:29
 #
+#: core/templates/core/profile.html:29
 msgid "Your public profile"
 msgstr "Ommaviy profilingiz"
 
-#: core/templates/core/profile.html:30
 #
+#: core/templates/core/profile.html:30
 msgid "This is your public profile."
 msgstr "Bu sizning ommaviy profilingiz."
 
@@ -1377,8 +1378,8 @@ msgctxt "profile"
 msgid "Open list"
 msgstr "Roʻyxatni ochish"
 
-#: core/templates/core/profile.html:86
 #
+#: core/templates/core/profile.html:86
 msgid "Shared lists"
 msgstr "Ulashilgan roʻyxatlar"
 
@@ -1387,8 +1388,12 @@ msgid "None of your lists are public yet."
 msgstr "Roʻyxatlaringizdan hech biri hali ommaviy emas."
 
 #: core/templates/core/profile.html:89
-msgid "Open a list on your account and choose Share, then make a link. It shows up here too."
-msgstr "Hisobingizda roʻyxatni oching, «Ulashish»ni bosing va havola yarating — roʻyxat bu yerda ham paydo boʻladi."
+msgid ""
+"Open a list on your account and choose Share, then make a link. It shows up "
+"here too."
+msgstr ""
+"Hisobingizda roʻyxatni oching, «Ulashish»ni bosing va havola yarating — "
+"roʻyxat bu yerda ham paydo boʻladi."
 
 #: core/templates/core/profile.html:91
 #, python-format
@@ -1461,8 +1466,8 @@ msgstr "Ulashish oʻchirildi. Eski havola endi ishlamaydi."
 msgid "Share <span data-share-name></span>"
 msgstr "<span data-share-name></span> ulashish"
 
-#: core/templates/core/share/_sheet.html:37 templates/base.html:420
-#: templates/base.html:431 templates/base.html:491
+#: core/templates/core/share/_sheet.html:37 templates/base.html:443
+#: templates/base.html:454 templates/base.html:514
 msgid "Close"
 msgstr "Yopish"
 
@@ -1532,10 +1537,17 @@ msgstr "Havola"
 msgid "Only you can see this list."
 msgstr "Bu roʻyxatni faqat siz koʻra olasiz."
 
-#: core/templates/core/share/_sheet.html:103
 #
-msgid "Make a link anyone can open, without an account. It shows this list as it is now and as you change it, never your email, and the list also appears on your public profile. You can turn it off at any time."
-msgstr "Hisobsiz ham ochish mumkin boʻlgan havola yarating. U roʻyxatni hozirgi holida va oʻzgartirgan sari koʻrsatadi, elektron pochtangizni hech qachon. Roʻyxat ommaviy profilingizda ham koʻrinadi. Uni istalgan vaqtda oʻchirishingiz mumkin."
+#: core/templates/core/share/_sheet.html:103
+msgid ""
+"Make a link anyone can open, without an account. It shows this list as it is "
+"now and as you change it, never your email, and the list also appears on "
+"your public profile. You can turn it off at any time."
+msgstr ""
+"Hisobsiz ham ochish mumkin boʻlgan havola yarating. U roʻyxatni hozirgi "
+"holida va oʻzgartirgan sari koʻrsatadi, elektron pochtangizni hech qachon. "
+"Roʻyxat ommaviy profilingizda ham koʻrinadi. Uni istalgan vaqtda "
+"oʻchirishingiz mumkin."
 
 #: core/templates/core/share/_sheet.html:106
 msgid "Make a link"
@@ -1567,10 +1579,14 @@ msgstr ""
 "Hozirgi havola ishlamay qoladi. Unga ega boʻlganlar uning oʻchirilganini "
 "koʻradi."
 
-#: core/templates/core/share/_sheet.html:143
 #
-msgid "The link stops working and the list leaves your public profile. Anyone who has the link will see that it has gone."
-msgstr "Havola ishlamay qoladi va roʻyxat ommaviy profilingizdan olib tashlanadi. Havolaga ega boʻlganlar uning oʻchirilganini koʻradi."
+#: core/templates/core/share/_sheet.html:143
+msgid ""
+"The link stops working and the list leaves your public profile. Anyone who "
+"has the link will see that it has gone."
+msgstr ""
+"Havola ishlamay qoladi va roʻyxat ommaviy profilingizdan olib tashlanadi. "
+"Havolaga ega boʻlganlar uning oʻchirilganini koʻradi."
 
 #: core/templates/core/share/_sheet.html:144
 msgid "Make a new link"
@@ -1719,28 +1735,28 @@ msgstr "Yoqqan hamma narsa, eng yangisi birinchi."
 msgid "Saved for a free evening."
 msgstr "Boʻsh kech uchun saqlangan."
 
-#: core/views.py:479
+#: core/views.py:481
 msgctxt "share card"
 msgid "My best, in order."
 msgstr "Eng yaxshilarim, tartib bilan."
 
-#: core/views.py:480
+#: core/views.py:482
 msgctxt "share card"
 msgid "Good taste, documented."
 msgstr "Yaxshi did, hujjatlangan."
 
-#: core/views.py:481
+#: core/views.py:483
 msgctxt "share card"
 msgid "Next on my list."
 msgstr "Roʻyxatimdagi navbatdagilar."
 
-#: core/views.py:639
+#: core/views.py:641
 #, python-format
 msgctxt "share card"
 msgid "Member since %(month)s %(year)s"
 msgstr "%(month)s %(year)s dan beri biz bilan"
 
-#: core/views.py:643
+#: core/views.py:645
 msgctxt "share card"
 msgid "more"
 msgstr "yana"
@@ -1751,6 +1767,11 @@ msgid "Nothing matches “%(q)s”. Try a shorter title."
 msgstr "“%(q)s” boʻyicha hech narsa topilmadi. Qisqaroq nom kiritib koʻring."
 
 #: movies/templates/movies/_browse_grid.html:21
+msgid "Nothing matches this filter. Try loosening it."
+msgstr ""
+"Bu filtrga hech narsa mos kelmadi. Shartlarni yumshatib koʻring."
+
+#: movies/templates/movies/_browse_grid.html:22
 msgid "Nothing loaded yet. Run the pipeline to fill the catalog."
 msgstr ""
 "Hali hech narsa yuklanmagan. Katalogni toʻldirish uchun jarayonni ishga "
@@ -1762,6 +1783,11 @@ msgid "No cartoons match “%(q)s”. Try a shorter title."
 msgstr "“%(q)s” boʻyicha multfilm topilmadi. Qisqaroq nom kiritib koʻring."
 
 #: movies/templates/movies/_cartoon_grid.html:21
+msgid "No cartoons match this filter. Try loosening it."
+msgstr ""
+"Bu filtrga mos multfilm yoʻq. Shartlarni yumshatib koʻring."
+
+#: movies/templates/movies/_cartoon_grid.html:22
 msgid "No cartoons loaded yet. Run the pipeline to fill the catalog."
 msgstr ""
 "Multfilmlar hali yuklanmagan. Katalogni toʻldirish uchun jarayonni ishga "
@@ -2073,8 +2099,8 @@ msgstr ""
 "Studiyalar hali yuklanmagan. Katalogni toʻldirish uchun jarayonni ishga "
 "tushiring."
 
-#: movies/templates/movies/_studio_header.html:41 movies/views.py:1379
-#: movies/views.py:1753
+#: movies/templates/movies/_studio_header.html:41 movies/views.py:1456
+#: movies/views.py:1830
 msgid "Active"
 msgstr "Faol faoliyat"
 
@@ -2148,12 +2174,14 @@ msgid "Order by"
 msgstr "Tartiblash"
 
 #: movies/templates/movies/browse.html:27
+#: movies/templates/movies/cartoon_list.html:26
 #: movies/templates/movies/movie_list.html:34
 #: movies/templates/movies/series_list.html:25
 msgid "Filter by genre"
 msgstr "Janr boʻyicha saralash"
 
 #: movies/templates/movies/browse.html:27
+#: movies/templates/movies/cartoon_list.html:26
 #: movies/templates/movies/movie_list.html:34
 #: movies/templates/movies/series_list.html:25
 msgid "Any genre"
@@ -2166,11 +2194,12 @@ msgstr "Multfilmlar"
 
 #: movies/templates/movies/cartoon_list.html:11
 msgid ""
-"Animated movies and shows made for younger viewers. Search by name or "
-"reorder by what was measured."
+"Animated movies and shows made for younger viewers. Search by name, narrow "
+"by genre, or reorder by what was measured."
 msgstr ""
 "Yosh tomoshabinlar uchun animatsion film va seriallar. Nomi boʻyicha "
-"qidiring yoki oʻlchangan koʻrsatkichlar boʻyicha tartiblang."
+"qidiring, janr boʻyicha toraytiring yoki oʻlchangan koʻrsatkichlar "
+"boʻyicha tartiblang."
 
 #: movies/templates/movies/cartoon_list.html:21
 msgid "Search cartoons"
@@ -2641,57 +2670,57 @@ msgstr "Studiyalarni qidirish"
 msgid "Search studios by name"
 msgstr "Studiyalarni nomi boʻyicha qidirish"
 
-#: movies/views.py:89 movies/views.py:223 movies/views.py:315
-#: movies/views.py:484
+#: movies/views.py:89 movies/views.py:253 movies/views.py:343
+#: movies/views.py:508
 msgid "Newest"
 msgstr "Yangilari"
 
-#: movies/views.py:90 movies/views.py:224 movies/views.py:316
-#: movies/views.py:485
+#: movies/views.py:90 movies/views.py:254 movies/views.py:344
+#: movies/views.py:509
 msgid "Rated"
 msgstr "Reyting boʻyicha"
 
-#: movies/views.py:92 movies/views.py:225 movies/views.py:317
-#: movies/views.py:486 movies/views.py:600 movies/views.py:1231
+#: movies/views.py:92 movies/views.py:255 movies/views.py:345
+#: movies/views.py:511 movies/views.py:677 movies/views.py:1308
 msgid "A–Z"
 msgstr "A–Z"
 
-#: movies/views.py:599
+#: movies/views.py:676
 msgid "Most popular"
 msgstr "Eng mashhurlari"
 
-#: movies/views.py:615
+#: movies/views.py:692
 msgid "Female"
 msgstr "Ayol"
 
-#: movies/views.py:616
+#: movies/views.py:693
 msgid "Male"
 msgstr "Erkak"
 
-#: movies/views.py:617
+#: movies/views.py:694
 msgid "Non-binary"
 msgstr "Nobinar"
 
-#: movies/views.py:726
+#: movies/views.py:803
 msgctxt "people list title"
 msgid "Acting"
 msgstr "Aktyorlar"
 
-#: movies/views.py:733
+#: movies/views.py:810
 msgctxt "people list title"
 msgid "Directing"
 msgstr "Rejissyorlar"
 
-#: movies/views.py:1229
+#: movies/views.py:1306
 msgid "Most movies"
 msgstr "Eng koʻp filmlar"
 
-#: movies/views.py:1382
+#: movies/views.py:1459
 #, python-format
 msgid "%(year)s–Active"
 msgstr "%(year)s – hozirgacha"
 
-#: movies/views.py:1753
+#: movies/views.py:1830
 msgid "Retired"
 msgstr "Faoliyati tugagan"
 
@@ -3189,47 +3218,59 @@ msgstr "Theoria — boshidan oxirigacha oʻlchangan film katalogi."
 msgid "Source · TMDB"
 msgstr "Manba · TMDB"
 
-#: templates/base.html:375
+#: templates/base.html:369
+msgid "Tashkent 2026"
+msgstr "Toshkent 2026"
+
+#: templates/base.html:372
+msgid "Author"
+msgstr "Muallif"
+
+#: templates/base.html:378
+msgid "Contributors"
+msgstr "Ishtirokchilar"
+
+#: templates/base.html:398
 msgid "Are you sure?"
 msgstr "Ishonchingiz komilmi?"
 
-#: templates/base.html:377
+#: templates/base.html:400
 msgid "No, stay"
 msgstr "Yoʻq, qolaman"
 
-#: templates/base.html:378
+#: templates/base.html:401
 msgid "Yes, sign out"
 msgstr "Ha, chiqaman"
 
-#: templates/base.html:399
+#: templates/base.html:422
 msgid "Film guide"
 msgstr "Film yordamchisi"
 
-#: templates/base.html:400
+#: templates/base.html:423
 msgid "Picks from Theoria"
 msgstr "Theoria tanlovlari"
 
-#: templates/base.html:409 templates/base.html:430
+#: templates/base.html:432 templates/base.html:453
 msgid "Recent chats"
 msgstr "So‘nggi chatlar"
 
-#: templates/base.html:414
+#: templates/base.html:437
 msgid "Expand film guide"
 msgstr "Film yordamchisini kengaytirish"
 
-#: templates/base.html:414
+#: templates/base.html:437
 msgid "Shrink film guide"
 msgstr "Film yordamchisini kichraytirish"
 
-#: templates/base.html:431
+#: templates/base.html:454
 msgid "Close recent chats"
 msgstr "So‘nggi chatlarni yopish"
 
-#: templates/base.html:442
+#: templates/base.html:465
 msgid "What are we watching?"
 msgstr "Nima tomosha qilamiz?"
 
-#: templates/base.html:443
+#: templates/base.html:466
 msgid ""
 "Tell me a mood, a genre, or how much time you have. Or start with one of "
 "these."
@@ -3237,58 +3278,46 @@ msgstr ""
 "Kayfiyatingizni, janrni yoki qancha vaqtingiz borligini ayting. Yoki "
 "quyidagilardan birini tanlang."
 
-#: templates/base.html:451
+#: templates/base.html:474
 msgid "Pick for tonight"
 msgstr "Bugun kechqurun uchun tanlov"
 
-#: templates/base.html:458
+#: templates/base.html:481
 msgid "Find by mood"
 msgstr "Kayfiyat boʻyicha topish"
 
-#: templates/base.html:465
+#: templates/base.html:488
 msgid "Browse by genre"
 msgstr "Janr boʻyicha tanlash"
 
-#: templates/base.html:471
+#: templates/base.html:494
 msgid "Surprise me"
 msgstr "Meni hayratga soling"
 
-#: templates/base.html:478
+#: templates/base.html:501
 msgid "Message the film guide"
 msgstr "Yordamchiga xabar"
 
-#: templates/base.html:480
+#: templates/base.html:503
 msgid "Ask me anything about movies..."
 msgstr "Filmlar haqida istalgan savolni bering..."
 
-#: templates/base.html:481
+#: templates/base.html:504
 msgid "Send message"
 msgstr "Xabar yuborish"
 
-#: templates/base.html:481
+#: templates/base.html:504
 msgid "Send"
 msgstr "Yuborish"
 
-#: templates/base.html:504
+#: templates/base.html:527
 msgid "Hi — not sure what to watch?"
 msgstr "Nima tomosha qilishni bilmayapsizmi?"
 
-#: templates/base.html:505
+#: templates/base.html:528
 msgid "Tell me a mood, genre, or how much time you have."
 msgstr "Kayfiyatingizni, janrni yoki qancha vaqtingiz borligini ayting."
 
-#: templates/base.html:510
+#: templates/base.html:533
 msgid "Get a film pick"
 msgstr "Film tanlash"
-
-#: templates/base.html
-msgid "Tashkent 2026"
-msgstr "Toshkent 2026"
-
-#: templates/base.html
-msgid "Author"
-msgstr "Muallif"
-
-#: templates/base.html
-msgid "Contributors"
-msgstr "Ishtirokchilar"

@@ -10,7 +10,28 @@
    param), choices ((value, text) pairs), current, and any_label for a filter
    whose default is "no filter" (rendered as a leading value="" choice). With
    no any_label the first choice is the default. .is-set marks a cell moved
-   off its default — the same test Reset undoes. {% endcomment %}
+   off its default — the same test Reset undoes.
+
+   multiple=True makes it a multi-select (Genre): checkboxes, nothing ticked
+   by default, `selected` (a list of values) in place of `current`. Ticking
+   one leaves the panel open so several can be picked in a row; the value line
+   lists what is ticked, each in a .facet__pick (CSS puts the commas between
+   them), or any_label when nothing is. {% endcomment %}
+{% if multiple %}
+<details class="facet facet--multi{% if selected %} is-set{% endif %}" data-facet data-facet-multi data-facet-any="{{ any_label }}">
+    <summary class="facet__trigger">
+        <span class="facet__label">{{ label }}</span>
+        <span class="facet__value" data-facet-value>{% if selected %}{% for value, text in choices %}{% if value in selected %}<span class="facet__pick">{{ text }}</span>{% endif %}{% endfor %}{% else %}{{ any_label }}{% endif %}</span>
+        <svg class="facet__chevron" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </summary>
+    <fieldset class="facet__panel">
+        <legend class="visually-hidden">{{ legend }}</legend>
+        {% for value, text in choices %}
+        <label class="facet__option"><input type="checkbox" name="{{ name }}" value="{{ value }}"{% if value in selected %} checked{% endif %}><span class="facet__text">{{ text }}</span></label>
+        {% endfor %}
+    </fieldset>
+</details>
+{% else %}
 <details class="facet{% if any_label %}{% if current %} is-set{% endif %}{% else %}{% for value, text in choices %}{% if forloop.first and value != current %} is-set{% endif %}{% endfor %}{% endif %}" data-facet>
     <summary class="facet__trigger">
         <span class="facet__label">{{ label }}</span>
@@ -27,3 +48,4 @@
         {% endfor %}
     </fieldset>
 </details>
+{% endif %}

@@ -21,7 +21,9 @@ from core.datacache import cached
 from movies.i18n import (
     current_lang, genre_labels, localize_movies, localize_series, person_names_by_id,
 )
-from movies.models import Credit, Genre, Movie, MovieMetrics, MovieRating, Person, Series
+from movies.models import (
+    Credit, Genre, Movie, MovieMetrics, MovieRating, Person, Series, SeriesGenre,
+)
 
 
 def _approx(n):
@@ -281,3 +283,48 @@ def build_genre_rows(kind):
 
 def genre_rows(kind):
     return cached("genre_rows", lambda: build_genre_rows(kind), kind)
+
+
+def build_cartoon_genre_ids(animation_id, movie_audience_id, series_audience_ids):
+    """The genre ids carried by at least one cartoon, per catalog:
+    `{"movie": [genre_id, ...], "series": [...]}`.
+
+    A cartoon is Animation plus the audience genre (see cartoon_list()), so
+    those genres are on every one and ticking them would filter nothing; they
+    are left out, which leaves the genres that actually tell cartoons apart
+    (Comedy, Adventure, Sci-Fi & Fantasy...) and none that can only return an
+    empty page. Language-free, so one entry serves every reader.
+    """
+    animated = MovieMetrics.objects.using("warehouse").filter(
+        genre_id=animation_id).values("movie_id")
+    for_kids = MovieMetrics.objects.using("warehouse").filter(
+        genre_id=movie_audience_id).values("movie_id")
+    movie_ids = set(
+        MovieMetrics.objects.using("warehouse")
+        .filter(movie_id__in=animated).filter(movie_id__in=for_kids)
+        .values_list("genre_id", flat=True).distinct()
+    )
+
+    animated = SeriesGenre.objects.using("warehouse").filter(
+        genre_id=animation_id).values("series_id")
+    for_kids = SeriesGenre.objects.using("warehouse").filter(
+        genre_id__in=series_audience_ids).values("series_id")
+    series_ids = set(
+        SeriesGenre.objects.using("warehouse")
+        .filter(series_id__in=animated).filter(series_id__in=for_kids)
+        .values_list("genre_id", flat=True).distinct()
+    )
+
+    implicit = {animation_id, movie_audience_id, *series_audience_ids}
+    return {
+        "movie": sorted(movie_ids - implicit),
+        "series": sorted(series_ids - implicit),
+    }
+
+
+def cartoon_genre_ids(animation_id, movie_audience_id, series_audience_ids):
+    return cached(
+        "cartoon_genre_ids",
+        lambda: build_cartoon_genre_ids(animation_id, movie_audience_id, series_audience_ids),
+        animation_id, movie_audience_id, "-".join(str(i) for i in series_audience_ids),
+    )
