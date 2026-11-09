@@ -1343,11 +1343,9 @@
       trigger.setAttribute("aria-label", t("Open film guide"));
     });
 
-    if (welcome && !welcomeDismissed) {
-      window.setTimeout(function () {
-        if (panel.hidden) welcome.hidden = false;
-      }, 700);
-    }
+    // The "Hi — not sure what to watch?" greeting no longer pops up on its own:
+    // the guide is not ready, so the launcher button alone stays. The markup
+    // (base.html) and dismissWelcome() are left in place for when it is.
   }
 
   /* --- Verify-code auto-advance --------------------------------------------
