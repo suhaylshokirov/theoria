@@ -73,12 +73,6 @@
             {% if series.prose_is_fallback %}<p class="prose-note">{% translate "Shown in English — no translation yet" %}</p>{% endif %}
 
             <dl class="facts">
-                {% if series_rating.rating %}
-                <div class="fact fact--wide">
-                    <dt class="label">{% translate "Rating" %}</dt>
-                    <dd>{% include "movies/_rating_badge.html" with rating=series_rating.rating vote_count=series_rating.vote_count imdb_id=series.imdb_id only %}</dd>
-                </div>
-                {% endif %}
                 <div class="fact">
                     <dt class="label">{% translate "First aired" %}</dt>
                     <dd class="mono">{% if series.first_air_date %}{{ series.first_air_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
@@ -149,21 +143,7 @@
 
         {% if series_rating.rating %}
         <aside class="film-side film-stagger">
-            {% comment %} The score ring: the IMDb rating as a share of 10. The
-               circle's pathLength is 100, so the arc length is simply the
-               rating x 10 (widthratio does the multiply in the template). {% endcomment %}
-            <div class="score">
-                <div class="score__ring" aria-hidden="true">
-                    <svg viewBox="0 0 110 110">
-                        <circle class="score__track" cx="55" cy="55" r="48" pathLength="100"/>
-                        <circle class="score__arc" cx="55" cy="55" r="48" pathLength="100"
-                                style="--fill: {% widthratio series_rating.rating 1 10 %}"
-                                stroke-dasharray="{% widthratio series_rating.rating 1 10 %} 100"/>
-                    </svg>
-                    <span class="score__value mono">{{ series_rating.rating|floatformat:1 }}</span>
-                </div>
-                <p><strong>{% translate "IMDb rating" %}</strong></p>
-            </div>
+            {% include "movies/_score_card.html" with rating=series_rating.rating vote_count=series_rating.vote_count imdb_id=series.imdb_id only %}
         </aside>
         {% endif %}
     </div>

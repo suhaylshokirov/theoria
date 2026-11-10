@@ -74,12 +74,6 @@
             {% if movie.prose_is_fallback %}<p class="prose-note">{% translate "Shown in English — no translation yet" %}</p>{% endif %}
 
             <dl class="facts">
-                {% if movie_rating.rating %}
-                <div class="fact fact--wide">
-                    <dt class="label">{% translate "Rating" %}</dt>
-                    <dd>{% include "movies/_rating_badge.html" with rating=movie_rating.rating vote_count=movie_rating.vote_count imdb_id=movie.imdb_id only %}</dd>
-                </div>
-                {% endif %}
                 <div class="fact">
                     <dt class="label">{% translate "Released" %}</dt>
                     <dd class="mono">{% if movie.release_date %}{{ movie.release_date|date:"j M Y" }}{% else %}—{% endif %}</dd>
@@ -140,23 +134,7 @@
 
         {% if movie_rating.rating or box_office %}
         <aside class="film-side film-stagger">
-            {% comment %} The score ring: the IMDb rating as a share of 10. The
-               circle's pathLength is 100, so the arc length is simply the
-               rating x 10 (widthratio does the multiply in the template). {% endcomment %}
-            {% if movie_rating.rating %}
-            <div class="score">
-                <div class="score__ring" aria-hidden="true">
-                    <svg viewBox="0 0 110 110">
-                        <circle class="score__track" cx="55" cy="55" r="48" pathLength="100"/>
-                        <circle class="score__arc" cx="55" cy="55" r="48" pathLength="100"
-                                style="--fill: {% widthratio movie_rating.rating 1 10 %}"
-                                stroke-dasharray="{% widthratio movie_rating.rating 1 10 %} 100"/>
-                    </svg>
-                    <span class="score__value mono">{{ movie_rating.rating|floatformat:1 }}</span>
-                </div>
-                <p><strong>{% translate "IMDb rating" %}</strong></p>
-            </div>
-            {% endif %}
+            {% include "movies/_score_card.html" with rating=movie_rating.rating vote_count=movie_rating.vote_count imdb_id=movie.imdb_id only %}
 
             {% comment %} Box office: how many times over the film earned back
                its budget, with the two figures as bars on one scale. Only when

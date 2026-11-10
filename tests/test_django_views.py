@@ -1972,7 +1972,9 @@ def test_movie_detail_renders_rating_badge_with_vote_count_and_synopsis():
     assert "2,103,445 votes" in body
     assert 'href="https://www.imdb.com/title/tt1234567/"' in body
     assert "IMDb rating 8.5 out of 10" in body
-    assert "8.5 / 10" in body  # the visible figure carries the "/ 10" scale
+    assert 'class="score__value mono">8.5<' in body  # the ring carries the figure
+    assert "/ 10" in body  # and the scale sits beside the IMDb mark
+    assert 'class="rating-badge-mark"' in body
 
 
 def test_movie_detail_renders_no_badge_when_no_imdb_rating():

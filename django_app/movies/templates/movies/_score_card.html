@@ -1,0 +1,33 @@
+{% comment %} The IMDb score card on a title page: the rating as a ring (share of
+   10), the IMDb mark, and the vote count. Linked out to imdb.com when the
+   title has an imdb_id. The one rating layout on movie and TV detail pages.
+
+   The circle's pathLength is 100, so the arc length is simply the rating x 10
+   (widthratio does the multiply in the template).
+
+   Params (pass with `only`):
+     rating     : Decimal/float 0-10 -- required; falsy renders nothing
+     vote_count : optional int
+     imdb_id    : optional string -- when present the card links out
+{% endcomment %}
+{% load i18n %}
+{% if rating %}
+{% if imdb_id %}<a class="score score--link" href="https://www.imdb.com/title/{{ imdb_id }}/" target="_blank" rel="noopener noreferrer"
+   aria-label="{% blocktranslate trimmed with value=rating|floatformat:"1u" %}IMDb rating {{ value }} out of 10{% endblocktranslate %}">{% else %}<div class="score" role="group"
+   aria-label="{% blocktranslate trimmed with value=rating|floatformat:"1u" %}IMDb rating {{ value }} out of 10{% endblocktranslate %}">{% endif %}
+    <div class="score__ring" aria-hidden="true">
+        <svg viewBox="0 0 110 110">
+            <circle class="score__track" cx="55" cy="55" r="48" pathLength="100"/>
+            <circle class="score__arc" cx="55" cy="55" r="48" pathLength="100"
+                    style="--fill: {% widthratio rating 1 10 %}"
+                    stroke-dasharray="{% widthratio rating 1 10 %} 100"/>
+        </svg>
+        <span class="score__value mono">{{ rating|floatformat:"1u" }}</span>
+    </div>
+    <div class="score__meta" aria-hidden="true">
+        <span class="rating-badge-mark">IMDb</span>
+        <span class="score__scale mono">/ 10</span>
+        {% if vote_count %}<span class="score__votes mono">{% blocktranslate trimmed with formatted=vote_count|floatformat:"0g" count counter=vote_count %}{{ formatted }} vote{% plural %}{{ formatted }} votes{% endblocktranslate %}</span>{% endif %}
+    </div>
+{% if imdb_id %}</a>{% else %}</div>{% endif %}
+{% endif %}
