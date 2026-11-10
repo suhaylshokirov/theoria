@@ -399,6 +399,17 @@ a.score--link:focus-visible {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* Stacked, the rating card leads the body, ahead of the synopsis and the
+     facts table. The side column is dissolved so the score card can be
+     ordered on its own; the box office stays at the foot. */
+  .film-side {
+    display: contents;
+  }
+
+  .film-side .score {
+    order: -1;
+  }
+
   /* Only the poster narrows; the collection buttons under it keep the
      column's full width. */
   .film-hero__plate .film-poster {
