@@ -307,19 +307,9 @@ a.score::after {
   font-size: var(--text-2xs);
 }
 
-.score__scale {
-  color: var(--ink-muted);
-  font-size: var(--text-sm);
-}
-
 .score__votes {
   color: var(--ink-faint);
   font-size: var(--text-xs);
-}
-
-a.score--link:hover .score__value,
-a.score--link:focus-visible .score__value {
-  color: var(--lime-text);
 }
 
 a.score--link:focus-visible {

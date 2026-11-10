@@ -26,7 +26,6 @@
     </div>
     <div class="score__meta" aria-hidden="true">
         <span class="rating-badge-mark">IMDb</span>
-        <span class="score__scale mono">/ 10</span>
         {% if vote_count %}<span class="score__votes mono">{% blocktranslate trimmed with formatted=vote_count|floatformat:"0g" count counter=vote_count %}{{ formatted }} vote{% plural %}{{ formatted }} votes{% endblocktranslate %}</span>{% endif %}
     </div>
 {% if imdb_id %}</a>{% else %}</div>{% endif %}
