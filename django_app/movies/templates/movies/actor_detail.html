@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="{% static 'css/people.css' %}">
 {% endblock %}
 
-{% block title %}Theoria — {{ actor.name }}{% endblock %}
+{% block title %}{{ actor.name }} — Theoria{% endblock %}
 
 {% block content %}
 {% include "movies/_person_header.html" with person=actor film_count=film_count avg_rating=avg_rating activity=activity only %}
