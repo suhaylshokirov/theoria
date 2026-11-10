@@ -22,7 +22,8 @@ from movies.i18n import (
     current_lang, genre_labels, localize_movies, localize_series, person_names_by_id,
 )
 from movies.models import (
-    Credit, Genre, Movie, MovieMetrics, MovieRating, Person, Series, SeriesGenre,
+    Credit, Genre, Movie, MovieCountry, MovieMetrics, MovieRating, Person, Series,
+    SeriesCountry, SeriesGenre,
 )
 
 
@@ -283,6 +284,72 @@ def build_genre_rows(kind):
 
 def genre_rows(kind):
     return cached("genre_rows", lambda: build_genre_rows(kind), kind)
+
+
+def build_country_rows(kind):
+    """`[(country_code, english_name, title_count)]` for the countries at least
+    one title originates from, the most titles first.
+
+    `kind` is "movie" or "series". Origin only, not production: the two
+    disagree on ~23% of titles, and "Korean movies" means made in Korea, not
+    merely co-financed there. Counting distinct titles guards the bridge's
+    (title, country, relation) grain. Language-free, like build_genre_rows():
+    the views key the ?country= filter on the ISO code and translate only
+    the visible name.
+    """
+    if kind == "movie":
+        link, owner = MovieCountry, "movie"
+    elif kind == "series":
+        link, owner = SeriesCountry, "series"
+    else:
+        raise ValueError(f"unknown country kind: {kind!r}")
+    return list(
+        link.objects.using("warehouse")
+        .filter(relation="origin")
+        .values_list("country_id", "country__name")
+        .annotate(title_count=Count(owner, distinct=True))
+        .order_by("-title_count", "country__name")
+    )
+
+
+def country_rows(kind):
+    return cached("country_rows", lambda: build_country_rows(kind), kind)
+
+
+def build_cartoon_country_codes(animation_id, movie_audience_id, series_audience_ids):
+    """The origin-country codes carried by at least one cartoon, as a sorted
+    list. The same cartoon test as build_cartoon_genre_ids(), so /cartoons/
+    offers only countries that can return something. Language-free."""
+    animated = MovieMetrics.objects.using("warehouse").filter(
+        genre_id=animation_id).values("movie_id")
+    for_kids = MovieMetrics.objects.using("warehouse").filter(
+        genre_id=movie_audience_id).values("movie_id")
+    codes = set(
+        MovieCountry.objects.using("warehouse")
+        .filter(relation="origin", movie_id__in=animated)
+        .filter(movie_id__in=for_kids)
+        .values_list("country_id", flat=True).distinct()
+    )
+
+    animated = SeriesGenre.objects.using("warehouse").filter(
+        genre_id=animation_id).values("series_id")
+    for_kids = SeriesGenre.objects.using("warehouse").filter(
+        genre_id__in=series_audience_ids).values("series_id")
+    codes |= set(
+        SeriesCountry.objects.using("warehouse")
+        .filter(relation="origin", series_id__in=animated)
+        .filter(series_id__in=for_kids)
+        .values_list("country_id", flat=True).distinct()
+    )
+    return sorted(codes)
+
+
+def cartoon_country_codes(animation_id, movie_audience_id, series_audience_ids):
+    return cached(
+        "cartoon_country_codes",
+        lambda: build_cartoon_country_codes(animation_id, movie_audience_id, series_audience_ids),
+        animation_id, movie_audience_id, "-".join(str(i) for i in series_audience_ids),
+    )
 
 
 def build_cartoon_genre_ids(animation_id, movie_audience_id, series_audience_ids):

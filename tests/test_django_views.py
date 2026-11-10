@@ -987,7 +987,7 @@ def test_browse_genre_applies_to_both_catalogs():
         _browse_hydration_mocks(movie_mgr, series_mgr)
         response = client.get("/browse/", {"genre": "science-fiction"})
 
-    rows_mock.assert_called_once_with("", "newest", [{"movie": 878, "series": 878}])
+    rows_mock.assert_called_once_with("", "newest", [{"movie": 878, "series": 878}], [])
     assert response.context["genres"] == ["science-fiction"]
     assert "genre=science-fiction" in response.context["base_query"]
 
@@ -999,7 +999,7 @@ def test_browse_genre_only_one_catalog_has_leaves_the_other_empty():
         _browse_hydration_mocks(movie_mgr, series_mgr)
         client.get("/browse/", {"genre": "drama"})
 
-    rows_mock.assert_called_once_with("", "newest", [{"movie": None, "series": 18}])
+    rows_mock.assert_called_once_with("", "newest", [{"movie": None, "series": 18}], [])
 
 
 def test_browse_unknown_genre_falls_back_to_unfiltered():
@@ -1010,7 +1010,7 @@ def test_browse_unknown_genre_falls_back_to_unfiltered():
         response = client.get("/browse/", {"genre": "nope"})
 
     assert response.context["genres"] == []
-    rows_mock.assert_called_once_with("", "newest", [])
+    rows_mock.assert_called_once_with("", "newest", [], [])
 
 
 def test_browse_rows_filter_each_side_by_its_own_genre_and_empty_a_side_without_it():
@@ -1045,6 +1045,7 @@ def test_browse_several_genres_are_all_passed_through_in_order_without_repeats()
     rows_mock.assert_called_once_with(
         "", "newest",
         [{"movie": 878, "series": 878}, {"movie": 28, "series": None}],
+        [],
     )
     assert response.context["genres"] == ["science-fiction", "action"]
     assert "genre=science-fiction&genre=action" in response.context["base_query"]
@@ -1069,7 +1070,7 @@ def test_browse_returns_200_with_context_keys():
         response = client.get("/browse/")
 
     assert response.status_code == 200
-    rows_mock.assert_called_once_with("", "newest", [])
+    rows_mock.assert_called_once_with("", "newest", [], [])
     page_items = list(response.context["page_obj"])
     assert movie in page_items
     assert show in page_items
@@ -1088,7 +1089,7 @@ def test_browse_invalid_sort_falls_back_to_newest():
 
     assert response.status_code == 200
     assert response.context["sort"] == "newest"
-    rows_mock.assert_called_once_with("", "newest", [])
+    rows_mock.assert_called_once_with("", "newest", [], [])
 
 
 def test_browse_search_passes_q_through():
@@ -1101,7 +1102,7 @@ def test_browse_search_passes_q_through():
 
     assert response.status_code == 200
     assert response.context["q"] == "robot"
-    rows_mock.assert_called_once_with("robot", "newest", [])
+    rows_mock.assert_called_once_with("robot", "newest", [], [])
 
 
 def test_browse_ajax_request_renders_results_fragment_only():
@@ -3833,3 +3834,156 @@ def test_movie_detail_shows_the_rating_without_a_rank():
     assert 'stroke-dasharray="91 100"' in body
     # The fixture's budget 1,000 / revenue 5,000 earns the box-office card.
     assert "5.0×" in body
+
+
+# ---------------------------------------------------------------------------
+# Country facet (/movies/, /tv/, /browse/, /cartoons/)
+# ---------------------------------------------------------------------------
+
+
+def _country_filter_params(qs, id_field):
+    """The compiled parameters of every `<id_field>__in=<subquery>` filter
+    that `_from_countries()` put on `qs`: the codes, then "origin"."""
+    found = []
+    for call in qs.filter.call_args_list:
+        assert list(call.kwargs) == [id_field + "__in"]
+        _, params = call.kwargs[id_field + "__in"].query.get_compiler("warehouse").as_sql()
+        found.append(list(params))
+    return found
+
+
+def _movie_list_qs(movie_mgr, genre_mgr):
+    genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+        .order_by.return_value.values_list.return_value = []
+    qs = movie_mgr.using.return_value.all.return_value
+    qs.filter.return_value = qs
+    qs.annotate.return_value = qs
+    qs.order_by.return_value = []
+    return qs
+
+
+def test_movie_list_filters_by_origin_country_any_of():
+    """?country= takes ISO codes, matches a title from *any* ticked country
+    (one origin each, so all-of would empty the grid), reads the origin
+    relation only, and drops unknown codes and repeats."""
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        qs = _movie_list_qs(movie_mgr, genre_mgr)
+        response = client.get("/movies/?country=jp&country=XX&country=US&country=JP")
+
+    assert response.status_code == 200
+    assert _country_filter_params(qs, "movie_id") == [["JP", "US", "origin"]]
+    assert response.context["countries"] == ["JP", "US"]
+    # Most titles first (a tie falls back to the name); only this catalog's countries.
+    assert response.context["country_choices"] == [
+        ("US", "United States of America"), ("FR", "France"), ("JP", "Japan"),
+    ]
+    assert "country=JP&country=US" in response.context["base_query"]
+    content = response.content.decode()
+    assert '<input type="checkbox" name="country" value="JP" checked>' in content
+    assert '<input type="checkbox" name="country" value="FR">' in content
+    assert "Any country" in content
+
+
+def test_movie_list_without_country_adds_no_filter():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        qs = _movie_list_qs(movie_mgr, genre_mgr)
+        response = client.get("/movies/", {"country": "nonsense"})
+
+    assert _country_filter_params(qs, "movie_id") == []
+    assert response.context["countries"] == []
+
+
+def test_movie_list_country_composes_with_genre():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = [(27, "Horror")]
+        qs = movie_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+        response = client.get("/movies/", {"genre": "horror", "country": "JP"})
+
+    assert [list(c.kwargs) for c in qs.filter.call_args_list] == [["movie_id__in"], ["movie_id__in"]]
+    assert response.context["base_query"] == "q=&sort=release&genre=horror&country=JP"
+
+
+def test_series_list_filters_by_origin_country():
+    with patch.object(Series, "objects", new=MagicMock()) as series_mgr, patch.object(
+        Genre, "objects", new=MagicMock()
+    ) as genre_mgr:
+        genre_mgr.using.return_value.annotate.return_value.filter.return_value \
+            .order_by.return_value.values_list.return_value = []
+        qs = series_mgr.using.return_value.all.return_value
+        qs.filter.return_value = qs
+        qs.annotate.return_value = qs
+        qs.order_by.return_value = []
+        response = client.get("/tv/", {"country": "kr"})
+
+    assert _country_filter_params(qs, "series_id") == [["KR", "origin"]]
+    # JP is a movie-only country here: /tv/ offers its own list.
+    assert [code for code, _ in response.context["country_choices"]] == ["US", "KR"]
+
+
+def test_country_labels_are_translated_but_codes_are_not():
+    with patch("movies.views.country_labels", return_value={"Japan": "Япония"}), patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Genre, "objects", new=MagicMock()) as genre_mgr:
+        _movie_list_qs(movie_mgr, genre_mgr)
+        response = client.get("/movies/")
+
+    assert ("JP", "Япония") in response.context["country_choices"]
+
+
+def test_browse_country_is_passed_to_the_union_and_offers_both_catalogs():
+    with patch("movies.views._browse_rows", return_value=[]) as rows_mock, patch.object(
+        Movie, "objects", new=MagicMock()
+    ) as movie_mgr, patch.object(Series, "objects", new=MagicMock()) as series_mgr:
+        _browse_hydration_mocks(movie_mgr, series_mgr)
+        response = client.get("/browse/?country=kr&country=JP")
+
+    rows_mock.assert_called_once_with("", "newest", [], ["KR", "JP"])
+    # The union of both catalogs, the counts added: US 9 + 4, JP 3, FR 3, KR 2.
+    assert [code for code, _ in response.context["country_choices"]] == ["US", "FR", "JP", "KR"]
+    assert "country=KR&country=JP" in response.context["base_query"]
+
+
+def test_browse_rows_filter_each_side_by_origin_country():
+    from movies.views import _browse_rows
+
+    sql = str(_browse_rows("", "newest", [], ["KR"]).query.get_compiler("warehouse").as_sql())
+    assert "bridge_movie_country" in sql and "bridge_series_country" in sql
+    assert "KR" in sql and "origin" in sql
+
+    unfiltered = str(_browse_rows("", "newest", [], []).query.get_compiler("warehouse").as_sql())
+    assert "bridge_movie_country" not in unfiltered
+
+
+def test_cartoon_list_offers_only_the_countries_a_cartoon_carries():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        _cartoon_mocks(movie_mgr, series_mgr)
+        response = client.get("/cartoons/")
+
+    # FR and KR have titles, but no cartoon: a choice that can only empty the grid.
+    assert [code for code, _ in response.context["country_choices"]] == ["US", "JP"]
+
+
+def test_cartoon_list_country_filters_both_sides_and_empty_state_names_the_filter():
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr:
+        movie_qs, series_qs = _cartoon_mocks(movie_mgr, series_mgr)
+        response = client.get("/cartoons/?country=jp&country=fr")
+
+    # FR is not offered on /cartoons/, so it is dropped.
+    assert response.context["countries"] == ["JP"]
+    assert _country_filter_params(movie_qs, "movie_id") == [["JP", "origin"]]
+    assert _country_filter_params(series_qs, "series_id") == [["JP", "origin"]]
+    assert "No cartoons match this filter" in response.content.decode()

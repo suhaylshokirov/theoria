@@ -31,6 +31,8 @@
                CLAUDE.md). {% endcomment %}
             {% translate "Genre" as label %}{% translate "Filter by genre" as legend %}{% translate "Any genre" as any_label %}
             {% include "movies/_facet.html" with label=label legend=legend name="genre" choices=genre_choices selected=genres multiple=True any_label=any_label only %}
+            {% translate "Country" as label %}{% translate "Filter by country" as legend %}{% translate "Any country" as any_label %}
+            {% include "movies/_facet.html" with label=label legend=legend name="country" choices=country_choices selected=countries multiple=True any_label=any_label only %}
         </div>
     </form>
 

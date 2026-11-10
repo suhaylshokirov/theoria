@@ -10,7 +10,7 @@
         {% empty %}
         <p class="empty">
             {% if q %}{% blocktranslate trimmed with q=q %}No shows match “{{ q }}”. Try a shorter title.{% endblocktranslate %}
-            {% elif genres %}{% translate "No shows match this filter. Try loosening it." %}
+            {% elif genres or countries %}{% translate "No shows match this filter. Try loosening it." %}
             {% else %}{% translate "No shows loaded yet. Run the pipeline to fill the catalog." %}{% endif %}
         </p>
         {% endfor %}

@@ -79,3 +79,25 @@ def _cartoon_genre_lists(request):
         "movies.views.cached_reads.cartoon_genre_ids", return_value=CARTOON_TEST_PRESENT_IDS
     ):
         yield
+
+
+# The origin countries each catalog offers, most titles first (the shape of
+# cached_reads.build_country_rows), and the codes some cartoon carries.
+COUNTRY_TEST_ROWS = {
+    "movie": [("US", "United States of America", 9), ("JP", "Japan", 3), ("FR", "France", 3)],
+    "series": [("US", "United States of America", 4), ("KR", "South Korea", 2)],
+}
+COUNTRY_TEST_CARTOON_CODES = ["JP", "US"]
+
+
+@pytest.fixture(autouse=True)
+def _country_lists():
+    """Every catalog page offers a Country cell, which reads the origin
+    countries of its catalogs. Keep those reads off the warehouse."""
+    from unittest.mock import patch
+
+    with patch("movies.views.cached_reads.country_rows",
+               side_effect=lambda kind: COUNTRY_TEST_ROWS[kind]), patch(
+        "movies.views.cached_reads.cartoon_country_codes", return_value=COUNTRY_TEST_CARTOON_CODES
+    ):
+        yield

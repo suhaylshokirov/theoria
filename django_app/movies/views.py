@@ -166,9 +166,63 @@ def _in_genre(queryset, id_field, link_model, genre_id):
     return queryset.filter(**{id_field + "__in": members})
 
 
-def _filter_query(q, sort, genres):
+def _country_choices(kinds, only=None):
+    """The country facet: `(choices, known_codes)` for the catalogs in `kinds`.
+
+    `choices` are `(ISO code, label)` pairs, the countries with the most
+    titles first (the catalogue is mostly American, so an A-Z list would bury
+    the few other countries a reader reaches for under a long alphabet; ties
+    fall back to the English name). The label is translated, the code is not.
+    `only`, when given, is the set of codes a page can actually return (the
+    cartoons index), so no choice is one that can only empty the grid.
+    """
+    labels = country_labels()
+    totals, names = {}, {}
+    for kind in kinds:
+        for code, name, count in cached_reads.country_rows(kind):
+            if only is not None and code not in only:
+                continue
+            totals[code] = totals.get(code, 0) + count
+            names.setdefault(code, name)
+    ordered = sorted(totals, key=lambda code: (-totals[code], names[code]))
+    return [(code, labels.get(names[code], names[code])) for code in ordered], set(totals)
+
+
+def _selected_countries(request, known_codes):
+    """The ?country= ISO codes a request names, as an ordered list without
+    repeats. Unlike genre, a title matches *any* ticked country: a title has
+    one origin country, rarely two, so an all-of match would empty the grid
+    the moment a second country is ticked. Unknown codes are dropped
+    silently, the same posture _selected_genres() takes."""
+    picked = []
+    for code in request.GET.getlist("country"):
+        code = code.strip().upper()
+        if code in known_codes and code not in picked:
+            picked.append(code)
+    return picked
+
+
+def _from_countries(queryset, id_field, link_model, codes):
+    """`queryset` narrowed to the titles whose origin is any of `codes`
+    (unchanged when `codes` is empty). A subquery on the bridge, for the
+    reason _in_genre() gives: no join to repeat a title or to reuse."""
+    if not codes:
+        return queryset
+    members = (
+        link_model.objects.using("warehouse")
+        .filter(relation="origin", country_id__in=codes)
+        .values(id_field)
+    )
+    return queryset.filter(**{id_field + "__in": members})
+
+
+def _filter_query(q, sort, genres, countries=()):
     """The params the pager must carry to the next page, urlencoded."""
-    return urlencode([("q", q), ("sort", sort)] + [("genre", slug) for slug in genres])
+    return urlencode(
+        [("q", q), ("sort", sort)]
+        + [("genre", slug) for slug in genres]
+        + [("country", code) for code in countries]
+    )
 
 
 def movie_list(request):
@@ -205,12 +259,15 @@ def movie_list(request):
         genre_choices.sort(key=lambda choice: choice[1].lower())
 
     genres = _selected_genres(request, genre_slugs)
+    country_choices, known_countries = _country_choices(("movie",))
+    countries = _selected_countries(request, known_countries)
 
     movies = localize_movies(Movie.objects.using("warehouse").all())
     if q:
         movies = filter_by_title(movies, q)
     for slug in genres:
         movies = _in_genre(movies, "movie_id", MovieMetrics, genre_slugs[slug])
+    movies = _from_countries(movies, "movie_id", MovieCountry, countries)
     # Annotated unconditionally, not only when sort == "rating" — the cards
     # display this figure too, so it must exist whether or not the list is
     # being sorted by it (Task 68). MOVIE_SORTS["rating"] points at the same
@@ -229,8 +286,10 @@ def movie_list(request):
         "page_obj": page_obj, "q": q, "sort": sort,
         "genres": genres,
         "genre_choices": genre_choices,
+        "countries": countries,
+        "country_choices": country_choices,
         "sort_choices": MOVIE_SORT_CHOICES,
-        "base_query": _filter_query(q, sort, genres),
+        "base_query": _filter_query(q, sort, genres, countries),
     }
     # See _person_list()'s identical branch: static/js/theoria.js's
     # initLiveFilter() re-requests this URL with this header on every filter
@@ -281,12 +340,15 @@ def series_list(request):
         genre_choices.sort(key=lambda choice: choice[1].lower())
 
     genres = _selected_genres(request, genre_slugs)
+    country_choices, known_countries = _country_choices(("series",))
+    countries = _selected_countries(request, known_countries)
 
     series = localize_series(Series.objects.using("warehouse").all())
     if q:
         series = filter_by_series_name(series, q)
     for slug in genres:
         series = _in_genre(series, "series_id", SeriesGenre, genre_slugs[slug])
+    series = _from_countries(series, "series_id", SeriesCountry, countries)
     # Annotated unconditionally, same reasoning as movie_list()'s imdb_rating:
     # the cards display this figure too, so it must exist whichever sort is
     # active.
@@ -303,8 +365,10 @@ def series_list(request):
         "page_obj": page_obj, "q": q, "sort": sort,
         "genres": genres,
         "genre_choices": genre_choices,
+        "countries": countries,
+        "country_choices": country_choices,
         "sort_choices": SERIES_SORT_CHOICES,
-        "base_query": _filter_query(q, sort, genres),
+        "base_query": _filter_query(q, sort, genres, countries),
     }
     if _is_ajax(request):
         return render(request, "movies/_series_results.html", context)
@@ -368,14 +432,16 @@ def _browse_genres():
     return choices, ids_by_slug
 
 
-def _browse_rows(q, sort, genre_ids=None):
+def _browse_rows(q, sort, genre_ids=None, countries=()):
     """Every movie and show as one paginatable, database-ordered feed.
 
     `genre_ids` is a list of `_browse_genres()`'s `ids_by_slug` entries, one
     per ticked genre (None or empty = no genre filter); a title must carry
     every one. A side with no id for any of them is emptied rather than left
     unfiltered, so picking a genre only one catalog has never leaks the other
-    catalog's whole list.
+    catalog's whole list. `countries` are ISO codes; a title matching any of
+    them stays, on both sides, so a country only one catalog has simply
+    contributes nothing from the other.
 
     cartoon_list() below merges Movie + Series the same conceptual way, but
     by loading every row into Python and sorting there — fine for a ~2,000
@@ -403,6 +469,7 @@ def _browse_rows(q, sort, genre_ids=None):
         else:
             for ids in genre_ids:
                 movies = _in_genre(movies, "movie_id", MovieMetrics, ids["movie"])
+    movies = _from_countries(movies, "movie_id", MovieCountry, countries)
     # A translated title sorts under its translated spelling, so each side of
     # the union reads its translated column (title_i18n / name_i18n) on a
     # translated request, and the English one otherwise.
@@ -426,6 +493,7 @@ def _browse_rows(q, sort, genre_ids=None):
         else:
             for ids in genre_ids:
                 series = _in_genre(series, "series_id", SeriesGenre, ids["series"])
+    series = _from_countries(series, "series_id", SeriesCountry, countries)
     series = series.annotate(
         kind=Value("series", output_field=CharField()),
         item_id=F("series_id"),
@@ -452,8 +520,10 @@ def browse(request):
 
     genre_choices, genre_ids_by_slug = _browse_genres()
     genres = _selected_genres(request, genre_ids_by_slug)
+    country_choices, known_countries = _country_choices(("movie", "series"))
+    countries = _selected_countries(request, known_countries)
 
-    rows = _browse_rows(q, sort, [genre_ids_by_slug[slug] for slug in genres])
+    rows = _browse_rows(q, sort, [genre_ids_by_slug[slug] for slug in genres], countries)
     page_obj = Paginator(rows, MOVIES_PER_PAGE).get_page(request.GET.get("page"))
 
     # Only this page's ~24 rows are hydrated into real Movie/Series objects —
@@ -495,8 +565,10 @@ def browse(request):
         "page_obj": page_obj, "q": q, "sort": sort,
         "genres": genres,
         "genre_choices": genre_choices,
+        "countries": countries,
+        "country_choices": country_choices,
         "sort_choices": BROWSE_SORT_CHOICES,
-        "base_query": _filter_query(q, sort, genres),
+        "base_query": _filter_query(q, sort, genres, countries),
     }
     if _is_ajax(request):
         return render(request, "movies/_browse_results.html", context)
@@ -553,6 +625,16 @@ def _cartoon_genres():
     return offered, ids_by_slug
 
 
+def _cartoon_countries():
+    """The country facet for /cartoons/: `(choices, known_codes)`, cut down to
+    the origin countries a cartoon carries."""
+    present = cached_reads.cartoon_country_codes(
+        CARTOON_ANIMATION_GENRE_ID, CARTOON_MOVIE_AUDIENCE_GENRE_ID,
+        CARTOON_SERIES_AUDIENCE_GENRE_IDS,
+    )
+    return _country_choices(("movie", "series"), only=set(present))
+
+
 def cartoon_list(request):
     """Browsable cartoon catalog: animated movies and shows made for younger
     viewers (see the CARTOON_* constants above), merged into one feed since a
@@ -572,6 +654,8 @@ def cartoon_list(request):
     genre_choices, genre_ids_by_slug = _cartoon_genres()
     genres = _selected_genres(request, {slug for slug, _ in genre_choices})
     genre_ids = [genre_ids_by_slug[slug] for slug in genres]
+    country_choices, known_countries = _cartoon_countries()
+    countries = _selected_countries(request, known_countries)
 
     # Two Exists() subqueries, not two chained .filter(moviemetrics__...)
     # calls: MovieMetrics.movie (like SeriesGenre.series below) carries
@@ -601,6 +685,7 @@ def cartoon_list(request):
         else:
             for ids in genre_ids:
                 movies = _in_genre(movies, "movie_id", MovieMetrics, ids["movie"])
+    movies = _from_countries(movies, "movie_id", MovieCountry, countries)
     movies = movies.annotate(
         imdb_rating=Max("movierating__rating", filter=Q(movierating__source="imdb"))
     )
@@ -623,6 +708,7 @@ def cartoon_list(request):
         else:
             for ids in genre_ids:
                 series = _in_genre(series, "series_id", SeriesGenre, ids["series"])
+    series = _from_countries(series, "series_id", SeriesCountry, countries)
     series = series.annotate(
         imdb_rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb"))
     )
@@ -658,8 +744,10 @@ def cartoon_list(request):
         "page_obj": page_obj, "q": q, "sort": sort,
         "genres": genres,
         "genre_choices": genre_choices,
+        "countries": countries,
+        "country_choices": country_choices,
         "sort_choices": CARTOON_SORT_CHOICES,
-        "base_query": _filter_query(q, sort, genres),
+        "base_query": _filter_query(q, sort, genres, countries),
     }
     if _is_ajax(request):
         return render(request, "movies/_cartoon_results.html", context)
