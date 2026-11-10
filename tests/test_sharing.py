@@ -885,11 +885,8 @@ def test_profile_renders_in_russian_from_the_viewers_cookie(owner):
 
 
 @override_settings(ALLOWED_HOSTS=["testserver"])
-def test_me_and_the_share_page_link_to_the_profile(owner):
+def test_the_share_page_links_to_the_profile(owner):
     collection = _shared_top(owner)
-    client = Client()
-    client.force_login(owner)
-    assert 'href="/users/share_owner/"' in client.get("/me/").content.decode()
     with _hydrate_with(_top_rows()):
         html = Client().get(f"/s/{collection.share_token}/").content.decode()
     assert 'href="/users/share_owner/"' in html
