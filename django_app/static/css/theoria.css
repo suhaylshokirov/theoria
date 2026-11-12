@@ -5112,7 +5112,7 @@ main,
 .header-search__list {
   position: absolute;
   top: calc(100% + var(--space-2));
-  right: 0;
+  right: calc(-1 * var(--space-6));
   z-index: 30;
   width: min(420px, calc(100vw - 2 * var(--space-5)));
   max-height: min(60vh, 460px);
@@ -5242,6 +5242,7 @@ main,
 
   html.has-js .header-search__list {
     left: 0;
+    right: 0;
     width: auto;
   }
 }
@@ -5700,6 +5701,7 @@ html.is-tv.has-js .header-search.is-open {
 
 html.is-tv.has-js .header-search__list {
   left: 0;
+  right: 0;
   width: auto;
 }
 

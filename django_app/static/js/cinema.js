@@ -598,8 +598,20 @@
         sub.textContent = [kindLabel[r.kind], r.year].filter(Boolean).join(" · ");
         text.appendChild(title);
         text.appendChild(sub);
-        var rating = document.createElement("small");
-        rating.textContent = r.rating != null ? r.rating.toFixed(1) : "";
+        // The same IMDb badge the poster cards wear (_rating_badge.html):
+        // yellow mark, figure, "/ 10". Nothing when there is no IMDb rating.
+        var rating = document.createElement("span");
+        if (r.rating != null) {
+          rating.className = "rating-badge";
+          var mark = document.createElement("span");
+          mark.className = "rating-badge-mark";
+          mark.textContent = "IMDb";
+          var figure = document.createElement("span");
+          figure.className = "rating-badge-figure";
+          figure.textContent = r.rating.toFixed(1);
+          rating.appendChild(mark);
+          rating.appendChild(figure);
+        }
         a.appendChild(img);
         a.appendChild(text);
         a.appendChild(rating);
