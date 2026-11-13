@@ -48,8 +48,8 @@ msgstr ""
 "пользователя."
 
 #: accounts/templates/accounts/change_username.html:5
-msgid "Change username — Theoria"
-msgstr "Смена имени пользователя — Theoria"
+msgid "Change username | Theoria"
+msgstr "Смена имени пользователя | Theoria"
 
 #: accounts/templates/accounts/change_username.html:18
 #: core/templates/core/account.html:47
@@ -80,8 +80,8 @@ msgid "Back to your account"
 msgstr "Назад в аккаунт"
 
 #: accounts/templates/accounts/login.html:5
-msgid "Sign in — Theoria"
-msgstr "Вход — Theoria"
+msgid "Sign in | Theoria"
+msgstr "Вход | Theoria"
 
 #: accounts/templates/accounts/login.html:18
 #: accounts/templates/accounts/signup.html:44
@@ -112,8 +112,8 @@ msgid "Sign up"
 msgstr "Зарегистрироваться"
 
 #: accounts/templates/accounts/signup.html:5
-msgid "Sign up — Theoria"
-msgstr "Регистрация — Theoria"
+msgid "Sign up | Theoria"
+msgstr "Регистрация | Theoria"
 
 #: accounts/templates/accounts/signup.html:19
 msgid "A username and an email. That's it."
@@ -124,8 +124,8 @@ msgid "Already have an account?"
 msgstr "Уже есть аккаунт?"
 
 #: accounts/templates/accounts/verify.html:5
-msgid "Enter your code — Theoria"
-msgstr "Введите код — Theoria"
+msgid "Enter your code | Theoria"
+msgstr "Введите код | Theoria"
 
 #: accounts/templates/accounts/verify.html:18
 msgid "Enter your code"
@@ -1309,8 +1309,8 @@ msgid "Create an account"
 msgstr "Создать аккаунт"
 
 #: core/templates/core/account.html:4
-msgid "Your account — Theoria"
-msgstr "Ваш аккаунт — Theoria"
+msgid "Your account | Theoria"
+msgstr "Ваш аккаунт | Theoria"
 
 #: core/templates/core/account.html:34 core/templates/core/profile.html:44
 #: core/templates/core/share/page.html:59
@@ -1613,8 +1613,8 @@ msgid "Keep it"
 msgstr "Оставить"
 
 #: core/templates/core/share/gone.html:9
-msgid "This link is no longer shared — Theoria"
-msgstr "Доступ по ссылке закрыт — Theoria"
+msgid "This link is no longer shared | Theoria"
+msgstr "Доступ по ссылке закрыт | Theoria"
 
 #: core/templates/core/share/gone.html:20
 msgid "This list is no longer shared."
@@ -3202,8 +3202,8 @@ msgid "Pilot"
 msgstr "Пилот"
 
 #: templates/404.html:10
-msgid "Page not found — Theoria"
-msgstr "Страница не найдена — Theoria"
+msgid "Page not found | Theoria"
+msgstr "Страница не найдена | Theoria"
 
 #: templates/404.html:21
 msgid "This page doesn’t exist."
@@ -3369,3 +3369,6 @@ msgstr "Назовите настроение, жанр или сколько у
 #: templates/base.html:533
 msgid "Get a film pick"
 msgstr "Подобрать фильм"
+
+msgid "Theoria | Welcome to the world of movies"
+msgstr "Theoria | добро пожаловать в мир кино"

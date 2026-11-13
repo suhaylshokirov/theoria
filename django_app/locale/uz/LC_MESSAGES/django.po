@@ -46,8 +46,8 @@ msgstr ""
 "boʻlmaydi."
 
 #: accounts/templates/accounts/change_username.html:5
-msgid "Change username — Theoria"
-msgstr "Foydalanuvchi nomini oʻzgartirish — Theoria"
+msgid "Change username | Theoria"
+msgstr "Foydalanuvchi nomini oʻzgartirish | Theoria"
 
 #: accounts/templates/accounts/change_username.html:18
 #: core/templates/core/account.html:47
@@ -78,8 +78,8 @@ msgid "Back to your account"
 msgstr "Hisobga qaytish"
 
 #: accounts/templates/accounts/login.html:5
-msgid "Sign in — Theoria"
-msgstr "Kirish — Theoria"
+msgid "Sign in | Theoria"
+msgstr "Kirish | Theoria"
 
 #: accounts/templates/accounts/login.html:18
 #: accounts/templates/accounts/signup.html:44
@@ -110,8 +110,8 @@ msgid "Sign up"
 msgstr "Roʻyxatdan oʻtish"
 
 #: accounts/templates/accounts/signup.html:5
-msgid "Sign up — Theoria"
-msgstr "Roʻyxatdan oʻtish — Theoria"
+msgid "Sign up | Theoria"
+msgstr "Roʻyxatdan oʻtish | Theoria"
 
 #: accounts/templates/accounts/signup.html:19
 msgid "A username and an email. That's it."
@@ -122,8 +122,8 @@ msgid "Already have an account?"
 msgstr "Hisobingiz bormi?"
 
 #: accounts/templates/accounts/verify.html:5
-msgid "Enter your code — Theoria"
-msgstr "Kodni kiriting — Theoria"
+msgid "Enter your code | Theoria"
+msgstr "Kodni kiriting | Theoria"
 
 #: accounts/templates/accounts/verify.html:18
 msgid "Enter your code"
@@ -1303,8 +1303,8 @@ msgid "Create an account"
 msgstr "Hisob yaratish"
 
 #: core/templates/core/account.html:4
-msgid "Your account — Theoria"
-msgstr "Hisobingiz — Theoria"
+msgid "Your account | Theoria"
+msgstr "Hisobingiz | Theoria"
 
 #: core/templates/core/account.html:34 core/templates/core/profile.html:44
 #: core/templates/core/share/page.html:59
@@ -1598,8 +1598,8 @@ msgid "Keep it"
 msgstr "Qoldirish"
 
 #: core/templates/core/share/gone.html:9
-msgid "This link is no longer shared — Theoria"
-msgstr "Bu havola endi ulashilmaydi — Theoria"
+msgid "This link is no longer shared | Theoria"
+msgstr "Bu havola endi ulashilmaydi | Theoria"
 
 #: core/templates/core/share/gone.html:20
 msgid "This list is no longer shared."
@@ -3169,8 +3169,8 @@ msgid "Pilot"
 msgstr "Pilot"
 
 #: templates/404.html:10
-msgid "Page not found — Theoria"
-msgstr "Sahifa topilmadi — Theoria"
+msgid "Page not found | Theoria"
+msgstr "Sahifa topilmadi | Theoria"
 
 #: templates/404.html:21
 msgid "This page doesn’t exist."
@@ -3337,3 +3337,6 @@ msgstr "Kayfiyatingizni, janrni yoki qancha vaqtingiz borligini ayting."
 #: templates/base.html:533
 msgid "Get a film pick"
 msgstr "Film tanlash"
+
+msgid "Theoria | Welcome to the world of movies"
+msgstr "Theoria | kino olamiga xush kelibsiz"
