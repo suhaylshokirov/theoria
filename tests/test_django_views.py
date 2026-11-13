@@ -3689,6 +3689,17 @@ def test_tmdb_image_filter_builds_url_and_handles_empty():
     assert tmdb_image(None) == ""
 
 
+def test_tmdb_srcset_filter_offers_the_whole_ladder():
+    from movies.templatetags.tmdb_images import tmdb_srcset
+
+    poster = tmdb_srcset("/abc.jpg", "poster")
+    assert "/w185/abc.jpg 185w" in poster and "/w780/abc.jpg 780w" in poster
+    assert "/original/bd.jpg 1920w" in tmdb_srcset("/bd.jpg", "backdrop")
+    assert "/h632/abc.jpg 421w" in tmdb_srcset("/abc.jpg", "profile")
+    assert "/w500/abc.jpg 500w" in tmdb_srcset("/abc.jpg", "logo")
+    assert tmdb_srcset("", "poster") == "" and tmdb_srcset(None) == ""
+
+
 # ---------------------------------------------------------------------------
 # 404 page
 # ---------------------------------------------------------------------------
@@ -3793,7 +3804,7 @@ def test_search_suggest_lists_films_then_shows_as_json():
         "kind": "movie", "title": "Inception", "year": 2020,
         "url": "/movies/inception/", "poster": movie_row["poster"], "rating": 8.8,
     }
-    assert movie_row["poster"].endswith("/w92/p.jpg")
+    assert movie_row["poster"].endswith("/w154/p.jpg")
     assert show_row["kind"] == "series"
     assert show_row["url"] == "/tv/dark/"
     assert show_row["poster"] == ""

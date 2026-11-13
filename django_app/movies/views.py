@@ -1091,7 +1091,7 @@ def search_suggest(request):
             "title": obj.display_title,
             "year": when.year if when else None,
             "url": url,
-            "poster": tmdb_image(obj.poster_path, "w92"),
+            "poster": tmdb_image(obj.poster_path, "w154"),
             "rating": float(obj.imdb_rating) if obj.imdb_rating is not None else None,
         }
 

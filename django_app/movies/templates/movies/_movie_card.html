@@ -11,7 +11,7 @@
 <div class="poster-card is-film">
     {% if plain %}<div class="card-static">{% else %}<a href="{% url 'movies:movie_detail' movie.slug %}">{% endif %}
         {% if movie.poster_path %}
-        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=movie.display_title %}{{ title }} poster{% endblocktranslate %}" loading="lazy" decoding="async">
+        <img class="poster" src="{{ movie.poster_path|tmdb_image:'w500' }}" srcset="{{ movie.poster_path|tmdb_srcset:'poster' }}" sizes="(max-width: 600px) 46vw, 200px" alt="{% blocktranslate trimmed with title=movie.display_title %}{{ title }} poster{% endblocktranslate %}" loading="lazy" decoding="async">
         {% else %}
         <div class="placeholder" aria-hidden="true">◻</div>
         {% endif %}

@@ -24,13 +24,13 @@
 <article class="film">
     <header class="film-hero">
         {% if movie.backdrop_path %}
-        <img class="film-hero__backdrop" src="{{ movie.backdrop_path|tmdb_image:'w1280' }}" alt=""
+        <img class="film-hero__backdrop" src="{{ movie.backdrop_path|tmdb_image:'w1280' }}" srcset="{{ movie.backdrop_path|tmdb_srcset:'backdrop' }}" sizes="100vw" alt=""
              crossorigin="anonymous" decoding="async" fetchpriority="high" data-glow-source>
         {% endif %}
         <div class="container film-hero__grid">
             <div class="film-hero__plate">
                 {% if movie.poster_path %}
-                <img class="film-poster" src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="{% blocktranslate trimmed with title=movie.display_title %}{{ title }} poster{% endblocktranslate %}" decoding="async"{% if not movie.backdrop_path %} crossorigin="anonymous" data-glow-source{% endif %}>
+                <img class="film-poster" src="{{ movie.poster_path|tmdb_image:'w500' }}" srcset="{{ movie.poster_path|tmdb_srcset:'poster' }}" sizes="(max-width: 900px) 150px, 340px" alt="{% blocktranslate trimmed with title=movie.display_title %}{{ title }} poster{% endblocktranslate %}" decoding="async"{% if not movie.backdrop_path %} crossorigin="anonymous" data-glow-source{% endif %}>
                 {% else %}
                 <div class="film-poster placeholder" aria-hidden="true">◻</div>
                 {% endif %}

@@ -25,7 +25,7 @@
     <div class="reel__stage" aria-hidden="true">
         {% for film in featured %}
         <img class="reel__image{% if forloop.first %} is-on{% endif %}" data-reel-image
-             src="{{ film.backdrop_path|tmdb_image:'w1280' }}" alt="" crossorigin="anonymous" decoding="async"
+             src="{{ film.backdrop_path|tmdb_image:'w1280' }}" srcset="{{ film.backdrop_path|tmdb_srcset:'backdrop' }}" sizes="100vw" alt="" crossorigin="anonymous" decoding="async"
              {% if forloop.first %}fetchpriority="high"{% else %}loading="lazy"{% endif %}>
         {% endfor %}
     </div>
@@ -119,7 +119,7 @@
             <a class="wall__tile" data-tilt
                href="{% if tile.kind == 'series' %}{% url 'movies:series_detail' tile.slug %}{% else %}{% url 'movies:movie_detail' tile.slug %}{% endif %}"
                {% if copy == "b" %}tabindex="-1" aria-hidden="true"{% endif %}>
-                <img src="{{ tile.poster_path|tmdb_image:'w342' }}" alt="" loading="lazy" decoding="async">
+                <img src="{{ tile.poster_path|tmdb_image:'w342' }}" srcset="{{ tile.poster_path|tmdb_srcset:'poster' }}" sizes="190px" alt="" loading="lazy" decoding="async">
             </a>
             {% endfor %}
             {% endfor %}
@@ -146,7 +146,7 @@
             <a class="rank__card" href="{% url 'movies:movie_detail' movie.slug %}">
                 <span class="rank__poster" data-tilt>
                     {% if movie.poster_path %}
-                    <img src="{{ movie.poster_path|tmdb_image:'w342' }}" alt="" loading="lazy" decoding="async">
+                    <img src="{{ movie.poster_path|tmdb_image:'w342' }}" srcset="{{ movie.poster_path|tmdb_srcset:'poster' }}" sizes="(max-width: 700px) 150px, 190px" alt="" loading="lazy" decoding="async">
                     {% endif %}
                 </span>
                 <span class="rank__meta">
