@@ -419,11 +419,6 @@ html.has-js .reel__tabs {
 
 /* --- Highest rated rail -------------------------------------------------------- */
 
-.rail-controls {
-  display: flex;
-  gap: var(--space-3);
-}
-
 .rail {
   display: flex;
   gap: var(--space-3);
@@ -873,11 +868,9 @@ html.has-js .reel {
 }
 
 /* Touch screens. Nothing here can be hovered, so the hint that says to
-   hover goes, and the rail's arrow buttons give way to the swipe the rail
-   already answers to (keyboard and mouse users keep them). */
+   hover goes. */
 @media (hover: none) and (pointer: coarse) {
-  .home-note--pointer,
-  .rail-controls {
+  .home-note--pointer {
     display: none;
   }
 }

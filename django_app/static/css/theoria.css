@@ -5018,29 +5018,6 @@ main,
 
 .cta--ghost::after { display: none; }
 
-/* Round icon button (rail arrows). */
-.round-btn {
-  display: inline-grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border-radius: 50%;
-  border: 1px solid var(--rule-strong);
-  background: none;
-  color: var(--ink);
-  cursor: pointer;
-  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
-}
-
-.round-btn:hover {
-  background: var(--sheet-2);
-  border-color: var(--ink-muted);
-  color: var(--ink);
-}
-
-.round-btn svg { width: 16px; height: 16px; }
-
 /* --- Header search -----------------------------------------------------------
    Wide: the field sits in the bar and its matches drop down beneath it.
    Narrow (<= 1240px, where the bar has no room for a field): the magnifier

@@ -287,16 +287,6 @@
 
   function initRails() {
     document.querySelectorAll("[data-rail]").forEach(function (rail) {
-      var name = rail.getAttribute("data-rail");
-      var controls = document.querySelector('[data-rail-controls="' + name + '"]');
-      if (controls) {
-        var by = function (dir) {
-          rail.scrollBy({ left: dir * rail.clientWidth * 0.8, behavior: reduce ? "auto" : "smooth" });
-        };
-        controls.querySelector("[data-rail-prev]").addEventListener("click", function () { by(-1); });
-        controls.querySelector("[data-rail-next]").addEventListener("click", function () { by(1); });
-      }
-
       // Mouse drag. Touch already scrolls natively, so it is left alone.
       var drag = null;
       rail.addEventListener("pointerdown", function (e) {
