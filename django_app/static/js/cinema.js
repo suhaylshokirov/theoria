@@ -30,17 +30,34 @@
      top, and it stays put while something inside it is in use: the mobile
      menu or an account/language popover is open (aria-expanded), or a field
      or a keyboard-focused control holds focus (:focus-visible, so a mouse
-     click on the theme toggle doesn't pin it forever). */
+     click on the theme toggle doesn't pin it forever).
+
+     Only the reader's own scrolling moves it. When content above the screen
+     changes height, the browser's scroll anchoring shifts the scroll
+     position to hold the view still, and that fires a scroll event nobody
+     made: read as a direction, it flicked the bar in and out while the
+     reader sat still (the home reel once grew and shrank every 8 s). So a
+     scroll with no wheel, touch, key or pointer press in the last moment,
+     that arrives with the page's height changed, only moves the baseline.
+     A scroll that follows such an input keeps counting while it coasts
+     (smooth wheel steps, touch momentum), since each of its events extends
+     the window. Dragging a scrollbar can send no input event at all in some
+     browsers, which is why an unexplained scroll is ignored only when the
+     page's height changed too. */
 
   function initHeaderScroll() {
     var header = document.querySelector(".site-header");
     if (!header) return;
     var HIDE_AFTER = 120; // px from the top before hiding is allowed
     var DELTA = 6; // px of travel that counts as a deliberate direction
+    var INTENT_MS = 300; // how long an input, or the scroll it started, vouches for the next scroll
     var scrolled = false;
     var hidden = false;
     var lastY = Math.max(0, window.scrollY);
     var queued = false;
+    var lastIntent = -Infinity;
+    var lastHeight = document.documentElement.scrollHeight;
+    var unprompted = false;
 
     function setHidden(next) {
       if (next === hidden) return;
@@ -69,7 +86,15 @@
       }
 
       if (y <= HIDE_AFTER) {
+        unprompted = false;
         setHidden(false);
+        lastY = y;
+        return;
+      }
+      // The page moved the scroll position, not the reader: start counting
+      // from here and leave the bar as it is.
+      if (unprompted) {
+        unprompted = false;
         lastY = y;
         return;
       }
@@ -86,8 +111,24 @@
       window.requestAnimationFrame(update);
     }
 
+    function markIntent() {
+      lastIntent = performance.now();
+    }
+
+    function onScroll() {
+      var now = performance.now();
+      var height = document.documentElement.scrollHeight;
+      if (now - lastIntent < INTENT_MS) lastIntent = now;
+      else if (height !== lastHeight) unprompted = true;
+      lastHeight = height;
+      request();
+    }
+
     update();
-    window.addEventListener("scroll", request, { passive: true });
+    ["wheel", "touchstart", "touchmove", "keydown", "pointerdown"].forEach(function (type) {
+      window.addEventListener(type, markIntent, { passive: true, capture: true });
+    });
+    window.addEventListener("scroll", onScroll, { passive: true });
     // Tabbing into a hidden bar brings it back rather than leaving focus
     // on something off screen.
     header.addEventListener("focusin", function () {
