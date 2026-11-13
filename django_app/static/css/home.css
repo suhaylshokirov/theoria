@@ -111,20 +111,47 @@
   to { transform: scaleY(0); }
 }
 
+/* Every slide sits in the same grid cell, so the reel is always as tall as
+   its tallest film and never changes height as it advances. A reel that
+   grew and shrank every few seconds moved the whole page under the reader
+   and made the browser's scroll anchoring fire scroll events of its own,
+   which flicked the header in and out. A waiting slide keeps its box but
+   leaves sight, the accessibility tree and the tab order (visibility), and
+   the showing one sits on the cell's floor, just above the queue. Without
+   JS nothing advances, so the others keep their `hidden` attribute; cinema.js
+   trades it for .is-waiting, since theoria.css's [hidden] rule is
+   display: none !important. */
 .reel__copy {
   position: relative;
+  display: grid;
   padding-bottom: var(--space-7);
+}
+
+.reel__slide {
+  grid-area: 1 / 1;
+  align-self: end;
+  min-width: 0;
 }
 
 .reel__slide[hidden] { display: none; }
 
+.reel__slide.is-waiting {
+  visibility: hidden;
+}
+
+/* Capped by the screen's height as well as its width. The reel always
+   takes its tallest film's height (.reel__copy), so the longest title has
+   to leave the buttons and the queue on the first screen: a four-line
+   "Lord of the Rings" at width-only sizing made the reel ~920px tall on a
+   768px laptop. 18ch rather than a tighter measure keeps long titles to as
+   few lines as the column allows. */
 .reel__title {
   margin-top: var(--space-5);
-  max-width: 14ch;
+  max-width: 18ch;
   font-family: var(--font-display);
   font-weight: 850;
   font-stretch: 118%;
-  font-size: clamp(2.6rem, calc(8.4 * var(--vw, 1vw)), 7.4rem);
+  font-size: clamp(2.6rem, min(calc(8.4 * var(--vw, 1vw)), calc(10 * var(--vh, 1vh))), 7.4rem);
   line-height: 0.88;
   letter-spacing: -0.02em;
   text-transform: uppercase;

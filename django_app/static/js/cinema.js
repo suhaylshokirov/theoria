@@ -195,6 +195,17 @@
 
     reel.style.setProperty("--reel-dur", REEL_DURATION + "ms");
 
+    // Every slide takes part in layout from here on, so the reel is as tall
+    // as its tallest film and keeps that height (home.css .reel__copy). The
+    // markup's `hidden` is for the no-JS page; a waiting slide is
+    // .is-waiting instead. Titles are split now too, not when their slide
+    // first shows: the word masks change a title's height slightly, and a
+    // late split would still nudge the page.
+    slides.forEach(function (slide) {
+      slide.hidden = false;
+      if (!reduce) splitWords(slide.querySelector("[data-reel-title]"));
+    });
+
     function show(index) {
       if (index === current) return;
       current = index;
@@ -203,10 +214,9 @@
         if (i === index) replay(img);
       });
       slides.forEach(function (slide, i) {
-        slide.hidden = i !== index;
+        slide.classList.toggle("is-waiting", i !== index);
         if (i === index) {
-          var title = slide.querySelector("[data-reel-title]");
-          if (!reduce) splitWords(title);
+          slide.querySelectorAll(".reel__title .w > span").forEach(replay);
           replay(slide.querySelector(".reel__tagline"));
         }
       });
