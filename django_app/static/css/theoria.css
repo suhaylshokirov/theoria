@@ -1581,10 +1581,17 @@ tbody th.genre-cell a:hover { color: var(--lime-text); }
 
 th.num, td.num {
   text-align: right;
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
   white-space: nowrap;
+}
+
+/* Mono is for the figures, not the column labels. A header cell that is
+   also .num would otherwise inherit the mono family (and, since Spline Sans
+   Mono ships at 400/500 only, a synthesized 600), so "Runtime" read heavier
+   than "Title" and "Air date". Headers keep the shared label face. */
+td.num {
+  font-family: var(--font-mono);
 }
 
 /* --- Meter cells -----------------------------------------------------------

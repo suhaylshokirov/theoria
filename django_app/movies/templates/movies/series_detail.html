@@ -149,14 +149,6 @@
     </div>
 </article>
 
-{% comment %} The trailer plays below the record. The backdrop no longer
-   competes with it for this slot (Task 75/90): it fills the hero. {% endcomment %}
-{% if trailer %}
-<figure class="video-strip">
-    {% translate "trailer" as trailer_word %}{% include "movies/_video_embed.html" with video=trailer kind=trailer_word only %}
-</figure>
-{% endif %}
-
 <section class="sheet-section" id="episodes">
     <div class="section-head">
         <h2>{% translate "Episodes" %}</h2>
@@ -235,6 +227,14 @@
     {% endwith %}
     {% enddatacache %}
 </section>
+
+{% comment %} The trailer plays below the episodes. The backdrop no longer
+   competes with it for this slot (Task 75/90): it fills the hero. {% endcomment %}
+{% if trailer %}
+<figure class="video-strip">
+    {% translate "trailer" as trailer_word %}{% include "movies/_video_embed.html" with video=trailer kind=trailer_word only %}
+</figure>
+{% endif %}
 
 <section class="sheet-section film-cast" id="cast">
     <div class="section-head">
