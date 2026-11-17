@@ -20,6 +20,7 @@ pip install -r requirements-ui.txt && python -m playwright install chromium   # 
 pytest tests/ui --base-url http://127.0.0.1:8000   # responsive-layout tests against a running site (skipped without --base-url)
 python manage.py serve                        # auto-sync replica if stale, then runserver
 python django_app/manage.py warm_cache        # fill the Redis read cache (needs REDIS_URL; best effort)
+python -m scripts.run_collections [--date D]   # only the franchise stages (Bronze→Silver→load→prune→cache version); needs that date's film Bronze
 ```
 
 **Two requirements files:** `requirements.txt` is the *web runtime only* (Django, psycopg2,
@@ -173,7 +174,7 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 
 ## Warehouse Schema (star schema)
 
-> **34 tables** (Task 109's `series_translation`, DDL `29`; Neon only once `29` is applied there) — **33 tables** as of 2026-09-24 on the local replica: **29** as of 2026-09-23 on live Neon (and the
+> **38 tables** (Task 153's four franchise tables, DDL `32`; Neon only once `32` is applied there) — **34 tables** as of Task 109's `series_translation` (DDL `29`; Neon only once `29` is applied there) — **33 tables** as of 2026-09-24 on the local replica: **29** as of 2026-09-23 on live Neon (and the
 > replica) plus Task 93's four `*_translation` tables (see the Translations block below) — Neon gets
 > those only once `27`/`28` are applied there. The **18
 > movie-side tables** were verified 2026-09-06 against `information_schema` and a fresh scratch DB
@@ -211,20 +212,22 @@ TMDB API → Bronze (S3, raw JSON) → Silver (S3, cleaned Parquet)
 > and no analytics query ever read it. Only the warehouse copy is gone; Silver still produces
 > `silver/person_aliases/`, so the loader can be restored from git history if an alias search is
 > ever built.
-> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`26` are migrations for an existing DB (once
+> `warehouse/ddl/01`–`03` bootstrap this schema; `04`–`32` are migrations for an existing DB (once
 > `11` drops tables, "run every file in order" ≠ "build the current schema" — see README §2).
 
-**Dimensions (9):**
+**Dimensions (11 on the movie side — Task 153 added `dim_collection_part` and `dim_collection_image`):**
 - `dim_movie(movie_id PK, title, release_date, runtime, budget, revenue, original_language, status, overview, tagline, poster_path, backdrop_path, imdb_id, original_title, homepage, slug, collection_id FK)`
 - `dim_person(person_id PK, name, gender, popularity, profile_path, known_for_department, slug, biography, birthday, deathday, place_of_birth, homepage, imdb_id)` — the last 6 from `GET /person/{id}` (Task 72), all nullable and sparse even among people with a photo. `imdb_id` has a non-unique index.
 - `dim_genre(genre_id PK, genre_name)`
-- `dim_collection(collection_id PK, name, poster_path, slug)`
+- `dim_collection(collection_id PK, name, poster_path, slug, backdrop_path, original_name, original_language, overview, homepage)` — a film franchise (TMDB collection). Task 50 made it; the last 5 columns are from `GET /collection/{id}` (Task 153, DDL `32`; `homepage` is the `en` translation entry's). Rows no film references are **pruned** by the loader. The site calls it a *franchise* (`Franchise*` models): "Collection" already means a reader's Liked/Top/Watch later lists.
+- `dim_collection_part(collection_id FK, movie_id, position, title, original_title, original_language, release_date, overview, poster_path, backdrop_path, genre_ids INTEGER[], popularity, vote_average, vote_count, adult, video, ingestion_date)` — PK `(collection_id, movie_id)`, index on `movie_id`. Task 153: every film TMDB lists in a collection. `movie_id` has **no FK**: ~half are not in `dim_movie` (listing rows, shown unlinked, never pulled in as catalogue movies), so it is a soft reference resolved at read time. **Loaded by REPLACE** by `collection_id`. `media_type`/`softcore` are constants and not stored.
+- `dim_collection_image(collection_id FK, file_path, kind CHECK IN ('poster','backdrop'), iso_639_1, iso_3166_1, width, height, aspect_ratio, vote_average, vote_count, ingestion_date)` — PK `(collection_id, file_path)`, index `(collection_id, kind)`. Task 153; replace-loaded.
 - `dim_date(date_id PK, full_date, year, month, day, decade)`
 - `dim_company(company_id PK, name, logo_path, origin_country, slug, description, headquarters, homepage, parent_company_id, parent_company_name)` — Task 58; the last 5 from `GET /company/{id}` (Task 65). `parent_company_id` has **no FK** (a holding-company parent frequently has no `dim_company` row) — soft reference, resolved at read time.
 - `dim_country(country_code PK, name)` — Task 61, ISO code is the PK (no surrogate, no slug)
 - `dim_language(language_code PK, name, english_name)` — Task 61, ISO code is the PK
 - `dim_movie_video(movie_id FK, video_id, name, key, site, type, official, size, iso_639_1, iso_3166_1, published_at, ingestion_date)` — PK `(movie_id, video_id)` on TMDB's `video_id` (not `key`, unique only within a site); index `(movie_id, type)`. Task 74. A film's trailers/clips — a multi-valued attribute of `dim_movie`, so `dim_` (not `fact_` — `size` is a resolution, no measure; not `bridge_` — no `dim_video` to join to). **Loaded by REPLACE, not upsert**: `common._replace_by_parent()` deletes every row for the partition's `movie_id`s then re-inserts, so a film's video set can *shrink* when TMDB drops a video or a YouTube key rots.
-- `dim_series_video(series_id FK, video_id, name, key, site, type, official, size, iso_639_1, iso_3166_1, published_at, ingestion_date)` — PK `(series_id, video_id)`. Task 90; a straight copy of `dim_movie_video` above, same PK/index/REPLACE-load shape, one row per show's trailer/clip. Counted among the 12 (now 13) TV tables in the schema header, not in this dimension's "9" — that count is the movie-side dimensions only.
+- `dim_series_video(series_id FK, video_id, name, key, site, type, official, size, iso_639_1, iso_3166_1, published_at, ingestion_date)` — PK `(series_id, video_id)`. Task 90; a straight copy of `dim_movie_video` above, same PK/index/REPLACE-load shape, one row per show's trailer/clip. Counted among the 12 (now 13) TV tables in the schema header, not in this list's count — that is the movie-side dimensions only.
 
 **Facts (3):**
 - `fact_movie_metrics(movie_id FK, date_id FK, genre_id FK, rating, vote_count, revenue, budget, popularity, ingestion_date)` — PK `(movie_id, date_id, genre_id)`, so a multi-genre film repeats its movie-level measures once per genre. Any query aggregating `revenue`/`popularity` must collapse it with `SELECT DISTINCT movie_id, …` first. **`rating`/`vote_count` have had no readers since Task 69** — every rating now comes from `fact_movie_rating`; the loader still writes them, a knowingly-retained write-only path (same posture as `dim_collection`).
@@ -245,10 +248,10 @@ free-tier cap started to bind.
 (`also_known_as` from `GET /person/{id}`) — was dropped 2026-09-23 (`26_drop_person_alias.sql`) as
 write-only; Silver still produces `silver/person_aliases/`.
 
-**Translations (5, Tasks 93–94, 109):** `movie_translation(movie_id FK, lang, title, overview, tagline)`,
+**Translations (7, Tasks 93–94, 109, 153):** `movie_translation(movie_id FK, lang, title, overview, tagline)`,
 `series_translation(series_id FK, lang, name, overview, tagline)` (Task 109; seasons/episodes stay English),
 `person_translation(person_id FK, lang, name, biography)` (Task 134; DDL `31`), `genre_translation(genre_id FK, lang, genre_name)`,
-`country_translation(country_code FK, lang, name)` — PK `(entity id, lang)`, `lang` = bare ISO code
+`country_translation(country_code FK, lang, name)`, `collection_translation(collection_id FK, lang, name, overview, homepage)` and `collection_part_translation(collection_id, movie_id, lang, title, overview)` (Task 153; the latter's FK is to `dim_collection_part`; it is the only Russian text for franchise parts the catalogue does not hold) — PK `(entity id, lang)`, `lang` = bare ISO code
 (`ru`, `uz`). Not `dim_`/`fact_`/`bridge_`: each attaches repeating text to one dimension, no measure,
 nothing to bridge (same posture as the dropped `person_alias`). Row-per-language so a 4th language costs
 no schema change. Replace-loaded by parent id (films, people) or upserted (genres, countries). Russian is

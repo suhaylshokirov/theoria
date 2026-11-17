@@ -141,7 +141,8 @@ independent of any Silver data.
 
 `dim_movie_video` (`01_dimensions.sql`, added Task 74) is also a dimension table but an unusual
 one: a multi-valued attribute of `dim_movie` (a film's trailers and clips), loaded by *replace*
-rather than upsert. See §3.10.
+rather than upsert. See §3.10. `dim_collection_part` and `dim_collection_image` (Task 153, DDL `32`)
+are the same kind of table for a franchise's parts and artwork. See §3.4.
 
 **Bridge tables** (`01_dimensions.sql`, added Phases 13–14): `bridge_movie_company`,
 `bridge_movie_country`, `bridge_movie_language` — see §3.7 for why `bridge_` and not `fact_`, and
@@ -255,20 +256,88 @@ has the drop; `etl/warehouse_loader/load_gold.py` and this section's scoping log
 (`_build_collaboration_edges()`/`_key_credits()` in `build_gold_datasets.py`) are recoverable from
 git history if a real "people who worked together" feature ever gets built on top of it.
 
-### 3.4 Franchises: `dim_collection`
+### 3.4 Franchises: `dim_collection`, its parts, and what the catalog does not hold
 
-`belongs_to_collection` was present in every Bronze movie-detail payload from the first ingestion
-run and read at no layer until Task 50. It was promoted to its own dimension rather than left as
-three denormalized columns on `dim_movie` (`collection_id`/`name`/`poster_path`) because a
-franchise has its own identity, artwork, and slug — 17 Bond films would otherwise repeat the same
-name, poster path, and slug computation 17 times with no single row to canonicalize it.
+**History.** `belongs_to_collection` was in every Bronze movie-detail payload from the first
+ingestion run and read at no layer until Task 50, which promoted it to its own dimension rather than
+leave three denormalized columns on `dim_movie` (`collection_id`/`name`/`poster_path`): a franchise
+has its own identity, artwork, and slug — 17 Bond films would otherwise repeat the same name, poster
+path, and slug computation 17 times with no single row to canonicalize it. The Franchises pages were
+removed on 2026-08-10 by user decision with the data layer kept, so the removal could be undone.
+**Task 153 (2026-11-17) undid it**, on a brief to use everything the warehouse holds and the API gives.
 
 `dim_movie.collection_id` is a **nullable** FK: roughly half the catalog belongs to no franchise,
-which is a property of films rather than missing data, so the schema doesn't force a sentinel
-"no collection" row to avoid a null. `load_dim_collection()` runs before `load_dim_movie()` (the FK
+which is a property of films rather than missing data, so the schema doesn't force a sentinel "no
+collection" row to avoid a null. `load_dim_collection()` runs before `load_dim_movie()` (the FK
 points that way) and derives the dimension by de-duplicating Silver's already-denormalized
 `collection_id`/`collection_name` columns — filtered on both id *and* name, since an id without a
-name would violate `name NOT NULL` on rows where TMDB's payload was partially populated.
+name would violate `name NOT NULL` on rows where TMDB's payload was partially populated. It now
+also carries `backdrop_path`, the fourth key of the stub that Silver used to drop.
+
+**What `GET /collection/{id}` adds.** The movie payload's stub has four keys. The collection's own
+endpoint adds the original name and language, an overview, and **every part** TMDB lists, and with
+`append_to_response=translations,images` a per-language text block and a poster/backdrop gallery.
+`32_collections_full.sql` stores all of it (measured 2026-11-16 across 392 collections):
+
+| table | holds | loaded by |
+|---|---|---|
+| `dim_collection` (+5 columns) | `backdrop_path`, `original_name`, `original_language`, `overview`, `homepage` | upsert, details win over the stub |
+| `dim_collection_part` | one row per film TMDB lists: title, date, overview, genres, TMDB score, flags | replace by `collection_id` |
+| `dim_collection_image` | one row per poster/backdrop, with language, size and vote | replace by `collection_id` |
+| `collection_translation` | per-language name, overview, homepage | replace by `collection_id` |
+| `collection_part_translation` | per-language title/overview of a *part* | replace by `collection_id` |
+
+Two columns are deliberately not stored: `media_type` (always `movie` — it is the endpoint) and
+`softcore` (always false, undocumented). The collection's `homepage` is the `en` translation entry's
+(34 of 368), because the top-level payload has none, which is why Bronze keeps `en` as well as the
+shipped languages for this one entity (`trim_translations(..., keep=...)`).
+
+**Parts that the catalog does not hold are listing rows, not movies.** 692 of 1,313 parts were not
+in `dim_movie`. Pulling them in as full movies would have grown the catalog 47% and Neon by 45–60 MB
+(407 of 512 MB were already used), and a catalog that is deliberately sampled (§2.1) stops being one
+if every sequel is added. So the user decided (2026-11-16): they are stored, translated and *shown*,
+unlinked, and the site says plainly they are not in the catalog. Consequences that shape the schema:
+
+- `dim_collection_part.movie_id` has **no foreign key**. It is a soft reference resolved at read time
+  (`movies/franchises.py`: a part is "in the catalog" when a `Movie` points at the franchise with that
+  id), the same posture as `dim_company.parent_company_id`.
+- `genre_ids` is an `INTEGER[]` on the part, not a bridge: it is a list of labels on a row with no
+  measure and no catalog row to join to.
+- `collection_part_translation` exists because `movie_translation` covers catalog films only;
+  `GET /collection/{id}?language=ru-RU` is the one source of Russian titles for the other 692. A
+  localized value is kept only where it differs from English (TMDB falls back to English silently),
+  and a `uz` title is never kept (Task 110).
+- TMDB's array order is release order in only 277 of 368 collections, so `position` is stored but the
+  site sorts by date. Undated parts sort last as "TBA"; `adult` parts (3) are hidden and stay stored.
+
+**Fetched every night, not once.** `ingest_companies()` skips an id it has seen, because a studio's
+description does not change. A franchise gains a part whenever a sequel is announced, so
+`ingest_collections()` fetches every referenced collection every run (3 calls each: details, `ru-RU`,
+`uz-UZ`; ~370 collections, ~55 s). The cost is bounded by the number of distinct collections, not by
+catalog size. A collection is all-or-nothing in Bronze (the three responses are written together), and
+a 404 — TMDB deleted it; 24 stale rows were found — is counted as *gone*, never raised.
+
+**Load rules** (`etl/warehouse_loader/load_collections.py`): one transaction; scoped to the collection
+ids in *tonight's* Silver, so a collection whose fetch failed keeps yesterday's overview, parts and
+gallery instead of being nulled; children are replaced (an upsert would strand a removed part or
+image forever with no failing check), part translations deleted before the parts and inserted after
+them (the FK points at a part); and **orphans are pruned** — a `dim_collection` row no film references
+is deleted with its children, children first. It is idempotent: the second run deletes nothing.
+Orchestration is `scripts/run_collections.py` (three stage functions that each log and return `False`
+on failure, so a franchise problem never stops the film refresh), wired into **both** `run_refresh`
+and `run_pipeline`, plus a standalone `python -m scripts.run_collections [--date D]`.
+
+**Naming.** "Franchises" in the UI and URLs; the warehouse keeps TMDB's word, `collection`. "Collections"
+on the site already means a reader's Liked / Top / Watch later lists (`core.Collection`), so the Django
+models are `Franchise*` with `db_table` pointing at the warehouse names.
+
+**On the site** (`movies/franchises.py`): `/franchises/` reads ~370 plain-dict rows from the cache
+(language in the key — the display name is translated) and filters and sorts them in Python, which
+is cheaper than ~370 aggregate rows through the ORM; `/franchises/<slug>/` merges parts and catalog
+films into one release-ordered list of installments; a film page invites the reader to explore "the trilogy" (exactly three installments) or "the franchise" (any other count; never "collection"), lists the first three movies the catalog holds (a numbered list of links, each with its release year and IMDb rating) and ends in a link to the whole thing; the
+analytics page reads two franchise queries. Rating, revenue and budget on a franchise page are
+catalog-only figures (a listing row has none, and its score is TMDB's, labelled as TMDB — the IMDb
+rating stays the rating of record).
 
 ### 3.5 Fields that were already in Bronze and never reached the page
 
@@ -467,7 +536,8 @@ road: no UI consumer ever arrived, so it was dropped from the warehouse on 2026-
 `movie_translation(movie_id, lang, title, overview, tagline)`, `person_translation(person_id,
 lang, name, biography)` (`name` added in Task 134; DDL `31`), `genre_translation(genre_id, lang, genre_name)` and
 `country_translation(country_code, lang, name)` (Task 93; DDL `27`/`28`), plus
-`series_translation(series_id, lang, name, overview, tagline)` for TV (Task 109; DDL `29`). Seasons
+`series_translation(series_id, lang, name, overview, tagline)` for TV (Task 109; DDL `29`), and
+`collection_translation` / `collection_part_translation` for franchises (Task 153; DDL `32`, §3.4). Seasons
 and episodes are deliberately untranslated — their names and overviews stay English. None is `dim_`, `fact_`
 or `bridge_`: each attaches repeating text to one dimension, keyed by language — no measure, and
 no second dimension to bridge to. Row-per-language rather than `title_ru` / `title_uz` columns

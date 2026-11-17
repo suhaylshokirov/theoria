@@ -213,12 +213,12 @@ def test_a_second_dashboard_request_runs_no_sql():
     with p1, p2, p3:
         client = _signed_in_client()
         first = client.get("/analytics/")
-        assert run_query.call_count == 15
+        assert run_query.call_count == 17
         second = client.get("/analytics/")
     assert first.status_code == second.status_code == 200
-    assert run_query.call_count == 15  # the hit ran nothing
-    assert first["Server-Timing"] == 'cache;desc="analytics_dashboard=miss"'
-    assert second["Server-Timing"] == 'cache;desc="analytics_dashboard=hit"'
+    assert run_query.call_count == 17  # the hit ran nothing
+    assert first["Server-Timing"] == 'cache;desc="analytics_dashboard_v2=miss"'
+    assert second["Server-Timing"] == 'cache;desc="analytics_dashboard_v2=hit"'
 
 
 def test_dashboard_translation_never_leaks_into_the_cached_rows():
@@ -236,7 +236,7 @@ def test_dashboard_translation_never_leaks_into_the_cached_rows():
     assert "Action" in en and "боевик" not in en and "Япония" not in en
     assert "боевик" in ru_again
     assert raw["return_bands_by_genre.sql"][0]["genre_name"] == "Action"  # the cached copy stays English
-    assert run_query.call_count == 15  # one build served all three languages
+    assert run_query.call_count == 17  # one build served all three languages
 
 
 def test_dashboard_is_open_to_signed_out_readers():
@@ -258,7 +258,7 @@ def test_dashboard_renders_when_the_cache_is_down():
     with p1, p2, p3, patch.object(datacache, "cache", broken):
         response = _signed_in_client().get("/analytics/")
     assert response.status_code == 200
-    assert run_query.call_count == 15
+    assert run_query.call_count == 17
 
 
 # --- Genre choice lists and labels (Task 117) ---------------------------------------

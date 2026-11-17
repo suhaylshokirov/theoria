@@ -1,0 +1,19 @@
+{% comment %} The franchise poster grid + pager, below the .finder console. The
+   other half of the pair initLiveFilter() swaps as the form changes; aria-live
+   so the swap is announced to screen readers. {% endcomment %}
+{% load i18n %}
+<div id="franchises-grid" aria-live="polite">
+    <div class="poster-grid">
+        {% for row in page_obj %}
+        {% include "movies/_franchise_card.html" with row=row only %}
+        {% empty %}
+        <p class="empty">
+            {% if q %}{% blocktranslate trimmed with q=q %}No franchises match “{{ q }}”. Try a shorter name.{% endblocktranslate %}
+            {% elif genres %}{% translate "No franchises match this filter. Try loosening it." %}
+            {% else %}{% translate "No franchises loaded yet. Run the pipeline to fill the catalog." %}{% endif %}
+        </p>
+        {% endfor %}
+    </div>
+
+    {% include "movies/_pager.html" with page_obj=page_obj param="page" base_query=base_query only %}
+</div>

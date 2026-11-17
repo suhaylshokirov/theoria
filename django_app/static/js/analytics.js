@@ -630,6 +630,44 @@
     });
   }
 
+  function buildInstallments(canvas) {
+    var d = readJSON("installment-data");
+    if (!d || !d.labels || !d.labels.length) return null;
+    var options = baseOptions();
+    options.plugins.tooltip = Object.assign(tooltipBase(), {
+      callbacks: {
+        title: function (items) {
+          return fill("Installment {n}", { n: d.labels[items[0].dataIndex] });
+        },
+        label: function (ctx) {
+          return [
+            t("IMDb rating") + ": " + dot(ctx.parsed.y, 2),
+            fill("Franchises: {count}", { count: d.franchises[ctx.dataIndex].toLocaleString(LANG) }),
+          ];
+        },
+      },
+    });
+    options.scales = {
+      x: xAxis({ title: axisTitle(t("Installment")) }),
+      y: yAxis({
+        // A rating axis that starts at zero would flatten a 0.5-point slide.
+        suggestedMin: 6,
+        suggestedMax: 7.5,
+        ticks: Object.assign(tickFont(), {
+          callback: function (v) { return dot(v, 1); },
+        }),
+      }),
+    };
+    return new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: d.labels,
+        datasets: [lineDataset(t("IMDb rating"), d.rating)],
+      },
+      options: options,
+    });
+  }
+
   var BUILDERS = {
     rating: buildRating,
     scatter: buildScatter,
@@ -637,6 +675,7 @@
     runtime: buildRuntime,
     nonenglish: buildNonEnglish,
     season: buildSeason,
+    installments: buildInstallments,
   };
 
   // --- Chart lifecycle -------------------------------------------------------

@@ -56,7 +56,7 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "original_language", "status", "vote_average", "vote_count",
             "popularity", "overview", "tagline", "poster_path", "backdrop_path",
             "collection_id", "collection_name", "collection_poster_path",
-            "genre_ids", "imdb_id", "original_title", "homepage",
+            "collection_backdrop_path", "genre_ids", "imdb_id", "original_title", "homepage",
         ],
         "ranges": {
             "vote_average": (0.0, 10.0),
@@ -380,7 +380,88 @@ ENTITY_CONFIGS: dict[str, dict[str, Any]] = {
             "size": (0, None),
         },
     },
+    # --- Franchises (Task 153). Written from the *measured* shape of 368
+    # GET /collection/{id} payloads on 2026-11-16, not by mirroring
+    # transform_collections.py (the Task 40 lesson). Only ids and the grain are
+    # required: poster is null on 6 of 368 collections, backdrop on 16, overview
+    # on 12; a part's genre_ids is empty on 2 of 1,313 and release_date on 46.
+    "collections": {
+        "parquet": "collections.parquet",
+        "pk_cols": ["collection_id"],
+        "required_cols": ["collection_id", "name"],
+        "expected_cols": [
+            "collection_id", "name", "original_name", "original_language",
+            "overview", "poster_path", "backdrop_path", "homepage",
+        ],
+        "ranges": {},
+    },
+    # position is the index in TMDB's parts array (so >= 0). Scores are TMDB's
+    # 0-10 scale. 1,313 parts, all distinct on (collection_id, movie_id).
+    "collection_parts": {
+        "parquet": "collection_parts.parquet",
+        "pk_cols": ["collection_id", "movie_id"],
+        "required_cols": ["collection_id", "movie_id", "position"],
+        "expected_cols": [
+            "collection_id", "movie_id", "position", "title", "original_title",
+            "original_language", "release_date", "overview", "poster_path",
+            "backdrop_path", "genre_ids", "popularity", "vote_average",
+            "vote_count", "adult", "video",
+        ],
+        "ranges": {
+            "position": (0, None),
+            "popularity": (0.0, None),
+            "vote_average": (0.0, 10.0),
+            "vote_count": (0, None),
+        },
+    },
+    # kind is one of poster/backdrop and no file_path is both (measured:
+    # 10,121 posters + 3,076 backdrops, 7 repeats inside one list). Image
+    # dimensions and counts are non-negative; vote_average is TMDB's 0-10.
+    "collection_images": {
+        "parquet": "collection_images.parquet",
+        "pk_cols": ["collection_id", "file_path"],
+        "required_cols": ["collection_id", "file_path", "kind"],
+        "expected_cols": [
+            "collection_id", "file_path", "kind", "iso_639_1", "iso_3166_1",
+            "width", "height", "aspect_ratio", "vote_average", "vote_count",
+        ],
+        "ranges": {
+            "width": (0, None),
+            "height": (0, None),
+            "aspect_ratio": (0.0, None),
+            "vote_average": (0.0, 10.0),
+            "vote_count": (0, None),
+        },
+        "allowed": {"kind": ("poster", "backdrop")},
+    },
+    # Only the shipped languages. A translation row may legitimately be empty in
+    # most columns (Uzbek: 18 entries, 0 titles kept, 0 overviews), so only the
+    # grain is required.
+    "collection_translations": {
+        "parquet": "collection_translations.parquet",
+        "pk_cols": ["collection_id", "lang"],
+        "required_cols": ["collection_id", "lang"],
+        "expected_cols": ["collection_id", "lang", "name", "overview", "homepage"],
+        "ranges": {},
+        "allowed": {"lang": ("ru", "uz")},
+    },
+    "collection_part_translations": {
+        "parquet": "collection_part_translations.parquet",
+        "pk_cols": ["collection_id", "movie_id", "lang"],
+        "required_cols": ["collection_id", "movie_id", "lang"],
+        "expected_cols": ["collection_id", "movie_id", "lang", "title", "overview"],
+        "ranges": {},
+        "allowed": {"lang": ("ru", "uz")},
+    },
 }
+
+# Franchise entities (Task 153). Checked by default; skipped only with
+# run_silver_checks(with_collections=False), for replaying a partition written
+# before the collection stage existed.
+_COLLECTION_ENTITIES = frozenset({
+    "collections", "collection_parts", "collection_images",
+    "collection_translations", "collection_part_translations",
+})
 
 # TV series entities. Checked by default (Task 85); skipped only when
 # run_silver_checks is called with with_tv=False — e.g. replaying a pre-Task-77
@@ -447,6 +528,16 @@ def _range_mask(df: pd.DataFrame, ranges: dict[str, tuple]) -> pd.Series:
             mask |= not_null & (series < lo)
         if hi is not None:
             mask |= not_null & (series > hi)
+    return mask
+
+
+def _allowed_mask(df: pd.DataFrame, allowed: dict[str, tuple]) -> pd.Series:
+    """True for every row whose value in a column is non-null and not in its allowed set."""
+    mask = pd.Series(False, index=df.index)
+    for col, values in allowed.items():
+        if col not in df.columns:
+            continue
+        mask |= df[col].notna() & ~df[col].isin(values)
     return mask
 
 
@@ -582,6 +673,27 @@ def _run_entity_checks(
                                        bad_count=0, message=f"No duplicates on grain={extra_cols}"))
             logger.info("[%s] grain OK", entity)
 
+    # 6. Allowed-values check — a column that must hold one of a closed set
+    #    (collection_images.kind, a translation row's lang). Only run when the
+    #    entity declares one.
+    allowed = cfg.get("allowed")
+    if allowed:
+        allowed_bad = _allowed_mask(df, allowed)
+        n_allowed = int(allowed_bad.sum())
+        if n_allowed:
+            bad = df[allowed_bad].copy()
+            bad["rejection_reason"] = "value_not_allowed"
+            rejects.append(bad)
+            results.append(CheckResult(
+                entity=entity, check="allowed", passed=False, bad_count=n_allowed,
+                message=f"{n_allowed} row(s) hold a value outside {allowed}",
+            ))
+            logger.error("[%s] allowed FAIL — %d row(s)", entity, n_allowed)
+        else:
+            results.append(CheckResult(entity=entity, check="allowed", passed=True,
+                                       bad_count=0, message=f"All values within {allowed}"))
+            logger.info("[%s] allowed OK", entity)
+
     _write_rejects(rejects, entity, ingestion_date, rejected_dir)
     return results
 
@@ -604,6 +716,8 @@ def run_silver_checks(
     bucket: str | None = None,
     rejected_dir: Path | None = None,
     with_tv: bool = True,
+    with_collections: bool = True,
+    only: frozenset[str] | None = None,
 ) -> list[CheckResult]:
     """Run all Silver DQ checks for the given ingestion_date.
 
@@ -611,6 +725,9 @@ def run_silver_checks(
     - Reads the Silver Parquet from S3.
     - Runs schema, null, duplicate, and range checks.
     - Writes rejected rows to `rejected_dir` (local Parquet files).
+
+    `only` limits the run to the named entities (the standalone franchise run
+    checks just its five).
 
     Returns a flat list of CheckResult objects, one per (entity, check) pair.
     Missing Silver files are recorded as failures but do not abort the run.
@@ -630,7 +747,11 @@ def run_silver_checks(
     all_results: list[CheckResult] = []
 
     for entity, cfg in ENTITY_CONFIGS.items():
+        if only is not None and entity not in only:
+            continue
         if entity in _TV_ENTITIES and not with_tv:
+            continue
+        if entity in _COLLECTION_ENTITIES and not with_collections:
             continue
         try:
             df = _read_silver_parquet(bucket, entity, ingestion_date, cfg["parquet"])
@@ -672,6 +793,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip the TV series Silver entities (for replaying a pre-TV partition).",
     )
+    parser.add_argument(
+        "--no-collections",
+        action="store_true",
+        help="Skip the franchise Silver entities (for a partition with no collection stage).",
+    )
     return parser.parse_args()
 
 
@@ -679,7 +805,10 @@ if __name__ == "__main__":
     from etl.logging_config import setup_logging
     setup_logging("silver_checks")
     args = _parse_args()
-    results = run_silver_checks(ingestion_date=args.date, with_tv=not args.no_tv)
+    results = run_silver_checks(
+        ingestion_date=args.date, with_tv=not args.no_tv,
+        with_collections=not args.no_collections,
+    )
     overall = all(r.passed for r in results)
     for r in results:
         status = "PASS" if r.passed else "FAIL"

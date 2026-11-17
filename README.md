@@ -35,10 +35,10 @@ TMDB API  →  Bronze (raw JSON)  →  Silver (typed Parquet)  →  Gold (aggreg
 | TV shows | **740**, with **4,192** seasons and **85,298** episodes |
 | People | **255,088** — everyone credited on a movie or a show, in every department, not just cast and directors |
 | Credits | **245,189** on movies and **390,097** on shows, across 13 departments (860 distinct movie job titles) |
-| Collections | **381** movie franchises, covering 617 movies |
+| Franchises | **370** movie series (2026-11-17), listing **1,318** installments, **623** of them movies in the catalog |
 | Ratings | IMDb for **1,242 / 1,246** movies, **737 / 740** shows, and **152,414** episodes; TMDB scores kept beside the movie ones |
 | Trailers and clips | **18,230** for 1,224 movies, **2,363** for 648 shows |
-| Warehouse tables | **34** — 14 dimensions, 6 facts, 8 bridges, 5 translation tables, 1 operational |
+| Warehouse tables | **38** — 16 dimensions, 6 facts, 8 bridges, 7 translation tables, 1 operational |
 | Test suite | **845** tests |
 
 The corpus is deliberate rather than incidental. TMDB's `movie/popular` endpoint returns whatever
@@ -92,7 +92,7 @@ The movie side, with the TV side built as its structural mirror (`dim_series` in
       └─► fact_series_credit ─► dim_series ─► dim_season ─► dim_episode ─► fact_episode_rating
 ```
 
-**Dimensions (14)** — movies: `dim_movie`, `dim_movie_video`; shows: `dim_series`, `dim_season`,
+**Dimensions (16)** — movies: `dim_movie`, `dim_movie_video`, `dim_collection_part`, `dim_collection_image`; shows: `dim_series`, `dim_season`,
 `dim_episode`, `dim_series_video`, `dim_network`; shared: `dim_person`, `dim_genre`,
 `dim_collection`, `dim_date`, `dim_company`, `dim_country`, `dim_language`. A trailer table is a
 multi-valued attribute of its title, so it is a `dim_`, loaded by *replace* rather than upsert (a
@@ -109,8 +109,9 @@ and languages, unlike `dim_collection` (one collection per movie, so *that* rela
 plain column on `dim_movie`). `bridge_movie_country` carries `relation ∈ {origin, production}` in
 its primary key, because the two disagree on 24% of movies that have both, and a coarser key would
 let one overwrite the other.
-**Translations (5)** — `movie_translation`, `series_translation`, `person_translation`,
-`genre_translation`, `country_translation`; see *Three languages* below.
+**Translations (7)** — `movie_translation`, `series_translation`, `person_translation`,
+`genre_translation`, `country_translation`, `collection_translation`, `collection_part_translation`;
+see *Three languages* below.
 **Operational (1)** — `etl_watermarks`
 
 Two tables were dropped once they proved dead weight, and the history is worth keeping:
@@ -421,6 +422,7 @@ this and fails loud before starting the server rather than 500ing on the first p
 | `/cartoons/` | Animated movies and shows made for younger viewers, merged into one shelf |
 | `/people/` · `/people/<slug>/` | Everyone holding any credit; per-person filmography across movies *and* shows, credits by department, and repeat collaborators |
 | `/studios/` · `/studios/<slug>/` | Browsable studio index; per-studio provenance (description, headquarters, site, parent) above a filterable filmography |
+| `/franchises/` · `/franchises/<slug>/` | Movie series: a searchable index with how much of each the catalog holds; per-franchise record (every installment in release order, catalog ones linked and the rest listed with TMDB's data, plus the poster and backdrop gallery). A movie page invites you to explore the trilogy or franchise, lists the first three movies the catalog holds with their release years and IMDb ratings and links to the whole series |
 | `/actors/` · `/directors/` | Scopes of `/people/`, filtered by the credits someone holds — not separate tables |
 | `/analytics/` | Dashboard panels driven by the SQL in `warehouse/queries/`, for movies and shows |
 | `/accounts/…` · `/me/` | Passwordless email-code sign-up and sign-in; a reader's Liked, Watch later and Top lists |

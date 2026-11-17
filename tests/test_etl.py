@@ -3659,6 +3659,7 @@ def _dim_movies_df():
         "collection_id": pd.array([100, None], dtype="Int64"),
         "collection_name": ["Alpha Collection", None],
         "collection_poster_path": ["/ac.jpg", None],
+        "collection_backdrop_path": ["/ac_bd.jpg", None],
         "tagline": ["Tag A", None],
         "poster_path": ["/a.jpg", None],
         "backdrop_path": ["/a_bd.jpg", None],
@@ -3826,16 +3827,26 @@ def test_load_dim_collection_takes_the_distinct_named_collections():
     (stmt, params), _ = mock_session.execute.call_args
     assert "INSERT INTO dim_collection" in str(stmt)
     assert params == [
-        {"collection_id": 100, "name": "Alpha Collection", "poster_path": "/ac.jpg"},
+        {"collection_id": 100, "name": "Alpha Collection", "poster_path": "/ac.jpg",
+         "backdrop_path": "/ac_bd.jpg"},
     ]
+
+
+def test_load_dim_collection_replays_a_silver_partition_that_has_no_backdrop_column():
+    """Task 153 added collection_backdrop_path; Silver written before it must still load."""
+    mock_session = MagicMock()
+    df = _dim_movies_df().drop(columns=["collection_backdrop_path"])
+
+    assert load_dim_collection(mock_session, df) == 1
+    (_, params), _ = mock_session.execute.call_args
+    assert params[0]["backdrop_path"] is None
 
 
 def test_load_dim_collection_deduplicates_a_franchise_shared_by_several_films():
     """Silver stores the collection inline per movie, so the dimension must dedupe it."""
     df = _dim_movies_df()
-    df.loc[1, ["collection_id", "collection_name", "collection_poster_path"]] = [
-        100, "Alpha Collection", "/ac.jpg",
-    ]
+    df.loc[1, ["collection_id", "collection_name", "collection_poster_path",
+               "collection_backdrop_path"]] = [100, "Alpha Collection", "/ac.jpg", "/ac_bd.jpg"]
     mock_session = MagicMock()
 
     count = load_dim_collection(mock_session, df)

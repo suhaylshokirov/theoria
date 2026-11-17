@@ -1,4 +1,4 @@
-"""Canned result sets for the analytics dashboard's fifteen queries (Task 133).
+"""Canned result sets for the analytics dashboard's seventeen queries (Task 133, 153).
 
 Shared by the view, cache, translation and insights tests so they all exercise
 the same realistic shape. `full_rows()` fills every panel with a little data;
@@ -90,6 +90,19 @@ def full_rows():
         {"season_number": 2, "show_count": 229, "avg_rating": Decimal("7.61"), "avg_change_from_season_1": Decimal("-0.01")},
         {"season_number": 3, "show_count": 207, "avg_rating": Decimal("7.40"), "avg_change_from_season_1": Decimal("-0.20")},
         {"season_number": 4, "show_count": 173, "avg_rating": Decimal("7.30"), "avg_change_from_season_1": Decimal("-0.30")},
+    ]
+    rows["franchise_box_office.sql"] = [
+        {"franchise_slug": "star-wars-collection", "franchise_name": "Star Wars Collection",
+         "movie_count": 9, "total_revenue": 8909187322, "total_budget": 1444250000,
+         "return_multiple": Decimal("6.17")},
+        {"franchise_slug": "james-bond-collection", "franchise_name": "James Bond Collection",
+         "movie_count": 17, "total_revenue": 6082654127, "total_budget": 1367200000,
+         "return_multiple": Decimal("4.45")},
+    ]
+    rows["franchise_installment_ratings.sql"] = [
+        {"installment_number": 1, "franchise_count": 335, "avg_rating": Decimal("7.18")},
+        {"installment_number": 2, "franchise_count": 131, "avg_rating": Decimal("6.83")},
+        {"installment_number": 3, "franchise_count": 68, "avg_rating": Decimal("6.71")},
     ]
     rows["series_rating_by_status.sql"] = [
         {"status": "Ended", "series_count": 540, "median_rating": Decimal("7.90")},

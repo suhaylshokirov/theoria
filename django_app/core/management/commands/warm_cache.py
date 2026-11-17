@@ -35,7 +35,7 @@ import config
 from analytics import cached_reads as analytics_reads
 from core import datacache
 from movies import cached_reads as movie_reads
-from movies import i18n, views
+from movies import franchises, i18n, views
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +58,14 @@ def warm_jobs():
             views.CARTOON_SERIES_AUDIENCE_GENRE_IDS)),
         ("genre_labels", i18n.genre_labels),
         ("country_labels", i18n.country_labels),
+        # Task 153: the franchise index's ~370 rows. Per language: the display
+        # name is translated, so the language is part of the key.
+        ("franchise_rows", franchises.franchise_rows),
     ]
 
 
 class Command(BaseCommand):
-    help = "Fill the site cache (home, analytics, genre lists, labels) for every language."
+    help = "Fill the site cache (home, analytics, genre lists, labels, franchises) for every language."
 
     def add_arguments(self, parser):
         parser.add_argument(

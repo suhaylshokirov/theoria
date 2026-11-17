@@ -11,6 +11,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import django
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DJANGO_APP_DIR = PROJECT_ROOT / "django_app"
@@ -257,3 +258,56 @@ def test_compact_money_uses_the_translated_suffix_and_a_dot():
     with translation.override("ru"):
         text = compact_money(45_411_061_972)
     assert text.startswith("$45.4") and "млрд" in text
+
+
+# --- Chapter 6: franchises (Task 153) ---------------------------------------------
+
+
+def _installments(*pairs):
+    return [{"installment_number": n, "franchise_count": c, "avg_rating": Decimal(str(r))}
+            for n, c, r in pairs]
+
+
+def test_franchise_finding_compares_the_first_movie_with_the_weighted_later_ones():
+    finding = insights._installment_finding(_installments((1, 335, 7.2), (2, 131, 6.8), (3, 68, 6.6)))
+    # later = (131*6.8 + 68*6.6) / 199 = 6.7316
+    assert finding["kind"] == "down"
+    assert finding["first"] == 7.2 and finding["size"] == pytest.approx(0.4684, abs=1e-3)
+    assert finding["last"] == 3
+
+
+def test_franchise_finding_reads_up_and_same():
+    assert insights._installment_finding(_installments((1, 50, 6.5), (2, 20, 7.0)))["kind"] == "up"
+    assert insights._installment_finding(_installments((1, 50, 7.0), (2, 20, 7.05)))["kind"] == "same"
+
+
+def test_franchise_finding_needs_a_first_and_a_later_place():
+    assert insights._installment_finding([]) is None
+    assert insights._installment_finding(_installments((1, 50, 7.0))) is None
+    assert insights._installment_finding(_installments((2, 50, 7.0), (3, 20, 6.0))) is None
+
+
+def test_franchise_chapter_shapes_the_chart_and_the_numbers_table():
+    rows = full_rows()
+    chapter = insights.build(rows)["franchises"]
+    assert chapter["has_data"] is True
+    assert chapter["installments"]["labels"] == [1, 2, 3]
+    assert chapter["installments"]["rating"] == [7.18, 6.83, 6.71]
+    assert chapter["installments"]["franchises"] == [335, 131, 68]
+    assert chapter["installment_table"][0] == {"number": 1, "franchises": 335, "rating": 7.18}
+    assert [r["franchise_slug"] for r in chapter["box_office"]] == ["star-wars-collection", "james-bond-collection"]
+    assert chapter["finding"]["kind"] == "down"
+
+
+def test_franchise_chapter_is_empty_on_a_fresh_warehouse():
+    chapter = insights.build(empty_rows())["franchises"]
+    assert chapter == {"has_data": False, "finding": None, "box_office": [], "installments": None,
+                       "installment_table": []}
+
+
+def test_franchise_queries_are_parameterless_and_name_their_guards():
+    box = (QUERIES_DIR / "franchise_box_office.sql").read_text(encoding="utf-8")
+    assert "HAVING COUNT(*) >= 2" in box and "m.budget >= 1000000" in box
+    inst = (QUERIES_DIR / "franchise_installment_ratings.sql").read_text(encoding="utf-8")
+    assert "adult IS NOT TRUE" in inst and "HAVING COUNT(*) >= 10" in inst
+    assert "source = 'imdb'" in inst

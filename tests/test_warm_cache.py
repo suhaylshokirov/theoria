@@ -2,6 +2,7 @@
 
 import io
 import os
+import re
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -86,7 +87,7 @@ def test_job_list_covers_every_cached_read_the_site_has():
     assert labels == [
         "home_stats", "home_mosaic", "home_shelves", "dashboard_rows",
         "genre_rows[movie]", "genre_rows[series]", "cartoon_genre_ids", "genre_labels",
-        "country_labels",
+        "country_labels", "franchise_rows",
     ]
 
 
@@ -152,5 +153,6 @@ def test_a_second_run_finds_everything_already_warm():
     with patch.object(warm_cache, "warm_jobs", return_value=jobs):
         first = _run()
         second = _run()
-    assert "0 entries built" not in first
-    assert "0 entries built" in second
+    # Whole-number match: "30 entries built" must not read as "0 entries built".
+    assert not re.search(r"(?<!\d)0 entries built", first)
+    assert re.search(r"(?<!\d)0 entries built", second)

@@ -57,6 +57,11 @@ from etl.silver.transform_series_links import transform_series_links
 from etl.silver.transform_series_videos import transform_series_videos
 from etl.warehouse_loader.load_dimensions import load_dimensions
 from etl.warehouse_loader.load_facts import load_facts
+from scripts.run_collections import (
+    build_collection_silver,
+    fetch_collections,
+    load_collection_warehouse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -326,6 +331,10 @@ def run_pipeline(
         len(succeeded_people), len(person_ids),
     )
 
+    # Task 153: the franchises the discovered films belong to. Best-effort — a
+    # failure is logged and the run carries on (see scripts/run_collections.py).
+    collections_ok = fetch_collections(ingestion_date)
+
     transform_movies(ingestion_date=ingestion_date)
     # TV Silver runs before transform_people so its series_people hand-off
     # exists when transform_people(with_tv=True) folds TV-only people into the
@@ -344,6 +353,7 @@ def run_pipeline(
     transform_movie_videos(ingestion_date=ingestion_date)
     transform_companies(ingestion_date=ingestion_date)
     transform_imdb_ratings(ingestion_date=ingestion_date, with_tv=True)
+    collections_ok = collections_ok and build_collection_silver(ingestion_date)
 
     silver_results = run_silver_checks(ingestion_date=ingestion_date)
     silver_failed = [r for r in silver_results if not r.passed]
@@ -356,6 +366,10 @@ def run_pipeline(
 
     load_dimensions(ingestion_date=ingestion_date)
     load_facts(ingestion_date=ingestion_date)
+    # After load_dimensions (needs dim_collection and dim_movie in place); one
+    # transaction, so a failure leaves the previous franchise rows untouched.
+    if collections_ok:
+        load_collection_warehouse(ingestion_date)
 
     # The data is committed, so tell the site's cache. Published here rather
     # than after the checks below: they only report, and a hiccup in one must

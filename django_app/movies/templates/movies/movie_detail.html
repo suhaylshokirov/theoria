@@ -155,6 +155,14 @@
     </div>
 </article>
 
+{% comment %} Where this film sits in its franchise: the series it belongs to, its
+   place in release order, and the installments either side. A neighbour the
+   catalog holds is a link; one it only lists is a dashed, unlinked frame (there
+   is no page behind it). Rendered only for a franchise of two or more. {% endcomment %}
+{% if franchise_strip %}
+{% include "movies/_franchise_strip.html" with strip=franchise_strip only %}
+{% endif %}
+
 {% comment %} The trailer plays below the record. The backdrop no longer
    competes with it for this slot: since the redesign it fills the hero. {% endcomment %}
 {% if trailer %}

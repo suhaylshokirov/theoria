@@ -3790,7 +3790,7 @@ def test_search_suggest_lists_films_then_shows_as_json():
 
     with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
         Series, "objects", new=MagicMock()
-    ) as series_mgr:
+    ) as series_mgr, patch("movies.views.franchise_rows", return_value=[]):
         movie_mgr.using.return_value.filter.return_value.annotate.return_value \
             .order_by.return_value.__getitem__.return_value = [movie]
         series_mgr.using.return_value.filter.return_value.annotate.return_value \
@@ -3811,6 +3811,36 @@ def test_search_suggest_lists_films_then_shows_as_json():
     assert show_row["rating"] is None
     # English requests search the Russian title too (filter_by_title).
     assert_title_search(movie_mgr.using.return_value.filter, "title", "in")
+
+
+def test_search_suggest_adds_matching_franchises_after_the_titles():
+    """Task 153: franchises match on the English or the Russian name, best-known
+    (most movies) first, capped at SUGGEST_FRANCHISES, and link to their page."""
+    def row(name, slug, parts, search=None):
+        return {"slug": slug, "display_name": name, "name": name, "poster_path": "/f.jpg",
+                "parts": parts, "search_text": (search or name).casefold()}
+
+    rows = [
+        row("Bond Collection", "bond-collection", 27),
+        row("Bond Girls Collection", "bond-girls", 3),
+        row("Jason Bourne Collection", "bourne", 5),   # no "bond" in the name
+        row("Bondi Collection", "bondi", 9),
+    ]
+    with patch.object(Movie, "objects", new=MagicMock()) as movie_mgr, patch.object(
+        Series, "objects", new=MagicMock()
+    ) as series_mgr, patch("movies.views.franchise_rows", return_value=rows):
+        movie_mgr.using.return_value.filter.return_value.annotate.return_value \
+            .order_by.return_value.__getitem__.return_value = []
+        series_mgr.using.return_value.filter.return_value.annotate.return_value \
+            .order_by.return_value.__getitem__.return_value = []
+        response = client.get("/search/suggest/", {"q": "bond"})
+
+    results = response.json()["results"]
+    assert [(r["kind"], r["title"], r["url"]) for r in results] == [
+        ("franchise", "Bond Collection", "/franchises/bond-collection/"),
+        ("franchise", "Bondi Collection", "/franchises/bondi/"),
+    ]
+    assert results[0]["rating"] is None and results[0]["poster"].endswith("/w154/f.jpg")
 
 
 def test_box_office_multiple_and_bar_widths():

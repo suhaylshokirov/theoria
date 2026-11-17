@@ -89,14 +89,24 @@ def load_dim_collection(session: Session, df: pd.DataFrame) -> int:
     the *distinct* set of those values — roughly half the catalog contributes
     nothing here, which is a real property of films rather than missing data.
     Must run before load_dim_movie(), which has an FK to this table.
+
+    This writes only what a movie payload carries (name, poster, backdrop). The
+    rest of a franchise — overview, original name, parts, gallery, translations —
+    comes from `GET /collection/{id}` and is loaded by
+    etl.warehouse_loader.load_collections (Task 153), which runs after this.
     """
+    # Task 153: backdrop_path joined the stub. A Silver partition written before
+    # that has no such column, so it replays with a null backdrop instead of failing.
+    df = df.assign(collection_backdrop_path=df.get("collection_backdrop_path"))
     named = df[df["collection_id"].notna() & df["collection_name"].notna()]
     collections = (
-        named[["collection_id", "collection_name", "collection_poster_path"]]
+        named[["collection_id", "collection_name", "collection_poster_path",
+               "collection_backdrop_path"]]
         .drop_duplicates(subset=["collection_id"], keep="last")
-        .rename(columns={"collection_name": "name", "collection_poster_path": "poster_path"})
+        .rename(columns={"collection_name": "name", "collection_poster_path": "poster_path",
+                         "collection_backdrop_path": "backdrop_path"})
     )
-    columns = ["collection_id", "name", "poster_path"]
+    columns = ["collection_id", "name", "poster_path", "backdrop_path"]
     records = _records(collections, columns)
     count = _upsert(session, "dim_collection", ["collection_id"], columns, records)
     logger.info("dim_collection: upserted %d row(s)", count)
@@ -417,6 +427,7 @@ def _load_translations(
     id_type: type = int,
     replace: bool,
     skip_unknown_parents: bool = False,
+    scope_ids: list[Any] | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     """Load one *_translation table from its Silver frame.
 
@@ -430,8 +441,11 @@ def _load_translations(
     translation TMDB withdrew disappears here too (a pure upsert would strand a
     stale Russian overview forever, with no failing check). `replace=False` is a
     plain upsert, right for the small fixed vocabularies (genres, countries).
-    Note the replace scope is the parent ids that have at least one row: a film
-    whose *only* translations vanished is not visited until it gains one again.
+    Note the replace scope is, by default, the parent ids that have at least one
+    row: a film whose *only* translations vanished is not visited until it gains
+    one again. A caller that knows every parent it processed (the franchise stage,
+    Task 153) passes them as `scope_ids`, which replaces that default, so such a
+    parent is cleared too.
 
     `skip_unknown_parents=True` turns a parent id absent from `parent_table` from
     a reject into a counted, logged skip. That is the right reading for countries:
@@ -476,7 +490,10 @@ def _load_translations(
 
     columns = [parent_col, "lang", *text_cols, "ingestion_date"]
     if replace:
-        parent_ids = sorted({r[parent_col] for r in rows})
+        parent_ids = (
+            sorted(scope_ids) if scope_ids is not None
+            else sorted({r[parent_col] for r in rows})
+        )
         count = _replace_by_parent(session, table, parent_col, parent_ids, columns, rows)
     else:
         count = _upsert(session, table, [parent_col, "lang"], columns, rows)

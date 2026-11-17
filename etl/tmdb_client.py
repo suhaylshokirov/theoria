@@ -38,7 +38,17 @@ def _language_params(language: str | None) -> dict[str, Any] | None:
 
 
 class TMDBAPIError(RuntimeError):
-    """Raised when a TMDB request fails permanently (after retries)."""
+    """Raised when a TMDB request fails permanently (after retries).
+
+    `status_code` is the final HTTP status when TMDB answered at all, and None
+    for a network-level failure. A caller that treats "the thing is gone" (404)
+    differently from "the call failed" reads it, instead of matching on the
+    message text.
+    """
+
+    def __init__(self, message: str = "", *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class TMDBClient:
@@ -118,7 +128,8 @@ class TMDBClient:
             logger.error("GET %s -> %d (giving up)", path, response.status_code)
             raise TMDBAPIError(
                 f"TMDB GET {path} failed with status {response.status_code}: "
-                f"{response.text[:200]}"
+                f"{response.text[:200]}",
+                status_code=response.status_code,
             )
 
         # Loop only exits via return/raise above; this guards the type checker.
@@ -278,6 +289,34 @@ class TMDBClient:
         get_movie_details() — a thin wrapper over one GET.
         """
         return self.get(f"company/{company_id}")
+
+    def get_collection_details(
+        self,
+        collection_id: int,
+        *,
+        append_to_response: str | None = None,
+        language: str | None = None,
+    ) -> dict[str, Any]:
+        """Full detail record for a single collection (a film franchise).
+
+        The `belongs_to_collection` stub inside a movie payload carries only
+        id/name/poster_path/backdrop_path. This endpoint adds `original_name`,
+        `original_language`, `overview` and `parts[]` — every film TMDB lists in
+        the collection, with its own title, date, genres, score and artwork.
+        `append_to_response="translations,images"` folds the per-language text
+        and the poster/backdrop gallery into the same payload. `language`
+        ("ru-RU") localises the top-level name and overview *and every part's*
+        title and overview, which is the only source of Russian text for parts
+        that are not in the catalogue.
+
+        A collection TMDB has deleted answers 404 (TMDBAPIError.status_code).
+        """
+        params: dict[str, Any] = {}
+        if append_to_response:
+            params["append_to_response"] = append_to_response
+        if language:
+            params["language"] = language
+        return self.get(f"collection/{collection_id}", params=params or None)
 
     def get_person_details(
         self, person_id: int, *, append_to_response: str | None = None

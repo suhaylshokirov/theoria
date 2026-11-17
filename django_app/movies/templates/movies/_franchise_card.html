@@ -1,0 +1,26 @@
+{% comment %} A franchise as a frame on the sheet, mirroring _movie_card.html.
+   Params (pass with `only`):
+     row : one dict from movies.franchises.franchise_rows()
+
+   Under the title: how many movies it runs to and over which years, then how
+   much of it the catalog holds, as a short bar with the figure printed beside
+   it. The bar is the one measured thing on the card, so it is the one place the
+   lime goes; the printed figure is its relief channel. {% endcomment %}
+{% load i18n l10n tmdb_images %}
+<div class="poster-card is-film franchise-card">
+    <a href="{% url 'movies:franchise_detail' row.slug %}">
+        {% if row.poster_path %}
+        <img class="poster" src="{{ row.poster_path|tmdb_image:'w500' }}" srcset="{{ row.poster_path|tmdb_srcset:'poster' }}" sizes="(max-width: 600px) 46vw, 200px" alt="{% blocktranslate trimmed with name=row.display_name %}{{ name }} poster{% endblocktranslate %}" loading="lazy" decoding="async">
+        {% else %}
+        <div class="placeholder" aria-hidden="true">◻</div>
+        {% endif %}
+        <div class="card-body">
+            <span class="card-title">{{ row.display_name }}</span>
+            <span class="card-sub">{% blocktranslate trimmed count n=row.parts %}{{ n }} movie{% plural %}{{ n }} movies{% endblocktranslate %}{% if row.years %} · {{ row.years }}{% endif %}</span>
+            <span class="coverage">
+                <span class="coverage__track" aria-hidden="true"><i style="width: {% widthratio row.in_catalog row.parts 100 %}%"></i></span>
+                <span class="coverage__value">{% blocktranslate trimmed with n=row.in_catalog total=row.parts %}{{ n }} of {{ total }} in Theoria{% endblocktranslate %}</span>
+            </span>
+        </div>
+    </a>
+</div>

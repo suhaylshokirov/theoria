@@ -22,7 +22,7 @@ QUERIES_DIR = Path(__file__).resolve().parent.parent.parent / "warehouse" / "que
 # pipeline publishes a new data version), so the old "dashboard_rows" entry
 # would be served to the new view and miss every key. Renaming the entry makes
 # the first request after the deploy a clean miss.
-CACHE_NAME = "analytics_dashboard"
+CACHE_NAME = "analytics_dashboard_v2"  # v2: Task 153 added the franchise chapter
 
 # The panels, grouped by the chapter that reads them.
 DASHBOARD_QUERIES = (
@@ -43,7 +43,10 @@ DASHBOARD_QUERIES = (
     # Chapter 5 (people)
     "top_rated_directors.sql",
     "signature_partnerships.sql",
-    # Chapter 6 (TV) — shaped for TV, not ported from the film queries: no
+    # Chapter 6 (franchises, Task 153)
+    "franchise_box_office.sql",
+    "franchise_installment_ratings.sql",
+    # Chapter 7 (TV) — shaped for TV, not ported from the film queries: no
     # revenue column anywhere (TV carries no money measure).
     "season_trajectory.sql",
     "series_rating_by_status.sql",

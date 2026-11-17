@@ -1,0 +1,26 @@
+{% comment %} A film's franchise (the movie page): an invitation to explore it, the first
+   three movies the catalog holds with their release year and IMDb rating, and a link to the whole thing.
+   The series is called "the trilogy" when it has exactly three movies and "the
+   franchise" otherwise, never "collection". Params (pass with `only`):
+     strip : movies.franchises.franchise_strip() — franchise, movies (up to three
+             Installments the catalog holds), current_id, total, held, is_trilogy
+   Each title opens that movie's page. The page the reader is on is marked rather
+   than linked to itself. The rating is the bare figure on an IMDb-yellow chip, as in
+   the homepage's top ten (the words are for screen readers); nothing for a movie
+   with no rating. {% endcomment %}
+{% load i18n %}
+<nav class="franchise-strip" aria-label="{% translate "Franchise" %}">
+    <div class="franchise-strip__lead">
+        <p class="franchise-strip__title">{% if strip.is_trilogy %}{% translate "Explore the trilogy" %}{% else %}{% translate "Explore the franchise" %}{% endif %}</p>
+        <ol class="franchise-strip__list">
+            {% for item in strip.movies %}
+            <li>
+                {% if item.movie_id == strip.current_id %}<span class="franchise-strip__current" aria-current="page">{{ item.title }}</span>{% else %}<a href="{% url 'movies:movie_detail' item.movie.slug %}">{{ item.title }}</a>{% endif %}
+                {% if item.release_date %}<span class="mono franchise-strip__year">{{ item.release_date|date:"Y" }}</span>{% endif %}
+                {% if item.movie.imdb_rating %}<span class="mono franchise-strip__rating"><span aria-hidden="true">{{ item.movie.imdb_rating|floatformat:1 }}</span><span class="visually-hidden">{% blocktranslate trimmed with value=item.movie.imdb_rating|floatformat:"1u" %}IMDb rating {{ value }} out of 10{% endblocktranslate %}</span></span>{% endif %}
+            </li>
+            {% endfor %}
+        </ol>
+        <a class="franchise-strip__all" href="{% url 'movies:franchise_detail' strip.franchise.slug %}">{% if strip.is_trilogy %}{% translate "See the full trilogy" %}{% else %}{% translate "See the full franchise" %}{% endif %}</a>
+    </div>
+</nav>

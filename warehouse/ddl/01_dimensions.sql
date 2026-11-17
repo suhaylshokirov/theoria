@@ -12,6 +12,12 @@ CREATE TABLE IF NOT EXISTS dim_collection (
     name          TEXT         NOT NULL,
     poster_path   TEXT,
     slug          VARCHAR(300),
+    -- Task 153: the rest of GET /collection/{id} (32_collections_full.sql).
+    backdrop_path     TEXT,
+    original_name     TEXT,
+    original_language VARCHAR(10),
+    overview          TEXT,
+    homepage          TEXT,
     CONSTRAINT pk_dim_collection PRIMARY KEY (collection_id)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_dim_collection_slug ON dim_collection (slug);
@@ -411,4 +417,82 @@ CREATE TABLE IF NOT EXISTS country_translation (
     CONSTRAINT pk_country_translation PRIMARY KEY (country_code, lang),
     CONSTRAINT fk_country_translation_country
         FOREIGN KEY (country_code) REFERENCES dim_country (country_code)
+);
+
+-- Task 153: a collection's parts, gallery and translations (32_collections_full.sql
+-- explains the shape of each, and why dim_collection_part.movie_id has no FK).
+CREATE TABLE IF NOT EXISTS dim_collection_part (
+    collection_id     INTEGER       NOT NULL,
+    movie_id          INTEGER       NOT NULL,
+    position          SMALLINT      NOT NULL,
+    title             TEXT,
+    original_title    TEXT,
+    original_language VARCHAR(10),
+    release_date      DATE,
+    overview          TEXT,
+    poster_path       TEXT,
+    backdrop_path     TEXT,
+    genre_ids         INTEGER[],
+    popularity        NUMERIC(12,4),
+    vote_average      NUMERIC(5,3),
+    vote_count        INTEGER,
+    adult             BOOLEAN,
+    video             BOOLEAN,
+    ingestion_date    DATE,
+    CONSTRAINT pk_dim_collection_part PRIMARY KEY (collection_id, movie_id),
+    CONSTRAINT fk_dim_collection_part_collection
+        FOREIGN KEY (collection_id) REFERENCES dim_collection (collection_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dim_collection_part_movie
+    ON dim_collection_part (movie_id);
+
+CREATE TABLE IF NOT EXISTS dim_collection_image (
+    collection_id  INTEGER       NOT NULL,
+    file_path      TEXT          NOT NULL,
+    kind           TEXT          NOT NULL,
+    iso_639_1      VARCHAR(8),
+    iso_3166_1     VARCHAR(8),
+    width          INTEGER,
+    height         INTEGER,
+    aspect_ratio   NUMERIC(6,4),
+    vote_average   NUMERIC(5,3),
+    vote_count     INTEGER,
+    ingestion_date DATE,
+    CONSTRAINT pk_dim_collection_image PRIMARY KEY (collection_id, file_path),
+    CONSTRAINT ck_dim_collection_image_kind CHECK (kind IN ('poster', 'backdrop')),
+    CONSTRAINT fk_dim_collection_image_collection
+        FOREIGN KEY (collection_id) REFERENCES dim_collection (collection_id)
+);
+CREATE INDEX IF NOT EXISTS idx_dim_collection_image_kind
+    ON dim_collection_image (collection_id, kind);
+
+-- Same shape as series_translation (29_series_translation.sql); `name` because that is
+-- what dim_collection calls it. Only `ru` carries a name (etl.translations.NAME_LANGUAGES);
+-- Uzbek rows exist only where TMDB has a homepage or overview for them.
+CREATE TABLE IF NOT EXISTS collection_translation (
+    collection_id  INTEGER       NOT NULL,
+    lang           VARCHAR(5)    NOT NULL,
+    name           TEXT,
+    overview       TEXT,
+    homepage       TEXT,
+    ingestion_date DATE          NOT NULL,
+    CONSTRAINT pk_collection_translation PRIMARY KEY (collection_id, lang),
+    CONSTRAINT fk_collection_translation_collection
+        FOREIGN KEY (collection_id) REFERENCES dim_collection (collection_id)
+);
+
+-- The only source of Russian text for the parts that are not in the catalogue
+-- (movie_translation covers catalogue films only): GET /collection/{id}?language=ru-RU
+-- localises every part's title and overview. Kept only where it differs from English.
+CREATE TABLE IF NOT EXISTS collection_part_translation (
+    collection_id  INTEGER       NOT NULL,
+    movie_id       INTEGER       NOT NULL,
+    lang           VARCHAR(5)    NOT NULL,
+    title          TEXT,
+    overview       TEXT,
+    ingestion_date DATE          NOT NULL,
+    CONSTRAINT pk_collection_part_translation PRIMARY KEY (collection_id, movie_id, lang),
+    CONSTRAINT fk_collection_part_translation_part
+        FOREIGN KEY (collection_id, movie_id)
+        REFERENCES dim_collection_part (collection_id, movie_id)
 );

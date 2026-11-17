@@ -16,6 +16,7 @@ named `pk_fact_*` constraints, not in the ORM. These models are read-only,
 so nothing here ever relies on `movie_id` alone being unique.
 """
 
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 
@@ -79,6 +80,49 @@ class TranslatedProse:
         return self.overview_is_fallback or self.tagline_is_fallback
 
 
+class Franchise(models.Model):
+    """A film franchise: a TMDB collection (Task 153).
+
+    Named Franchise, not Collection: `core.Collection` is a reader's Liked / Top /
+    Watch later list. The warehouse keeps TMDB's word (`dim_collection`).
+    Every column below comes from `belongs_to_collection` or `GET /collection/{id}`.
+    """
+
+    collection_id = models.IntegerField(primary_key=True)
+    name = models.TextField()
+    poster_path = models.TextField(null=True)
+    backdrop_path = models.TextField(null=True)
+    slug = models.SlugField(max_length=300, unique=True, null=True)
+    original_name = models.TextField(null=True)
+    original_language = models.CharField(max_length=10, null=True)
+    overview = models.TextField(null=True)
+    # The English homepage; a language's own lives in FranchiseTranslation.
+    homepage = models.TextField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_collection"
+
+    def __str__(self):
+        return self.name
+
+    # `name_i18n` / `overview_i18n` are annotated by i18n.localize_franchises();
+    # like Movie, the properties fall back to English when nothing was annotated.
+    @property
+    def display_name(self):
+        return getattr(self, "name_i18n", None) or self.name
+
+    @property
+    def display_overview(self):
+        return getattr(self, "overview_i18n", None) or self.overview
+
+    @property
+    def overview_is_fallback(self):
+        """True when this request is non-English and the overview shown is the
+        English text because no translation exists."""
+        return hasattr(self, "overview_tr") and bool(self.overview) and not self.overview_tr
+
+
 class Movie(TranslatedProse, models.Model):
     movie_id = models.IntegerField(primary_key=True)
     title = models.TextField()
@@ -96,6 +140,11 @@ class Movie(TranslatedProse, models.Model):
     imdb_id = models.CharField(max_length=20, null=True)
     original_title = models.TextField(null=True)
     homepage = models.TextField(null=True)
+    # Nullable by design: about half the catalog belongs to no franchise (Task 153).
+    franchise = models.ForeignKey(
+        Franchise, on_delete=models.DO_NOTHING, db_column="collection_id",
+        null=True, related_name="movies",
+    )
 
     class Meta:
         managed = False
@@ -909,3 +958,116 @@ class SeriesNetwork(models.Model):
 
     def __str__(self):
         return f"{self.series_id}/{self.network_id}"
+
+
+# --- Franchises (Task 153) ---------------------------------------------------
+# Same fake-single-PK workaround as the fact/bridge models above: the real keys
+# are composite in Postgres (32_collections_full.sql); a column is marked
+# primary_key=True here only to satisfy Django. Nothing relies on it alone being
+# unique.
+
+class FranchisePart(models.Model):
+    """A film TMDB lists in a collection — in the catalog or not.
+
+    `movie_id` is a soft reference with no FK: 692 of 1,313 parts are films the
+    catalog does not hold, shown as unlinked listing rows. views resolve the ones
+    that do exist against Movie at read time.
+    """
+
+    movie_id = models.IntegerField(primary_key=True)
+    franchise = models.ForeignKey(
+        Franchise, on_delete=models.DO_NOTHING, db_column="collection_id",
+        related_name="parts",
+    )
+    position = models.SmallIntegerField()
+    title = models.TextField(null=True)
+    original_title = models.TextField(null=True)
+    original_language = models.CharField(max_length=10, null=True)
+    release_date = models.DateField(null=True)
+    overview = models.TextField(null=True)
+    poster_path = models.TextField(null=True)
+    backdrop_path = models.TextField(null=True)
+    genre_ids = ArrayField(models.IntegerField(), null=True)
+    popularity = models.DecimalField(max_digits=12, decimal_places=4, null=True)
+    vote_average = models.DecimalField(max_digits=5, decimal_places=3, null=True)
+    vote_count = models.IntegerField(null=True)
+    adult = models.BooleanField(null=True)
+    video = models.BooleanField(null=True)
+    ingestion_date = models.DateField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_collection_part"
+
+    def __str__(self):
+        return f"{self.franchise_id}/{self.movie_id}"
+
+    @property
+    def display_title(self):
+        return getattr(self, "title_i18n", None) or self.title
+
+
+class FranchiseImage(models.Model):
+    file_path = models.TextField(primary_key=True)
+    franchise = models.ForeignKey(
+        Franchise, on_delete=models.DO_NOTHING, db_column="collection_id",
+        related_name="images",
+    )
+    kind = models.TextField()  # "poster" | "backdrop"
+    iso_639_1 = models.CharField(max_length=8, null=True)
+    iso_3166_1 = models.CharField(max_length=8, null=True)
+    width = models.IntegerField(null=True)
+    height = models.IntegerField(null=True)
+    aspect_ratio = models.DecimalField(max_digits=6, decimal_places=4, null=True)
+    vote_average = models.DecimalField(max_digits=5, decimal_places=3, null=True)
+    vote_count = models.IntegerField(null=True)
+
+    class Meta:
+        managed = False
+        db_table = "dim_collection_image"
+
+    def __str__(self):
+        return f"{self.franchise_id}{self.file_path}"
+
+
+class FranchiseTranslation(models.Model):
+    franchise = models.ForeignKey(
+        Franchise, on_delete=models.DO_NOTHING, db_column="collection_id",
+        primary_key=True, related_name="translations",
+    )
+    lang = models.CharField(max_length=5)
+    name = models.TextField(null=True)
+    overview = models.TextField(null=True)
+    homepage = models.TextField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "collection_translation"
+
+    def __str__(self):
+        return f"{self.franchise_id}/{self.lang}"
+
+
+class FranchisePartTranslation(models.Model):
+    """A listing row's Russian title/overview (a catalog part reads MovieTranslation).
+
+    Kept only where it differs from English; `uz` never carries a title.
+    """
+
+    movie_id = models.IntegerField(primary_key=True)
+    franchise = models.ForeignKey(
+        Franchise, on_delete=models.DO_NOTHING, db_column="collection_id",
+        related_name="part_translations",
+    )
+    lang = models.CharField(max_length=5)
+    title = models.TextField(null=True)
+    overview = models.TextField(null=True)
+    ingestion_date = models.DateField()
+
+    class Meta:
+        managed = False
+        db_table = "collection_part_translation"
+
+    def __str__(self):
+        return f"{self.franchise_id}/{self.movie_id}/{self.lang}"

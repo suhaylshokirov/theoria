@@ -53,6 +53,13 @@ WAREHOUSE_TABLES = [
     "dim_language",
     "dim_date",
     "dim_movie_video",
+    # Task 153: a franchise's parts, gallery and translations. All hang off
+    # dim_collection (above); the part translations also reference the parts, so
+    # they follow them.
+    "dim_collection_part",
+    "dim_collection_image",
+    "collection_translation",
+    "collection_part_translation",
     # Task 93: per-language text. Each has an FK to a table above it.
     "movie_translation",
     "person_translation",

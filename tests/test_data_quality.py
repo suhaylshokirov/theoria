@@ -25,6 +25,7 @@ from data_quality.silver_checks import (
     _write_rejects,
     run_silver_checks,
     ENTITY_CONFIGS,
+    _COLLECTION_ENTITIES,
     _TV_ENTITIES,
 )
 
@@ -54,6 +55,7 @@ def _movies_df(**overrides) -> pd.DataFrame:
         "collection_id": None,
         "collection_name": None,
         "collection_poster_path": None,
+        "collection_backdrop_path": None,
         "imdb_id": "tt0137523",
         "original_title": "Fight Club",
         "homepage": None,
@@ -347,6 +349,42 @@ def _all_entity_dfs() -> dict[str, pd.DataFrame]:
         "movie_languages": languages_df,
         "movie_videos": movie_videos_df,
         "imdb_ratings": imdb_ratings_df,
+    } | _collection_entity_dfs()
+
+
+def _collection_entity_dfs() -> dict[str, pd.DataFrame]:
+    """Minimal valid Silver DataFrames for the five franchise entities (Task 153)."""
+    return {
+        "collections": pd.DataFrame([{
+            "collection_id": 119, "name": "The Lord of the Rings Collection",
+            "original_name": "The Lord of the Rings Collection", "original_language": "en",
+            "overview": "An epic.", "poster_path": "/p.jpg", "backdrop_path": "/b.jpg",
+            "homepage": None,
+        }]),
+        "collection_parts": pd.DataFrame([{
+            "collection_id": 119, "movie_id": 120, "position": 0,
+            "title": "The Fellowship of the Ring", "original_title": "The Fellowship of the Ring",
+            "original_language": "en", "release_date": dt.date(2001, 12, 18),
+            "overview": "A hobbit.", "poster_path": "/f.jpg", "backdrop_path": "/fb.jpg",
+            "genre_ids": [12, 14], "popularity": 50.0, "vote_average": 8.4,
+            "vote_count": 25000, "adult": False, "video": False,
+        }]),
+        "collection_images": pd.DataFrame([
+            {"collection_id": 119, "file_path": "/i1.jpg", "kind": "poster", "iso_639_1": "en",
+             "iso_3166_1": "US", "width": 1000, "height": 1500, "aspect_ratio": 0.667,
+             "vote_average": 5.3, "vote_count": 4},
+            {"collection_id": 119, "file_path": "/i2.jpg", "kind": "backdrop", "iso_639_1": None,
+             "iso_3166_1": None, "width": 1920, "height": 1080, "aspect_ratio": 1.778,
+             "vote_average": 5.1, "vote_count": 2},
+        ]),
+        "collection_translations": pd.DataFrame([{
+            "collection_id": 119, "lang": "ru", "name": "Властелин колец (Коллекция)",
+            "overview": "Эпос.", "homepage": None,
+        }]),
+        "collection_part_translations": pd.DataFrame([{
+            "collection_id": 119, "movie_id": 120, "lang": "ru",
+            "title": "Братство Кольца", "overview": None,
+        }]),
     }
 
 
@@ -902,3 +940,88 @@ def test_run_silver_checks_with_tv_episode_ratings_both_sources_for_one_episode_
 
     er_results = [r for r in results if r.entity == "episode_ratings"]
     assert er_results and all(r.passed for r in er_results), [r for r in er_results if not r.passed]
+
+
+# ---------------------------------------------------------------------------
+# Franchise entities (Task 153)
+# ---------------------------------------------------------------------------
+
+def test_run_silver_checks_checks_collection_entities_by_default(tmp_path):
+    mock_s3 = _make_multi_entity_s3_mock(_all_entity_dfs() | _tv_entity_dfs())
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 11, 16), bucket="theoria-datalake",
+            rejected_dir=tmp_path,
+        )
+
+    assert {r.entity for r in results if r.entity in _COLLECTION_ENTITIES} == set(
+        _COLLECTION_ENTITIES
+    )
+    assert all(r.passed for r in results), [r for r in results if not r.passed]
+
+
+def test_run_silver_checks_with_collections_false_skips_them(tmp_path):
+    """The escape hatch for a partition written before the collection stage."""
+    dfs = {k: v for k, v in _all_entity_dfs().items() if k not in _COLLECTION_ENTITIES}
+    mock_s3 = _make_multi_entity_s3_mock(dfs)
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 11, 16), bucket="theoria-datalake",
+            rejected_dir=tmp_path, with_tv=False, with_collections=False,
+        )
+
+    assert not any(r.entity in _COLLECTION_ENTITIES for r in results)
+    assert all(r.passed for r in results), [r for r in results if not r.passed]
+
+
+def test_run_silver_checks_only_limits_the_entities_read(tmp_path):
+    mock_s3 = _make_multi_entity_s3_mock(_collection_entity_dfs())
+
+    with patch.object(s3_utils, "get_s3_client", return_value=mock_s3):
+        results = run_silver_checks(
+            ingestion_date=dt.date(2026, 11, 16), bucket="theoria-datalake",
+            rejected_dir=tmp_path, only=_COLLECTION_ENTITIES,
+        )
+
+    assert {r.entity for r in results} == set(_COLLECTION_ENTITIES)
+    assert all(r.passed for r in results)
+
+
+@pytest.mark.parametrize("entity, column, bad_value", [
+    ("collection_images", "kind", "logo"),
+    ("collection_translations", "lang", "uz-UZ"),
+    ("collection_part_translations", "lang", "en"),
+])
+def test_allowed_values_check_rejects_a_value_outside_the_closed_set(
+    tmp_path, entity, column, bad_value
+):
+    df = _collection_entity_dfs()[entity].copy()
+    df.loc[0, column] = bad_value
+    results = _run_entity_checks(
+        df, entity, ENTITY_CONFIGS[entity], dt.date(2026, 11, 16), tmp_path
+    )
+    allowed = next(r for r in results if r.check == "allowed")
+    assert not allowed.passed and allowed.bad_count == 1
+    assert (tmp_path / f"{entity}_rejected_2026-11-16.parquet").exists()
+
+
+def test_collection_images_ranges_reject_a_score_off_the_tmdb_scale(tmp_path):
+    df = _collection_entity_dfs()["collection_images"].copy()
+    df.loc[0, "vote_average"] = 11.0
+    results = _run_entity_checks(
+        df, "collection_images", ENTITY_CONFIGS["collection_images"],
+        dt.date(2026, 11, 16), tmp_path,
+    )
+    assert not next(r for r in results if r.check == "ranges").passed
+
+
+def test_collection_parts_duplicate_grain_fails(tmp_path):
+    parts = _collection_entity_dfs()["collection_parts"]
+    df = pd.concat([parts, parts], ignore_index=True)
+    results = _run_entity_checks(
+        df, "collection_parts", ENTITY_CONFIGS["collection_parts"],
+        dt.date(2026, 11, 16), tmp_path,
+    )
+    assert next(r for r in results if r.check == "duplicates").bad_count == 1

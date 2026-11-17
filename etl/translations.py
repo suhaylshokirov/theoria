@@ -45,8 +45,16 @@ def _clean(value: Any) -> str | None:
     return value.strip() or None if isinstance(value, str) else None
 
 
-def trim_translations(payload: dict[str, Any]) -> dict[str, Any]:
-    """Return `payload` with its translations block cut down to TRANSLATION_LANGUAGES.
+def trim_translations(
+    payload: dict[str, Any], keep: tuple[str, ...] = TRANSLATION_LANGUAGES
+) -> dict[str, Any]:
+    """Return `payload` with its translations block cut down to `keep` (default: the shipped languages).
+
+    `keep` widens the cut for a caller that needs one more language than the
+    site ships: a collection's English homepage lives only in its ``en``
+    translation entry (Task 153), so its Bronze writer keeps ``en`` too.
+    ``select_translations()`` still filters to TRANSLATION_LANGUAGES, so the extra
+    entry never reaches a ``*_translation`` table.
 
     A payload without a ``translations`` block is returned unchanged. The input
     is not mutated.
@@ -56,7 +64,7 @@ def trim_translations(payload: dict[str, Any]) -> dict[str, Any]:
         return payload
     kept = [
         entry for entry in block.get("translations") or []
-        if entry.get("iso_639_1") in TRANSLATION_LANGUAGES
+        if entry.get("iso_639_1") in keep
     ]
     return {**payload, "translations": {**block, "translations": kept}}
 

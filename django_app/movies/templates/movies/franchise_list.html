@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load i18n static %}
+
+{% block title %}{% translate "Franchises" %} | Theoria{% endblock %}
+
+{% block body_class %}page-catalog page-franchises{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/catalog.css' %}">
+<link rel="stylesheet" href="{% static 'css/franchises.css' %}">
+{% endblock %}
+
+{% block content %}
+{% translate "Franchises" as sheet_title %}{% translate "Movie series from the first installment to the latest. Search by name, narrow by genre, or reorder by size, newest installment or popularity." as sheet_sub %}
+{% include "movies/_sheet_header.html" with title=sheet_title sub=sheet_sub only %}
+
+<section class="sheet-section">
+    {% comment %} The same filter console and live-filter contract as
+       movie_list.html: a plain GET form that still works with no JS, which
+       static/js/theoria.js's initLiveFilter() upgrades by re-fetching and
+       swapping #franchises-grid as a field changes. {% endcomment %}
+    <form class="finder" method="get" action="{% url 'movies:franchise_list' %}" data-finder data-live-filter data-live-targets="#franchises-grid">
+        {% translate "Search franchises" as placeholder %}{% translate "Search franchises by name" as search_label %}
+        {% url 'movies:franchise_list' as reset_url %}{% include "movies/_finder_search.html" with q=q placeholder=placeholder label=search_label reset_url=reset_url only %}
+        <div class="finder__facets">
+            {% translate "Sort" as label %}{% translate "Order by" as legend %}
+            {% include "movies/_facet.html" with label=label legend=legend name="sort" choices=sort_choices current=sort only %}
+            {% translate "Genre" as label %}{% translate "Filter by genre" as legend %}{% translate "Any genre" as any_label %}
+            {% include "movies/_facet.html" with label=label legend=legend name="genre" choices=genre_choices selected=genres multiple=True any_label=any_label only %}
+        </div>
+    </form>
+
+    {% include "movies/_franchise_grid.html" %}
+</section>
+{% endblock %}

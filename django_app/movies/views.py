@@ -20,15 +20,19 @@ from core.services import collection_flags
 
 from movies import cached_reads
 from movies.models import (
-    Company, Credit, Episode, Genre, Movie, MovieCompany,
+    Company, Credit, Episode, Franchise, Genre, Language, Movie, MovieCompany,
     MovieCountry, MovieLanguage, MovieMetrics, MovieRating, MovieVideo,
     Person, Season, Series, SeriesCompany, SeriesCountry, SeriesCredit,
     SeriesGenre, SeriesLanguage, SeriesNetwork, SeriesRating, SeriesVideo,
 )
+from movies.franchises import (
+    GALLERY_BACKDROPS, GALLERY_POSTERS, franchise_gallery, franchise_homepage,
+    franchise_installments, franchise_rows, franchise_stats, franchise_strip, hero_backdrop,
+)
 from movies.i18n import (
     attach_movie_titles, attach_person_names, attach_series_titles, country_labels,
     filter_by_person_name, filter_by_series_name, filter_by_title, genre_labels,
-    is_translated_request, localize_genres, localize_movies, localize_people,
+    is_translated_request, localize_franchises, localize_genres, localize_movies, localize_people,
     localize_person_names, localize_series, person_name_order, search_aliases,
     series_name_order, title_order,
 )
@@ -37,6 +41,7 @@ from movies.templatetags.tmdb_images import tmdb_image
 from movies.vocab import display_department, display_job
 
 MOVIES_PER_PAGE = 24
+FRANCHISES_PER_PAGE = 24
 PEOPLE_PER_PAGE = 30
 STUDIOS_PER_PAGE = 30
 
@@ -1021,8 +1026,18 @@ def movie_detail(request, movie_slug):
     )
     trailer = _pick_trailer(videos)
 
+    # Task 153: which franchise this film belongs to, and its neighbours.
+    franchise_context = None
+    if movie.franchise_id:
+        franchise = localize_franchises(
+            Franchise.objects.using("warehouse").filter(pk=movie.franchise_id)
+        ).first()
+        if franchise is not None:
+            franchise_context = franchise_strip(franchise, movie_id)
+
     context = {
         "movie": movie,
+        "franchise_strip": franchise_context,
         "genres": genres,
         "cast": cast,
         "cast_count": len(cast),
@@ -1061,6 +1076,7 @@ def _box_office(budget, revenue):
 # How many matches the header search dropdown lists, films first then shows.
 SUGGEST_MOVIES = 6
 SUGGEST_SERIES = 3
+SUGGEST_FRANCHISES = 2
 
 
 def search_suggest(request):
@@ -1101,6 +1117,24 @@ def search_suggest(request):
     ] + [
         row("series", s, reverse("movies:series_detail", args=[s.slug]), s.first_air_date)
         for s in series
+    ]
+    # Task 153: franchises, after the titles. The same English-or-Russian name
+    # match the franchise list uses; from the cached rows, so no extra query.
+    needle = term.casefold()
+    matches = sorted(
+        (r for r in franchise_rows() if needle in r["search_text"]),
+        key=FRANCHISE_SORTS["parts"],
+    )[:SUGGEST_FRANCHISES]
+    results += [
+        {
+            "kind": "franchise",
+            "title": r["display_name"],
+            "year": None,
+            "url": reverse("movies:franchise_detail", args=[r["slug"]]),
+            "poster": tmdb_image(r["poster_path"], "w154"),
+            "rating": None,
+        }
+        for r in matches
     ]
     return JsonResponse({"results": results})
 
@@ -1381,6 +1415,104 @@ def series_detail(request, series_slug):
         ),
     }
     return render(request, "movies/series_detail.html", context)
+
+
+# --- Franchises (Task 153) ---------------------------------------------------
+# ?sort= values accepted by franchise_list. The rows are ~370 plain dicts held in
+# the cache (movies.franchises.franchise_rows), so these are Python sort keys,
+# not order_by expressions. A missing figure sorts last whichever way it runs.
+FRANCHISE_SORTS = {
+    "parts": lambda r: (-r["parts"], r["display_name"].casefold()),
+    "name": lambda r: (r["display_name"].casefold(),),
+    "newest": lambda r: (r["newest"] is None, -(r["newest"].toordinal() if r["newest"] else 0),
+                         r["display_name"].casefold()),
+    "popularity": lambda r: (r["popularity"] is None, -(r["popularity"] or 0),
+                             r["display_name"].casefold()),
+}
+
+FRANCHISE_SORT_CHOICES = [
+    ("parts", gettext_lazy("Most movies")),
+    ("name", gettext_lazy("A–Z")),
+    ("newest", gettext_lazy("Newest installment")),
+    ("popularity", gettext_lazy("Popularity")),
+]
+
+
+def franchise_list(request):
+    """Browsable franchise index: poster grid + name search + sort + genre facet.
+
+    The same console as /studios/ and /movies/. A franchise is a TMDB
+    collection; the genre facet offers the genres its parts carry, and a
+    ticked genre must be carried by *some* part (a franchise is not itself
+    tagged). Rows come from the cache, so this page costs no warehouse query
+    on a hit.
+    """
+    q = request.GET.get("q", "").strip()
+    sort = request.GET.get("sort", "parts")
+    if sort not in FRANCHISE_SORTS:
+        sort = "parts"
+
+    rows = franchise_rows()
+    offered = set().union(*(r["genre_ids"] for r in rows)) if rows else set()
+    genre_rows = [(gid, name) for gid, name in cached_reads.genre_rows("movie") if gid in offered]
+    labels = genre_labels()
+    genre_slugs = {slugify(name): gid for gid, name in genre_rows}
+    genre_choices = [(slugify(name), labels.get(name, name)) for _, name in genre_rows]
+    if labels:
+        genre_choices.sort(key=lambda choice: choice[1].lower())
+    genres = _selected_genres(request, genre_slugs)
+
+    if q:
+        needle = q.casefold()
+        rows = [r for r in rows if needle in r["search_text"]]
+    for slug in genres:
+        rows = [r for r in rows if genre_slugs[slug] in r["genre_ids"]]
+    rows = sorted(rows, key=FRANCHISE_SORTS[sort])
+
+    page_obj = Paginator(rows, FRANCHISES_PER_PAGE).get_page(request.GET.get("page"))
+    context = {
+        "page_obj": page_obj, "q": q, "sort": sort,
+        "genres": genres, "genre_choices": genre_choices,
+        "sort_choices": FRANCHISE_SORT_CHOICES,
+        "base_query": _filter_query(q, sort, genres),
+    }
+    if _is_ajax(request):
+        return render(request, "movies/_franchise_results.html", context)
+    return render(request, "movies/franchise_list.html", context)
+
+
+@login_required
+def franchise_detail(request, franchise_slug):
+    """One franchise: everything TMDB knows about it, and how much of it the
+    catalog holds.
+
+    Catalog films are full cards; the rest are listing rows. The header figures
+    for rating, revenue and budget cover catalog films only (a listing row has
+    neither, and its score is TMDB's, not the IMDb rating the site uses).
+    """
+    franchise = get_object_or_404(
+        localize_franchises(Franchise.objects.using("warehouse")), slug=franchise_slug
+    )
+    items = franchise_installments(franchise)
+    gallery = franchise_gallery(franchise)
+    language = (
+        Language.objects.using("warehouse").filter(pk=franchise.original_language).first()
+        if franchise.original_language else None
+    )
+
+    posters, backdrops = gallery["posters"], gallery["backdrops"]
+    context = {
+        "franchise": franchise,
+        "items": items,
+        "stats": franchise_stats(items),
+        "original_language": language.name if language else None,
+        "homepage": franchise_homepage(franchise),
+        "hero_backdrop": hero_backdrop(franchise, gallery),
+        "poster_total": len(posters), "backdrop_total": len(backdrops),
+        "posters": posters[:GALLERY_POSTERS], "more_posters": posters[GALLERY_POSTERS:],
+        "backdrops": backdrops[:GALLERY_BACKDROPS], "more_backdrops": backdrops[GALLERY_BACKDROPS:],
+    }
+    return render(request, "movies/franchise_detail.html", context)
 
 
 # ?sort= values accepted by studio_list, mapped to an order_by expression.

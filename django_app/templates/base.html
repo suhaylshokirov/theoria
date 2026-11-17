@@ -220,6 +220,7 @@
                 <a href="{% url 'movies:cartoon_list' %}"{% if vn == "cartoon_list" %} aria-current="page"{% endif %}>{% translate "Cartoons" %}</a>
                 <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>{% translate "People" %}</a>
                 <a href="{% url 'movies:studio_list' %}"{% if vn in "studio_list,studio_detail" %} aria-current="page"{% endif %}>{% translate "Studios" %}</a>
+                <a href="{% url 'movies:franchise_list' %}"{% if vn in "franchise_list,franchise_detail" %} aria-current="page"{% endif %}>{% translate "Franchises" %}</a>
                 <a href="{% url 'analytics:dashboard' %}"{% if vn == "dashboard" %} aria-current="page"{% endif %}>{% translate "Analytics" %}</a>
                 {% if request.user.is_authenticated %}
                 <div class="menu account-menu" data-account-menu>
@@ -260,7 +261,7 @@
             <form class="header-search" id="header-search" role="search" method="get"
                   action="{% url 'movies:browse' %}" data-header-search
                   data-endpoint="{% url 'movies:search_suggest' %}"
-                  data-label-movie="{% translate "Movie" %}" data-label-series="{% translate "TV show" %}"
+                  data-label-movie="{% translate "Movie" %}" data-label-series="{% translate "TV show" %}" data-label-franchise="{% translate "Franchise" %}"
                   data-empty="{% translate "No title matches that search. Try another title." %}"
                   data-hint="{% translate "Type at least two letters of a title." %}">
                 <label class="header-search__field">

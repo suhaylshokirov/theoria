@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% load i18n l10n static tmdb_images %}
+
+{% block title %}{{ franchise.display_name }} | Theoria{% endblock %}
+{% block description %}{% blocktranslate trimmed count n=stats.parts with name=franchise.display_name held=stats.in_catalog %}{{ name }}: {{ n }} movie, {{ held }} in the Theoria catalog.{% plural %}{{ name }}: {{ n }} movies, {{ held }} in the Theoria catalog.{% endblocktranslate %}{% endblock %}
+
+{% block body_class %}page-franchises page-franchise{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/franchises.css' %}">
+{% endblock %}
+
+{% block content %}
+{% comment %} A franchise as a record: the backdrop as a measured strip across the
+   top, the poster hung on its lower edge as a plate, then the name and what is
+   known about the series. The figures describe the whole series where they can
+   (movies, years) and the movies Theoria holds where only those have the data
+   (rating, revenue, budget); the note under them says which is which. {% endcomment %}
+{% if hero_backdrop %}
+<figure class="backdrop-strip franchise-banner">
+    <img src="{{ hero_backdrop|tmdb_image:'w1280' }}" srcset="{{ hero_backdrop|tmdb_srcset:'backdrop' }}" sizes="(max-width: 1200px) 100vw, 1200px" alt="" decoding="async" fetchpriority="high">
+</figure>
+{% endif %}
+
+<header class="franchise-head{% if hero_backdrop %} has-banner{% endif %}">
+    <div class="franchise-plate">
+        {% if franchise.poster_path %}
+        <img class="poster" src="{{ franchise.poster_path|tmdb_image:'w500' }}" srcset="{{ franchise.poster_path|tmdb_srcset:'poster' }}" sizes="(max-width: 720px) 120px, 220px" alt="{% blocktranslate trimmed with name=franchise.display_name %}{{ name }} poster{% endblocktranslate %}" decoding="async">
+        {% else %}
+        <div class="placeholder" aria-hidden="true">◻</div>
+        {% endif %}
+    </div>
+
+    <div class="franchise-title">
+        <h1 class="sheet-title">{{ franchise.display_name }}</h1>
+        {% if franchise.original_name and franchise.original_name != franchise.display_name %}
+        <p class="specimen-original-title mono">{% blocktranslate trimmed with title=franchise.original_name %}originally “{{ title }}”{% endblocktranslate %}</p>
+        {% endif %}
+    </div>
+
+    <div class="franchise-record">
+        {% if franchise.display_overview %}
+        <p class="specimen-synopsis"{% if franchise.overview_is_fallback %} lang="en"{% endif %}>{{ franchise.display_overview }}</p>
+        {% if franchise.overview_is_fallback %}<p class="prose-note">{% translate "Shown in English — no translation yet" %}</p>{% endif %}
+        {% endif %}
+
+        {% if original_language or homepage %}
+        <dl class="record-list">
+            {% if original_language %}
+            <div class="record-row">
+                <dt class="label">{% translate "Original language" %}</dt>
+                <dd>{{ original_language }}</dd>
+            </div>
+            {% endif %}
+            {% if homepage %}
+            <div class="record-row">
+                <dt class="label">{% translate "Official site" %}</dt>
+                <dd><a class="ext-link" href="{{ homepage }}" target="_blank" rel="noopener noreferrer">{{ homepage }}</a></dd>
+            </div>
+            {% endif %}
+        </dl>
+        {% endif %}
+
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-value" data-count="{{ stats.parts|unlocalize }}">{{ stats.parts }}</span>
+                <span class="stat-label">{% translate "Movies" %}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value" data-count="{{ stats.in_catalog|unlocalize }}">{{ stats.in_catalog }}</span>
+                <span class="stat-label">{% translate "In Theoria" %}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{{ stats.years|default:"—" }}</span>
+                <span class="stat-label">{% translate "Years" %}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{% if stats.avg_rating %}★ {{ stats.avg_rating|floatformat:"2u" }}{% else %}—{% endif %}</span>
+                <span class="stat-label">{% translate "Avg rating" %}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{% if stats.revenue %}${{ stats.revenue|floatformat:"0g" }}{% else %}—{% endif %}</span>
+                <span class="stat-label">{% translate "Revenue" %}</span>
+            </div>
+            <div class="stat">
+                <span class="stat-value">{% if stats.budget %}${{ stats.budget|floatformat:"0g" }}{% else %}—{% endif %}</span>
+                <span class="stat-label">{% translate "Budget" %}</span>
+            </div>
+        </div>
+        {% if stats.in_catalog < stats.parts %}
+        <p class="prose-note">{% translate "Rating, revenue and budget count only the movies in Theoria." %}</p>
+        {% endif %}
+    </div>
+</header>
+
+<section class="sheet-section">
+    <div class="section-head">
+        <h2>{% translate "Movies" %}</h2>
+        <span class="section-note">{% blocktranslate trimmed count n=stats.parts with held=stats.in_catalog %}{{ n }} movie · {{ held }} in Theoria{% plural %}{{ n }} movies · {{ held }} in Theoria{% endblocktranslate %}</span>
+    </div>
+
+    {% translate "Upcoming" as upcoming_label %}{% translate "TBA" as tba_label %}
+    <div class="poster-grid franchise-parts">
+        {% for item in items %}
+        {% if item.movie %}
+            {% if item.is_upcoming %}
+            {% with sub=item.release_date|date:"Y"|add:" · "|add:upcoming_label %}
+            {% include "movies/_movie_card.html" with movie=item.movie card_sub=sub only %}
+            {% endwith %}
+            {% elif not item.release_date %}
+            {% include "movies/_movie_card.html" with movie=item.movie card_sub=tba_label only %}
+            {% else %}
+            {% include "movies/_movie_card.html" with movie=item.movie only %}
+            {% endif %}
+        {% else %}
+        {% include "movies/_franchise_part_card.html" with item=item only %}
+        {% endif %}
+        {% empty %}
+        <p class="empty">{% translate "No movies are listed for this franchise yet." %}</p>
+        {% endfor %}
+    </div>
+</section>
+
+{% if posters or backdrops %}
+{% include "movies/_franchise_gallery.html" %}
+{% endif %}
+{% endblock %}

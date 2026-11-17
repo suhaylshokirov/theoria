@@ -15,7 +15,8 @@ from django.shortcuts import render
 from analytics import insights
 from analytics.cached_reads import dashboard_rows
 from movies.i18n import (
-    country_labels, genre_labels, localize_rows, movie_titles_by_slug, person_names_by_slug,
+    country_labels, franchise_names_by_slug, genre_labels, localize_rows,
+    movie_titles_by_slug, person_names_by_slug,
 )
 
 
@@ -42,6 +43,12 @@ def dashboard(request):
         row["director_name"] = people.get(row["director_slug"], row["director_name"])
     for row in partners:
         row["collaborator_name"] = people.get(row["collaborator_slug"], row["collaborator_name"])
+
+    # Franchise names are keyed by slug in the rows, like people (Task 153).
+    franchises = rows["franchise_box_office.sql"]
+    names = franchise_names_by_slug(r["franchise_slug"] for r in franchises)
+    for row in franchises:
+        row["franchise_name"] = names.get(row["franchise_slug"], row["franchise_name"])
 
     context = insights.build(rows)
 

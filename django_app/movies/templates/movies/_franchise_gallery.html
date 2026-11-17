@@ -1,0 +1,42 @@
+{% comment %} A franchise's artwork: the best posters and backdrops for
+   this reader, the rest behind "show all". The rest sit in a closed native
+   <details>, so their images are never requested until it is opened; the ones
+   shown use loading="lazy" and the responsive srcset ladder. Each frame links
+   to the full-size file on TMDB's image server. {% endcomment %}
+{% load i18n l10n tmdb_images %}
+<section class="sheet-section franchise-gallery">
+    <div class="section-head">
+        <h2>{% translate "Gallery" %}</h2>
+        <span class="section-note">{% blocktranslate trimmed with p=poster_total b=backdrop_total %}{{ p }} posters · {{ b }} backdrops{% endblocktranslate %}</span>
+    </div>
+
+    {% if posters %}
+    <h3 class="gallery-label">{% translate "Posters" %}</h3>
+    <div class="poster-grid is-tight gallery-grid">
+        {% for image in posters %}{% include "movies/_franchise_gallery_item.html" with image=image shape="poster" name=franchise.display_name only %}{% endfor %}
+    </div>
+    {% if more_posters %}
+    <details class="gallery-more">
+        <summary>{% blocktranslate trimmed with n=more_posters|length %}Show {{ n }} more posters{% endblocktranslate %}</summary>
+        <div class="poster-grid is-tight gallery-grid">
+            {% for image in more_posters %}{% include "movies/_franchise_gallery_item.html" with image=image shape="poster" name=franchise.display_name only %}{% endfor %}
+        </div>
+    </details>
+    {% endif %}
+    {% endif %}
+
+    {% if backdrops %}
+    <h3 class="gallery-label">{% translate "Backdrops" %}</h3>
+    <div class="gallery-grid gallery-grid--wide">
+        {% for image in backdrops %}{% include "movies/_franchise_gallery_item.html" with image=image shape="backdrop" name=franchise.display_name only %}{% endfor %}
+    </div>
+    {% if more_backdrops %}
+    <details class="gallery-more">
+        <summary>{% blocktranslate trimmed with n=more_backdrops|length %}Show {{ n }} more backdrops{% endblocktranslate %}</summary>
+        <div class="gallery-grid gallery-grid--wide">
+            {% for image in more_backdrops %}{% include "movies/_franchise_gallery_item.html" with image=image shape="backdrop" name=franchise.display_name only %}{% endfor %}
+        </div>
+    </details>
+    {% endif %}
+    {% endif %}
+</section>

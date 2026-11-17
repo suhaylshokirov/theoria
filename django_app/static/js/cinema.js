@@ -575,6 +575,7 @@
     var kindLabel = {
       movie: form.getAttribute("data-label-movie"),
       series: form.getAttribute("data-label-series"),
+      franchise: form.getAttribute("data-label-franchise"),
     };
     var items = [];
     var selected = -1;

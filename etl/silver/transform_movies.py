@@ -48,8 +48,8 @@ def _list_bronze_keys(bucket: str, ingestion_date: dt.date) -> list[str]:
 def _flatten_movie(raw: dict[str, Any]) -> dict[str, Any]:
     """Extract and rename the fields we keep from one TMDB movie-detail payload."""
     # TMDB nests the franchise as an object, or omits it entirely (~48% of films).
-    # Flattened to three scalars here so Silver stays a flat table; dim_collection
-    # is built from the distinct values downstream.
+    # Flattened to four scalars here so Silver stays a flat table; dim_collection
+    # is built from the distinct values downstream (backdrop_path added in Task 153).
     collection = raw.get("belongs_to_collection") or {}
     return {
         "movie_id": raw.get("id"),
@@ -78,6 +78,7 @@ def _flatten_movie(raw: dict[str, Any]) -> dict[str, Any]:
         "collection_id": collection.get("id"),
         "collection_name": collection.get("name"),
         "collection_poster_path": collection.get("poster_path") or None,
+        "collection_backdrop_path": collection.get("backdrop_path") or None,
         # Flatten nested genres list to a list of IDs for the bridge table.
         "genre_ids": [g["id"] for g in raw.get("genres", [])],
     }

@@ -41,6 +41,7 @@ PAGES = {
     "cartoons": "/cartoons/",
     "people": "/people/",
     "studios": "/studios/",
+    "franchises": "/franchises/",
     "login": "/accounts/login/",
     "analytics": "/analytics/",
     # The site's own 404 page. A DEBUG server routes this URL to the same view
@@ -56,8 +57,15 @@ PAGES = {
     "tv-detail": "/tv/breaking-bad/",
     "person-detail": "/people/leonardo-dicaprio/",
     "studio-detail": "/studios/warner-bros-pictures/",
+    # Task 153: a franchise page (a long mixed grid of catalog and listing cards
+    # plus a gallery), and a film that carries the "Part of" strip.
+    "franchise-detail": "/franchises/james-bond-collection/",
+    "movie-in-franchise": "/movies/casino-royale/",
 }
-AUTH_PAGES = {"movie-detail", "tv-detail", "person-detail", "studio-detail"}
+AUTH_PAGES = {
+    "movie-detail", "tv-detail", "person-detail", "studio-detail",
+    "franchise-detail", "movie-in-franchise",
+}
 
 
 def session_cookie():

@@ -37,6 +37,8 @@ LANGUAGE_ROWS = 7
 # A tiny budget makes a silly multiple (a $1M film earning $400M), so the
 # "biggest return" callout only considers movies that cost at least this much.
 BEST_RETURN_MIN_BUDGET = 5_000_000
+# Two averages closer than this are "about the same" (franchise installments).
+INSTALLMENT_SAME_POINTS = 0.1
 
 
 def _f(value):
@@ -378,6 +380,53 @@ def _tv(rows):
     }
 
 
+# --- Chapter 6: franchises (Task 153) ----------------------------------------
+
+
+def _installment_finding(rows):
+    """How a series' later movies rate against its first.
+
+    The first movie's average against the franchise-weighted average of every
+    later installment (2 and up), so the figure is not dominated by the long tail
+    of a few series. None until there is a first and at least one later place.
+    """
+    if len(rows) < 2 or rows[0]["installment_number"] != 1:
+        return None
+    first = _f(rows[0]["avg_rating"])
+    later = rows[1:]
+    weight = sum(r["franchise_count"] for r in later)
+    tail = sum(_f(r["avg_rating"]) * r["franchise_count"] for r in later) / weight
+    gap = tail - first
+    if abs(gap) < INSTALLMENT_SAME_POINTS:
+        kind = "same"
+    else:
+        kind = "up" if gap > 0 else "down"
+    return {"kind": kind, "size": abs(gap), "first": first, "later": tail, "last": rows[-1]["installment_number"]}
+
+
+def _franchises(rows):
+    box_office = rows["franchise_box_office.sql"]
+    installments = rows["franchise_installment_ratings.sql"]
+    return {
+        "has_data": bool(box_office or installments),
+        "finding": _installment_finding(installments),
+        "box_office": box_office,
+        "installments": {
+            "labels": [r["installment_number"] for r in installments],
+            "rating": [_f(r["avg_rating"]) for r in installments],
+            "franchises": [r["franchise_count"] for r in installments],
+        } if installments else None,
+        "installment_table": [
+            {
+                "number": r["installment_number"],
+                "franchises": r["franchise_count"],
+                "rating": _f(r["avg_rating"]),
+            }
+            for r in installments
+        ],
+    }
+
+
 # --- Whole page -------------------------------------------------------------
 
 
@@ -405,5 +454,6 @@ def build(rows):
         "time": _time(rows),
         "world": _world(rows),
         "people": _people(rows),
+        "franchises": _franchises(rows),
         "tv": _tv(rows),
     }

@@ -30,8 +30,8 @@ from django.utils.translation import get_language
 from core.datacache import cached
 
 from movies.models import (
-    CountryTranslation, GenreTranslation, Movie, MovieTranslation,
-    PersonTranslation, Series, SeriesTranslation,
+    CountryTranslation, FranchisePartTranslation, FranchiseTranslation, GenreTranslation,
+    Movie, MovieTranslation, PersonTranslation, Series, SeriesTranslation,
 )
 
 DEFAULT_LANG = "en"
@@ -110,6 +110,65 @@ def localize_series(queryset):
         overview_i18n=Coalesce("overview_tr", "overview"),
         tagline_i18n=Coalesce("tagline_tr", "tagline"),
     )
+
+
+def localize_franchises(queryset):
+    """Annotate name/overview in the reader's language (Task 153).
+
+    Adds `name_i18n`, `overview_i18n` (translated, else English) and the raw
+    `name_tr`, `overview_tr` (translated, else NULL). Only Russian carries a
+    name (the Task 110 rule), so a Uzbek request reads the English name and,
+    where TMDB has one, the Uzbek overview.
+    """
+    lang = current_lang()
+    if lang == DEFAULT_LANG:
+        return queryset
+    return queryset.annotate(
+        name_tr=_column(FranchiseTranslation, "franchise_id", "name", lang),
+        overview_tr=_column(FranchiseTranslation, "franchise_id", "overview", lang),
+    ).annotate(
+        name_i18n=Coalesce("name_tr", "name"),
+        overview_i18n=Coalesce("overview_tr", "overview"),
+    )
+
+
+def franchise_names_by_slug(slugs):
+    """{slug: name in the reader's language} for the given franchise slugs; {} for English.
+
+    For the analytics rows, which arrive as plain dicts keyed by slug. A franchise
+    with no translated name is absent, so the caller keeps the English one.
+    """
+    lang = current_lang()
+    slugs = {slug for slug in slugs if slug}
+    if lang == DEFAULT_LANG or not slugs:
+        return {}
+    return dict(
+        FranchiseTranslation.objects.using("warehouse")
+        .filter(franchise__slug__in=slugs, lang=lang)
+        .exclude(name__isnull=True)
+        .exclude(name="")
+        .values_list("franchise__slug", "name")
+    )
+
+
+def franchise_part_texts(franchise_id):
+    """{movie_id: {"title": ..., "overview": ...}} for a franchise's listing rows
+    in the reader's language; {} for English.
+
+    Only the fields TMDB actually translated are present (the pipeline keeps a
+    value only where it differs from English), so a caller falls back per field.
+    """
+    lang = current_lang()
+    if lang == DEFAULT_LANG:
+        return {}
+    texts = {}
+    for movie_id, title, overview in (
+        FranchisePartTranslation.objects.using("warehouse")
+        .filter(franchise_id=franchise_id, lang=lang)
+        .values_list("movie_id", "title", "overview")
+    ):
+        texts[movie_id] = {"title": title or None, "overview": overview or None}
+    return texts
 
 
 def localize_person_names(queryset):

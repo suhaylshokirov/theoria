@@ -1,0 +1,8 @@
+{% load i18n tmdb_images %}
+<a class="gallery-item gallery-item--{{ shape }}" href="{{ image.file_path|tmdb_image:'original' }}" target="_blank" rel="noopener noreferrer">
+    {% if shape == "poster" %}
+    <img src="{{ image.file_path|tmdb_image:'w342' }}" srcset="{{ image.file_path|tmdb_srcset:'poster' }}" sizes="(max-width: 600px) 30vw, 150px" alt="{% blocktranslate trimmed with name=name %}{{ name }} poster{% endblocktranslate %}" loading="lazy" decoding="async">
+    {% else %}
+    <img src="{{ image.file_path|tmdb_image:'w780' }}" srcset="{{ image.file_path|tmdb_srcset:'backdrop' }}" sizes="(max-width: 600px) 100vw, 320px" alt="{% blocktranslate trimmed with name=name %}{{ name }} backdrop{% endblocktranslate %}" loading="lazy" decoding="async">
+    {% endif %}
+</a>

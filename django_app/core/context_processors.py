@@ -91,5 +91,8 @@ def js_strings(request):
             "Season": _("Season"),
             "Season {n}": _("Season {n}"),
             "vs season 1": _("vs season 1"),
+            "Installment": _("Installment"),
+            "Installment {n}": _("Installment {n}"),
+            "Franchises: {count}": _("Franchises: {count}"),
         }
     }

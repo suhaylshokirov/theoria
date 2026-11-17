@@ -1,0 +1,7 @@
+{% comment %} AJAX-only response for the Franchises index's live filtering (see
+   _is_ajax() and franchise_list() in views.py). static/js/theoria.js's
+   initLiveFilter() locates #franchises-grid in this response and copies its
+   innerHTML onto the live element. Also included directly by
+   franchise_list.html for a normal page load, so the live and no-JS paths
+   render from the same source and can't drift apart. {% endcomment %}
+{% include "movies/_franchise_grid.html" %}

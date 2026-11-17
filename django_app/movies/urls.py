@@ -22,6 +22,8 @@ urlpatterns = [
     path("actors/<slug:actor_slug>/", views.actor_detail, name="actor_detail"),
     path("directors/", views.director_list, name="director_list"),
     path("directors/<slug:director_slug>/", views.director_detail, name="director_detail"),
+    path("franchises/", views.franchise_list, name="franchise_list"),
+    path("franchises/<slug:franchise_slug>/", views.franchise_detail, name="franchise_detail"),
     path("studios/", views.studio_list, name="studio_list"),
     path("studios/<slug:company_slug>/", views.studio_detail, name="studio_detail"),
 ]

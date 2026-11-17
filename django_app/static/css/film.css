@@ -389,6 +389,142 @@ a.score--link:focus-visible {
   margin-top: var(--space-9);
 }
 
+/* --- Franchise strip ------------------------------------------------------
+   Under the record: the series the film belongs to, the first three movies the
+   catalog holds as a numbered list of title links, each with its IMDb rating, and
+   an underlined link to the whole collection. No posters: the list is a way
+   across, not a gallery. */
+
+.page-film .franchise-strip {
+  margin-top: var(--space-9);
+  padding-block: var(--space-6);
+  border-block: var(--hairline);
+}
+
+.franchise-strip__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-stretch: 118%;
+  font-size: var(--text-lg);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+/* A numbered list, one movie per line, top to bottom. The numbers are the
+   native <ol> markers (so a screen reader reads "1 of 3"), set in mono. */
+.franchise-strip__list {
+  margin: var(--space-4) 0 0;
+  padding: 0 0 0 var(--space-7);
+  list-style: decimal;
+}
+
+.franchise-strip__list li {
+  min-width: 0;
+  padding-left: var(--space-2);
+}
+
+.franchise-strip__list li + li {
+  margin-top: var(--space-3);
+}
+
+.franchise-strip__list li::marker {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+/* Titles are --text-md; the rating chip beside each is smaller (below). */
+.franchise-strip__list a,
+.franchise-strip__current {
+  font-size: var(--text-md);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* Titles are plain ink and not underlined; hover turns them lime. */
+.franchise-strip__list a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.franchise-strip__list a:hover {
+  color: var(--lime-text);
+}
+
+/* The page the reader is already on: no link to itself, in fainter ink. */
+.franchise-strip__current {
+  color: var(--ink-muted);
+}
+
+/* The release year, between the title and the rating: mono, muted, the same size
+   as the chip that follows it.
+
+   Both the year and the chip are smaller than the 18px title, so sharing its
+   baseline leaves their centres ~1.4px below the centre of the title's capitals,
+   which reads as "sitting a little low". `vertical-align: 0.1em` (of their own
+   14px) lifts them exactly that much: measured at 0px off the title's cap centre,
+   with the row height unchanged. */
+.franchise-strip__year {
+  margin-left: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-muted);
+  vertical-align: 0.1em;
+}
+
+/* The rating is the bare figure on IMDb yellow, the same chip as the homepage's
+   top ten (home.css .rank__rating, which this page does not load): black figures
+   on #f5c518. It sits in the line after the title, so a long title wraps and the
+   chip follows it instead of being pushed to the far edge. */
+.franchise-strip__rating {
+  display: inline-block;
+  margin-left: var(--space-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #f5c518;
+  color: #000;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.3;
+  vertical-align: 0.1em; /* centred on the title's capitals, as the year above */
+}
+
+/* The link to the whole collection: lime like the titles, but underlined, since
+   it is the one link that is not a movie. */
+.franchise-strip__all {
+  display: inline-block;
+  margin-top: var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--lime-text);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+.franchise-strip__all:hover {
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .page-film .franchise-strip {
+    margin-top: var(--space-8);
+  }
+}
+
+@media (pointer: coarse) {
+  .franchise-strip__all {
+    padding-block: var(--space-3);
+  }
+
+  .franchise-strip__list a,
+  .franchise-strip__current {
+    padding-block: var(--space-2);
+  }
+}
+
 .page-film .film-cast {
   margin-top: var(--space-9);
 }

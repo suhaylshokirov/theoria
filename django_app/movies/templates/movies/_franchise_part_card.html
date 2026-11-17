@@ -1,0 +1,42 @@
+{% comment %} An installment the catalog does not hold, as an unlinked frame on the
+   sheet. A catalog installment is a normal _movie_card.html; this is its
+   counterpart for a movie we only list. Params (pass with `only`):
+     item : a movies.franchises.Installment with no .movie
+
+   Everything on it is what TMDB says: the score is TMDB's, labelled as TMDB
+   (the IMDb rating is the site's rating of record), and the frame is dashed so
+   a reader sees at a glance that there is no page behind it. The overview sits
+   behind a native <details>, so it opens with no JS and a row of cards only grows
+   under the one that is open. {% endcomment %}
+{% load i18n l10n tmdb_images %}
+<div class="poster-card is-film is-listing">
+    <div class="card-static">
+        {% if item.poster_path %}
+        <img class="poster" src="{{ item.poster_path|tmdb_image:'w500' }}" srcset="{{ item.poster_path|tmdb_srcset:'poster' }}" sizes="(max-width: 600px) 46vw, 200px" alt="{% blocktranslate trimmed with title=item.title %}{{ title }} poster{% endblocktranslate %}" loading="lazy" decoding="async">
+        {% else %}
+        <div class="placeholder" aria-hidden="true">◻</div>
+        {% endif %}
+        <div class="card-body">
+            <span class="card-title">{{ item.title }}</span>
+            <span class="card-sub">{% if item.release_date %}{{ item.release_date|date:"Y" }}{% else %}{% translate "TBA" %}{% endif %}</span>
+            <span class="listing-flags">
+                <span class="listing-flag">{% translate "Not in Theoria" %}</span>
+                {% if item.is_upcoming %}<span class="listing-flag">{% translate "Upcoming" %}</span>{% endif %}
+                {% if item.direct_to_video %}<span class="listing-flag">{% translate "Direct-to-video" %}</span>{% endif %}
+            </span>
+            {% if item.tmdb_score %}
+            <span class="listing-score" aria-label="{% blocktranslate trimmed with value=item.tmdb_score|floatformat:"1u" %}TMDB rating {{ value }} out of 10{% endblocktranslate %}">
+                <span class="listing-score__mark" aria-hidden="true">TMDB</span>
+                <span class="listing-score__figure" aria-hidden="true">{{ item.tmdb_score|floatformat:"1u" }} / 10</span>
+            </span>
+            {% endif %}
+            {% if item.genres %}<span class="listing-genres">{{ item.genres|join:" · " }}</span>{% endif %}
+            {% if item.overview %}
+            <details class="listing-more">
+                <summary>{% translate "Overview" %}</summary>
+                <p{% if item.overview_is_fallback %} lang="en"{% endif %}>{{ item.overview }}</p>
+            </details>
+            {% endif %}
+        </div>
+    </div>
+</div>

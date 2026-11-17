@@ -1,0 +1,417 @@
+/* Theoria — Franchises (the index and the franchise record).
+   Loads after theoria.css and adds only what the foundation has no component
+   for: the coverage bar on a franchise card, the record header with its poster
+   hung on the banner, the unlinked listing card, and the gallery. Everything
+   else — the finder console, poster grid, stats, record list, backdrop strip —
+   is theoria.css's, used as it is. Scoped by .page-franchises so nothing leaks. */
+
+/* --- Index card: how much of the franchise the catalog holds ----------------
+   The bar is the one measured thing on the card, so it takes the lime; the
+   figure printed beside it is the relief channel (lime alone is 1.5:1). */
+
+.franchise-card .coverage {
+  display: block;
+  margin-top: var(--space-3);
+}
+
+.franchise-card .coverage__track {
+  display: block;
+  height: 3px;
+  background: var(--sheet-2);
+}
+
+.franchise-card .coverage__track i {
+  display: block;
+  height: 100%;
+  background: var(--lime);
+}
+
+.franchise-card .coverage__value {
+  display: block;
+  margin-top: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+/* --- Record header ----------------------------------------------------------
+   The banner is the shared backdrop strip. The poster hangs on its lower edge
+   as a plate; the name sits beside it, and the rest of the record runs under
+   both. On a phone the plate stays beside the name and the record spans the
+   full width, so the overview never reads in a 200px column. */
+
+.page-franchise .franchise-banner {
+  margin-top: 0;
+}
+
+.franchise-head {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  grid-template-areas:
+    "plate title"
+    "plate record";
+  column-gap: var(--space-8);
+  align-items: start;
+  padding-top: var(--space-6);
+}
+
+.franchise-head.has-banner .franchise-plate {
+  margin-top: calc(-1 * var(--space-9));
+}
+
+.franchise-plate {
+  grid-area: plate;
+  position: relative; /* above the banner it overlaps */
+}
+
+.franchise-plate .poster,
+.franchise-plate .placeholder {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  background: var(--sheet);
+  border: var(--hairline);
+  /* A paper-coloured ring separates the plate from the banner under it. */
+  box-shadow: 0 0 0 var(--space-2) var(--paper);
+}
+
+.franchise-plate .placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rule-strong);
+  font-size: var(--text-xl);
+}
+
+.franchise-title {
+  grid-area: title;
+  min-width: 0;
+}
+
+.franchise-title .sheet-title {
+  overflow-wrap: anywhere;
+}
+
+.franchise-record {
+  grid-area: record;
+  min-width: 0;
+}
+
+.franchise-record .record-list {
+  max-width: 62ch;
+}
+
+.franchise-record .stats {
+  margin-top: var(--space-6);
+  column-gap: var(--space-7);
+  row-gap: var(--space-2);
+}
+
+.franchise-record .stat {
+  min-width: 0;
+}
+
+.franchise-record .stat .stat-value {
+  overflow-wrap: anywhere;
+}
+
+.page-franchise .sheet-section {
+  margin-top: var(--space-9);
+}
+
+/* --- Listing cards: installments the catalog does not hold ------------------
+   Same frame as a poster card, but dashed: a reader sees before reading a word
+   that there is no page behind it. Never a link, so nothing lifts on hover. */
+
+.page-franchise .franchise-parts {
+  align-items: start; /* an opened overview grows its own card, not the row */
+}
+
+.poster-card.is-listing .poster,
+.poster-card.is-listing .placeholder {
+  border-style: dashed;
+  border-color: var(--rule-strong);
+}
+
+.listing-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.listing-flag {
+  padding: 2px var(--space-2);
+  border-radius: var(--radius);
+  background: var(--sheet-2);
+  color: var(--ink-muted);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  line-height: 1.4;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* TMDB's score, marked as TMDB's: the IMDb rating is the site's rating of
+   record, so this must never be mistaken for it. An outlined mark, not the
+   yellow IMDb chip. */
+.listing-score {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.listing-score__mark {
+  padding: 1px var(--space-1);
+  border: 1px solid var(--ink-muted);
+  border-radius: 3px;
+  color: var(--ink-muted);
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+}
+
+.listing-score__figure {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.listing-genres {
+  display: block;
+  margin-top: var(--space-2);
+  font-family: var(--font-role);
+  font-size: var(--text-2xs);
+  line-height: 1.35;
+  color: var(--ink-muted);
+}
+
+.listing-more {
+  margin-top: var(--space-2);
+}
+
+.listing-more summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.listing-more summary::-webkit-details-marker {
+  display: none;
+}
+
+/* A drawn chevron, turned over while the overview is open. */
+.listing-more summary::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.listing-more[open] summary::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+
+.listing-more summary:hover {
+  color: var(--lime-text);
+}
+
+.listing-more p {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+
+/* --- Gallery ---------------------------------------------------------------- */
+
+.gallery-label {
+  margin: var(--space-6) 0 var(--space-4);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.franchise-gallery .section-head + .gallery-label {
+  margin-top: 0;
+}
+
+/* Gallery posters are artwork, not catalog cards, so they get more room each than
+   the 116px "tight" poster grid they otherwise share. */
+.poster-grid.gallery-grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-4);
+}
+
+.gallery-grid--wide {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.gallery-item {
+  display: block;
+  overflow: hidden;
+  background: var(--sheet);
+  border: var(--hairline);
+  transition: border-color var(--dur) var(--ease);
+}
+
+.gallery-item img {
+  display: block;
+  width: 100%;
+  object-fit: cover;
+}
+
+.gallery-item--poster img {
+  aspect-ratio: 2 / 3;
+}
+
+.gallery-item--backdrop img {
+  aspect-ratio: 16 / 9;
+}
+
+.gallery-item:hover,
+.gallery-item:focus-visible {
+  border-color: var(--lime-mark);
+  text-decoration: none;
+}
+
+/* "Show N more" is a one-way door: the images are not requested until it
+   opens, and once open the label would be wrong, so it steps aside. */
+.gallery-more > summary {
+  display: inline-flex;
+  align-items: center;
+  margin-top: var(--space-5);
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-stretch: 78%;
+  font-size: var(--text-3xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease);
+}
+
+.gallery-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.gallery-more > summary:hover {
+  background: var(--lime-wash);
+  border-color: var(--lime-mark);
+}
+
+.gallery-more[open] > summary {
+  display: none;
+}
+
+.gallery-more[open] .gallery-grid,
+.gallery-more[open] .gallery-grid--wide {
+  margin-top: var(--space-4);
+}
+
+/* --- Phones ------------------------------------------------------------------ */
+
+@media (max-width: 720px) {
+  .page-franchise .franchise-banner img {
+    aspect-ratio: 16 / 7;
+  }
+
+  .franchise-head {
+    grid-template-columns: 112px minmax(0, 1fr);
+    grid-template-areas:
+      "plate title"
+      "record record";
+    column-gap: var(--space-5);
+    row-gap: var(--space-5);
+  }
+
+  .franchise-head.has-banner .franchise-plate {
+    margin-top: calc(-1 * var(--space-8));
+  }
+
+  .franchise-title .sheet-title {
+    font-size: var(--text-xl);
+  }
+
+  .franchise-record .stats {
+    margin-top: var(--space-4);
+    column-gap: var(--space-6);
+  }
+
+  .franchise-record .stat {
+    padding-top: var(--space-3);
+  }
+
+  .franchise-record .record-row {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+
+  .franchise-record .record-row dd {
+    overflow-wrap: anywhere;
+  }
+
+  .page-franchise .sheet-section {
+    margin-top: var(--space-7);
+  }
+
+  .gallery-grid--wide {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (pointer: coarse) {
+  .listing-more summary,
+  .gallery-more > summary {
+    min-height: 44px;
+  }
+}
+
+/* --- TV -------------------------------------------------------------------- */
+
+html.is-tv .franchise-head {
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+}
+
+html.is-tv .franchise-record .specimen-synopsis {
+  max-width: 70ch;
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+html.is-tv .listing-more p {
+  font-size: var(--text-sm);
+}

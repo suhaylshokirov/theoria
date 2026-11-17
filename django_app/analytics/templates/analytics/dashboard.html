@@ -49,6 +49,7 @@
         <li><a href="#decades">{% translate "Decades" %}</a></li>
         <li><a href="#origins">{% translate "Origins" %}</a></li>
         <li><a href="#people">{% translate "People" %}</a></li>
+        <li><a href="#franchises">{% translate "Franchises" %}</a></li>
         <li><a href="#tv">{% translate "TV shows" %}</a></li>
     </ul>
 </nav>
@@ -488,6 +489,94 @@
     {% endif %}
 </section>
 
+{# ============================== Franchises ============================== #}
+<section class="chapter" id="franchises" aria-labelledby="franchises-h">
+    <header class="chapter-head">
+        <h2 id="franchises-h">{% translate "Franchises" %}</h2>
+        {% with f=franchises.finding %}{% if f %}
+        <p class="finding">
+            {% if f.kind == "same" %}{% blocktranslate with first=f.first|floatformat:"1u" %}A franchise’s first movie averages <strong>★ {{ first }}</strong>; its later installments rate <strong>about the same</strong>.{% endblocktranslate %}
+            {% elif f.kind == "down" %}{% blocktranslate with first=f.first|floatformat:"1u" size=f.size|floatformat:"1u" %}A franchise’s first movie averages <strong>★ {{ first }}</strong>; its later installments average <strong>{{ size }} points lower</strong>.{% endblocktranslate %}
+            {% else %}{% blocktranslate with first=f.first|floatformat:"1u" size=f.size|floatformat:"1u" %}A franchise’s first movie averages <strong>★ {{ first }}</strong>; its later installments average <strong>{{ size }} points higher</strong>.{% endblocktranslate %}
+            {% endif %}
+        </p>
+        {% endif %}{% endwith %}
+        {% if franchises.has_data %}
+        <p class="chapter-note">{% translate "Only the movies in the catalog have a budget, revenue or rating here. An installment’s place counts every movie the series has, so a third movie is third even when the first two are not in the catalog." %}</p>
+        {% endif %}
+    </header>
+
+    {% if franchises.has_data %}
+    <div class="chapter-body">
+        <section class="panel span-7" aria-labelledby="franchise-money-h">
+            <div class="section-head">
+                <h3 id="franchise-money-h">{% translate "Franchises by box office" %}</h3>
+                <span class="section-note">{% translate "2+ movies" %}</span>
+            </div>
+            {% if franchises.box_office %}
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr><th scope="col">{% translate "Franchise" %}</th><th scope="col" class="num">{% translate "Movies" %}</th><th scope="col" class="num">{% translate "Total revenue" %}</th><th scope="col" class="num">{% translate "Budget" %}</th><th scope="col" class="num">{% translate "Return" %}</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in franchises.box_office %}
+                        <tr>
+                            <th scope="row"><a href="{% url 'movies:franchise_detail' row.franchise_slug %}">{{ row.franchise_name }}</a></th>
+                            <td class="num" data-meter>{{ row.movie_count }}</td>
+                            <td class="num">{{ row.total_revenue|compact_money }}</td>
+                            <td class="num">{{ row.total_budget|compact_money }}</td>
+                            <td class="num">{{ row.return_multiple|floatformat:"1u" }}×</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="panel-caption">{% translate "Return is the series’ total revenue over its total budget. Movies with a budget of at least $1M and box-office revenue only; not adjusted for inflation." %}</p>
+            {% else %}
+            <p class="empty">{% translate "No franchises loaded yet. Run the pipeline to fill the warehouse." %}</p>
+            {% endif %}
+        </section>
+
+        <section class="panel span-5" aria-labelledby="installment-h">
+            <div class="section-head">
+                <h3 id="installment-h">{% translate "Rating by installment" %}</h3>
+                <span class="section-note">{% translate "10+ franchises per place" %}</span>
+            </div>
+            {% if franchises.installments %}
+            <div class="chart-stage">
+                <canvas id="installment-chart" data-chart="installments" role="img" aria-label="{% translate "Average IMDb rating of a franchise’s first, second, third and later movies, line chart" %}"></canvas>
+            </div>
+            <p class="panel-caption">{% translate "Only series that keep going reach a high number, so the right end describes fewer, longer-running franchises." %}</p>
+            <details class="numbers">
+                <summary>{% translate "Show the numbers" %}</summary>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr><th scope="col">{% translate "Installment" %}</th><th scope="col" class="num">{% translate "Franchises" %}</th><th scope="col" class="num">{% translate "Avg rating" %}</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for row in franchises.installment_table %}
+                            <tr>
+                                <th scope="row" class="mono">{{ row.number }}</th>
+                                <td class="num">{{ row.franchises }}</td>
+                                <td class="num">{{ row.rating|floatformat:"2u" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            {% else %}
+            <p class="empty">{% translate "Not enough franchises are loaded yet to chart this." %}</p>
+            {% endif %}
+        </section>
+    </div>
+    {% else %}
+    <p class="empty">{% translate "No franchises loaded yet. Run the pipeline to fill the warehouse." %}</p>
+    {% endif %}
+</section>
+
 {# ================================== TV =================================== #}
 <section class="chapter" id="tv" aria-labelledby="tv-h">
     <header class="chapter-head">
@@ -606,6 +695,7 @@
 {% if time.runtime %}{{ time.runtime|json_script:"runtime-data" }}{% endif %}
 {% if time.non_english %}{{ time.non_english|json_script:"nonenglish-data" }}{% endif %}
 {% if tv.seasons %}{{ tv.seasons|json_script:"season-data" }}{% endif %}
+{% if franchises.installments %}{{ franchises.installments|json_script:"installment-data" }}{% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
 <script src="{% static 'js/analytics.js' %}"></script>

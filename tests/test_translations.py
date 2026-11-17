@@ -676,9 +676,10 @@ def test_check_translation_sanity_passes_when_loaded_and_in_domain(monkeypatch):
 
     results = check_translation_sanity(session, "b", DATE)
 
-    # Two checks per table with a Silver file; series_translation has none here,
-    # so only its lang_domain check runs.
-    assert len(results) == 9 and all(r.passed for r in results)
+    # Two checks per table with a Silver file; series_translation and the two
+    # collection tables (Task 153) have none here, so only their lang_domain
+    # checks run: 7 domain + 4 load.
+    assert len(results) == 11 and all(r.passed for r in results)
     assert "ru=1200, uz=800" in next(r for r in results if r.check == "translations:movie_translation:load").detail
 
 

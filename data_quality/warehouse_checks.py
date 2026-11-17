@@ -1,7 +1,7 @@
 """End-to-end data quality validation for the warehouse layer.
 
 Runs three families of checks after the dimension and fact loaders have run
-for a given ingestion_date (the third, translations, is described at the end):
+for a given ingestion_date (the last two, translations and franchises, are described at the end):
 
     1. FK integrity — every fact row's foreign keys resolve to an existing
        dimension row. The database's FOREIGN KEY constraints (see
@@ -28,9 +28,13 @@ for a given ingestion_date (the third, translations, is described at the end):
            table, not this date's rows: an unchanged row keeps its old
            ingestion_date (see _upsert), so a no-change night tags none.
 
-    3. Translations (Task 93, 109) — the five *_translation tables carry only
+    3. Translations (Task 93, 109, 153) — the *_translation tables carry only
        languages the site ships, and are non-empty whenever their Silver file
        was. See check_translation_sanity().
+
+    4. Franchises (Task 153) — a collection's parts and gallery match the Silver
+       files exactly, nothing is orphaned, and every catalogue film appears in
+       its own collection's parts. See check_collection_sanity().
 
 Produces one CheckResult per check; the overall run passes only if every
 CheckResult has passed=True.
@@ -123,16 +127,27 @@ _FK_CHECKS = [
     ("person_translation", "person_id", "dim_person", "person_id"),
     ("genre_translation", "genre_id", "dim_genre", "genre_id"),
     ("country_translation", "country_code", "dim_country", "country_code"),
+    # Task 153: franchises. dim_movie.collection_id is the long-standing FK; the
+    # four tables below hang off dim_collection. (collection_part_translation's
+    # composite FK to dim_collection_part is checked in check_collection_sanity.)
+    ("dim_movie", "collection_id", "dim_collection", "collection_id"),
+    ("dim_collection_part", "collection_id", "dim_collection", "collection_id"),
+    ("dim_collection_image", "collection_id", "dim_collection", "collection_id"),
+    ("collection_translation", "collection_id", "dim_collection", "collection_id"),
 ]
 
 
 def _count_orphans(session: Session, fact_table: str, fk_col: str,
                     dim_table: str, dim_pk: str) -> int:
-    """Count rows in fact_table whose fk_col has no matching row in dim_table."""
+    """Count rows in fact_table whose non-null fk_col has no matching row in dim_table.
+
+    A NULL foreign key is not an orphan: dim_movie.collection_id is null for the
+    ~half of films that belong to no collection (Task 153 added it to the checks).
+    """
     sql = (
         f"SELECT COUNT(*) FROM {fact_table} f "
         f"LEFT JOIN {dim_table} d ON f.{fk_col} = d.{dim_pk} "
-        f"WHERE d.{dim_pk} IS NULL"
+        f"WHERE d.{dim_pk} IS NULL AND f.{fk_col} IS NOT NULL"
     )
     return session.execute(text(sql)).scalar()
 
@@ -881,6 +896,10 @@ _TRANSLATION_ENTITIES = [
     ("person_translations", "person_translation", "person_id"),
     ("genre_translations", "genre_translation", "genre_id"),
     ("country_translations", "country_translation", "country_code"),
+    # Task 153. For collection_part_translation the id column is only the
+    # collection half of its composite key; nothing here reads it.
+    ("collection_translations", "collection_translation", "collection_id"),
+    ("collection_part_translations", "collection_part_translation", "collection_id"),
 ]
 
 
@@ -962,6 +981,106 @@ def check_translation_sanity(
 
 
 # ---------------------------------------------------------------------------
+# 5. Franchises (Task 153)
+# ---------------------------------------------------------------------------
+
+def _scalar_int(session: Session, sql: str, **params) -> int:
+    return int(session.execute(text(sql), params).scalar() or 0)
+
+
+def check_collection_sanity(
+    session: Session, bucket: str, ingestion_date: dt.date,
+) -> list[CheckResult]:
+    """Franchise tables against their Silver files, and against each other.
+
+      * ``collections:part_translation_fk`` — every collection_part_translation row
+        has its part (a composite FK the one-column _FK_CHECKS cannot express).
+      * ``collections:no_orphans`` — no dim_collection row is left that no film
+        references; the loader prunes them, so any left means the prune did not run.
+      * ``collections:parts_match`` / ``images_match`` — for the collections in the
+        date's Silver file, the warehouse holds exactly the Silver parts / images.
+        Exact, not >=, because both are replace-loaded: a surplus row is a part TMDB
+        removed that the loader failed to remove.
+      * ``collections:catalogue_in_parts`` — **warn level**: every catalogue film
+        with a collection appears in that collection's parts (0 exceptions measured
+        on 2026-11-16). TMDB can lag a day behind a film's own payload, so a miss is
+        logged loudly but does not fail the run; the detail names how many.
+
+    A missing table (DDL 32 not applied yet) or a missing Silver file skips the
+    check with a log line, as the translation checks do.
+    """
+    results: list[CheckResult] = []
+
+    def record(name: str, ok: bool, detail: str) -> None:
+        results.append(CheckResult(name, ok, detail))
+        (logger.info if ok else logger.error)("[%s] %s — %s", name, "OK" if ok else "FAIL", detail)
+
+    try:
+        orphans = _scalar_int(
+            session,
+            "SELECT COUNT(*) FROM collection_part_translation t "
+            "LEFT JOIN dim_collection_part p "
+            "ON p.collection_id = t.collection_id AND p.movie_id = t.movie_id "
+            "WHERE p.movie_id IS NULL",
+        )
+        record("collections:part_translation_fk", orphans == 0,
+               f"{orphans} collection_part_translation row(s) without a part")
+
+        unreferenced = _scalar_int(
+            session,
+            "SELECT COUNT(*) FROM dim_collection c WHERE NOT EXISTS "
+            "(SELECT 1 FROM dim_movie m WHERE m.collection_id = c.collection_id)",
+        )
+        record("collections:no_orphans", unreferenced == 0,
+               f"{unreferenced} collection(s) no film references")
+
+        missing = _scalar_int(
+            session,
+            "SELECT COUNT(*) FROM dim_movie m "
+            "JOIN dim_collection c ON c.collection_id = m.collection_id "
+            "WHERE EXISTS (SELECT 1 FROM dim_collection_part x WHERE x.collection_id = c.collection_id) "
+            "AND NOT EXISTS (SELECT 1 FROM dim_collection_part p "
+            "WHERE p.collection_id = m.collection_id AND p.movie_id = m.movie_id)",
+        )
+        if missing:
+            logger.warning(
+                "[collections:catalogue_in_parts] %d catalogue film(s) are missing from "
+                "their collection's parts (TMDB lag?)", missing,
+            )
+        record("collections:catalogue_in_parts", True,
+               f"{missing} catalogue film(s) missing from their collection's parts"
+               + (" (WARN)" if missing else ""))
+    except Exception as exc:
+        session.rollback()
+        logger.info("[collections] tables not readable (%s) — skipped", exc)
+        return results
+
+    try:
+        silver_collections = _read_silver_parquet(
+            bucket, "collections", ingestion_date, "collections.parquet")
+        silver_parts = _read_silver_parquet(
+            bucket, "collection_parts", ingestion_date, "collection_parts.parquet")
+        silver_images = _read_silver_parquet(
+            bucket, "collection_images", ingestion_date, "collection_images.parquet")
+    except Exception as exc:
+        logger.info("[collections] no Silver for %s (%s) — match checks skipped",
+                    ingestion_date, exc)
+        return results
+
+    ids = sorted(int(c) for c in silver_collections["collection_id"].dropna())
+    for label, table, silver_df in (
+        ("parts", "dim_collection_part", silver_parts),
+        ("images", "dim_collection_image", silver_images),
+    ):
+        in_wh = _scalar_int(
+            session, f"SELECT COUNT(*) FROM {table} WHERE collection_id = ANY(:ids)", ids=ids
+        )
+        record(f"collections:{label}_match", in_wh == len(silver_df),
+               f"Silver={len(silver_df)}, {table}={in_wh} for {len(ids)} collection(s)")
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -987,6 +1106,7 @@ def run_warehouse_checks(
         all_results.extend(check_fk_integrity(session))
         all_results.extend(check_row_count_sanity(session, bucket, ingestion_date))
         all_results.extend(check_translation_sanity(session, bucket, ingestion_date))
+        all_results.extend(check_collection_sanity(session, bucket, ingestion_date))
 
         try:
             silver_movies_count = len(_read_silver_parquet(bucket, "movies", ingestion_date, "movies.parquet"))
@@ -1044,6 +1164,34 @@ def run_warehouse_checks(
         "Warehouse checks complete: %d passed, %d failed in %.2fs", passed, failed, elapsed,
     )
     return all_results
+
+
+def run_collection_checks(
+    ingestion_date: dt.date | None = None, bucket: str | None = None,
+) -> list[CheckResult]:
+    """Just the franchise-related checks: their FKs, translations and sanity (Task 153).
+
+    What the standalone `scripts.run_collections` runs; the full
+    run_warehouse_checks() already covers the same ground inside a nightly run.
+    """
+    if ingestion_date is None:
+        ingestion_date = dt.date.today()
+    if bucket is None:
+        bucket = config.S3_BUCKET
+    franchise_tables = {"dim_collection_part", "dim_collection_image",
+                        "collection_translation", "dim_movie"}
+    with get_session() as session:
+        results = [
+            r for r in check_fk_integrity(session)
+            if any(r.check.startswith(f"fk:{t}.") for t in franchise_tables)
+            and "collection" in r.check
+        ]
+        results += [
+            r for r in check_translation_sanity(session, bucket, ingestion_date)
+            if "collection" in r.check
+        ]
+        results += check_collection_sanity(session, bucket, ingestion_date)
+    return results
 
 
 def _parse_args() -> argparse.Namespace:
