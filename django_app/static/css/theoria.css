@@ -544,19 +544,14 @@ main.container {
   transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 
-/* Eight links (Task 153 added Franchises) plus the inline search field fill the
-   1180px bar exactly; one more pixel wraps the theme toggle onto a second row.
-   While the search is inline (the bar's widest state) the links trade 4px of
-   side padding each for the room. Below 1240px the search collapses to a button
-   and the links are back to their full padding. */
+/* Five links now (Movies, TV Shows and Cartoons live under Browse), so the bar
+   no longer needs the links squeezed to fit beside the inline search field:
+   full side padding plus a real gap between neighbours. Russian labels run
+   longer (Аналитика, Франшизы) but still fit with room to spare. Below 1241px
+   the search collapses to a button and the 1101-1240px rule below takes over. */
 @media (min-width: 1241px) {
-  .nav-links a:not(.signin-btn) {
-    padding-inline: var(--space-3);
-  }
-
-  /* Russian labels run longer (Мультфильмы, Аналитика): a little tighter still. */
-  html:lang(ru) .nav-links a:not(.signin-btn) {
-    padding-inline: var(--space-2);
+  .nav-links {
+    gap: var(--space-3);
   }
 }
 

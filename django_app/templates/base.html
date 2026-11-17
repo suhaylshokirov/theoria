@@ -211,13 +211,12 @@
             {% comment %} resolver_match.url_name, not request.path: "/" would prefix every
                route, and view_name equality would drop the highlight as soon as
                you opened a detail page. Grouping the list and detail names keeps
-               "Movies" lit while you're on /movies/120/. {% endcomment %}
+               the tab lit while you're on /movies/120/. Movies, TV Shows and
+               Cartoons have no tabs of their own (reached through Browse), so
+               their pages light Browse. {% endcomment %}
             {% with vn=request.resolver_match.url_name %}
             <div class="nav-links" id="nav-links">
-                <a href="{% url 'movies:browse' %}"{% if vn == "browse" %} aria-current="page"{% endif %}>{% translate "Browse" %}</a>
-                <a href="{% url 'movies:movie_list' %}"{% if vn in "movie_list,movie_detail" %} aria-current="page"{% endif %}>{% translate "Movies" %}</a>
-                <a href="{% url 'movies:series_list' %}"{% if vn in "series_list,series_detail" %} aria-current="page"{% endif %}>{% translate "TV Shows" %}</a>
-                <a href="{% url 'movies:cartoon_list' %}"{% if vn == "cartoon_list" %} aria-current="page"{% endif %}>{% translate "Cartoons" %}</a>
+                <a href="{% url 'movies:browse' %}"{% if vn in "browse,movie_list,movie_detail,series_list,series_detail,cartoon_list" %} aria-current="page"{% endif %}>{% translate "Browse" %}</a>
                 <a href="{% url 'movies:person_list' %}"{% if vn in "person_list,person_detail,actor_list,director_list" %} aria-current="page"{% endif %}>{% translate "People" %}</a>
                 <a href="{% url 'movies:studio_list' %}"{% if vn in "studio_list,studio_detail" %} aria-current="page"{% endif %}>{% translate "Studios" %}</a>
                 <a href="{% url 'movies:franchise_list' %}"{% if vn in "franchise_list,franchise_detail" %} aria-current="page"{% endif %}>{% translate "Franchises" %}</a>
