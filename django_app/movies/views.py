@@ -5,7 +5,7 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.urls import reverse
 from django.db.models import (
-    Avg, Case, CharField, Count, Exists, F, IntegerField, Max, Min, OuterRef, Q, Sum,
+    Avg, BigIntegerField, Case, CharField, Count, Exists, F, IntegerField, Max, Min, OuterRef, Q, Sum,
     Value, When,
 )
 from django.db.models.functions import Lower
@@ -405,12 +405,14 @@ def _series_year_span(series):
 BROWSE_SORTS = {
     "newest": (F("sort_date").desc(nulls_last=True), "kind", "item_id"),
     "rating": (F("rating").desc(nulls_last=True), "kind", "item_id"),
+    "revenue": (F("revenue").desc(nulls_last=True), "kind", "item_id"),
     "title": ("sort_title_lower", "kind", "item_id"),
 }
 
 BROWSE_SORT_CHOICES = [
     ("newest", gettext_lazy("Newest")),
     ("rating", gettext_lazy("Rated")),
+    ("revenue", gettext_lazy("Revenue")),
     ("title", gettext_lazy("A–Z")),
 ]
 
@@ -453,7 +455,7 @@ def _browse_rows(q, sort, genre_ids=None, countries=()):
     row animated-content slice, not for the whole catalog (~1,957 rows today,
     growing nightly as the pipeline backfills TV). This instead builds two
     `.values()` querysets with an identical column shape (kind, item_id,
-    sort_title(_lower), sort_date, rating) and `.union(..., all=True)`s them,
+    sort_title(_lower), sort_date, rating, revenue) and `.union(..., all=True)`s them,
     so Paginator's count()/slicing does the pagination in the database — a
     request for any page only ever pulls MOVIES_PER_PAGE rows over the wire.
 
@@ -487,7 +489,9 @@ def _browse_rows(q, sort, genre_ids=None, countries=()):
         sort_title_lower=Lower(title_column),
         sort_date=F("release_date"),
         rating=Max("movierating__rating", filter=Q(movierating__source="imdb")),
-    ).values("kind", "item_id", "sort_title", "sort_title_lower", "sort_date", "rating")
+    ).values(
+        "kind", "item_id", "sort_title", "sort_title_lower", "sort_date", "rating", "revenue",
+    )
 
     series = localize_series(Series.objects.using("warehouse").all())
     if q:
@@ -506,7 +510,12 @@ def _browse_rows(q, sort, genre_ids=None, countries=()):
         sort_title_lower=Lower(name_column),
         sort_date=F("first_air_date"),
         rating=Max("seriesrating__rating", filter=Q(seriesrating__source="imdb")),
-    ).values("kind", "item_id", "sort_title", "sort_title_lower", "sort_date", "rating")
+        # TV has no money measures; a typed NULL keeps the union's columns aligned
+        # so shows follow the ranked movies, nulls-last like MOVIE_SORTS["revenue"].
+        revenue=Value(None, output_field=BigIntegerField()),
+    ).values(
+        "kind", "item_id", "sort_title", "sort_title_lower", "sort_date", "rating", "revenue",
+    )
 
     return movies.union(series, all=True).order_by(*BROWSE_SORTS[sort])
 
