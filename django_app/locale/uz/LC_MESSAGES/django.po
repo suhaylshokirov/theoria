@@ -3633,3 +3633,7 @@ msgstr "Kayfiyatingizni, janrni yoki qancha vaqtingiz borligini ayting."
 #: templates/base.html:534
 msgid "Get a film pick"
 msgstr "Film tanlash"
+
+#: movies/templates/movies/browse.html:4 movies/templates/movies/browse.html:11
+msgid "Movies & TV"
+msgstr "Filmlar va seriallar"

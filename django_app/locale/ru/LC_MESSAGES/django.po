@@ -3667,3 +3667,7 @@ msgstr "Назовите настроение, жанр или сколько у
 #: templates/base.html:534
 msgid "Get a film pick"
 msgstr "Подобрать фильм"
+
+#: movies/templates/movies/browse.html:4 movies/templates/movies/browse.html:11
+msgid "Movies & TV"
+msgstr "Фильмы и сериалы"

@@ -1159,7 +1159,7 @@ def test_nav_contains_the_browse_link():
 
     content = response.content.decode()
     assert 'href="/browse/"' in content
-    assert ">Browse<" in content
+    assert ">Movies<" in content
 
 
 @contextlib.contextmanager
